@@ -5,6 +5,7 @@ Tool 3: Check Safety Tool
 
 from core.tool_system import Tool
 from core.maps_service import get_crime_data_by_location
+from core.tools._argtext import clean_arg_text
 from typing import Optional
 
 from core.safety_reference import (
@@ -27,12 +28,27 @@ def check_safety_impl(
     Tool.execute offloads it to an executor thread (tool_system.py :279-284), keeping the
     asyncio event loop responsive so the fc-loop's per-tool timeout / batch budget can fire.
     """
-    # 兼容 address 和 area 参数
-    location = address or area
+    # 兼容 address 和 area 参数. Both are free text from a model/planner, so they are
+    # normalised at the boundary (None / a number / a lone UTF-16 surrogate all arrive here).
+    location = clean_arg_text(address) or clean_arg_text(area)
+    user_query = clean_arg_text(user_query)
     if not location and (latitude is not None or longitude is not None):
         location = 'Supplied coordinates'
     if not location:
-        raise ValueError("必须提供 address 或 area 参数")
+        # A missing/blank/non-string location is a CALLER error, not a crash. Raising here
+        # (outside the try below) turned an empty string into an unhandled exception that
+        # every caller had to catch separately; a structured refusal is what the rest of
+        # this tool returns and what the agent loop can render honestly.
+        return {
+            'address': "",
+            'safety_score': None,
+            'safety_level': 'Unknown',
+            'crime_data': {},
+            'error': "check_safety needs an address, postcode or area name",
+            'scoring_explanation': "No location was supplied, so no score is available.",
+            'safety_analysis': "Safety cannot be assessed without a location.",
+            'retryable': False,
+        }
     
     # 检测用户语言
     is_chinese = _detect_chinese(user_query or location)
@@ -84,7 +100,8 @@ def check_safety_impl(
                 scoring_explanation = _generate_scoring_explanation(
                     total_crimes, safety_score, crime_data, is_chinese, band=band,
                     per_month=per_month)
-                safety_analysis = _generate_safety_analysis(crime_data, location, is_chinese)
+                safety_analysis = _generate_safety_analysis(
+                    crime_data, location, is_chinese, per_month=per_month)
         else:
             # No data must NOT become a middling score that reads as a measurement.
             safety_score = None
@@ -171,14 +188,46 @@ def _detect_chinese(text: str) -> bool:
     return False
 
 
+def crime_window(crime_data: dict, per_month: float | None = None) -> tuple[int, float]:
+    """(months_covered, crimes_per_month) for ONE crime payload — the single place the
+    monthly average is computed.
+
+    There used to be two: the scoring block divided by ``months_covered`` (3) while the
+    detail block divided the SAME total by a hardcoded 6 and labelled it "6-month total",
+    so one reply said "7681 incidents (about 2560 per month)" and, four lines later,
+    "Monthly average: 1280 incidents". ``total_crimes_6m`` keeps its historical key name
+    but holds MONTHS_OF_CRIME_DATA months of radius data (see maps_service), so 6 was
+    simply wrong. Both renderers now read this. Never raises."""
+    data = crime_data if isinstance(crime_data, dict) else {}
+    try:
+        months = int(data.get("months_covered") or 0)
+    except (TypeError, ValueError):
+        months = 0
+    if months <= 0:
+        months = 3
+    total = data.get("total_crimes_6m", 0)
+    try:
+        total = float(total)
+    except (TypeError, ValueError):
+        total = 0.0
+    if per_month is None:
+        per_month = data.get("crimes_per_month")
+    try:
+        pm = float(per_month)
+    except (TypeError, ValueError):
+        pm = None
+    if pm is None or pm != pm:            # missing or NaN
+        pm = total / months
+    return months, pm
+
+
 def _generate_scoring_explanation(total_crimes: int, safety_score: int, crime_data: dict,
                                   is_chinese: bool, band: str | None = None,
                                   per_month: float | None = None) -> str:
     """生成评分计算方法的详细解释（根据语言生成）"""
     
+    _mo, _pm = crime_window(crime_data, per_month)
     if is_chinese:
-        _mo = crime_data.get("months_covered", 3)
-        _pm = per_month if per_month is not None else 0
         explanation = f"""
 **评分依据:**
 
@@ -200,8 +249,6 @@ def _generate_scoring_explanation(total_crimes: int, safety_score: int, crime_da
             explanation += "\n📊 **趋势**: 犯罪率相对稳定。"
     
     else:  # English
-        _mo = crime_data.get("months_covered", 3)
-        _pm = per_month if per_month is not None else 0
         explanation = f"""
 **How this score was produced:**
 
@@ -225,13 +272,15 @@ def _generate_scoring_explanation(total_crimes: int, safety_score: int, crime_da
     return explanation.strip()
 
 
-def _generate_safety_analysis(crime_data: dict, location: str, is_chinese: bool) -> str:
-    """Describe the actual observation period without inventing personal night-walk risk."""
+def _generate_safety_analysis(crime_data: dict, location: str, is_chinese: bool,
+                              per_month: float | None = None) -> str:
+    """Describe the actual observation period without inventing personal night-walk risk.
+
+    The window and the monthly average come from ``crime_window`` — the SAME values the
+    scoring block prints — so one reply can no longer state two different averages for
+    one total."""
     total = crime_data.get('total_crimes_6m', 0)
-    months = crime_data.get('months_covered') or 1
-    per_month = crime_data.get('crimes_per_month')
-    if per_month is None:
-        per_month = total / months
+    months, per_month = crime_window(crime_data, per_month)
     ref = crime_data.get('reference_point') or {}
     period = ', '.join(crime_data.get('data_months') or []) or 'not supplied'
     origin = ref.get('measured_from') or 'query-point precision was not supplied'
@@ -240,7 +289,7 @@ def _generate_safety_analysis(crime_data: dict, location: str, is_chinese: bool)
         categories = {}
     if is_chinese:
         lines = [f'地点：{location}；实际查询点：{origin}',
-                 f'统计月份：{period}；共{months}个月、{total}条记录，月均{per_month:g}条。',
+                 f'统计月份：{period}；{months}个月总计{total}条记录，月均{per_month:g}条。',
                  '覆盖范围：警方接口默认约1英里半径，并非某条步行路线或某套房的个人风险。']
         lines.extend(f'{name}: {count}条' for name, count in list(categories.items())[:3])
         lines.append(CAVEAT_ZH)

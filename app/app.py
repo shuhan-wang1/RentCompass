@@ -24,7 +24,9 @@ import subprocess
 import contextvars
 from flask import Flask, request, jsonify, render_template, session, g, has_request_context
 from flask_cors import CORS
-from werkzeug.exceptions import HTTPException, BadRequest, UnsupportedMediaType
+from werkzeug.exceptions import (
+    HTTPException, BadRequest, RequestEntityTooLarge, UnsupportedMediaType,
+)
 import json
 import re
 from datetime import datetime
@@ -37,6 +39,7 @@ from uk_rent_agent.web.conversation_store import (
 )
 from uk_rent_agent.web.identity import (
     resolve_user_id, normalize_message, valid_user_id, InvalidUserId, InvalidMessage,
+    text_is_storable,
 )
 from uk_rent_agent.web.auth_store import (
     AuthStore, AuthError, InvalidUsername, WeakPassword, UsernameTaken,
@@ -50,6 +53,7 @@ from uk_rent_agent.observability import (
     agent_execution_context,
     new_request_id,
     request_context,
+    request_id_var,
 )
 from core.data_loader import load_mock_properties_from_csv, load_properties
 from core.tool_system import create_tool_registry
@@ -754,7 +758,108 @@ def _crashed_turn_observations() -> dict:
     merged = dict(turn_observations.snapshot())
     merged.update(turn_observations.write_audit_snapshot(AGENT_ARCH))
     merged.update(turn_observations.dsml_snapshot())
+    if _died_before_the_observation_window():
+        # THE FOUR-CELL RULE (README §13). `llm_observer_installed` is a fact about
+        # the PROCESS and is stamped True whenever the callback is attached; the
+        # usage status is a fact about the TURN. A request that died before
+        # `begin_turn()` opened its window has an empty snapshot, so the status
+        # defaulted to `not_instrumented` — the one cell the consumer never forgives
+        # (the 2026-07-25 class: nothing was watching) — while the flag next to it
+        # said something WAS. An anonymous 4xx-shaped request could therefore charge
+        # the canary gate an instrumentation violation (2026-09-03 T3 高-1).
+        #
+        # Nothing here is a guess: the endpoints make every model call AFTER
+        # `begin_turn()`, so a turn that never reached it provably made none. Saying
+        # `no_llm_calls` is the observation; `unknown_turn_signals` then downgrades
+        # it to `partial` for an unobservable outcome, which is the honest,
+        # exemption-eligible cell rather than the accusation.
+        merged["llm_usage_status"] = turn_observations.USAGE_NO_CALLS
+        merged["llm_calls"] = 0
+        # The same argument, applied to every other field `unknown_turn_signals`
+        # nulls. It nulls them because a turn that CRASHED MID-FLIGHT may already
+        # have dispatched a write or flushed partial output, so a 0 there would be
+        # an assumption. That reasoning does not reach a request that never opened
+        # its window: on both canary endpoints nothing between the route entry and
+        # `begin_turn()` calls the model, dispatches a tool or runs a guard, so
+        # "none of that happened" is an OBSERVATION, not a fabricated zero. Stating
+        # it is what stops a pre-window 500 holding the gate on six null required
+        # fields it could never have filled.
+        merged["dsml_blocked"] = 0
+        merged["dsml_leak"] = 0
+        merged["provider_schema_400_count"] = 0
+        merged["denied_write_count"] = 0
+        merged["tainted_write_executed_count"] = 0
+        merged["forbidden_write_executed_count"] = 0
+        merged["write_audit"] = []
     return merged
+
+
+def _died_before_the_observation_window() -> bool:
+    """True when this request failed BEFORE its turn opened an observation window.
+
+    Both conditions are required, and they are independent: `current()` is None
+    whenever no window is open in this context, and `g.canary_turn_started` is
+    stamped in the same breath as `begin_turn()`, so its absence proves the window
+    was never opened for THIS request rather than merely being unreachable from
+    here. A turn that ran and then died at the response boundary fails both tests
+    and keeps reporting exactly what its accumulators saw.
+    """
+    try:
+        if turn_observations.current() is not None:
+            return False
+    except Exception:
+        return False
+    try:
+        if not has_request_context():
+            return False
+        return getattr(g, "canary_turn_started", None) is None
+    except Exception:
+        return False
+
+
+# --- answer contract (manager_v1) -> canary record + API response ----------
+# The arch builds a full AnswerContract (root task id, evidence refs, the answer text
+# itself). None of that may go into an ops log or a canary record, and until now none
+# of it reached ANY consumer at all — the object was written to the graph state and
+# read by nothing (2026-09-03 review P2-1). What is forwarded is the bounded,
+# content-free summary below and nothing else:
+#
+#     {"valid": bool, "limitations": [str], "final_response_truncated": bool}
+#
+# `valid` is True unless the arch explicitly marked the contract invalid (the builder
+# raised and the fallback payload carries `valid: False` plus an error_code).
+# `limitations` are the machine-authored "task X returned no evidence" lines — never
+# user text, never tool output — capped at 8 entries of 200 chars. The whole key is
+# ABSENT (never null) when the architecture produced no contract, so a legacy/fc_loop
+# record stays byte-for-byte what it was.
+_ANSWER_CONTRACT_MAX_LIMITATIONS = 8
+_ANSWER_CONTRACT_MAX_LIMITATION_CHARS = 200
+
+
+def _answer_contract_summary(final_state) -> dict | None:
+    """Bounded, content-free projection of the arch's answer contract, or None."""
+    if not isinstance(final_state, dict):
+        return None
+    contract = final_state.get("answer_contract")
+    if not isinstance(contract, dict) or not contract:
+        return None
+    raw = contract.get("limitations")
+    limitations = []
+    if isinstance(raw, (list, tuple)):
+        for item in raw[:_ANSWER_CONTRACT_MAX_LIMITATIONS]:
+            if not isinstance(item, str):
+                continue
+            text = item.strip()
+            if text:
+                limitations.append(text[:_ANSWER_CONTRACT_MAX_LIMITATION_CHARS])
+    return {
+        # A contract that did not declare itself invalid is valid: the success shape
+        # is the model_dump of a VALIDATED AnswerContract and carries no `valid` key,
+        # while the failure shape sets it to False explicitly.
+        "valid": bool(contract.get("valid", True)),
+        "limitations": limitations,
+        "final_response_truncated": bool(contract.get("final_response_truncated")),
+    }
 
 
 def _build_fc_signals(final_state) -> dict:
@@ -815,8 +920,59 @@ def _build_fc_signals(final_state) -> dict:
     }
     _CANARY_TOOL_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,127}$")
 
-    def _tool_latency_from_artifacts(artifacts) -> dict:
-        """Per-tool latency, derived from the artifact ledger both arches already write.
+    def _wave_latency_rows(task_results):
+        """The legacy WAVE executor's calls, projected onto the artifact fold's shape.
+
+        A parallel wave (`dispatch_tasks -> task_worker -> gather_wave`) writes
+        `task_results`, never `tool_artifacts` — `tool_artifacts` has no reducer in
+        `agent.state`, so concurrent `Send` workers cannot append to it. `tool_batches`
+        counts a wave regardless (`wave_batches` below), which is how a legacy turn
+        reported `tool_batches: 1` with NO `tool_latency` key at all: the calls happened,
+        were timed, and were invisible to the only function that reads timings.
+
+        The rows are NOT folded into `tool_artifacts` — that ledger is read by the
+        critic, `_has_usable_retrieval_evidence` and `_collect_grounding_evidence`, and a
+        telemetry fix must not move a grounding decision. They are projected HERE
+        instead, and only into the latency summary.
+
+        `task_worker_node` writes `started_at`/`ended_at`/`elapsed_ms` in the same field
+        names `agent_loop._artifact` uses, so the fold needs no second implementation —
+        only the two shape differences a wave row has:
+
+          * identity is `(run_id, id, index)` rather than an artifact position, so a
+            duplicated `Send` (the reducer is an append) cannot double-count a call;
+          * there are no `timed_out`/`abandoned` FLAGS. A per-task timeout is reported in
+            `obs`, using one exact producer-side template, so that template — not a loose
+            search for the word "timeout" — is what identifies it. A killed task is
+            counted and kept OUT of the samples, exactly as a timed-out artifact is: the
+            duration measures the budget, not the tool.
+        """
+        rows = []
+        seen_ids = set()
+        if not isinstance(task_results, list):
+            return rows
+        for r in task_results:
+            if not isinstance(r, dict):
+                continue
+            name = r.get("tool")
+            name = name.strip() if isinstance(name, str) else ""
+            if not _CANARY_TOOL_NAME_RE.fullmatch(name):
+                continue
+            key = (r.get("run_id"), r.get("id"), r.get("index"), name)
+            if key in seen_ids:
+                continue
+            seen_ids.add(key)
+            obs = r.get("obs")
+            timed_out = (isinstance(obs, str)
+                         and obs.startswith(f"Error: {name} timed out after"))
+            rows.append({"tool": name, "elapsed_ms": r.get("elapsed_ms"),
+                         "timed_out": timed_out, "abandoned": False,
+                         "params": r.get("params")})
+        return rows
+
+    def _tool_latency_from_artifacts(artifacts, task_results=None) -> dict:
+        """Per-tool latency, derived from the artifact ledger both arches already write,
+        plus the legacy wave's `task_results` (see ``_wave_latency_rows``).
 
         ``elapsed_ms`` is set on EVERY artifact (see ``agent_loop._artifact``), so this
         needs no new instrumentation on the hot path — only a fold at the end of the
@@ -831,10 +987,40 @@ def _build_fc_signals(final_state) -> dict:
         """
         import math as _math
 
+        rows = [a for a in artifacts if isinstance(a, dict)]
+        wave_rows = _wave_latency_rows(task_results)
+        if wave_rows:
+            # Cross-path de-duplication. The single-tool node and the wave are different
+            # routes and do not normally both run for one call, but "normally" is not a
+            # guarantee: if a call appears in BOTH ledgers it is ONE call, and counting it
+            # twice would understate p50 by pairing a duration with itself. The shared key
+            # is (tool, params digest) — the same digest the no-progress guard uses, so
+            # two rows that agree on it are the same call by the runtime's own definition.
+            try:
+                from core.langgraph_agent import _params_digest as _digest
+            except Exception:
+                _digest = None
+            if _digest is not None:
+                seen = {
+                    (a.get("tool"), a.get("params_digest"))
+                    for a in rows
+                    if isinstance(a.get("params_digest"), str) and a.get("params_digest")
+                }
+                if seen:
+                    kept = []
+                    for row in wave_rows:
+                        try:
+                            digest = _digest(row["tool"], row.get("params") or {})
+                        except Exception:
+                            digest = None
+                        if digest is not None and (row["tool"], digest) in seen:
+                            continue
+                        kept.append(row)
+                    wave_rows = kept
+            rows = rows + wave_rows
+
         samples: dict = {}
-        for a in artifacts:
-            if not isinstance(a, dict):
-                continue
+        for a in rows:
             name = a.get("tool")
             name = name.strip() if isinstance(name, str) else ""
             if not _CANARY_TOOL_NAME_RE.fullmatch(name):
@@ -872,7 +1058,8 @@ def _build_fc_signals(final_state) -> dict:
                          "timed_out": slot["timed_out"], "abandoned": slot["abandoned"]}
         return out
 
-    tool_latency = _tool_latency_from_artifacts(artifacts)
+    tool_latency = _tool_latency_from_artifacts(
+        artifacts, final_state.get("task_results"))
     wave_batches = 1 if final_state.get("task_results") else 0
     tool_batches = len(artifact_turns) + wave_batches
     signals = {
@@ -942,6 +1129,10 @@ def _build_fc_signals(final_state) -> dict:
         # Optional, non-gating diagnostics. The telemetry layer already strips
         # objectives, arguments, data, errors and any other user-derived content.
         signals["specialist"] = dict(specialist)
+    _contract = _answer_contract_summary(final_state)
+    if _contract is not None:
+        # Additive and non-gating; absent entirely on an arch that produced none.
+        signals["answer_contract"] = _contract
     return signals
 
 
@@ -1133,6 +1324,7 @@ def _handle_http_exception(e: HTTPException):
     if _is_api_path():
         message = {
             400: "bad request", 404: "not found", 405: "method not allowed",
+            413: "request body is too large",
             415: "unsupported media type", 500: "internal server error",
         }.get(e.code, (e.description or e.name or "error"))
         return jsonify({"error": message}), (e.code or 500)
@@ -1266,12 +1458,79 @@ def _request_body():
     return None
 
 
+# Bounds for the post-parse text scan below. A body is already capped at
+# MAX_REQUEST_BYTES, so these only stop a pathological shape (a deeply nested or
+# very wide document) from making the scan itself the expensive part of the request.
+_BODY_SCAN_MAX_DEPTH = 12
+_BODY_SCAN_MAX_NODES = 5000
+
+
+def _reject_unstorable_text(data) -> None:
+    """Refuse a parsed body carrying text no durable store can hold.
+
+    `json.loads` accepts a `\\udXXX` escape and hands back a Python str containing a
+    LONE SURROGATE; sqlite3 encodes bind parameters as strict UTF-8 and raises
+    `UnicodeEncodeError` on one. Before this check that surfaced as an anonymous
+    HTTP 500 from inside `conversation_store.start_request_turn` — with a canary
+    record charging the gate an instrumentation violation for a one-line request
+    body (2026-09-03 T3 高-1). An embedded NUL is refused for the same reason: it
+    truncates the value for several readers rather than being stored as typed.
+
+    This is the request-wide layer; `normalize_message` states the same rule for the
+    chat message specifically, and the store now sanitises as a third line of
+    defence. A client error is reported as a 4xx here, never as a server error.
+    """
+    stack = [(data, 0)]
+    nodes = 0
+    while stack:
+        node, depth = stack.pop()
+        nodes += 1
+        if nodes > _BODY_SCAN_MAX_NODES or depth > _BODY_SCAN_MAX_DEPTH:
+            # Too big/deep to verify exhaustively. The store sanitises what it is
+            # handed, so stopping here degrades to "sanitised" rather than "500".
+            return
+        if isinstance(node, str):
+            if not text_is_storable(node):
+                raise ApiError(
+                    400,
+                    "request body contains text that cannot be stored "
+                    "(unpaired unicode surrogate or NUL byte)")
+        elif isinstance(node, dict):
+            for key, value in node.items():
+                if isinstance(key, str) and not text_is_storable(key):
+                    raise ApiError(
+                        400,
+                        "request body contains a field name that cannot be stored "
+                        "(unpaired unicode surrogate or NUL byte)")
+                stack.append((value, depth + 1))
+        elif isinstance(node, (list, tuple)):
+            for value in node:
+                stack.append((value, depth + 1))
+
+
 def get_json_or_400() -> dict:
-    """Parse a REQUIRED JSON object body, mapping Flask's HTML errors to JSON per contract."""
+    """Parse a REQUIRED JSON object body, mapping Flask's HTML errors to JSON per contract.
+
+    An over-size body is a 413 with the limit stated, NOT the generic 400: Flask
+    raises `RequestEntityTooLarge` from `get_data()`, which is not a `BadRequest`
+    subclass and used to fall into the catch-all below and be reported as "malformed
+    JSON body" — a client could not tell "too big" from "syntactically broken"
+    (2026-09-03 T3 低-1).
+    """
+    limit = _runtime_config.max_request_bytes
+    declared = None
+    try:
+        declared = request.content_length
+    except Exception:
+        declared = None
+    if isinstance(declared, int) and limit and declared > limit:
+        raise ApiError(413, f"request body exceeds the {limit}-byte limit")
     try:
         data = request.get_json(silent=False)
     except UnsupportedMediaType:
         raise ApiError(415, "Content-Type must be application/json")
+    except RequestEntityTooLarge:
+        raise ApiError(413, f"request body exceeds the {limit}-byte limit")
     except BadRequest:
         raise ApiError(400, "malformed JSON body")
     except Exception:
@@ -1280,6 +1539,7 @@ def get_json_or_400() -> dict:
         raise ApiError(400, "request body must be JSON")
     if not isinstance(data, dict):
         raise ApiError(400, "request body must be a JSON object")
+    _reject_unstorable_text(data)
     return data
 
 
@@ -1553,15 +1813,55 @@ def _enforce_auth():
     return jsonify({"error": "authentication required"}), 401
 
 
+def _trusted_proxy_ips() -> frozenset:
+    """The peer addresses whose ``X-Forwarded-For`` this process will believe.
+
+    EMPTY BY DEFAULT, and that is the fix. The previous rule was "if the peer is
+    loopback, take the rightmost XFF value", which meant anything that could reach
+    the app on loopback could pick its own rate-limit bucket: 15 requests with 15
+    different `X-Forwarded-For` values all passed a limiter that was already tripped
+    (2026-09-03 T3 低-3). Loopback is not evidence of nginx — in the one deployment
+    where nginx really is the peer, it is uvicorn's `--proxy-headers`
+    (docker-compose.yml passes it on both pools) that has ALREADY rewritten
+    `remote_addr` to the client address, so nothing here needs to read the header at
+    all. An operator running a reverse proxy without that flag opts in explicitly
+    with `TRUSTED_PROXY_IPS=127.0.0.1` (comma-separated).
+    """
+    raw = os.getenv("TRUSTED_PROXY_IPS", "")
+    return frozenset(part.strip() for part in raw.split(",") if part.strip())
+
+
+_TRUSTED_PROXY_IPS = _trusted_proxy_ips()
+
+
 def _rate_limit_subject() -> str:
     user_id = _authed_user_id()
     if user_id:
         return f"user:{user_id}"
     remote = request.remote_addr or "unknown"
-    if remote in {"127.0.0.1", "::1"}:
-        # Direct WSGI/test deployments may not run Uvicorn's proxy middleware.
-        # Production nginx overwrites XFF with exactly one address; accepting
-        # the rightmost value here preserves that one-hop contract.
+    if _TRUSTED_PROXY_IPS and remote in _TRUSTED_PROXY_IPS:
+        # A CONFIGURED hop, so the LAST element of the chain is the address that hop
+        # itself wrote, and everything left of it is whatever the client sent.
+        #
+        # The rightmost element is the right answer under BOTH nginx configurations
+        # in play here, which is why the rule is stated this way rather than as a
+        # single-address check:
+        #
+        #   * the nginx INSTALLED on this box (/etc/nginx/sites-available/
+        #     rentcompass.co.uk.conf) sets `X-Forwarded-For $proxy_add_x_forwarded_for`
+        #     — an APPEND, so the header is `<whatever the client sent>, <real peer>`
+        #     and only the last element is trustworthy;
+        #   * `deploy/nginx/*.conf` in this repo sets `X-Forwarded-For $remote_addr`
+        #     — a REPLACE, so the header is exactly one address, which is also the
+        #     last element.
+        #
+        # A forged prefix therefore cannot move the bucket: the client controls every
+        # element except the final one, and the final one is the only one read. What
+        # closed T3 低-3 is the TRUST decision above (an unconfigured peer never
+        # reaches this branch at all), not a restriction on the chain's shape — and an
+        # earlier revision of this fix rejected multi-element chains outright, which
+        # would have silently fallen back to `remote_addr` for every request behind
+        # the appending config that is actually deployed.
         xff = request.headers.get("X-Forwarded-For", "")
         forwarded = xff.rsplit(",", 1)[-1].strip() if xff else ""
         if forwarded:
@@ -1708,6 +2008,19 @@ async def api_alex():
     - 是否需要查询天气（调用 get_weather 工具）
     - 是否需要搜索附近设施（调用 search_nearby_pois 工具）
     - 或者直接回答用户问题
+
+    Conversation contract:
+      * ``conversation_id`` OMITTED (or null) -> a new conversation is created
+        implicitly and its id is echoed in the response.
+      * ``conversation_id`` PRESENT but naming no conversation THIS caller owns ->
+        **404 ``conversation not found``**, matching
+        ``GET /api/conversations/<cid>/messages``. The endpoint never silently
+        substitutes a new conversation for an id the client asked for.
+
+    Response contract additions:
+      * ``answer_contract`` — present only when the architecture produced one
+        (manager_v1 with specialists). ``{"valid": bool, "limitations": [str],
+        "final_response_truncated": bool}``; never contains user text.
     """
     prepared = _prepare_chat_request()
     data = prepared.data
@@ -1727,9 +2040,22 @@ async def api_alex():
     # --- resolve / implicitly create the conversation --------------------------
     # New conversations are stamped with THIS process's architecture provenance at creation;
     # existing ones are reconciled after a pool switch (normally a no-op).
+    #
+    # OMITTED conversation_id  -> implicit creation (the documented first-turn shape).
+    # PRESENT but unknown/not owned by this caller -> 404, the SAME answer
+    # `GET /api/conversations/<cid>/messages` gives. It used to return 200 with a
+    # freshly minted conversation id, so pointing at another user's conversation
+    # produced a success the client could not distinguish from "your conversation
+    # continued" while the read route 404'd on the very same id (2026-09-03 T3 低-2).
+    # 404 is the safer half of that disagreement: no data crossed either way, but a
+    # client that believes it is appending to a conversation is now told when it is
+    # not, and a probe for another user's conversation id gets the same answer
+    # whether or not the id exists for someone else.
     conversation_id = data.get('conversation_id')
-    conv = conversation_store.get_conversation(user_id, conversation_id) if conversation_id else None
-    if conv:
+    if conversation_id:
+        conv = conversation_store.get_conversation(user_id, conversation_id)
+        if not conv:
+            raise ApiError(404, "conversation not found")
         conversation_id = conv["id"]
         _reconcile_agent_arch(user_id, conversation_id, conv)
     else:
@@ -1864,6 +2190,15 @@ async def api_alex():
     # conversation_id + turn_id are echoed in EVERY response (incl. errors + implicit creation).
     payload["conversation_id"] = conversation_id
     payload["turn_id"] = turn_id
+    # The SAME bounded summary the canary record carries (see _answer_contract_summary),
+    # so the client and the gate read one object rather than two descriptions of it.
+    # Absent when the architecture produced no contract, or when the turn crashed
+    # before one existed.
+    _fc_for_response = _turn_fc_signals.get()
+    if isinstance(_fc_for_response, dict):
+        _contract_for_response = _fc_for_response.get("answer_contract")
+        if isinstance(_contract_for_response, dict):
+            payload["answer_contract"] = dict(_contract_for_response)
     _serialization_failed = False
     try:
         payload, _boundary_blocked = _guard_payload_before_persistence(payload)
@@ -2559,7 +2894,45 @@ def _process_background_job(job: dict, worker_id: str) -> None:
     Summary preparation is checkpointed before it mutates the latest snapshot, so a
     crash re-applies the same value rather than making a second LLM call. Memory uses
     its own per-user idempotency key and is therefore safe under at-least-once delivery.
+
+    CORRELATION. Both job kinds make a BILLED provider call (the rolling-summary fold
+    and auto-memory's fact extraction), and they make it here — on the outbox consumer
+    thread, minutes after the turn returned. A thread starts with an empty context, so
+    every one of those calls used to log ``request_id: "-"`` and belong to no turn.
+
+    The fix is not a context snapshot taken where the worker was spawned: the consumer
+    is a LONG-LIVED thread shared by every turn, so a snapshot would stamp all of its
+    work with whichever request happened to start it. The id travels WITH THE JOB
+    instead (queued into the payload), and is bound around this call. ``request_context``
+    sets only ``request_id``/``user_id``; it does NOT re-open the turn's observation
+    window, whose canary record was written long ago — the work becomes correlatable
+    without being counted into a record already on disk.
     """
+    payload = job.get("payload") or {}
+    correlation = payload.get("request_id") if isinstance(payload, dict) else None
+    if not isinstance(correlation, str) or not correlation:
+        # A job queued before this field existed, or one whose turn had no id. A
+        # job-scoped sentinel is still better than "-": it says which job spent the
+        # money, and it can never be mistaken for a real request id.
+        correlation = f"job:{job.get('id') or 'unknown'}"
+
+    def _run():
+        with request_context(correlation, str(job.get("user_id") or "-")):
+            _apply_background_job(job, worker_id)
+
+    # `bind_post_turn_context` runs `_run` in a COPY of this context with the
+    # observation window explicitly cleared. Both halves matter. The consumer thread
+    # normally has no window, but "normally" is not an invariant — an inline consumer
+    # (tests), or any future path that drains the outbox from inside a request, would
+    # otherwise let this job's provider call append to a canary record that was
+    # emitted minutes ago, silently making the in-memory turn disagree with the line
+    # on disk. Clearing it inside a context COPY also means neither that clear nor the
+    # `request_context` above can leak back to whatever called us.
+    turn_observations.bind_post_turn_context(_run)()
+
+
+def _apply_background_job(job: dict, worker_id: str) -> None:
+    """The body of one outbox job, run inside its correlation context."""
     kind = job.get("kind")
     payload = job.get("payload") or {}
     if not isinstance(payload, dict):
@@ -2657,6 +3030,9 @@ def _spawn_rolling_summary_update(user_id, conversation_id, dropped_turns,
             "dropped_turns": copy.deepcopy(dropped_turns),
             "through_turn_id": through_turn_id,
             "reply_language": reply_language,
+            # Same reason as the memory job: update_rolling_summary makes a billed
+            # provider call inside the outbox worker, long after this turn returned.
+            "request_id": request_id_var.get() or None,
         },
     })
 
@@ -3163,11 +3539,12 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
 
     # ── Tool-markup guard, LAYER 1: before anything persists this ──
     # Placement is the whole point. response_text goes into the conversation DB
-    # (_write_back_turn, just below) and into auto-memory (remember_turn_async)
-    # before any payload exists, so a guard at the HTTP boundary would still let raw
-    # control markup land in storage — where it is replayed into the next turn's
-    # context and may be acted on. Both arches converge here, so one scan covers
-    # fc_loop and legacy without either graph having to cooperate.
+    # (_write_back_turn, just below) and into auto-memory (the durable `memory_turn`
+    # outbox job queued below) before any payload exists, so a guard at the HTTP
+    # boundary would still let raw control markup land in storage — where it is
+    # replayed into the next turn's context and may be acted on. Both arches
+    # converge here, so one scan covers fc_loop and legacy without either graph
+    # having to cooperate.
     _reply_lang = extracted_context.get('reply_language', 'en')
     try:
         g.reply_language = _reply_lang  # so the boundary fallback matches the conversation
@@ -3237,6 +3614,10 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             "session_id": user_id,
             "tool_used": _tool_used,
             "idempotency_key": f"turn:{request_id}" if request_id else None,
+            # Correlation for the DEFERRED provider call this job will make. See
+            # _process_background_job: the outbox consumer is a long-lived thread
+            # shared by every turn, so the id has to travel WITH the job.
+            "request_id": request_id or None,
             "turn_started_at": (turn.get("started_at") if isinstance(turn, dict) else None),
             # Taint A+ (§2.8c): a tainted turn hardens the auto-memory bypass to
             # user-only fact extraction so untrusted content can't seed durable memory.

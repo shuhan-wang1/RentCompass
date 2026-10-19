@@ -10,6 +10,7 @@ import time
 import math
 from typing import Optional, List, Dict
 from core.tool_system import Tool
+from core.tools._argtext import clean_arg_text
 from core.maps_service import overpass_request, OverpassError, OverpassEmpty
 from core.cache_service import get_from_cache, set_to_cache, create_cache_key
 from geopy.geocoders import Nominatim
@@ -471,6 +472,30 @@ def _is_too_generic(variant: str) -> bool:
     return not [w for w in words if w not in _GENERIC_PLACE_WORDS]
 
 
+def _upgrade_generic_address(address, user_query) -> str:
+    """``address`` if it locates something, else the most specific curated place named in
+    ``user_query``, else ``address`` unchanged.
+
+    The geocode ladder deliberately refuses a variant with no locating token, so a caller
+    that passes a bare city gets a hard "Could not find coordinates" and zero POIs. The
+    user's own message usually carries the answer ("What's near Shoreditch in London?"),
+    so consult it before giving up. Only fires when the supplied address is generic, so a
+    real address/postcode is never overridden by a place name mentioned in passing.
+    NEVER raises: on any failure the caller keeps the address it had."""
+    try:
+        text = " ".join(str(address or "").split())
+        if text and not _is_too_generic(text):
+            return text
+        from core.tools.search_properties import most_specific_known_area
+        area = most_specific_known_area(user_query)
+        if area and not _is_too_generic(area):
+            print(f"🧭 [OSM POI] 地址过于宽泛，改用消息中更具体的地点 area_chars={len(area)}")
+            return area
+        return text
+    except Exception:
+        return str(address or "")
+
+
 def geocode_address(address: str, deadline: Optional[float] = None) -> Optional[tuple]:
     """将地址转换为经纬度，带有多级回退策略 + 进程内缓存。
 
@@ -929,6 +954,14 @@ def search_nearby_pois_impl(
     except (TypeError, ValueError, OverflowError):
         requested_radius = None
     radius = clamp_radius(radius)
+    # Every free-text argument is normalised BEFORE anything reads it. A model (or a
+    # planner) can pass None, a number, or text carrying a lone UTF-16 surrogate from a
+    # broken client; each used to become an opaque TypeError/UnicodeEncodeError inside the
+    # body and surface as the generic "Nearby POI lookup failed" — or, for a surrogate
+    # echoed back into the response, as a 500 further downstream.
+    address = clean_arg_text(address)
+    user_query = clean_arg_text(user_query)
+    poi_type = clean_arg_text(poi_type) or "all"
     inferred = _infer_poi_types_from_query(user_query or '')
     if str(poi_type).lower() == 'all':
         types = inferred or ['restaurant', 'supermarket', 'convenience', 'cafe']
@@ -971,6 +1004,14 @@ def search_nearby_pois_impl(
         return payload
     try:
         exact = coords_in_uk(latitude, longitude)
+        if not exact:
+            # A caller can hand this tool a place that locates nothing — the legacy planner
+            # literally passed "London" — and the geocode ladder rejects such a string
+            # (_is_too_generic) rather than silently centring the circle on a city. When the
+            # user's own words name something more specific, use THAT instead of failing:
+            # "What's near Shoreditch in London?" must search Shoreditch, not London.
+            address = _upgrade_generic_address(address, user_query)
+            payload['address'] = address
         coords = ((float(latitude), float(longitude)) if exact else
                   geocode_address(address, deadline=min(deadline, time.monotonic() + budget_s / 3)))
         if not coords:

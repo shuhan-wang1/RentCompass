@@ -694,7 +694,16 @@ class AgentMemory:
             print(f"[memory] episodic cap error_type={type(e).__name__}")
 
     def remember_turn_async(self, *args, **kwargs):
-        threading.Thread(target=self.remember_turn, args=args, kwargs=kwargs, daemon=True).start()
+        # A bare `threading.Thread(target=...)` starts in a FRESH, EMPTY context, so
+        # every provider call `remember_turn` makes (fact extraction, consolidation)
+        # logged `request_id: "-"` and belonged to no turn. asyncio never had this
+        # problem — `create_task`/`run_coroutine_threadsafe` capture `copy_context()`
+        # — which is why only the thread/executor spawn sites were unattributable.
+        # `spawn_observed_thread` makes the thread boundary behave like an await
+        # boundary; it starts the thread, so this stays one call.
+        from uk_rent_agent.observability import spawn_observed_thread
+
+        spawn_observed_thread(self.remember_turn, args=args, kwargs=kwargs)
 
     def maybe_reflect(self, session_id, user_id):
         user_id = _valid_user_id(user_id)

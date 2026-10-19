@@ -4,21 +4,42 @@ Operational runbook for evaluating and gradually exposing a configurable
 candidate (`fc_loop` by default, or `manager_v1` with specialists explicitly
 enabled) against the standing `legacy` rollback pool.
 The offline gate evaluator is `scripts/canary_report.py`; it reads the `canary.turn`
-telemetry stream and returns an exit code (0 proceed, 2 hold/stage-pause, 3 zero-tolerance).
+telemetry stream and returns an exit code (0 proceed, 2 hold/stage-pause/instrumentation-hold,
+3 zero-tolerance **on a valid measurement**). §5 has the full contract, including why
+an invalid measurement can never return 3.
 
 ---
 
-## 0. The next release on this host (with PR #83)
+## 0. The release procedure on this host (as of `1df0d4f`, deployed 2026-09-03)
 
 `$REPO` below is your checkout (`/…/uk_rent_recommendation`); every path is
-relative to it. This section is the whole procedure for the next release on the
+relative to it. This section is the whole procedure for a release on the
 production box; the rest of the runbook is the rollout machinery it hands off to.
 
+**This section used to be titled "The next release on this host (with PR #83)".**
+PRs #83 and #84 are merged and the release they describe HAPPENED: `1df0d4f`
+(`1df0d4f7140f366e42b120fc9629fdb87e738428`) was deployed to both pools on
+2026-09-03 ~10:20 UTC, routing unchanged, and the monitor was reinstalled the
+same day. Read what follows as the standing procedure, not as pending work.
+
 **Current state, for reference:** no weighted include is installed
-(`/etc/nginx/snippets/rentcompass-canary-routing.conf` does not exist), the site
-conf's sole upstream is `127.0.0.1:5002`, and the root `.env` contains **no
-`CANARY_*` key at all** — so every consumer resolves the candidate identity to
-`fc_loop:0:0`, which passes every whitelist.
+(`/etc/nginx/snippets/rentcompass-canary-routing.conf` does not exist) and the
+site conf's sole upstream is `127.0.0.1:5002`.
+
+The root `.env` sets **no `CANARY_AGENT_ARCH`, no `CANARY_MANAGER_V1_SPECIALISTS`
+and no `CANARY_USE_MCP_TOOLS`** — so every consumer resolves the candidate
+identity to `fc_loop:0:0`, which passes every whitelist. It is **not** true that
+the file has "no `CANARY_*` key at all", and a reader who greps `CANARY` will
+find three keys that matter:
+
+| key in the root `.env` | what it is | who writes it | who reads it |
+|---|---|---|---|
+| `FC_CANARY_IMAGE` | the immutable candidate image tag, e.g. `uk-rent-agent:canary-fc-loop-1df0d4f` | `deploy/update.sh` | `docker-compose.yml` (`:?`, so an unset value fails **every** compose command), `switch_pool.sh` |
+| `FC_CANARY_SHA` | the candidate's full 40-char commit; becomes `APP_CANDIDATE_SHA` for `app-fc` and therefore `X-Agent-Version` on `:5002` | `deploy/update.sh` | compose, `rentcompass-monitor.sh` pin check |
+| `LEGACY_APP_SHA` | the same, for the `legacy` pool on `:5001` | `deploy/update.sh` | compose (`:-`, so a missing value can never block the rollback target from starting), `rentcompass-monitor.sh` pin check |
+
+All three are **written by the deploy path**. Do not hand-edit them either — the
+instruction below is "leave the root `.env` alone", not "the file is empty".
 
 ### Before the release
 
@@ -51,8 +72,18 @@ conf's sole upstream is `127.0.0.1:5002`, and the root `.env` contains **no
 6. If anything goes wrong mid-release, the emergency lever works against the
    still-old containers:
    ```bash
-   sudo bash deploy/switch_pool.sh --to legacy --allow-unidentified-target
+   sudo bash deploy/switch_pool.sh --to legacy
    ```
+   **No `--allow-unidentified-target`.** Since the `1df0d4f` release the legacy
+   pool reports its full 40-char commit (`LEGACY_APP_SHA` is set in the root
+   `.env` and `app` has been recreated), so rollback passes the provenance check
+   unaided. Add `--allow-unidentified-target` **only** if the switch actually
+   refuses with `target reports a non-full sha` — i.e. against a pre-2026-09
+   image, or one whose `.env` pin was cleared. It relaxes the SHA check only, it
+   is restricted to weight-0 rollback by `set_canary_weight.sh`, and it must
+   never become routine: an operator who pastes it by habit will paste it on a
+   *forward* switch, where "I cannot prove what I am exposing traffic to" is
+   exactly the wrong thing to wave through.
 
 ### Verify
 
@@ -60,22 +91,44 @@ conf's sole upstream is `127.0.0.1:5002`, and the root `.env` contains **no
    with `X-Agent-Arch: legacy` / `fc_loop`, `X-Agent-Specialists: 0`, and the new
    full 40-char `X-Agent-Version`. `bash deploy/update.sh --status` prints the
    same in one place.
+
+   **This is now the OBSERVED state, not an aspiration** (verified on both pools
+   2026-09-03 and again 2026-09-06). It was written before any image emitted
+   `X-Agent-Specialists`, and several comments in the deploy scripts still
+   describe that older world; they are annotated `CORRECTED 2026-09-06`. The
+   absent-header exemption stays in the code for a pool that has not been
+   rebuilt — a pool that positively answers `1` where `0` is expected is still
+   refused outright.
 8. `.runtime/checkpoints_fc.sqlite3` must still be the file that is growing; no
    `checkpoints_fc_loop_specialists-0.sqlite3` should appear.
 
 ### After BOTH pools verify — not before
 
-9. Reinstall the monitor. **Order matters**: the new monitor is tolerant of a pool
-   that sends no `X-Agent-Specialists` header, but the rest of it expects the new
-   build, and `check_install_drift.sh` is red until this runs.
+9. Reinstall the monitor — **done for `1df0d4f` on 2026-09-03**; the ongoing
+   check is the drift check, not the install. **Order matters**: the monitor is
+   tolerant of a pool that sends no `X-Agent-Specialists` header, but the rest of
+   it expects the new build, and `check_install_drift.sh` is red until the
+   install runs.
    ```bash
    sudo install -m 0755 deploy/monitoring/rentcompass-monitor.sh /usr/local/bin/rentcompass-monitor.sh
    bash deploy/monitoring/check_install_drift.sh
    ```
+   Run `bash deploy/monitoring/check_install_drift.sh` on its own after **any**
+   release, and after any reboot: it is read-only and it is what tells you
+   whether git, `deploy/monitoring/rentcompass-monitor.sha256`, the installed
+   copy in `/usr/local/bin` and the systemd unit still agree. **Every commit that
+   edits `rentcompass-monitor.sh` makes it red until the install above is re-run**
+   — regenerate the manifest in the same commit with
+   `bash deploy/monitoring/check_install_drift.sh --write-manifest`.
 10. `deploy/run_canary_gate.sh` now resolves the interpreter itself (this host has
     no `python` on PATH, only `python3`; the old default exited 127 before running
     the report, so the automatic zero-tolerance rollback silently could not fire).
-    If you ever see exit 127 from it, pin the interpreter explicitly with
+    Its search order prefers a repo virtualenv, but **there is none on this host**
+    (neither `$REPO/.venv` nor `$REPO/venv` exists), so resolution lands on
+    `/usr/bin/python3` — which is sufficient, because `scripts/canary_report.py`
+    is stdlib-only. The project's actual venv is `/tmp/rentcompass-venv`, which
+    the search order never consults. If you ever see exit 127 from it, or want
+    that venv, pin the interpreter explicitly with
     `CANARY_GATE_PYTHON=/tmp/rentcompass-venv/bin/python`.
 
 ### Never, casually
@@ -89,8 +142,47 @@ conf's sole upstream is `127.0.0.1:5002`, and the root `.env` contains **no
     reset, and it prints the exact command that puts the candidate back.
 12. Do **not** run `deploy/switch_pool_rehearse.sh` from an automated context: it
     starts a real nginx and probes the real pools. The offline equivalents are
-    `deploy/test_switch_pool_assertions.sh`, `deploy/test_update_assertions.sh`
-    and `deploy/test_release_assertions.sh`, which touch no network at all.
+    `deploy/test_switch_pool_assertions.sh`, `deploy/test_update_assertions.sh`,
+    `deploy/test_release_assertions.sh`, `deploy/test_set_canary_weight_assertions.sh`
+    and `deploy/monitoring/test_monitor_assertions.sh`, which touch no network at all.
+
+### Testing the pools directly (loopback), and the two traps in it
+
+Both traps below cost a previous test round real turns and a wrong diagnosis.
+
+**1. The session cookie is `Secure`, so loopback HTTP drops it.** The Flask
+session cookie is issued `session=…; Secure; HttpOnly; Path=/; SameSite=Lax`
+even though `config.py` defaults `session_cookie_secure=False`. Over plain HTTP
+to `127.0.0.1:5001` / `:5002` a spec-compliant cookie jar will **not** send it
+back, so **every turn mints a new `user_id` and a new `conversation_id`** and a
+multi-turn scenario looks context-blind for that reason alone — nothing to do
+with the agent. Real traffic arrives through nginx over TLS and is unaffected.
+Relay the cookie by hand (what a browser does), e.g.
+
+```bash
+jar=$(mktemp)
+curl -sD - -o /dev/null -X POST http://127.0.0.1:5002/api/alex \
+  -H 'Content-Type: application/json' -H 'X-Request-Id: agenttest-demo-1-fc' \
+  -d '{"message":"...","ui_language":"en"}' | tr -d '\r' \
+  | sed -n 's/^[Ss]et-[Cc]ookie: \(session=[^;]*\).*/\1/p' > "$jar"
+# then send `-H "Cookie: $(cat "$jar")"` on every following turn
+```
+
+Do **not** "fix" this by flipping the cookie flag on production.
+
+**2. Label test traffic in `X-Request-Id`.** Every turn writes a `canary.turn`
+record keyed on the request id, and those records are what
+`scripts/canary_report.py` and the gate read. Send an explicit, greppable id so
+your traffic can be found and excluded:
+
+* `agenttest-<round>-<case>-<pool>` for hand-driven scenarios
+  (e.g. `agenttest-t1-f4b-fc`);
+* `answer-probe-<uuid4>` is what `deploy/probe_pool_answer.py` sends by itself.
+
+The id is kept verbatim only if it matches `^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$`
+(`observability.new_request_id`); anything else is **replaced** by a SHA-256
+digest of itself, so a "clever" id becomes unfindable. A repeated id replays the
+persisted response instead of driving a new turn — always use a fresh one.
 
 ---
 
@@ -603,7 +695,15 @@ So before **any** weight > 0, the controller drives one real turn through
   fallback, the greeting fast path, the endpoint crash strings);
 - the grounding substring the query's tool must produce — the default query is
   benchmark case D1, `Is Peckham (SE15 5DP) safe to live in?`, whose grounded answer
-  must cite `data.police.uk`.
+  must cite `data.police.uk`;
+- **added 2026-09-06** — that an answer announcing a lookup actually made one. The
+  probe mirrors `app/core/agent_loop.py::ANNOUNCED_TOOL_PATTERNS` and the two stub
+  markers, and convicts only on both halves together: an announcement in the text
+  **and** `tool_batches == 0` **and** `tool_ledger_status == "complete"`. That
+  heuristic half needs `--canary-log`; the explicit stub markers are checked beside
+  the canned/fallback list, so they fail a turn even with no readable sink. An
+  `unavailable` ledger or a missing `tool_batches` key never convicts. README §13
+  and §4 carry the reasoning.
 
 ```bash
 # Run it by hand against a pool before a stage:
@@ -731,7 +831,12 @@ Two classes. **Zero-tolerance** metrics are absolute (any occurrence rolls back)
 known **base98 family** of eval findings gives legacy a non-zero baseline on them — we gate
 on the candidate being no worse than legacy, not on an absolute zero.
 
-### Zero-tolerance (instant rollback → exit 3)
+### Zero-tolerance (instant rollback → exit 3 on a valid measurement)
+
+The counters below are always computed and always printed. They are **actionable**
+only on a window that is a measurement, and only for the arm under test — see §5,
+"An invalid measurement can never roll anything back" and "Zero-tolerance answers
+for ONE ARM — `--candidate-sha`".
 
 - **tainted / unauthorized memory write executed** — must be **0**. (A *denied* attempt is
   the safe A+ path: non-clean but never executed — it does **not** trip this.)
@@ -756,7 +861,12 @@ on the candidate being no worse than legacy, not on an absolute zero.
   longer decides anything on its own, because a runtime whose every dispatch is refused
   reports `failed = 0`.
 
-Exit-code precedence: **zero-tolerance (3) > hold/stage-pause (2) > proceed (0)**.
+Exit-code precedence, **corrected 2026-09-06** (this used to read "zero-tolerance (3)
+> hold/stage-pause (2) > proceed (0)", which was the live defect §5 describes):
+**measurement-invalid (2) ▸ zero-tolerance (3) ▸ instrumentation-hold (2) ▸
+stage-pause (2) ▸ proceed (0)**. Every `instrumentation.failed` reason other than the
+three invalidity facts keeps its old rank *below* zero-tolerance — those windows are
+readable, merely incomplete. §5 is the authority on this table.
 
 ---
 
@@ -786,11 +896,16 @@ Exit-code precedence: **zero-tolerance (3) > hold/stage-pause (2) > proceed (0)*
 
 - Run the weight-0 command above. It is the emergency rollback verb.
 - On a **single-upstream** host (this box today) the verb is
-  `sudo bash deploy/switch_pool.sh --to legacy --allow-unidentified-target`. The
-  `--allow-unidentified-target` flag is still needed while the deployed legacy pool
-  cannot name its commit; it relaxes the SHA check only. It works against a pool
-  that sends no `X-Agent-Specialists` header (see above) — that exemption is what
-  keeps this lever usable during a release.
+  `sudo bash deploy/switch_pool.sh --to legacy`. **CORRECTED 2026-09-06: no
+  `--allow-unidentified-target`.** That flag was needed while the deployed legacy
+  pool could not name its commit; the `1df0d4f` release of 2026-09-03 set
+  `LEGACY_APP_SHA` in the root `.env` and recreated `app`, so `:5001/ready` now
+  states a full 40-char commit and the lever verifies provenance unaided. Keep
+  the flag for a pool that has genuinely lost its stamp (a pre-2026-09 image, or
+  a cleared `.env` pin): it relaxes the SHA check only, and `set_canary_weight.sh`
+  restricts it to weight 0. The lever also works against a pool that sends no
+  `X-Agent-Specialists` header (see above) — that exemption is what keeps it
+  usable against an un-rebuilt image, though both pools do send the header today.
 - The last-resort manual path, if the lever itself is broken: edit the
   `server 127.0.0.1:5002;` line in `/etc/nginx/sites-available/rentcompass.co.uk.conf`
   to `5001`, then `sudo nginx -t && sudo systemctl reload nginx`.
@@ -799,7 +914,11 @@ Exit-code precedence: **zero-tolerance (3) > hold/stage-pause (2) > proceed (0)*
   treated as untrusted/abandoned state.
 - When the report is run through `deploy/run_canary_gate.sh`, a
   **zero-tolerance** breach (exit 3) automatically invokes the weight-0 command.
-  Running `canary_report.py` directly never mutates routing.
+  Running `canary_report.py` directly never mutates routing. **Corrected
+  2026-09-06:** the report returns 3 only for a window it has judged a valid
+  measurement, and the wrapper carries a second, independent gate that refuses the
+  rollback verb (`ROLLBACK_REFUSED`, exit 2) if it is ever handed a 3 beside
+  `measurement_valid=False`. See §5.
 
 ---
 
@@ -857,10 +976,15 @@ python scripts/canary_report.py --input .runtime/logs/ --stage c3 --window 72  -
   | code | meaning |
   |---|---|
   | **0** | proceed / stage-progress-ok |
-  | **2** | hold, stage-pause, **or** instrumentation-hold |
-  | **3** | zero-tolerance breach (instant rollback) |
+  | **2** | hold, stage-pause, **or** instrumentation-hold (including *the measurement is invalid*) |
+  | **3** | zero-tolerance breach **on a valid measurement** (instant rollback) |
   | **1** | input/runtime error — no `--input`, unparseable `--since`/`--now`, negative `--expect-turns` |
   | **64** | CLI usage error — unknown flag, or an option missing its argument |
+
+  **Exit 3 is an action, not a report.** `deploy/run_canary_gate.sh` turns it into
+  `set_canary_weight.sh --weight 0`, so the report will only ever return it for a window
+  that is a *measurement* — see "An invalid measurement can never roll anything back"
+  below. Every other verdict leaves traffic exactly where it is.
 
   `--json` takes a **PATH**. A bare `--json` used to abort inside argparse with **exit 2**,
   which is indistinguishable from STAGE-PAUSE if only `$?` is checked; it now exits **64**,
@@ -970,15 +1094,42 @@ the run that was driven, so every rate in the report has an unknown denominator.
 ranks *below* zero-tolerance: a run that both lost turns and committed a real breach
 still exits **3**.
 
-### Mixed `telemetry_schema_version` in one window is also an INSTRUMENTATION-HOLD
+### An invalid measurement can never roll anything back
 
-`canary_report.py` refuses a window whose records mix
-`telemetry_schema_version` **2** and **3**: the two contracts are not comparable, so
-any rate computed across both has an undefined denominator.
+Before judging a window, the report asks whether the window is a **measurement at
+all**. Three facts say it is not, and each says the same thing — the rates have no
+single denominator:
 
-**This will fire on the day you roll a pool forward.** While the legacy pool still
-runs a v2 image and the candidate already emits v3, every window spanning the cutover
-HOLDs immediately. That is the check working, not a regression in the candidate.
+| fact | why it invalidates |
+|---|---|
+| mixed `telemetry_schema_version` | `llm_calls` and `tool_batches` were *redefined* at v3; summing across the boundary describes no build |
+| mixed candidate builds (after abbreviation-folding) | two releases averaged together |
+| record contract-violation rate above **5%** (`canary_report.MEASUREMENT_INVALID_VIOLATION_RATE`), or an empty window | part of the population is unreadable |
+
+When any of them holds, the verdict is **INSTRUMENTATION-HOLD (exit 2)** and it
+**outranks zero-tolerance**. The zero-tolerance and stage-pause facts are still
+computed and still printed — marked `BREACH (not actionable)` with a `NOT ACTIONABLE
+until instrumentation is valid` note — but they trigger **no automated rollback**.
+Nothing is promoted either: 2 is a hold. Fix the instrumentation, re-run the window,
+and act on what the valid window says.
+
+> **Changed 2026-09-06.** This used to be the other way round, and it was live: a
+> window straddling the 2026-09-03 deploy exited **3**, not 2, because zero-tolerance
+> outranked the mixed-schema hold and the pre-v3 history in the stream carried real
+> counters. Under `deploy/run_canary_gate.sh` that exit fires
+> `set_canary_weight.sh --weight 0` — so an operator following the paragraph below
+> verbatim (`--since <before-the-deploy>`) would have rolled a clean fc candidate to
+> 0% traffic on the strength of rows earlier builds wrote. The remedy in that
+> paragraph was right; the sentence claiming the window "HOLDs immediately" was not.
+> The wrapper now also refuses the rollback verb outright (`ROLLBACK_REFUSED`,
+> exit 2) if it is ever handed a 3 alongside `measurement_valid=False`.
+
+### Mixed `telemetry_schema_version` in one window
+
+This is the invalidity you will actually meet. **It fires on the day you roll a pool
+forward:** while the legacy pool still runs a v2 image and the candidate already emits
+v3, every window spanning the cutover holds. That is the check working, not a
+regression in the candidate.
 
 The correct handling is to **move `--since` to after BOTH pools finished deploying**,
 so the window contains a single schema:
@@ -994,6 +1145,54 @@ bash deploy/run_canary_gate.sh --input .runtime/logs/ --stage c1 --since <both-p
 Do **not** relax the check or hand-edit the logs to make the window pass. The stage
 hold clocks (§2) run from the window you open, so a window opened after the deploy is
 also the only one whose elapsed-hours figure means anything.
+
+### Zero-tolerance answers for ONE ARM — `--candidate-sha`
+
+Zero-tolerance rolls back **a release**, so it counts only rows that release produced:
+the `--candidate-arch` rows, and — when you pin one with `--candidate-sha <sha>` —
+only the rows of that build. Everything else is reported *beside* it and never gated
+on:
+
+- `zero_tolerance_control` — the control arm's counters. It is the baseline being
+  compared against; its breaches say nothing about whether the candidate may ship.
+- `zero_tolerance_other_builds` — rows of the candidate arch from a **different**
+  build. History is not evidence about a build that did not exist yet.
+- `zero_tolerance_by_candidate_sha` — the full per-build breakdown, so "where did
+  those 468 counters come from" is a lookup rather than an investigation.
+
+On this host that distinction is not academic: every zero-tolerance row in
+`.runtime/logs/` was written either by the legacy arm or by an **earlier fc_loop
+build** (`4171d84`, `9129280`, and rows from a pool started with no sha at all). The
+deployed candidate has produced none. Pin the build whenever the stream still holds
+records from an older one:
+
+```bash
+bash deploy/run_canary_gate.sh --input .runtime/logs/ --stage c1 \
+  --since <both-pools-live-ISO> --candidate-sha <FC_CANARY_SHA>
+```
+
+A full and an abbreviated sha are folded onto one build when the full form appears in
+the same window, so `4171d84` and `4171d84778be…` are no longer counted as two
+releases. An abbreviation that matches nothing — or matches two shas — stays its own
+group rather than being guessed.
+
+### Read the `[INSTRUMENTATION]` block before the verdict
+
+Every run now prints it, clean or not, directly under `decision :`:
+
+```
+[INSTRUMENTATION] measurement_valid=False  <-- THE MEASUREMENT IS INVALID; ...
+  records validated   : 224  conformant=179  violating=45
+  violation rate      : 20.1%  (measurement-invalid above 5%)
+  schema versions     : [2, 3]  MIXED
+  candidate builds    : ['1df0d4f…', '4171d84778be…', '7db03e7', 'shaSER']  MIXED
+  sha aliases folded  : {'4171d84': '4171d84778be…'}
+  undated / unparseable / unattributable : 0 / 0 / 0
+```
+
+It used to exist only in `--json`, so an operator reading the console saw a confident
+BLOCK or PROCEED with no hint that the window mixed two schemas, four build labels and
+45 unreadable records. **The verdict is only as good as this block.**
 
 > Passing 50 rounds is a **functional** gate only. The `internal` stage still requires
 > its **24h minimum elapsed** (see the stage table) — driving 50 turns quickly does not
@@ -1014,14 +1213,18 @@ if a regression surfaces post-cutover).
 
 ---
 
-## Legacy pool self-identification (added 2026-07-26, inert)
+## Legacy pool self-identification (added 2026-07-26 — LIVE since 2026-09-03)
 
-`APP_CANDIDATE_SHA` for the `app` service now reads `${LEGACY_APP_SHA:-}`. It is **wiring only
-and takes effect at the next planned public rebuild** — per HANDOFF §3.10, the rollback target
-is deliberately NOT rebuilt just to populate it, because rebuilding the only escape hatch right
-after moving traffic onto an unproven candidate is the worst possible timing.
+**Status: done.** `APP_CANDIDATE_SHA` for the `app` service reads `${LEGACY_APP_SHA:-}`. That
+was wiring only, waiting on the next planned public rebuild — per HANDOFF §3.10 the rollback
+target was deliberately NOT rebuilt just to populate it, because rebuilding the only escape
+hatch right after moving traffic onto an unproven candidate is the worst possible timing. The
+`1df0d4f` release of 2026-09-03 was that planned rebuild: it set
+`LEGACY_APP_SHA=1df0d4f7140f366e42b120fc9629fdb87e738428` in the root `.env` and recreated
+`app`, and `:5001/ready` now answers that full 40-char sha. Everything below is retained as the
+contract for a pool that has NOT been rebuilt.
 
-Until it is populated the legacy pool may answer `x-agent-version: unknown`. On a
+While it is unpopulated the legacy pool answers `x-agent-version: unknown`. On a
 weighted install the emergency weight-0 controller accepts that condition only for
 legacy, after validating readiness, architecture and `X-Agent-Specialists: 0`:
 

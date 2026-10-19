@@ -98,23 +98,31 @@ check "edge vs the EXPECTED pool is silent"     "silent"               "$(edge_v
 check "edge vs the wrong pool would page"       "sev3-edge-mismatch"   "$(edge_ver 200 abc123 unknown)"
 echo
 
-# --- the specialist-header rule, verbatim from the monitor -------------------
-# R3-M3: `probe` reports `none` when X-Agent-Specialists is absent, and the header
-# does not exist in origin/main — so the first version of this check paged sev3 on
-# EVERY run for every pool, five minutes apart, from the moment the new monitor was
-# installed until both pools had been rebuilt. An always-firing alert is an ignored
-# alert, which is the same defect the "expected public arch" section above records.
-specialists_ok() { # <observed> <expected>
-  local observed="${1:-}" expected="${2:-}"
-  if [ "$observed" = "$expected" ]; then return 0; fi
-  if [ "$expected" = 0 ] && { [ -z "$observed" ] || [ "$observed" = none ]; }; then return 0; fi
-  return 1
-}
+# --- the specialist-header rule, EXTRACTED from the monitor ------------------
+# R3-M3: `probe` reports `none` when X-Agent-Specialists is absent, and no image
+# built before 2026-08-31 emits it — so the first version of this check paged sev3
+# on EVERY run for every pool, five minutes apart, from the moment the new monitor
+# was installed until both pools had been rebuilt. An always-firing alert is an
+# ignored alert, which is the same defect the "expected public arch" section above
+# records.
+#
+# CORRECTED 2026-09-06: the 1df0d4f release of 2026-09-03 rebuilt both pools, and
+# :5001 and :5002 now answer `x-agent-specialists: 0`. So the ABSENT-header rows
+# below are the compatibility path for an un-rebuilt image, and `spec 0 0` is what
+# this host actually produces every five minutes.
+#
+# The rule is SOURCED from the shipped monitor, not transcribed: a hand-copied
+# condition passes no matter what the script says, which is the defect this whole
+# file exists to avoid. `tests/test_r3c_specialist_rule.py` additionally holds all
+# four shell copies byte-identical.
+MON_SH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/rentcompass-monitor.sh"
+eval "$(sed -n '/^specialists_ok() {/,/^}/p' "$MON_SH")"
 spec() { specialists_ok "$1" "$2" && echo "silent" || echo "sev3-specialists"; }
 echo "--- specialist header (absent == 0 only when 0 is expected) ---"
-check "matching bits are silent"                    "silent"           "$(spec 0 0)"
+check "the rule was sourced from the shipped monitor" "function" "$(type -t specialists_ok)"
+check "TODAY'S POOLS: 0 observed where 0 is expected" "silent"           "$(spec 0 0)"
 check "matching 1s are silent"                      "silent"           "$(spec 1 1)"
-check "TODAY'S IMAGE: absent where 0 is expected"   "silent"           "$(spec none 0)"
+check "AN UN-REBUILT IMAGE: absent where 0 is expected" "silent"        "$(spec none 0)"
 check "an empty value where 0 is expected"          "silent"           "$(spec '' 0)"
 check "absent where 1 is expected still pages"      "sev3-specialists" "$(spec none 1)"
 check "1 where 0 is expected still pages"           "sev3-specialists" "$(spec 1 0)"
@@ -122,6 +130,31 @@ check "0 where 1 is expected still pages"           "sev3-specialists" "$(spec 0
 # `_expected_specialists` is literally `none` when the edge serves an arch that is
 # neither legacy nor the configured candidate; that must stay an alert.
 check "an unresolvable expectation still pages"     "sev3-specialists" "$(spec 0 none)"
+echo
+
+# --- legacy-pool provenance: this host names its commit now ------------------
+# Both legacy conditions are EXTRACTED and evaluated by
+# tests/test_monitor_legacy_pin_alert.py, which is where the real blocks are read
+# out of the shipped file. These rows record the STATE those blocks now see, which
+# changed on 2026-09-03 and which the monitor's prose used to deny:
+# LEGACY_APP_SHA is set in the root .env and `app` was recreated, so :5001 answers
+# a full 40-char sha. The "cannot state its commit" warning is therefore inert, and
+# the pin check is live-and-agreeing rather than unreachable.
+LEGACY_SHA40="$(printf '1df0d4f7140f366e42b120fc9629fdb87e738428')"
+unknown_alert() { # <l_ver>
+  { [ "$1" = "unknown" ] || [ "$1" = "none" ]; } && echo "sev4-unidentified" || echo "silent"; }
+legacy_pin() {   # <l_ver> <pinned>
+  [ -n "$2" ] && [ "$1" != "none" ] && [ "$1" != "unknown" ] && [ "$1" != "$2" ] \
+    && echo "sev3-pin-mismatch" || echo "silent"; }
+echo "--- legacy pool provenance (post-1df0d4f) ---"
+check "a 40-char legacy sha raises no 'cannot state' warning" "silent" \
+      "$(unknown_alert "$LEGACY_SHA40")"
+check "a regressed legacy pool still warns"        "sev4-unidentified" "$(unknown_alert unknown)"
+check "legacy serving its pin is silent"           "silent"            "$(legacy_pin "$LEGACY_SHA40" "$LEGACY_SHA40")"
+check "legacy drifting off its pin now pages"      "sev3-pin-mismatch" "$(legacy_pin "$LEGACY_SHA40" 0000000000000000000000000000000000000000)"
+# The documented intermediate state (pin set, container not yet recreated) must NOT
+# double-report the warning above.
+check "pin set but container not recreated stays silent" "silent"      "$(legacy_pin unknown "$LEGACY_SHA40")"
 echo
 
 # --- end-to-end exit contract ------------------------------------------------

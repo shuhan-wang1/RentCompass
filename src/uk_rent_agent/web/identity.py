@@ -8,6 +8,8 @@ Contract (api_contract_v1):
   - user_id: 1–64 chars, [A-Za-z0-9_-]+. Invalid client-supplied id → 400.
   - Resolution priority: body user_id > X-User-Id header > ?user_id= query > cookie > mint.
   - Non-string chat message → 400.
+  - A chat message carrying an unpaired UTF-16 surrogate, a NUL, or another
+    C0 control → 400 (they are unencodable/untruncatable, not merely odd).
 """
 from __future__ import annotations
 
@@ -62,13 +64,48 @@ def resolve_user_id(
     return mint(), True
 
 
+#: Any code point in the UTF-16 surrogate range. ``json.loads`` accepts a
+#: ``\udXXX`` escape and Python happily holds the resulting lone surrogate in a
+#: ``str`` — but it cannot be encoded as UTF-8, so the FIRST thing that tries
+#: (sqlite3's strict bind-parameter encoder, on the durable conversation store)
+#: raises ``UnicodeEncodeError`` deep inside the request and the caller sees a 500.
+#: An unpaired surrogate is not text a user can have typed; it is rejected here, at
+#: the request boundary, as the client error it is.
+SURROGATE_RE = re.compile(r"[\ud800-\udfff]")
+
+#: C0 controls (plus DEL) that are not ordinary whitespace. NUL in particular
+#: truncates the string for several SQLite readers and terminates a C string in any
+#: downstream consumer, so a message carrying one is refused rather than stored.
+CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def text_is_storable(value) -> bool:
+    """True when ``value`` is a str that can be encoded and durably stored as UTF-8.
+
+    False for a lone surrogate or an embedded NUL — the two classes that make a
+    string unencodable/untruncatable rather than merely unusual.
+    """
+    if not isinstance(value, str):
+        return False
+    return not (SURROGATE_RE.search(value) or "\x00" in value)
+
+
 def normalize_message(message):
     """Validate a chat message; return the original string unchanged.
 
-    Raises ``InvalidMessage`` for a non-string or an empty/whitespace-only string.
+    Raises ``InvalidMessage`` for a non-string, an empty/whitespace-only string, an
+    unpaired UTF-16 surrogate, or a C0 control character other than tab/newline/CR.
+    The last two are rejected HERE, before any durable write, because they are the
+    inputs that turn a client mistake into a server error further down (see
+    ``SURROGATE_RE``/``CONTROL_RE``).
     """
     if not isinstance(message, str):
         raise InvalidMessage("message must be a string")
     if not message.strip():
         raise InvalidMessage("message is required")
+    if SURROGATE_RE.search(message):
+        raise InvalidMessage(
+            "message contains an unpaired unicode surrogate and cannot be encoded")
+    if CONTROL_RE.search(message):
+        raise InvalidMessage("message contains disallowed control characters")
     return message

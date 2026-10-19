@@ -396,12 +396,17 @@ fi
 # Provenance is directional. A FORWARD switch onto a pool that cannot name its commit is
 # refused. A ROLLBACK onto one is allowed with --allow-unidentified-target, loudly: being
 # unable to prove what you rolled back to beats staying on something known to be broken.
-# The public legacy pool currently reports 'unknown'. The compose wiring now exists
-# (`app`'s APP_CANDIDATE_SHA: "${LEGACY_APP_SHA:-}"), but it is INERT until that
-# container is next recreated, and `app` must NOT be recreated while it is the standing
-# escape hatch. So --allow-unidentified-target stays necessary for legacy rollback until
-# the next PLANNED public rebuild sets LEGACY_APP_SHA in the root .env. Once it does,
-# rollback passes the 40-char check on its own and this flag should stop being routine.
+# CORRECTED 2026-09-06: the public legacy pool USED to report 'unknown', because the
+# compose wiring (`app`'s APP_CANDIDATE_SHA: "${LEGACY_APP_SHA:-}") was INERT until that
+# container was next recreated, and `app` was not recreated while it was the standing
+# escape hatch. THAT PLANNED REBUILD HAS HAPPENED: the 1df0d4f release of 2026-09-03 set
+# LEGACY_APP_SHA in the root .env and recreated `app`, and :5001/ready now answers a full
+# 40-char x-agent-version. So `--to legacy` passes this check unaided, and
+# --allow-unidentified-target is NO LONGER part of the routine rollback command
+# (docs/canary_runbook.md section 0.6). It is now only for a pool that has genuinely lost
+# its stamp: a pre-2026-09 image, or one whose .env pin was cleared. It must never be
+# pasted on a FORWARD switch — set_canary_weight.sh restricts it to weight 0 precisely
+# because an operator trained to paste it routinely will paste it where it is wrong.
 if [[ ${#t_sha} -ne 40 ]]; then
   if [[ "$ALLOW_UNIDENTIFIED" -eq 1 ]]; then
     printf '\033[33mWARN\033[0m target cannot state its commit (x-agent-version: %s) — proceeding under --allow-unidentified-target\n' "${t_sha:-<absent>}"

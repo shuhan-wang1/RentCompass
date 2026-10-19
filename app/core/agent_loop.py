@@ -25,6 +25,7 @@ import functools
 import json
 import logging
 import os
+import re
 import time
 from dataclasses import dataclass
 from typing import Any, Literal, Optional
@@ -68,6 +69,10 @@ from core.langgraph_agent import (
     _structured_search_tool_data,
     format_refinement_output,
 )
+from core.search_readiness import (
+    detect_relative_budget_delta,
+    resolve_relative_budget,
+)
 from core.candidate_validation import (
     render_candidate_status,
     render_similar_listings,
@@ -100,6 +105,149 @@ _UNTRUSTED_TOOLS = frozenset({
     "web_search", "search_properties", "reasoning_property", "multi_search",
     "get_property_details", "search_nearby_pois",
 })
+
+# ─── Announced-but-unexecuted tool calls ────────────────────────────
+# A turn that ends on "Let me search for actual one-bedroom listings…" with
+# `tool_batches == 0` promised the user a lookup and then stopped. It carries NO canned or
+# fallback marker, so `deploy/probe_pool_answer.py` and every marker-based monitor score it
+# a PASS — the failure class is invisible. These patterns are the shared definition of that
+# shape: the loop uses them to force one more (bounded) iteration, and the deploy probe
+# mirrors this list so the monitor sees what the loop sees.
+#
+# Each pattern is a search verb the answer commits to in the FUTURE. "Let me know", "I'll
+# be honest" and every other let-me/I'll phrasing without a lookup verb deliberately do not
+# match: the verb is required, not the auxiliary.
+ANNOUNCED_TOOL_PATTERNS: tuple[str, ...] = (
+    # EN
+    r"\blet me\s+(?:just\s+|first\s+|quickly\s+|go\s+(?:ahead\s+)?and\s+)?"
+    r"(?:search|look\s+up|look\s+for|check|find|fetch|pull|run|query|verify|confirm|"
+    r"retrieve|get)\b",
+    r"\bi(?:'|’)?ll\s+(?:just\s+|first\s+|quickly\s+|go\s+(?:ahead\s+)?and\s+|now\s+)?"
+    r"(?:search|look\s+up|look\s+for|check|find|fetch|pull|run|query|verify|confirm|"
+    r"retrieve|get)\b",
+    r"\bi\s+will\s+(?:now\s+)?(?:search|look\s+up|look\s+for|check|find|fetch|pull|run|"
+    r"query|verify|confirm|retrieve)\b",
+    r"\bi(?:'|’)?m\s+going\s+to\s+(?:search|look\s+up|look\s+for|check|find|fetch|pull|"
+    r"run|query|verify)\b",
+    r"\blet me check the context\b",
+    r"\b(?:one\s+moment|give\s+me\s+a\s+(?:moment|second|sec))\s+while\s+i\b",
+    r"\b(?:searching|checking|looking)\s+(?:for\s+\w+|now|that\s+up)\b",
+    r"\bhold\s+on\s+while\s+i\b",
+    # ZH
+    r"(?:让我|我)(?:来|先|现在|这就|马上)?(?:搜索|搜一下|搜下|查询|查一下|查下|查找|"
+    r"检索|核实|确认|看一下|看看)",
+    r"我(?:将|会|要)(?:为(?:您|你)|给(?:您|你))?(?:搜索|查询|查找|检索|核实)",
+    r"(?:稍等|请稍候|请稍等)[，,]?\s*我(?:来|先)?(?:搜索|查询|查找|检索)",
+    r"正在(?:为(?:您|你))?(?:搜索|查询|查找|检索)",
+    r"我需要(?:先)?(?:搜索|查询|查找|检索|核实)",
+)
+
+_ANNOUNCED_TOOL_RE = tuple(re.compile(p, re.IGNORECASE) for p in ANNOUNCED_TOOL_PATTERNS)
+
+# Emitted when the bounded retry ALSO produced no tool call. Explicit, stable, and
+# user-honest, so the probe can detect the class instead of scoring the stub a PASS.
+ANNOUNCED_TOOL_STUB_MARKER_EN = (
+    "I was not able to run that lookup this round, so nothing above is a fresh result.")
+ANNOUNCED_TOOL_STUB_MARKER_ZH = "本轮未能完成上述查询，以上内容并非新的检索结果。"
+
+# One nudge per turn: the marker rides on the corrective message in the transcript, so the
+# bound needs no new state channel.
+_ANNOUNCED_TOOL_NUDGE_MARKER = "fc_announced_tool_nudge"
+
+_ANNOUNCED_TOOL_NUDGE_TEXT = (
+    "COMPLETION CHECK: your last message announced a lookup ('let me search…' / "
+    "'I'll check…' / 「让我查一下…」) but no tool ran this turn, so the user would receive a "
+    "promise instead of an answer. Either CALL the tool you named now, or answer directly "
+    "from what you already have — do not announce a lookup you are not making."
+)
+
+
+def announces_unexecuted_tool(text, artifacts=None) -> bool:
+    """True when ``text`` announces a lookup and no tool actually executed this turn.
+
+    Both halves are required. An answer that announces a search AND ran one is narrating
+    work it did; an answer with no tools that never promised any is an ordinary
+    conversational reply. Only the intersection is the broken class.
+    """
+    if any(_is_executed(a) for a in (artifacts or ()) if isinstance(a, dict)):
+        return False
+    body = str(text or "")
+    if not body.strip():
+        return False
+    return any(pattern.search(body) for pattern in _ANNOUNCED_TOOL_RE)
+
+
+# ─── Internal vocabulary must not reach the user ────────────────────
+# The behaviour rule (loop_prompts.OUTPUT_HYGIENE_RULE) asks the model not to print these;
+# this is the deterministic backstop for when it does anyway. Live answers contained "the
+# tool's internal criteria still show `max_budget: 200`" and "I don't have a clear focus
+# stack showing which listings are being discussed" — honest, and implementation vocabulary
+# in the product surface. Only CLOSED-SET internal identifiers are rewritten (snake_case
+# state keys, the two block headings and the phrase "focus stack"); nothing else in the
+# answer is touched, so a legitimate sentence can never be mangled by this.
+_INTERNAL_VOCABULARY_EN = (
+    (re.compile(r"`?\bmax_budget\b`?\s*[:=]\s*`?(\d[\d,]*)`?"), r"a budget cap of £\1"),
+    (re.compile(r"`?\bmax_commute_time\b`?\s*[:=]\s*`?(\d+)`?"), r"a commute limit of \1 min"),
+    (re.compile(r"\b(?:the\s+)?focus[_ ]stack\b", re.IGNORECASE),
+     "the listings we have been discussing"),
+    (re.compile(r"\bEARLIER FOCUSES\b"), "the listings discussed earlier"),
+    (re.compile(r"\bFOCUSED PROPERTY\b"), "the listing you are looking at"),
+    (re.compile(r"`?\b(?:extracted_context|accumulated_search_criteria|"
+                r"accumulated criteria|tool_artifacts|criteria_gate_shown)\b`?"),
+     "the saved search criteria"),
+    (re.compile(r"`?\bmax_budget\b`?"), "the budget"),
+    (re.compile(r"`?\bmax_commute_time\b`?"), "the commute limit"),
+    (re.compile(r"`?\broom_type\b`?"), "the room type"),
+)
+_INTERNAL_VOCABULARY_ZH = (
+    (re.compile(r"`?\bmax_budget\b`?\s*[:=]\s*`?(\d[\d,]*)`?"), r"预算上限 £\1"),
+    (re.compile(r"`?\bmax_commute_time\b`?\s*[:=]\s*`?(\d+)`?"), r"通勤上限 \1 分钟"),
+    (re.compile(r"\b(?:the\s+)?focus[_ ]stack\b", re.IGNORECASE), "我们正在讨论的房源"),
+    (re.compile(r"\bEARLIER FOCUSES\b"), "之前讨论过的房源"),
+    (re.compile(r"\bFOCUSED PROPERTY\b"), "您正在查看的房源"),
+    (re.compile(r"`?\b(?:extracted_context|accumulated_search_criteria|"
+                r"accumulated criteria|tool_artifacts|criteria_gate_shown)\b`?"),
+     "已记录的搜索条件"),
+    (re.compile(r"`?\bmax_budget\b`?"), "预算"),
+    (re.compile(r"`?\bmax_commute_time\b`?"), "通勤上限"),
+    (re.compile(r"`?\broom_type\b`?"), "房型"),
+)
+
+
+def scrub_internal_vocabulary(text: str, reply_language: str = "en") -> str:
+    """Rewrite internal state names in a user-facing answer. Never raises."""
+    body = str(text or "")
+    if not body:
+        return body
+    rules = (_INTERNAL_VOCABULARY_ZH
+             if str(reply_language or "").lower().startswith("zh")
+             else _INTERNAL_VOCABULARY_EN)
+    try:
+        for pattern, replacement in rules:
+            body = pattern.sub(replacement, body)
+    except Exception:  # pragma: no cover - defensive
+        return str(text or "")
+    return body
+
+
+def _mark_announced_stub(text: str, reply_language: str) -> str:
+    """Append the explicit marker once, keeping whatever the model did produce."""
+    marker = (ANNOUNCED_TOOL_STUB_MARKER_ZH
+              if str(reply_language or "").lower().startswith("zh")
+              else ANNOUNCED_TOOL_STUB_MARKER_EN)
+    body = str(text or "").rstrip()
+    if marker in body:
+        return body
+    return f"{body}\n\n{marker}" if body else marker
+
+
+def _has_announce_nudge(messages) -> bool:
+    return any(
+        isinstance(getattr(m, "additional_kwargs", None), dict)
+        and m.additional_kwargs.get(_ANNOUNCED_TOOL_NUDGE_MARKER)
+        for m in (messages or ())
+    )
+
 
 # Per-tool length cap for the model-facing derived view (chars). Raw ToolResult.data is
 # ALWAYS preserved untouched in tool_artifacts; only the model channel is capped.
@@ -1267,6 +1415,31 @@ def _turn_tool_budget_s() -> float:
         return float(os.getenv("FC_TURN_TOOL_BUDGET_S", "40"))
     except (TypeError, ValueError):
         return 40.0
+
+
+# ─── Per-turn repeat-call caps (fan-out backstop) ───────────────────
+# A single Chinese-language turn ran `search_properties` THREE times (12.9 s p50, 28.4 s
+# max) plus `get_property_details` four times and `web_search` once across 6 batches and 7
+# model calls — 76.3 s and 101 K input tokens for the same answer the English turn produced
+# in 29.7 s with ONE search. The no-progress guard only suppresses a byte-identical repeat
+# (same tool + same params digest), so a re-search with slightly different criteria costs a
+# full tool run every time. These caps bound the repeat count per USER TURN regardless of
+# how the arguments differ; the model is told it has already run the tool and must answer
+# from what it has. They are a backstop, not the fix for whatever made the model re-plan.
+_TURN_TOOL_CALL_CAPS_DEFAULT = {"search_properties": 2, "web_search": 3}
+_TURN_TOOL_CALL_CAP_DEFAULT = 6
+
+
+def _turn_tool_call_cap(tool: str) -> int:
+    """Max EXECUTED calls of `tool` in one user turn (FC_TURN_CALL_CAP_<TOOL> overrides)."""
+    env_name = "FC_TURN_CALL_CAP_" + str(tool or "").upper()
+    raw = os.getenv(env_name)
+    if raw is not None:
+        try:
+            return max(1, int(raw))
+        except (TypeError, ValueError):
+            pass
+    return _TURN_TOOL_CALL_CAPS_DEFAULT.get(tool, _TURN_TOOL_CALL_CAP_DEFAULT)
 
 
 def _loop_soft_cap() -> int:
@@ -2649,7 +2822,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                         "loop_turn=%d", added, elapsed_now, loop_turn)
         return added
 
-    async def agent_node(state: AgentState) -> Command[Literal["execute_tools", "critic", "format_output_fc"]]:
+    async def agent_node(
+            state: AgentState) -> Command[
+                Literal["agent", "execute_tools", "critic", "format_output_fc"]]:
         messages = list(state.get("messages") or [])
         explicit_memory_required = False
         ec = state.get("extracted_context") or {}
@@ -2862,6 +3037,33 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
 
         # Plain text -> final answer through the legacy critic.
         text = clean_response(resp.content if hasattr(resp, "content") else str(resp))
+
+        # Never terminate a turn on an answer that ANNOUNCES a tool call it did not make.
+        # Live, a follow-up turn shipped a 105-char "Let me search for actual one-bedroom
+        # listings in Shoreditch…" with `tool_batches: 0` and no canned marker, so every
+        # marker-based monitor scored it a PASS. One bounded corrective iteration (the
+        # nudge marker below makes it once-per-turn, and the wrap edge above still binds
+        # the wall clock); if the retry ALSO produces no tool call, the answer ships with
+        # an explicit marker rather than as a silent promise.
+        if announces_unexecuted_tool(text, state.get("tool_artifacts")):
+            if not _has_announce_nudge(messages):
+                logger.info("fc_loop.announced_tool_without_execution loop_turn=%d", loop_turn)
+                nudge = HumanMessage(
+                    content=_ANNOUNCED_TOOL_NUDGE_TEXT,
+                    additional_kwargs={_ANNOUNCED_TOOL_NUDGE_MARKER: True})
+                # A FRESH AIMessage carrying only the text, not `resp` itself. This is the
+                # one place the loop sends a plain-text assistant turn back to the model,
+                # and echoing the provider's own object did exactly that: the tool-bound
+                # response carries `tool_calls: []` plus provider metadata, and the strict
+                # /beta endpoint answered 400 to all three follow-up calls (observed on
+                # `fixtest-f3-poi-t2`), burning the turn into the wrap-up path.
+                return Command(update={
+                    "messages": messages + [AIMessage(content=text), nudge],
+                    "loop_turn": loop_turn,
+                }, goto="agent")
+            logger.warning("fc_loop.announced_tool_stub_shipped loop_turn=%d", loop_turn)
+            text = _mark_announced_stub(text, reply_language)
+
         text = validate_commute_response(text, state)
         memory_contract = state.get("memory_write_contract") or {}
         if memory_contract.get("requested"):
@@ -2893,7 +3095,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         ec = state.get("extracted_context") or {}
         acc = state.get("accumulated_search_criteria") or {}
         from core.langgraph_agent import _apply_explicit_criteria_updates
-        acc = _apply_explicit_criteria_updates(acc, ec.get('current_message') or '')
+        # Relative budget edits were resolved by the state node against the pre-turn
+        # ceiling; re-applying one here would add the delta a second time.
+        acc = _apply_explicit_criteria_updates(acc, ec.get('current_message') or '',
+                                               apply_relative_budget=False)
         p["current_message"] = ec.get("current_message", "")
         # A hard filter the model invented (a plausible budget, a bedroom count, "shared")
         # narrows the search to nothing while staying invisible to the user. Drop anything
@@ -2925,6 +3130,28 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             p["commute_destination"] = cd
         if not p.get("max_budget") and acc.get("max_budget"):
             p["max_budget"] = acc["max_budget"]
+        # Relative budget edit ("raise the budget by £200" / 「预算提高200镑」): the model
+        # itself emits the DELTA as `max_budget`, which live produced a search at £200 and
+        # 0 results. The accumulated ceiling has already been resolved for this turn (see
+        # `_relative_budget_repair`), so a model value that is exactly the delta is the
+        # delta — never a ceiling.
+        _delta = detect_relative_budget_delta(p.get("current_message") or "")
+        if _delta is not None:
+            _acc_budget = acc.get("max_budget")
+            try:
+                _model_is_delta = (p.get("max_budget") is not None
+                                   and abs(float(p["max_budget"]) - abs(_delta)) < 1e-6)
+            except (TypeError, ValueError):
+                _model_is_delta = False
+            if _model_is_delta and _acc_budget:
+                p["max_budget"] = _acc_budget
+                logger.info("fc_loop.relative_budget_delta_as_ceiling delta=%s resolved=%s",
+                            _delta, _acc_budget)
+            elif _model_is_delta:
+                # A delta with no prior ceiling is not a ceiling either. Searching AT the
+                # delta guarantees zero results; drop the filter and say so in the log.
+                p.pop("max_budget", None)
+                logger.info("fc_loop.relative_budget_unresolved delta=%s", _delta)
         if not p.get("max_commute_time") and acc.get("max_travel_time") and not acc.get("no_commute"):
             p["max_commute_time"] = acc["max_travel_time"]
         if acc.get("no_commute"):
@@ -3043,6 +3270,21 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         # sibling call's types; applied inside it so the merged calls share one digest and
         # the no-progress guard answers the duplicates from the first result.
         poi_canon = _canonical_poi_args(batch)
+        # ── Batch-level taint, evaluated BEFORE any write is admitted (P0-5) ──────────
+        # Reads and writes of one batch are dispatched CONCURRENTLY (the two ensure_future
+        # loops below), so a `remember` emitted in the SAME batch as an untrusted read could
+        # commit while that read was still in flight and the gate would see the PRE-batch
+        # `context_tainted: False` (observed live: `remember` 8 ms, `search_nearby_pois`
+        # 1387 ms, one batch, gate saw false — on both fc_loop and manager_v1). Taint is
+        # therefore a property of the batch AS PLANNED, not of what has already returned:
+        # any `_UNTRUSTED_TOOLS` read requested in this batch taints this batch's writes.
+        #
+        # Conservative by construction and cheap: `memory_write_allowed` denies only a
+        # write that is tainted AND not user-authorized, so an explicit 「记住…」 save whose
+        # content is the user's own words is still allowed (and audited as `confirmed`).
+        # Only the model-initiated write — exactly the injection vehicle — is closed off.
+        batch_tainted = bool(state.get("context_tainted", False)) or any(
+            tc.get("name") in _UNTRUSTED_TOOLS for tc in batch)
         for tc in batch:
             name = tc.get("name")
             args = dict(tc.get("args") or {})
@@ -3102,12 +3344,28 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             seen.add((name, digest))
             spec = specs.get(name)
             side_effect = getattr(spec, "side_effect", "none") if spec else "none"
+            if side_effect != "write":
+                # Per-turn repeat cap (fan-out backstop): count what has ALREADY executed
+                # this user turn plus what this batch has already admitted, so a batch
+                # cannot smuggle the (N+1)th call past a check that only read history.
+                cap = _turn_tool_call_cap(name)
+                already = sum(
+                    1 for a in artifacts
+                    if a.get("tool") == name and _is_executed(a))
+                already += sum(1 for entry in plan
+                               if entry[0].get("name") == name and entry[2] == "run")
+                if already >= cap:
+                    logger.info("fc_loop.turn_call_cap tool=%s cap=%d already=%d",
+                                name, cap, already)
+                    plan.append((tc, digest, ("deny_cap", cap), args))
+                    continue
             if side_effect == "write":
                 # Canary write audit: the key is the idempotency digest, which both
                 # this planning pass and the dispatch loop below compute identically,
                 # so a call classified here is the same record marked dispatched there.
                 _akey = f"{name}:{digest}"
-                _tainted = bool(state.get("context_tainted", False))
+                # Batch-level, not state-level: see `batch_tainted` above (P0-5).
+                _tainted = batch_tainted
                 # Candidate content is computed up-front: authorization now depends on it
                 # (A+ rule-2 refinement / H13) — a 「记住」 cue only authorizes saving what
                 # the user actually stated, not tool-derived content pulled into context.
@@ -3139,7 +3397,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                             plan.append((tc, digest, ("deny_recall", ""), args))
                             continue
                     allowed = bool(mem_gate.memory_write_allowed(
-                        context_tainted=state.get("context_tainted", False),
+                        context_tainted=batch_tainted,
                         user_authorized=user_authorized))
                     if not allowed:
                         kind = str(args.get("kind") or name)
@@ -3497,8 +3755,12 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             if prepared_specialists.call(i) is None:
                 if specialist_eligible_role(name, plan[i][3]) is not None:
                     # Eligible but unplanned: fail closed rather than fall back to
-                    # unrestricted manager dispatch.
+                    # unrestricted manager dispatch. Counted like every other per-call
+                    # denial (TD-2): this branch used to return denied WITHOUT touching
+                    # `denied_calls`, so a whole denial class was invisible to telemetry
+                    # and could never be measured in a canary.
                     specialist_error_code_by_idx[i] = "specialist_call_not_planned"
+                    _note_specialist_call_denied(name, "specialist_call_not_planned")
                     return _denied()
                 # Manager-owned tool (memory / ask_user) or an unmapped tool: unchanged.
                 return await _run(
@@ -4010,6 +4272,28 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     content=json.dumps(payload, ensure_ascii=False, default=str),
                     tool_call_id=tcid, name=name))
                 continue
+            if isinstance(mode, tuple) and mode[0] == "deny_cap":
+                # Per-turn repeat cap. Recorded exactly like the other pre-dispatch
+                # refusals (denied=True, raw_data None → REQUESTED, not EXECUTED) so the
+                # tool ledger, the eval trace and the security audit all agree, and the
+                # digest still suppresses an identical retry.
+                cap = mode[1]
+                artifacts.append(_artifact(
+                    turn, name, None, digest, success=False,
+                    error=f"denied: {name} already ran {cap} times this turn",
+                    denied=True, elapsed_ms=0))
+                messages.append(ToolMessage(
+                    content=json.dumps({
+                        "success": False, "data": None,
+                        "error": (
+                            f"not run: {name} has already run {cap} time(s) this turn, which "
+                            "is the per-turn limit. Do NOT call it again — answer the user "
+                            "from the results already gathered above, and say plainly what "
+                            "you could not confirm."
+                        ),
+                    }, ensure_ascii=False),
+                    tool_call_id=tcid, name=name))
+                continue
             if isinstance(mode, tuple) and mode[0] == "deny_recall":
                 # H12: model-initiated write on a pure recall-question turn. Denied like the
                 # tainted-write refusal (denied=True → security audit + not executed), but with
@@ -4440,7 +4724,12 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         artifacts = list(state.get("tool_artifacts") or [])
         prefs = state.get("user_preferences") or {}
         acc = state.get("accumulated_search_criteria") or {}
-        final_response = state.get("final_response", "") or ""
+        final_response = scrub_internal_vocabulary(
+            state.get("final_response", "") or "",
+            _reply_language_from_ctx(
+                state.get("extracted_context") or {},
+                (state.get("extracted_context") or {}).get("current_message")
+                or _current_message(state.get("user_query") or "")))
         response_type = state.get("response_type", "answer") or "answer"
         # Prompt assembly failures carry a deterministic machine-readable error code.
         # Preserve it through the final formatter; normal answer/search paths still start
@@ -4729,6 +5018,53 @@ def _derive_known_criteria(acc: dict) -> dict:
 # GRAPH WIRING (consumed lazily by langgraph_agent.build_agent_graph)
 # ═══════════════════════════════════════════════════════════════════
 
+def _relative_budget_repair(extract_preferences_node):
+    """Resolve a RELATIVE budget edit against the PRE-turn ceiling.
+
+    The shared ``extract_preferences`` node folds a budget stated this turn into the
+    accumulated criteria using the deterministic currency extractor, which cannot tell
+    "raise the budget BY £200" from a £200 ceiling. Live, that overwrote a £2,200 ceiling
+    with £200 and the follow-up search returned nothing while the model told the user its
+    "internal criteria still show max_budget: 200".
+
+    This wrapper is the last place that still holds the pre-turn value — the node's own
+    update replaces it — so the repair happens here, around the node, rather than by
+    editing the shared node itself. It is a no-op for every message that states no
+    relative edit (``detect_relative_budget_delta`` returns None), which is almost all of
+    them.
+
+    A relative edit with NO prior ceiling clears ``max_budget`` instead: the delta is not
+    a ceiling, and searching at the delta is the failure this exists to prevent.
+    """
+    import inspect
+
+    def _repair(state, update):
+        prior = (state.get("accumulated_search_criteria") or {}).get("max_budget")
+        message = ((state.get("extracted_context") or {}).get("current_message")
+                   or _current_message(state.get("user_query") or ""))
+        if detect_relative_budget_delta(message) is None:
+            return update
+        resolved = resolve_relative_budget(message, prior)
+        result = dict(update or {})
+        acc = result.get("accumulated_search_criteria")
+        acc = dict(acc) if isinstance(acc, dict) else dict(
+            state.get("accumulated_search_criteria") or {})
+        acc["max_budget"] = resolved  # None when there was no prior ceiling
+        result["accumulated_search_criteria"] = acc
+        logger.info("fc_loop.relative_budget_resolved prior=%s resolved=%s", prior, resolved)
+        return result
+
+    if inspect.iscoroutinefunction(extract_preferences_node):
+        async def node(state):
+            return _repair(state, await extract_preferences_node(state))
+    else:
+        def node(state):
+            return _repair(state, extract_preferences_node(state))
+
+    node.__name__ = getattr(extract_preferences_node, "__name__", "extract_preferences")
+    return node
+
+
 def build_fc_graph(tool_registry, *, extract_preferences_node, critic_node,
                    checkpointer=None, store=None, enable_hitl=False,
                    hydrate_prefs_node=None, persist_prefs_node=None, instrument=None,
@@ -4757,7 +5093,8 @@ def build_fc_graph(tool_registry, *, extract_preferences_node, critic_node,
     use_store = store is not None
 
     graph = StateGraph(AgentState)
-    graph.add_node("extract_preferences", ident("extract_preferences", extract_preferences_node))
+    graph.add_node("extract_preferences", ident(
+        "extract_preferences", _relative_budget_repair(extract_preferences_node)))
     graph.add_node("guard", ident("guard", nodes["guard"]))
     graph.add_node("agent", ident("agent", nodes["agent"]))
     graph.add_node("execute_tools", ident("execute_tools", nodes["execute_tools"]))

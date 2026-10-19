@@ -18,13 +18,15 @@ def _fake(tmp_path: Path, name: str, body: str) -> Path:
     return path
 
 
-def _run(tmp_path: Path, report_rc: int, *, rollback_rc: int = 0):
+def _run(tmp_path: Path, report_rc: int, *, rollback_rc: int = 0,
+         report_stdout: str = ""):
     report_args = tmp_path / "report.args"
     weight_args = tmp_path / "weight.args"
+    _echo = f"printf '%s\\n' {report_stdout!r}\n" if report_stdout else ""
     report = _fake(
         tmp_path,
         "report",
-        f"printf '%s\\n' \"$@\" > \"$REPORT_ARGS\"\nexit {report_rc}\n",
+        f"printf '%s\\n' \"$@\" > \"$REPORT_ARGS\"\n{_echo}exit {report_rc}\n",
     )
     weight = _fake(
         tmp_path,
@@ -72,3 +74,30 @@ def test_rollback_failure_has_distinct_loud_exit(tmp_path):
     assert weight_args.exists()
     assert result.returncode == 70
     assert "ROLLBACK_FAILED" in result.stderr
+
+
+def test_exit_three_on_an_invalid_measurement_refuses_the_rollback(tmp_path):
+    """The second gate on the rollback verb.
+
+    `canary_report.build_verdict` already refuses to return 3 for a window it has
+    called unreadable, so this path should be unreachable. It is wired anyway
+    because exit 3 here is not a report, it is `set_canary_weight.sh --weight 0`:
+    a future regression in the report's precedence rule must not be able to move
+    production traffic off a measurement the report itself disowned.
+    """
+    result, _, weight_args = _run(
+        tmp_path, 3,
+        report_stdout="[INSTRUMENTATION] measurement_valid=False",
+    )
+
+    assert result.returncode == 2
+    assert not weight_args.exists(), "no rollback may be fired on an invalid window"
+    assert "ROLLBACK_REFUSED" in result.stderr
+
+
+def test_report_stdout_still_reaches_the_operator(tmp_path):
+    """The verdict text is teed, not swallowed, and the report's rc is preserved."""
+    result, _, _ = _run(tmp_path, 2, report_stdout="CANARY REPORT LINE")
+
+    assert result.returncode == 2
+    assert "CANARY REPORT LINE" in result.stdout

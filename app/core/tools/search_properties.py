@@ -15,6 +15,7 @@ Tool 1: Search Properties Tool
 """
 
 from core.tool_system import Tool
+from core.tools._argtext import clean_arg_text
 from typing import Optional, List, Dict
 import pandas as pd
 import asyncio
@@ -1011,6 +1012,120 @@ _KNOWN_AREAS = {re.sub(r"[’']", "", n.lower()): n for n in _KNOWN_AREA_NAMES}
 # Same normalisation, London half only — the set a geocoder should read "London" into.
 LONDON_AREAS = {re.sub(r"[’']", "", n.lower()): n for n in _LONDON_AREA_NAMES}
 
+# ── Postcode-district -> London BOROUGH, for reconciling a provider's own area label ──
+# OnTheMarket display names carry a borough word chosen by the agent, and it is sometimes
+# simply wrong: "Rugby House 6 Great Ormond Street, Islington WC1N" was returned for a
+# CAMDEN search and shown to a user who had asked for Camden — WC1N is Camden (Bloomsbury),
+# not Islington. The postcode is the one part of that string the agent cannot get wrong.
+#
+# DELIBERATELY INCOMPLETE. Only districts that sit unambiguously inside ONE borough are
+# listed; every district that straddles a boundary (N1 Islington/Hackney, EC1 Islington/
+# City, SE1 Southwark/Lambeth, NW6 Camden/Brent, E20, N4) is OMITTED, because a confident
+# wrong correction is worse than the label we started with. Sub-district overrides come
+# first for the few 4-character codes that leave their district's borough.
+_LONDON_DISTRICT_BOROUGH = {
+    "WC1": "Camden", "NW1": "Camden", "NW3": "Camden", "NW5": "Camden",
+    "N5": "Islington", "N7": "Islington",
+    "E5": "Hackney", "E8": "Hackney", "E9": "Hackney", "N16": "Hackney",
+    "E1": "Tower Hamlets", "E2": "Tower Hamlets", "E3": "Tower Hamlets",
+    "E14": "Tower Hamlets",
+    "SE5": "Southwark", "SE15": "Southwark", "SE16": "Southwark",
+    "SE8": "Lewisham", "SE13": "Lewisham", "SE14": "Lewisham",
+    "SE10": "Greenwich", "SE18": "Greenwich",
+    "SE11": "Lambeth", "SW2": "Lambeth", "SW4": "Lambeth", "SW9": "Lambeth",
+    "SW11": "Wandsworth", "SW17": "Wandsworth", "SW18": "Wandsworth",
+    "W1": "Westminster", "W2": "Westminster", "W9": "Westminster",
+    "SW1": "Westminster", "NW8": "Westminster",
+    "SW3": "Kensington and Chelsea", "SW5": "Kensington and Chelsea",
+    "SW7": "Kensington and Chelsea", "SW10": "Kensington and Chelsea",
+    "W8": "Kensington and Chelsea", "W11": "Kensington and Chelsea",
+    "W6": "Hammersmith and Fulham", "W12": "Hammersmith and Fulham",
+    "W14": "Hammersmith and Fulham", "SW6": "Hammersmith and Fulham",
+    "EC2": "City of London", "EC3": "City of London", "EC4": "City of London",
+}
+# 4-character outward codes whose borough differs from their district's.
+_LONDON_OUTWARD_BOROUGH = {
+    "WC1X": "Islington",
+    "WC1R": "Islington",
+}
+# The borough words a listing string may claim. A label is only ever corrected when BOTH
+# sides are boroughs: a neighbourhood name ("Shoreditch", "Bloomsbury") is not a borough
+# claim and is never touched.
+_LONDON_BOROUGH_NAMES = {
+    b.lower(): b for b in
+    set(_LONDON_DISTRICT_BOROUGH.values()) | set(_LONDON_OUTWARD_BOROUGH.values())
+}
+
+_OUTWARD_IN_ADDRESS_RE = re.compile(
+    r"\b([A-Z]{1,2}[0-9][A-Z0-9]?)\b(?!\s*[0-9][A-Z]{2})", re.IGNORECASE)
+
+
+def borough_for_postcode(text: str) -> str | None:
+    """The London borough an outward postcode in ``text`` unambiguously sits in, else None.
+    Never raises."""
+    try:
+        m = _OUTWARD_IN_ADDRESS_RE.search(str(text or ""))
+        if not m:
+            m = re.search(r"\b([A-Z]{1,2}[0-9][A-Z0-9]?)\s*[0-9][A-Z]{2}\b",
+                          str(text or ""), re.IGNORECASE)
+        if not m:
+            return None
+        outward = m.group(1).upper()
+        if outward in _LONDON_OUTWARD_BOROUGH:
+            return _LONDON_OUTWARD_BOROUGH[outward]
+        district = re.match(r"^([A-Z]{1,2}[0-9]+)", outward)
+        return _LONDON_DISTRICT_BOROUGH.get(district.group(1)) if district else None
+    except Exception:
+        return None
+
+
+def reconcile_area_label(address: object) -> str:
+    """Replace a listing string's BOROUGH word when its own postcode contradicts it.
+
+    "Rugby House 6 Great Ormond Street, Islington WC1N" -> "... Camden WC1N". WC1N is
+    Bloomsbury, i.e. Camden; the borough word in an OnTheMarket display name is chosen by
+    the agent and is sometimes simply wrong, which is how a Camden search answered a Camden
+    question with a listing labelled Islington.
+
+    Only a borough word ADJACENT TO THE POSTCODE is touched — in the postcode's own comma
+    part, or alone in the part just before it. A borough name inside a STREET name
+    ("Camden Park Road, London, E1 4AA") is never rewritten. Untouched, too, when the
+    district is not in the curated unambiguous set, when nothing claims a borough, or when
+    the two already agree, so this can only remove a contradiction and never invent a
+    claim. Never raises."""
+    try:
+        text = " ".join(str(address or "").split())
+        if not text:
+            return text
+        borough = borough_for_postcode(text)
+        if not borough:
+            return text
+        parts = [p.strip() for p in text.split(",")]
+        pc_idx = next((i for i, part in enumerate(parts)
+                       if _OUTWARD_IN_ADDRESS_RE.search(part)
+                       or re.search(r"\b[A-Z]{1,2}[0-9][A-Z0-9]?\s*[0-9][A-Z]{2}\b",
+                                    part, re.IGNORECASE)), None)
+        if pc_idx is None:
+            return text
+        targets = {pc_idx}
+        if pc_idx > 0 and parts[pc_idx - 1].lower() in _LONDON_BOROUGH_NAMES:
+            targets.add(pc_idx - 1)
+        changed = False
+        for idx in sorted(targets):
+            part = parts[idx]
+            for claimed_lower, claimed in _LONDON_BOROUGH_NAMES.items():
+                if claimed == borough:
+                    continue
+                pattern = re.compile(r"\b" + re.escape(claimed) + r"\b", re.IGNORECASE)
+                if pattern.search(part):
+                    part = pattern.sub(borough, part)
+                    changed = True
+            parts[idx] = part
+        return ", ".join(parts) if changed else text
+    except Exception:
+        return str(address or "")
+
+
 # Switch / location cues that precede a place name in a conversational area change.
 # The captured span is VALIDATED against _KNOWN_AREAS, so even a weak cue can never
 # invent an area — only a recognised UK place is ever returned.
@@ -1090,6 +1205,38 @@ def _extract_areas(text: str) -> list[str]:
             return areas
     area = _extract_area(source)
     return [area] if area else []
+def most_specific_known_area(text: str) -> str | None:
+    """The MOST SPECIFIC curated UK place named anywhere in ``text``, else None.
+
+    "Most specific" is a two-level order, not a longest-match: a London area/borough
+    ("Shoreditch") beats a bare city ("London"), because a city name locates nothing a
+    geocoder can centre a 300 m circle on. Within a level the longest name wins, so
+    "Notting Hill" beats a stray "Hill"-shaped partial and "Milton Keynes" beats a
+    partial city token.
+
+    This exists because the legacy planner had no place resolver at all: it fell back to
+    the literal string "London" for a POI lookup, and "London" is rejected by the geocode
+    ladder as too generic (``_is_too_generic``), so "What's near Shoreditch in London?"
+    returned "Could not find coordinates for address: London" and zero POIs. Returns the
+    CANONICAL English spelling so downstream geocoding works whatever the input language.
+    Never raises."""
+    try:
+        if not text or not str(text).strip():
+            return None
+        t = re.sub(r"[\u2019']", "", str(text).lower())
+        best_london = best_city = None
+        for key in _KNOWN_AREAS:
+            if not re.search(r"\b" + re.escape(key) + r"\b", t):
+                continue
+            if key in LONDON_AREAS:
+                if best_london is None or len(key) > len(best_london):
+                    best_london = key
+            elif best_city is None or len(key) > len(best_city):
+                best_city = key
+        winner = best_london or best_city
+        return _KNOWN_AREAS[winner] if winner else None
+    except Exception:
+        return None
 
 
 def _extract_area(text: str) -> str | None:
@@ -1155,13 +1302,26 @@ def _extract_area(text: str) -> str | None:
             chosen.append((replacement.start(), area))
     if chosen:
         return sorted(chosen, key=lambda item: item[0])[-1][1]
-    # (a) Chinese city names — distinctive, safe substring match.
+    # (a) Chinese place names — distinctive, safe substring match. The MOST SPECIFIC match
+    # wins, not the first one in table order: "我想在伦敦卡姆登租..." contains both 伦敦
+    # (London) and 卡姆登 (Camden), and returning the city dropped the borough the user
+    # actually asked for — a Camden request then searched all of London. A London
+    # area/borough beats a bare city; within a level the longest key wins.
+    _zh_london = _zh_city = None
     for zh, canon in _ZH_AREA_MAP.items():
         for match in re.finditer(re.escape(zh), text):
             prefix = re.split(r'[。！？!?;；\n，,:：]', text[:match.start()])[-1][-45:]
-            if not is_hypothetical(clause_at(text, match.start(), match.end())) and not re.search(
+            if is_hypothetical(clause_at(text, match.start(), match.end())) or re.search(
                     r'(?:不(?:要|是|需要|想|考虑)|取消|删除|移除|去掉|排除)[^，。；;!?]{0,14}$', prefix):
-                return canon
+                continue
+            if re.sub(r"[\u2019']", "", canon.lower()) in LONDON_AREAS:
+                if _zh_london is None or len(zh) > len(_zh_london[0]):
+                    _zh_london = (zh, canon)
+            elif _zh_city is None or len(zh) > len(_zh_city[0]):
+                _zh_city = (zh, canon)
+            break
+    if _zh_london or _zh_city:
+        return (_zh_london or _zh_city)[1]
     t = text.lower().strip()
     if re.search(r'只(?:修改|改|调整)|(?:备用|主)方案', t):
         for key in sorted(_KNOWN_AREAS, key=len, reverse=True):
@@ -1231,6 +1391,50 @@ def _extract_budget_clear(text: str) -> bool:
 _GROUNDED_HARD_FIELDS = ("max_budget", "bedrooms", "room_type")
 
 
+# A CEILING marker introducing the amount ("最多 2200", "under £2200"). Guards
+# detect_relative_budget_delta, whose loose ZH pattern `(?:提高|…|加|涨|多)\s*(\d…)` matches the
+# single character 多 INSIDE 最多, so the plain ceiling "预算每月最多2200英镑" is read as a
+# +2200 DELTA. Wired into the accumulator that clears max_budget for a delta with no prior
+# ceiling, that turned a first-turn Chinese budget statement into NO BUDGET FILTER AT ALL
+# (reproduced live: fixtest-f4-rz2-legacy, max_budget null where the pre-change run recorded
+# 2000). Its EN half (`at most|max|up to|to`) already lives in search_readiness._ABSOLUTE_TARGET;
+# 最多/不超过/以内 and under/below/no more than do not, so they are covered here until F3 folds
+# them into that regex — see the F3 request in the report.
+_BUDGET_CEILING_MARKER = re.compile(
+    r"(?:最多|至多|不超过|不多于|不高于|最高|上限|以内|以下)\s*(?:£)?\s*(\d[\d,]*(?:\.\d+)?)"
+    r"|\b(?:under|below|no\s+more\s+than|not\s+more\s+than|within)\s*(?:£|gbp\s*)?"
+    r"(\d[\d,]*(?:\.\d+)?)",
+    re.IGNORECASE)
+
+
+def _states_relative_budget_edit(text) -> bool:
+    """True when ``text`` states a budget DELTA ("raise the budget by £200", 「预算提高200镑」)
+    rather than a ceiling.
+
+    Wraps the one detector that knows the difference
+    (``core.search_readiness.detect_relative_budget_delta``) so every budget-override site
+    asks the same question, and adds ONE guard it is missing: when the amount the detector
+    read is the same amount a CEILING marker introduces, the message states a ceiling, not an
+    edit. False for "raise the budget TO £2400" (the detector's own guard) and for
+    「预算每月最多2200英镑」 (this one). Never raises: if the detector is unavailable the
+    callers keep their old behaviour rather than losing the override entirely."""
+    try:
+        from core.search_readiness import detect_relative_budget_delta
+        delta = detect_relative_budget_delta(text)
+        if delta is None:
+            return False
+        for match in _BUDGET_CEILING_MARKER.finditer(str(text or "")):
+            raw = (match.group(1) or match.group(2) or "").replace(",", "")
+            try:
+                if abs(float(raw) - abs(float(delta))) < 1e-9:
+                    return False
+            except ValueError:
+                continue
+        return True
+    except Exception:
+        return False
+
+
 def ground_hard_constraints(params: dict, accumulated: dict = None,
                             current_message: str = "") -> tuple[dict, list[str]]:
     """Strip HARD search filters the model invented rather than heard.
@@ -1265,7 +1469,8 @@ def ground_hard_constraints(params: dict, accumulated: dict = None,
     # have not run the state node yet still use the current explicit update.
     if message:
         from core.langgraph_agent import _apply_explicit_criteria_updates
-        acc = _apply_explicit_criteria_updates(acc, message)
+        # A relative edit is resolved once, by the state node (see the flag's docstring).
+        acc = _apply_explicit_criteria_updates(acc, message, apply_relative_budget=False)
     dropped: list[str] = []
 
     def _correct(field: str, allowed, fallback):
@@ -1283,6 +1488,13 @@ def ground_hard_constraints(params: dict, accumulated: dict = None,
     # Monthly is the canonical unit at the model/tool boundary. Pair every
     # corrected number with its period, preventing £350/week becoming £350/month.
     fresh_budget, fresh_period = _extract_budget(message)
+    # P1-1: a figure stated as a DELTA ("raise the budget by £200") is not a ceiling the
+    # user said, so it must not enter the allowed set — that is how a model-supplied
+    # max_budget of 200 used to be blessed as "something the user actually said". The
+    # accumulated ceiling (already resolved by the graph) is the only allowed value; with
+    # no accumulated ceiling the filter is DROPPED rather than set to the delta.
+    if fresh_budget and _states_relative_budget_edit(message):
+        fresh_budget, fresh_period = None, None
     acc_budget = acc.get("max_budget")
     allowed_budget = [fresh_budget] if fresh_budget is not None else [acc_budget]
     if fresh_budget and fresh_period in ("week", "weekly", "pw"):
@@ -1917,6 +2129,24 @@ class PropertyFilter:
         return round(price_match + commute_match, 1)
 
 
+def _as_text_list(value) -> list | None:
+    """A list argument as a list of clean strings, or None when nothing usable was sent.
+
+    A model that sends ``"Camden"`` where ``areas: list`` is declared used to have the
+    string iterated character by character. Never raises."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        cleaned = clean_arg_text(value)
+        return [cleaned] if cleaned else None
+    if isinstance(value, (list, tuple, set)):
+        out = [clean_arg_text(item) for item in value]
+        out = [item for item in out if item]
+        return out or None
+    cleaned = clean_arg_text(value)
+    return [cleaned] if cleaned else None
+
+
 async def search_properties_impl(
     user_query: str = "",
     area: str = None,                 # 🆕 想住/搜索的区域（首选）
@@ -1966,6 +2196,27 @@ async def search_properties_impl(
     Returns:
         包含搜索结果或（仅在 search_area 无法确定时）澄清问题的字典。
     """
+    # ── Argument boundary ──────────────────────────────────────────────────
+    # Everything below this line may assume the free-text arguments ARE strings and the
+    # list arguments ARE lists. A model can send None, a number, a bare string where a
+    # list is declared, or text carrying a lone UTF-16 surrogate; the first statements of
+    # this function (memory stripping, budget parsing) run OUTSIDE the big try/except
+    # below, so a malformed argument used to escape as an unhandled TypeError instead of
+    # the structured {'success': False, 'error': ...} this tool promises.
+    user_query = clean_arg_text(user_query)
+    current_message = clean_arg_text(current_message)
+    area = clean_arg_text(area) or None
+    location = clean_arg_text(location) or None
+    commute_destination = clean_arg_text(commute_destination) or None
+    room_type = clean_arg_text(room_type) or None
+    move_in_date = clean_arg_text(move_in_date) or None
+    reply_language = clean_arg_text(reply_language) or None
+    sort_by = clean_arg_text(sort_by) or "value"
+    budget_period = clean_arg_text(budget_period) or "month"
+    areas = _as_text_list(areas)
+    property_features = _as_text_list(property_features)
+    accumulated_preferences = _as_text_list(accumulated_preferences)
+
     # Memory-stripped view of user_query. The agent PREPENDS a long-term-memory
     # block to user_query; a HARD search filter (area/budget/room_type/bedrooms)
     # must NEVER be extracted from a prior conversation's remembered criteria
@@ -2120,6 +2371,21 @@ async def search_properties_impl(
             logger.info("property_search.no_commute_detected")
         if msg_for_extraction:
             fresh_budget, fresh_period = _extract_budget(msg_for_extraction)
+            # P1-1: "raise the budget by £200" states a DELTA. The graph has already folded
+            # it into the ceiling it hands us, so re-reading the raw figure here would either
+            # re-install £200 as the ceiling (the legacy bug) or, if we applied the delta a
+            # second time, overshoot. A relative edit therefore states NO ceiling as far as
+            # this override is concerned: whatever the caller passed stands, and an absent
+            # ceiling stays absent (no budget filter) rather than becoming the delta.
+            # detect_relative_budget_delta returns None for "raise the budget TO £2400", so
+            # an absolute restatement still overrides exactly as before. Idempotent by
+            # construction — it never adds anything.
+            if fresh_budget and _states_relative_budget_edit(msg_for_extraction):
+                logger.info(
+                    "property_search.relative_budget_not_a_ceiling",
+                    extra={"had_previous_value": max_budget is not None},
+                )
+                fresh_budget = None
             if fresh_budget and fresh_budget != max_budget:
                 logger.info(
                     "property_search.budget_updated",
@@ -3385,7 +3651,12 @@ async def search_properties_impl(
                             geo_location = prop.get('Geo_Location', prop.get('geo_location', ''))
                             row = {
                                 'rank': i,
-                                'address': prop.get('Address', prop.get('address', 'Unknown')),
+                                # The provider's own borough word can contradict the listing's own postcode
+                                # ("... Islington WC1N" for a Camden listing). Show the reconciled label;
+                                # keep the raw provider string for traceability.
+                                'address': reconcile_area_label(
+                                    prop.get('Address', prop.get('address', 'Unknown'))),
+                                'provider_address': prop.get('Address', prop.get('address', 'Unknown')),
                                 'price': f"£{price}/month",
                                 'budget_status': budget_status,
                                 'price_raw': price,
@@ -3636,7 +3907,12 @@ async def search_properties_impl(
                         _absent_features.append(_normal)
                 row = {
                     'rank': i,
-                    'address': prop.get('Address', prop.get('address', 'Unknown')),
+                    # The provider's own borough word can contradict the listing's own postcode
+                    # ("... Islington WC1N" for a Camden listing). Show the reconciled label;
+                    # keep the raw provider string for traceability.
+                    'address': reconcile_area_label(
+                        prop.get('Address', prop.get('address', 'Unknown'))),
+                    'provider_address': prop.get('Address', prop.get('address', 'Unknown')),
                     'price': f"£{int(prop.get('price', 0))}/month",
                     'budget_status': prop.get('budget_status', ''),
                     'score': prop.get('recommendation_score', 0),

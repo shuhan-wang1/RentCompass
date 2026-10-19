@@ -33,11 +33,13 @@ produce a 0, and only then does 0 mean "we looked and there were none".
 from __future__ import annotations
 
 import contextvars
+import functools
+import itertools
 import math
 import re
 import threading
 from collections import deque
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 # Set once per request by begin_turn(). Default None => "no turn in progress",
 # which is not the same as "a turn that saw nothing".
@@ -270,6 +272,51 @@ def begin_turn() -> Dict[str, Any]:
 
 def current() -> Optional[Dict[str, Any]]:
     return _turn_obs.get()
+
+
+# Billed provider calls that happened with NO observation window open. They are
+# real spend that no canary record can ever contain — post-turn critic
+# regeneration, on-demand scraping, auto-memory writes — and in one measured
+# 8-minute production window they were 40 of 93 provider calls. A process-wide
+# counter is not attribution, but it is the difference between "we know this
+# population exists and how big it is" and the previous state, which was that the
+# only way to see them at all was to read the container's httpx log by hand.
+_detached_llm_calls = itertools.count()
+_detached_llm_call_total = 0
+
+
+def detached_llm_call_count() -> int:
+    """Billed raw provider calls seen since start-up with no turn window open."""
+    return _detached_llm_call_total
+
+
+def bind_post_turn_context(fn: Callable[..., Any]) -> Callable[..., Any]:
+    """Bind ``fn`` to the turn's TRACE identity but to a CLOSED observation window.
+
+    Post-turn work — the critic's regeneration pass, on-demand scraping, auto-memory
+    — is spawned on plain threads and executors, which do not inherit context, so
+    every provider call it makes logs ``request_id: "-"`` and belongs to no turn.
+    Propagating the context fixes the correlation.
+
+    What it deliberately does NOT do is re-open the turn's accounting.
+    ``_turn_obs`` holds a MUTABLE dict shared by every copy of the context, and the
+    canary record for that turn has already been written by the time this work runs.
+    A naive ``copy_context()`` would therefore let a post-turn call append to a
+    record that was emitted minutes ago — silently making the in-memory turn
+    disagree with the line already on disk, which is worse than the ``"-"`` it was
+    meant to fix. So the copied context keeps ``request_id`` / ``user_id`` /
+    ``agent_role`` / ``task_id`` and drops the window: the work is *correlatable*
+    without being *counted twice*. Its spend lands in
+    :func:`detached_llm_call_count`, where it is visible as what it is.
+    """
+    from uk_rent_agent.observability import bind_current_context
+
+    def _detached(*args: Any, **kwargs: Any):
+        _turn_obs.set(None)
+        return fn(*args, **kwargs)
+
+    functools.update_wrapper(_detached, fn)
+    return bind_current_context(_detached)
 
 
 def end_turn() -> None:
@@ -1032,6 +1079,10 @@ def note_raw_llm_call(run_id: Any, *, usage_blob: Any,
     """
     obs = _turn_obs.get()
     if obs is None:
+        # No window: this call is billed and belongs to no canary record. Count it
+        # so the size of that population is knowable from inside the process.
+        global _detached_llm_call_total
+        _detached_llm_call_total = next(_detached_llm_calls) + 1
         return False
     # Observing a call IS the proof that calls on this path are observed. Without this,
     # snapshot() returns all-None for a turn whose only LLM work went through the raw

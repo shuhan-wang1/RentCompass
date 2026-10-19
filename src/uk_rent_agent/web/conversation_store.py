@@ -16,10 +16,70 @@ from __future__ import annotations
 
 import datetime
 import json
+import re
 import sqlite3
 import threading
 import uuid
 from pathlib import Path
+
+# --------------------------------------------------------------------------- #
+# Bind-parameter text safety                                                   #
+# --------------------------------------------------------------------------- #
+#
+# `json.loads` accepts a `\udXXX` escape and Python holds the resulting LONE
+# SURROGATE in a `str` quite happily. sqlite3 does not: it encodes every TEXT bind
+# parameter as strict UTF-8, so the first INSERT carrying one raises
+# `UnicodeEncodeError` — a 500 raised from inside the durable write, from a body
+# an anonymous caller controls (2026-09-03 T3 高-1).
+#
+# The request boundary now refuses that input outright (`web.identity`), and this is
+# the SECOND layer: no code path into this store may turn attacker-shaped text into
+# an exception. Every parameter passes through `_safe_text`, so a surrogate arriving
+# from anywhere else — a background job, an import, a fork, a future caller — is
+# stored as replacement characters instead of killing the request.
+#
+# The check is a regex search over non-ASCII strings only, so the common case
+# (ASCII, or ordinary UTF-8) costs one `str.isascii()` call and touches nothing.
+
+_SURROGATE_RE = re.compile(r"[\ud800-\udfff]")
+
+
+def _safe_text(value):
+    """Return ``value`` unchanged unless it is a str sqlite3 cannot encode.
+
+    A string containing an unpaired surrogate is re-encoded with ``surrogatepass``
+    and decoded back with ``replace``: every valid part round-trips byte-for-byte
+    and only the unencodable code points become U+FFFD.
+    """
+    if type(value) is not str or value.isascii():
+        return value
+    if _SURROGATE_RE.search(value) is None:
+        return value
+    return value.encode("utf-8", "surrogatepass").decode("utf-8", "replace")
+
+
+def _safe_params(parameters):
+    """Apply ``_safe_text`` across one bind-parameter sequence or mapping."""
+    if isinstance(parameters, dict):
+        return {key: _safe_text(val) for key, val in parameters.items()}
+    if isinstance(parameters, (list, tuple)):
+        return type(parameters)(_safe_text(val) for val in parameters)
+    return parameters
+
+
+class _EncodeSafeConnection(sqlite3.Connection):
+    """A connection whose bind parameters can never raise ``UnicodeEncodeError``.
+
+    Applied at the CONNECTION rather than at each call site on purpose: the store
+    has ~60 statements and the guarantee has to hold for the one somebody adds next.
+    """
+
+    def execute(self, sql, parameters=(), /):
+        return super().execute(sql, _safe_params(parameters))
+
+    def executemany(self, sql, seq_of_parameters, /):
+        return super().executemany(
+            sql, (_safe_params(row) for row in seq_of_parameters))
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS conversations (
@@ -211,7 +271,8 @@ class ConversationStore:
         self.db_path = str(db_path)
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
-        self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        self._conn = sqlite3.connect(
+            self.db_path, check_same_thread=False, factory=_EncodeSafeConnection)
         self._conn.row_factory = sqlite3.Row
         with self._lock:
             self._conn.execute("PRAGMA foreign_keys=ON")

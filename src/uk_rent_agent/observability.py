@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import contextlib
 import contextvars
+import functools
 import hashlib
 import hmac
 import json
 import logging
 import os
 import re
+import threading
 import time
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Any
 
 request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
@@ -116,6 +118,79 @@ def current_agent_context() -> dict[str, str]:
         "parent_task_id": parent_task_id_var.get(),
     }
     return {key: value for key, value in values.items() if value is not None}
+
+
+def bind_current_context(fn: "Callable[..., Any]") -> "Callable[..., Any]":
+    """Bind ``fn`` to a SNAPSHOT of the context active at the moment of binding.
+
+    Why this exists
+    ---------------
+    ``request_id`` is a ContextVar, and a ContextVar reaches a new execution unit
+    only if that unit inherits a context. asyncio does this for you —
+    ``create_task``/``call_soon``/``run_coroutine_threadsafe`` all capture
+    ``copy_context()`` at the call site — which is why every provider call made
+    *during* a turn already carries the turn's id.
+
+    Threads and executors do NOT. ``threading.Thread(target=f)`` and
+    ``Executor.submit(f)`` start ``f`` in a fresh, empty context, so anything they
+    log reports ``request_id: "-"``. In one 8-minute production window 40 of 93
+    billed DeepSeek calls looked like that — post-turn critic regeneration,
+    on-demand scraping and auto-memory writes — every one of them billed, and none
+    of them attributable to the turn that caused it or countable by the release
+    gate. This wrapper is the fix: it makes a thread boundary behave like an await
+    boundary.
+
+    It snapshots at BIND time, not at call time. That matters: the point of the
+    snapshot is to capture the spawning turn's identity, and by the time a queued
+    task actually runs, the request that queued it has usually finished and its
+    context has been reset.
+
+    ``turn_observations`` stores a MUTABLE dict in its own ContextVar, so a call
+    made under a copied context also lands in the originating turn's observation
+    window — the id and the accounting travel together, exactly as they do across
+    an await.
+    """
+    snapshot = contextvars.copy_context()
+
+    @functools.wraps(fn)
+    def _run(*args: Any, **kwargs: Any):
+        # A Context object cannot be entered twice at once ("cannot enter context:
+        # ... is already entered"), so running the snapshot directly would make the
+        # returned callable single-use and would raise if two workers ever ran it
+        # concurrently. `snapshot.run(copy_context)` mints a fresh copy of the
+        # snapshot per invocation, which is what makes this safe to hand to a pool.
+        return snapshot.run(contextvars.copy_context).run(fn, *args, **kwargs)
+
+    return _run
+
+
+def spawn_observed_thread(
+    target: "Callable[..., Any]",
+    *,
+    args: tuple = (),
+    kwargs: dict | None = None,
+    name: str | None = None,
+    daemon: bool = True,
+) -> threading.Thread:
+    """``threading.Thread`` that inherits the caller's observability context.
+
+    A drop-in replacement for ``threading.Thread(target=..., daemon=True).start()``
+    at any post-turn spawn site. The thread is started before returning.
+    """
+    thread = threading.Thread(
+        target=bind_current_context(target),
+        args=args,
+        kwargs=kwargs or {},
+        name=name,
+        daemon=daemon,
+    )
+    thread.start()
+    return thread
+
+
+def submit_with_context(executor: Any, fn: "Callable[..., Any]", *args: Any, **kwargs: Any):
+    """``executor.submit`` that carries the caller's observability context in."""
+    return executor.submit(bind_current_context(fn), *args, **kwargs)
 
 
 @contextlib.contextmanager

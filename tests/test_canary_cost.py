@@ -107,8 +107,11 @@ def test_groups_by_exact_arch_and_rollout_and_prices_each_group():
         ("manager_v1", "rollout-b"),
         ("fc_loop", "rollout-a"),
     }
+    # 1000 input of which 200 are cache reads -> 800 miss @1.0 + 500 out @2.0
+    # + 200 hit @0.5 = 1900 / 1e6. NOT 0.0021: that figure charged the 200 cached
+    # tokens at BOTH the miss and the hit rate (see compute_cost).
     assert groups[("manager_v1", "rollout-a")]["total_cost"] == pytest.approx(
-        0.0021
+        0.0019
     )
     assert groups[("fc_loop", "rollout-a")]["total_cost"] == pytest.approx(
         0.002
@@ -117,7 +120,7 @@ def test_groups_by_exact_arch_and_rollout_and_prices_each_group():
     assert no_calls["total_cost"] == 0
     assert no_calls["no_llm_call_turns"] == 1
     assert no_calls["unmeasured_turns"] == 0
-    assert report["total_cost"] == pytest.approx(0.0041)
+    assert report["total_cost"] == pytest.approx(0.0039)
 
 
 def test_no_llm_calls_is_zero_cost_not_unmeasured():
@@ -182,7 +185,7 @@ def test_unverified_prices_hold_even_with_legacy_override_flag():
     assert ordinary["exit_code"] == provisional["exit_code"] == 2
     assert ordinary["total_cost"] is provisional["total_cost"] is None
     assert "provisional_cost" not in ordinary
-    assert provisional["provisional_cost"] == pytest.approx(0.0021)
+    assert provisional["provisional_cost"] == pytest.approx(0.0019)
     assert "unverified" in provisional["error"]
 
 

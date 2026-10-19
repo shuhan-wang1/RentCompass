@@ -1,0 +1,50 @@
+{
+  "price_table_version": 2,
+  "currency": "USD",
+  "unit": "per_1m_tokens",
+  "effective_from": "2026-09-06",
+  "unverified": false,
+  "source_url": "https://api-docs.deepseek.com/quick_start/pricing",
+  "retrieved_at": "2026-09-06T07:40:00Z",
+  "rate_basis": "peak",
+  "_note": "Rates transcribed from DeepSeek's published pricing page at the retrieved_at instant. DeepSeek quotes a PEAK and an OFF-PEAK rate (off-peak is half of peak; peak hours are 01:00-04:00 and 06:00-10:00 UTC, Mon-Fri). The `input`/`output`/`cache_read` fields carry the PEAK figures deliberately: a cost gate that understates spend is worse than one that overstates it, so the shipped number is an upper bound. Both figures are kept per model under `peak`/`off_peak` so the discount can be applied later without re-fetching. `input` is the CACHE-MISS rate and `cache_read` the cache-hit rate; canary_cost charges (input_tokens - cache_read_tokens) at `input` and cache_read_tokens at `cache_read`, because DeepSeek reports cache hits as a breakdown OF prompt_tokens and not as an extra bucket (see core/turn_observations._usage_from_token_usage). NEVER edit a published version in place: historical runs must stay reproducible. Add a v3 instead.",
+  "models": {
+    "deepseek-v4-flash": {
+      "verified": true,
+      "source_url": "https://api-docs.deepseek.com/quick_start/pricing",
+      "retrieved_at": "2026-09-06T07:40:00Z",
+      "input": 0.44,
+      "output": 1.32,
+      "cache_read": 0.014,
+      "peak": {"input": 0.44, "output": 1.32, "cache_read": 0.014},
+      "off_peak": {"input": 0.22, "output": 0.66, "cache_read": 0.007}
+    },
+    "deepseek-v4-pro": {
+      "verified": true,
+      "source_url": "https://api-docs.deepseek.com/quick_start/pricing",
+      "retrieved_at": "2026-09-06T07:40:00Z",
+      "input": 1.32,
+      "output": 3.96,
+      "cache_read": 0.044,
+      "peak": {"input": 1.32, "output": 3.96, "cache_read": 0.044},
+      "off_peak": {"input": 0.66, "output": 1.98, "cache_read": 0.022}
+    },
+    "deepseek-v4-flash-vision-exp": {
+      "verified": true,
+      "source_url": "https://api-docs.deepseek.com/quick_start/pricing",
+      "retrieved_at": "2026-09-06T07:40:00Z",
+      "input": 0.44,
+      "output": 1.32,
+      "cache_read": 0.014,
+      "peak": {"input": 0.44, "output": 1.32, "cache_read": 0.014},
+      "off_peak": {"input": 0.22, "output": 0.66, "cache_read": 0.007}
+    },
+    "deepseek-chat": {
+      "verified": false,
+      "_note": "RETIRED and no longer listed on the published pricing page. Kept with null rates on purpose rather than deleted: a record that names it must be reported as UNPRICED, not silently dropped from the denominator. It is the model name behind the 2026-07-25 incident (a stale app/.env DEEPSEEK_MODEL), so a window that still contains it is telling you something.",
+      "input": null,
+      "output": null,
+      "cache_read": null
+    }
+  }
+}

@@ -5,8 +5,24 @@
 # Exit contract:
 #   0   report says proceed; traffic is NOT promoted automatically
 #   1/2/64 (or any non-3 code) report status is returned unchanged; no mutation
-#   3   zero-tolerance breach; rollback succeeded; breach status remains 3
+#   3   zero-tolerance breach ON A VALID MEASUREMENT; rollback succeeded; status stays 3
 #   70  zero-tolerance breach, but rollback itself FAILED (operator emergency)
+#
+# EXIT 3 IS AN ACTION, NOT A REPORT
+# ---------------------------------------------------------------------------
+# This wrapper turns exit 3 into `set_canary_weight.sh --weight 0`. So exit 3 may
+# only ever be produced by a window that is a MEASUREMENT: one schema version, one
+# candidate build, and a contract-violation rate under the report's
+# measurement-validity limit. `canary_report.build_verdict` enforces that — an
+# invalid window returns INSTRUMENTATION-HOLD (exit 2) and prints its
+# zero-tolerance and stage-pause facts marked "not actionable", however alarming
+# they look. Nothing is promoted either: 2 is still a non-zero hold.
+#
+# Before this rule, a window straddling a deploy exited 3 off pre-v3 history that
+# earlier builds of the candidate arch had written, and this wrapper rolled the
+# healthy candidate to 0%. If you see exit 2 with breach lines in it, fix the
+# instrumentation and re-run the window; do not hand-fire the rollback on the
+# strength of numbers the report has told you it cannot attribute.
 #
 # 70 CAN ALSO MEAN "A DEPLOY IS RUNNING RIGHT NOW"
 # ---------------------------------------------------------------------------
@@ -18,18 +34,21 @@
 # itself prove the rollback verb is broken. Check for a running deploy first, then
 # re-run `sudo bash deploy/set_canary_weight.sh --weight 0` by hand.
 #
-# MIXED TELEMETRY SCHEMA VERSIONS -> exit 2 (INSTRUMENTATION-HOLD)
+# AN INVALID MEASUREMENT -> exit 2 (INSTRUMENTATION-HOLD), never exit 3
 # ---------------------------------------------------------------------------
 # canary_report.py refuses a window that mixes telemetry_schema_version 2 and 3
-# records: the two contracts are not comparable, so every rate in the report would
-# have an unknown denominator. On the day a pool is rolled forward this is the
-# normal state for a while — legacy still emitting v2 while the candidate already
-# emits v3 — and the window HOLDs immediately.
+# records, or two candidate builds, or whose contract-violation rate is over the
+# measurement-validity limit: the rates then have an unknown denominator. On the
+# day a pool is rolled forward the first of those is the normal state for a while —
+# legacy still emitting v2 while the candidate already emits v3 — and the window
+# HOLDs immediately.
 #
 # The correct handling is to move `--since` to AFTER both pools finished deploying,
-# so the window contains one schema only. Do NOT relax the check, and do not read
-# the HOLD as an SLO regression: it means the measurement is invalid, not that the
-# candidate is bad. See docs/canary_runbook.md section 5.
+# so the window contains one schema and one build. Do NOT relax the check, and do
+# not read the HOLD as an SLO regression: it means the measurement is invalid, not
+# that the candidate is bad. Pin the build with `--candidate-sha <sha>` if the
+# stream still holds records from an earlier build of the same arch. See
+# docs/canary_runbook.md section 5.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -47,8 +66,17 @@ WEIGHT_SCRIPT="${CANARY_GATE_WEIGHT_SCRIPT:-$HERE/set_canary_weight.sh}"
 # branches on "non-zero means bad" silently read the missing interpreter as a HOLD.
 # A gate that cannot start must never look like a gate that ran.
 #
-# Order: explicit override, then the ambient PYTHON, then a repo virtualenv (where
-# the report's dependencies actually live), then python3, then python.
+# Order: explicit override, then the ambient PYTHON, then a repo virtualenv, then
+# python3, then python.
+#
+# On THIS host neither `$REPO/.venv` nor `$REPO/venv` exists, so resolution falls
+# through to `python3` — and that is fine, because `scripts/canary_report.py` and
+# `scripts/canary_cost.py` are stdlib-only by design (the closed-loop contract test
+# depends on it). The venv entries are kept for hosts that do have one; they are not
+# a statement that the report needs one here. The project's working interpreter on
+# this box is `/tmp/rentcompass-venv/bin/python`, which is NOT searched because it is
+# outside the repo — pass `CANARY_GATE_PYTHON=/tmp/rentcompass-venv/bin/python` if
+# you want it (docs/canary_runbook.md section 0.10).
 _gate_python() {
   local candidate
   for candidate in "${CANARY_GATE_PYTHON:-}" "${PYTHON:-}" \
@@ -73,12 +101,18 @@ if [[ -z "$REPORT_PYTHON" && -z "$REPORT_CMD" ]]; then
   exit 69
 fi
 
+# The report's output is streamed to the operator AND kept, so the rollback
+# decision below can re-read what the report actually said instead of trusting a
+# bare status code. `tee` is in the pipeline, so the report's own status must come
+# from PIPESTATUS, never from `$?` (which would be tee's).
+GATE_OUT="$(mktemp -t canary-gate-XXXXXX.txt)"
+trap 'rm -f "$GATE_OUT"' EXIT
 if [[ -n "$REPORT_CMD" ]]; then
-  "$REPORT_CMD" "$@"
+  "$REPORT_CMD" "$@" | tee "$GATE_OUT"
 else
-  "$REPORT_PYTHON" "$REPORT_SCRIPT" "$@"
+  "$REPORT_PYTHON" "$REPORT_SCRIPT" "$@" | tee "$GATE_OUT"
 fi
-report_rc=$?
+report_rc=${PIPESTATUS[0]}
 
 if [[ "$report_rc" != 3 ]]; then
   if [[ "$report_rc" == 0 ]]; then
@@ -87,6 +121,16 @@ if [[ "$report_rc" != 3 ]]; then
     printf 'CANARY_GATE_NO_CHANGE: report exit=%s; traffic weight is unchanged\n' "$report_rc" >&2
   fi
   exit "$report_rc"
+fi
+
+# SECOND GATE on the rollback verb, independent of the exit code. The report
+# already refuses to return 3 for an invalid measurement (see the exit contract
+# above); this re-reads its printed verdict so a future regression in that rule
+# still cannot drive traffic off a window the report itself called unreadable.
+# Absent marker => nothing to object to (e.g. --quiet), and the code stands.
+if grep -q 'measurement_valid=False' "$GATE_OUT" 2>/dev/null; then
+  printf '\033[31mROLLBACK_REFUSED\033[0m: the report returned exit 3 but also reported measurement_valid=False; an invalid measurement must never drive an automated rollback. Fix the instrumentation (one schema version, one candidate build) and re-run.\n' >&2
+  exit 2
 fi
 
 printf '\033[31mCANARY_ZERO_TOLERANCE_BREACH\033[0m: forcing candidate weight to 0\n' >&2

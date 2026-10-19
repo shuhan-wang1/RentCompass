@@ -112,9 +112,35 @@ services:
       driver: json-file
       options: {max-size: 20m, max-file: "5"}
     # Trust the X-Forwarded-* headers set by the nginx reverse proxy so the app
-    # sees the real client IP and https scheme (needed for Secure session cookies).
-    # forwarded-allow-ips=* is safe because the port is bound to 127.0.0.1 (see
-    # the ports: mapping) — only nginx on this host can reach the app.
+    # sees the real client IP and https scheme.
+    #
+    # CORRECTED 2026-09-06 (F1 residual R1). This used to pass
+    # `--forwarded-allow-ips "*"`, justified as "safe because the port is bound to
+    # 127.0.0.1 — only nginx on this host can reach the app". The second half does
+    # not follow: loopback-bound is not nginx-only, and with `*` uvicorn rewrote
+    # `remote_addr` from ANY peer's X-Forwarded-For, BELOW app.py's own
+    # TRUSTED_PROXY_IPS gate — so a rotating XFF picked its own rate-limit bucket
+    # (measured: 20/20 requests past a tripped limiter).
+    #
+    # THE HOP IS NOT 127.0.0.1. nginx runs on the host and proxy_passes to
+    # 127.0.0.1:5001, but the published port is served by docker-proxy, so the
+    # connection is re-originated onto the `rentnet` bridge and the container sees
+    # the BRIDGE GATEWAY. Observed 2026-09-06: rentnet is br-3f0b81f4d59c,
+    # 172.19.0.1/16, with exactly the 4 veths of this file's 4 services.
+    # Re-check after any network recreation with:
+    #     ip -o -4 addr show | grep -E 'br-|docker0'
+    #     ls /sys/class/net/<bridge>/brif     # the bridge with 4 interfaces
+    # and override UVICORN_FORWARDED_ALLOW_IPS in the root .env if it moved.
+    #
+    # WHAT THIS DOES AND DOES NOT BUY. Every connection to 127.0.0.1:5001 arrives
+    # from that same gateway — nginx's and a local attacker's alike — so this
+    # cannot distinguish them, and a local process that can reach the published
+    # port can still choose its own forwarded address. It is defence in depth: the
+    # blanket wildcard is gone, so if these containers are ever attached to another
+    # network, or the port is ever published on a routable interface, a remote
+    # peer's X-Forwarded-For is no longer believed. An EMPTY override disables the
+    # rewrite entirely (uvicorn then trusts nobody), which fails closed.
+    # NEVER set this back to "*".
     command:
       - python
       - -m
@@ -127,7 +153,7 @@ services:
       - "5001"
       - --proxy-headers
       - --forwarded-allow-ips
-      - "*"
+      - "${UVICORN_FORWARDED_ALLOW_IPS:-172.19.0.1}"
     # No depends_on: SearXNG/Valkey are optional web-search infrastructure.
     # /ready reports their loss as degraded while core chat remains startable.
     networks: [rentnet]
@@ -148,6 +174,13 @@ services:
       SESSION_COOKIE_SECURE: "true"
       ALLOW_LEGACY_CLIENT_USER_ID: "false"
       MAX_REQUEST_BYTES: "262144"
+      # app.py::_trusted_proxy_ips — the peer whose X-Forwarded-For the APP will
+      # believe. Deliberately the SAME hop as --forwarded-allow-ips above, so the
+      # two layers cannot disagree about who the proxy is. In practice uvicorn has
+      # already rewritten remote_addr to the client for a request that came via
+      # that hop, so this gate is dormant on the nginx path; it is what keeps the
+      # app correct if the uvicorn rewrite is ever turned off.
+      TRUSTED_PROXY_IPS: "${UVICORN_FORWARDED_ALLOW_IPS:-172.19.0.1}"
       # --- Canary pins (legacy pool) ------------------------------------------
       # These only make the current effective defaults EXPLICIT + turn on
       # per-turn telemetry; they change no behaviour. They take effect the next
@@ -265,7 +298,9 @@ services:
       driver: json-file
       options: {max-size: 20m, max-file: "5"}
     # Identical entrypoint to `app`: same uvicorn factory, same proxy-header
-    # handling. Only the arch/strict flags and DB/telemetry paths differ (below).
+    # handling, same single trusted hop (see the long comment on `app`'s command —
+    # in particular why the hop is the rentnet bridge gateway and not 127.0.0.1).
+    # Only the arch/strict flags and DB/telemetry paths differ (below).
     command:
       - python
       - -m
@@ -278,7 +313,7 @@ services:
       - "5001"
       - --proxy-headers
       - --forwarded-allow-ips
-      - "*"
+      - "${UVICORN_FORWARDED_ALLOW_IPS:-172.19.0.1}"
     # Same optional-dependency contract as legacy; never hold app startup on
     # web-search infrastructure.
     networks: [rentnet]
@@ -297,6 +332,13 @@ services:
       SESSION_COOKIE_SECURE: "true"
       ALLOW_LEGACY_CLIENT_USER_ID: "false"
       MAX_REQUEST_BYTES: "262144"
+      # app.py::_trusted_proxy_ips — the peer whose X-Forwarded-For the APP will
+      # believe. Deliberately the SAME hop as --forwarded-allow-ips above, so the
+      # two layers cannot disagree about who the proxy is. In practice uvicorn has
+      # already rewritten remote_addr to the client for a request that came via
+      # that hop, so this gate is dormant on the nginx path; it is what keeps the
+      # app correct if the uvicorn rewrite is ever turned off.
+      TRUSTED_PROXY_IPS: "${UVICORN_FORWARDED_ALLOW_IPS:-172.19.0.1}"
       # ...plus the candidate knobs.  Safe defaults are fc_loop with specialist
       # dispatch disabled; manager_v1 is an explicit paired opt-in in the root
       # .env (CANARY_AGENT_ARCH=manager_v1 and

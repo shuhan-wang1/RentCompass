@@ -74,7 +74,7 @@ UNTRUSTED_DATA_MARKER = "LOW-PRIVILEGE UNTRUSTED DATA"
 # selected.  ``PromptSpec.content_hash`` records the rendered bytes for each finite locale
 # variant, so prompt-only A/Bs remain attributable even when the application SHA is shared.
 FC_LOOP_SYSTEM_PROMPT_ID = "uk_rent.fc_loop.system"
-FC_LOOP_SYSTEM_PROMPT_VERSION = "2.2.0"
+FC_LOOP_SYSTEM_PROMPT_VERSION = "2.3.0"
 
 # 2.6 soft criteria gate. The gate itself lives inside search_properties; the harness
 # re-injects criteria_gate_shown / confirmed. The model must know the confirmed
@@ -106,12 +106,18 @@ AREA_SWITCH_RULE = (
 )
 
 # 1 / 1.5 / multi-area zh deictic anchoring (structural rule, not results[0]).
+# The wording here is quoted back at users almost verbatim, so it must not contain
+# implementation vocabulary: a live answer read "I don't have a clear focus stack showing
+# which listings are being discussed", which is this sentence leaking (P1-9). The rule says
+# the same thing in the words a person would use; only the internal names changed.
 DEICTIC_RULE = (
     "REFERENCE RESOLUTION (Chinese deictics): 「那个区域」/「那边」refers to the AREA currently "
     "under discussion, NOT automatically the first search result. A singular near reference "
-    "(「这个房源」/「这套」/「this one」) means the listing at the BOTTOM of the focus stack (the "
-    "most recently focused one). 「上一个聚焦的」means the focus before it. Resolve references "
-    "from the context block, never by guessing an index."
+    "(「这个房源」/「这套」/「this one」) means the listing the user selected most recently — the "
+    "LAST one in the context block's list of listings they have looked at. 「上一个聚焦的」means "
+    "the one they looked at before that. Resolve references from the context block, never by "
+    "guessing an index. Describe these to the user in plain language ('the listing you're "
+    "looking at', 'the one before it') and never by the names the context block uses."
 )
 
 # 4 no-fabrication (echoes SECURITY_DIRECTIVE point 4, kept for the loop's tool-choice path).
@@ -237,6 +243,24 @@ EVIDENCE_SCOPE_RULE = (
     'override older chat turns, including office_days_per_week and monthly_total_budget.'
 )
 
+# Internal state names must not reach the user (P1-9). Live answers printed "the tool's
+# internal criteria still show `max_budget: 200`", "I don't have a clear focus stack
+# showing which listings are being discussed" and "Let me check the context". Each was
+# honest and each leaked implementation vocabulary into the product surface. The context
+# block below IS written in those names — that is what makes the rule necessary rather
+# than optional.
+OUTPUT_HYGIENE_RULE = (
+    "PLAIN LANGUAGE TO THE USER: the context blocks, tool names and parameter names above "
+    "are INTERNAL. Never print them to the user \u2014 not focus stack / FOCUSED PROPERTY / "
+    "EARLIER FOCUSES, not extracted_context / accumulated criteria / tool_artifacts, not "
+    "parameter names such as max_budget, max_commute_time, room_type or confirmed, and "
+    "never a raw key:value pair from them. Say it the way a person would: 'the listing "
+    "you're looking at', 'your budget of \u00a32,200', 'the ones we discussed'. Do not narrate "
+    "your own process ('let me check the context', 'the tool returned'); state the answer, "
+    "or state plainly what you could not find out."
+)
+
+
 _BEHAVIOUR_RULES_HEADER = "=== BEHAVIOUR RULES (standing instructions) ==="
 _BEHAVIOUR_RULES_FOOTER = "=== END BEHAVIOUR RULES ==="
 
@@ -256,6 +280,7 @@ _BEHAVIOUR_RULES_ORDER = (
     NO_FABRICATION_RULE,
     MEMORY_CONFIRM_RULE,
     NO_EMOJI_RULE,
+    OUTPUT_HYGIENE_RULE,
 )
 
 

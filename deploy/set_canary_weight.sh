@@ -304,6 +304,14 @@ if [[ "$WEIGHT" == 100 ]]; then
   esac
 fi
 
+# --allow-unidentified-target relaxes the SHA check ONLY, and only on the way down.
+# CORRECTED 2026-09-06: it is no longer routine. The legacy pool answered 'unknown' until
+# the 1df0d4f release of 2026-09-03 set LEGACY_APP_SHA in the root .env and recreated
+# `app`; :5001/ready now states a full 40-char commit, so both the weight-0 controller and
+# switch_pool.sh --to legacy verify provenance unaided. Pass this flag only when a pool has
+# genuinely lost its stamp (a pre-2026-09 image, or a cleared .env pin). The weight-0
+# restriction below is what stops the habit leaking onto an ESCALATION, where "I cannot
+# prove what I am exposing traffic to" is exactly the wrong thing to wave through.
 if [[ "$WEIGHT" != 0 && "$ALLOW_UNIDENTIFIED" == 1 ]]; then
   die "--allow-unidentified-target is restricted to the weight-0 emergency rollback"
 fi
@@ -351,11 +359,13 @@ verify_local() { # label url want_arch want_specialists configured_sha allow_unk
 }
 
 run_answer_probe() { # base_url want_arch want_specialists -> stdout, probe rc
-  # `--expect-specialists 0` is passed for legacy exactly as verify_local does:
-  # the DEPLOYED legacy pool predates X-Agent-Specialists (it is the standing
-  # rollback escape hatch and must not be recreated), so it sends no such header.
-  # probe_pool_answer.py::specialists_match mirrors verify_local's `none` branch —
-  # an absent header counts as 0 only when the pool answers as arch 'legacy'.
+  # `--expect-specialists 0` is passed for legacy exactly as verify_local does.
+  # CORRECTED 2026-09-06 on two counts. (1) The legacy pool no longer omits
+  # X-Agent-Specialists: the 1df0d4f release of 2026-09-03 rebuilt it and :5001
+  # now answers `0`. (2) The exemption was never narrowed to arch 'legacy' after
+  # R3-H1 widened it: probe_pool_answer.py::specialists_match accepts an absent
+  # header for ANY pool whose EXPECTED identity is specialists=0, which is what
+  # keeps the rollback usable against an image that has not been rebuilt.
   $ANSWER_PROBE_CMD --url "$1" --expect-arch "$2" \
     --expect-specialists "$3" --expect-substring "$ANSWER_PROBE_SUBSTRING" \
     --timeout "$ANSWER_PROBE_TIMEOUT" 2>&1

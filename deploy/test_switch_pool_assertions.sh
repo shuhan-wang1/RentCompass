@@ -10,9 +10,18 @@
 # calls, and until now its only exerciser was deploy/switch_pool_rehearse.sh —
 # which starts a REAL nginx and probes the REAL pools, so nobody runs it in a
 # review. That is how R3-H1 shipped: an `X-Agent-Specialists` equality check with
-# no exemption for the pre-2026-08-31 images, which is BOTH containers deployed on
-# this host, turning `--to legacy` (the documented emergency rollback) and the
-# drain leg of `update.sh --pool fc` into hard refusals.
+# no exemption for the pre-2026-08-31 images, which was BOTH containers deployed
+# on this host at the time, turning `--to legacy` (the documented emergency
+# rollback) and the drain leg of `update.sh --pool fc` into hard refusals.
+#
+# THE DEFAULTS MODEL TODAY'S HOST (corrected 2026-09-06). They used to model the
+# pre-2026-08-31 images — specialists header ABSENT, which was then production.
+# The 1df0d4f release of 2026-09-03 rebuilt both pools, and `curl -sI` against
+# :5001 and :5002 now returns `x-agent-specialists: 0` plus a full 40-char
+# `x-agent-version` on each. A harness whose fakes answer a header shape the host
+# no longer has cannot catch a regression in the `observed == expected` branch, so
+# the defaults were moved to the real triple and the absent-header cases are kept
+# as an EXPLICIT un-rebuilt-image scenario (section 1b) rather than as the default.
 #
 # Every external command is injected, including curl. A `curl` stub is also put
 # first on PATH that records any use and fails: if the real binary were ever
@@ -42,11 +51,12 @@ setup() {   # setup <current upstream port>
   ROUTE_CONF_PATH="$SANDBOX/no-weighted-include.conf"
   printf 'CANARY_AGENT_ARCH=fc_loop\nCANARY_MANAGER_V1_SPECIALISTS=0\nCANARY_USE_MCP_TOOLS=0\n' > "$SANDBOX/root.env"
 
-  # The identity each port answers with. `-` in the specialists slot means the
-  # pool sends NO X-Agent-Specialists header at all, which is what origin/main's
-  # image does — i.e. what is running on this box right now.
-  : "${P5001:=legacy $SHA40_A -}"
-  : "${P5002:=fc_loop $SHA40_B -}"
+  # The identity each port answers with, as "<arch> <sha> <specialists>".
+  # `-` in the specialists slot means the pool sends NO X-Agent-Specialists
+  # header at all — a pre-2026-08-31 image. The DEFAULT is the live shape of this
+  # host since the 1df0d4f release of 2026-09-03: both pools state `0`.
+  : "${P5001:=legacy $SHA40_A 0}"
+  : "${P5002:=fc_loop $SHA40_B 0}"
 
   cat > "$SANDBOX/bin/fakecurl" <<'EOF'
 #!/usr/bin/env bash
@@ -117,9 +127,51 @@ run_switch() {
 port_now() { sed -n 's/.*server[[:space:]]\+127\.0\.0\.1:\([0-9]\+\);.*/\1/p' "$CONF_PATH" | head -1; }
 
 # ══════════════════════════════════════════════════════════════════════════
-echo "--- 1. R3-H1: the pools deployed TODAY send no X-Agent-Specialists ---"
-# `git grep X-Agent-Specialists origin/main` -> zero hits, so neither running
-# container emits it. The equality check refused the emergency rollback outright.
+echo "--- 1. TODAY'S HOST: both pools state X-Agent-Specialists: 0 ---"
+# Observed live on 2026-09-03 and re-verified 2026-09-06:
+#   :5001  x-agent-arch: legacy   x-agent-specialists: 0  x-agent-version: <40 hex>
+#   :5002  x-agent-arch: fc_loop  x-agent-specialists: 0  x-agent-version: <40 hex>
+# These are the defaults, so every OTHER section in this file also runs against
+# the shape production actually has.
+setup 5002
+run_switch --to legacy
+check    "EMERGENCY ROLLBACK --to legacy is accepted on the real header set" 0 "$RC"
+check    "and the public upstream actually moved 5002 -> 5001" 5001 "$(port_now)"
+contains "$OUT" "switched to legacy"                      "and the switch is announced"
+lacks    "$OUT" "sends no X-Agent-Specialists header"     "no absent-header exemption is claimed when the header is present"
+teardown
+
+setup 5001
+run_switch --to fc
+check    "and back: --to fc is accepted"                  0 "$RC"
+check    "the public upstream moved 5001 -> 5002"         5002 "$(port_now)"
+lacks    "$OUT" "sends no X-Agent-Specialists header"     "the forward switch claims no exemption either"
+teardown
+
+# The R3-H1 fix loosened the rule so an ABSENT header counts as 0. It must not have
+# been loosened into uselessness: a pool that POSITIVELY answers 1 against a
+# configured 0 is still a hard refusal, and the upstream must not move.
+setup 5001
+P5002="fc_loop $SHA40_B 1" run_switch --to fc
+check    "a real-header pool answering 1 where 0 is configured is refused" 1 "$RC"
+contains "$OUT" "specialists='1', expected '0'"           "and names both sides"
+check    "the public upstream did NOT move"               5001 "$(port_now)"
+contains "$OUT" "nothing changed"                         "and says nothing changed"
+teardown
+
+# Today's legacy pool CAN name its commit (LEGACY_APP_SHA is set in the root .env
+# and `app` was recreated by the 1df0d4f release), so the emergency rollback needs
+# no --allow-unidentified-target. Guarding the runbook wording (section 0.6).
+setup 5002
+run_switch --to legacy
+check    "rollback needs no --allow-unidentified-target today" 0 "$RC"
+lacks    "$OUT" "cannot state its commit"                 "and no provenance warning is printed"
+teardown
+echo
+
+echo "--- 1b. COMPATIBILITY: a pool built before 2026-08-31 omits the header ---"
+# Not this host any more, but still the contract: the exemption exists so that an
+# un-rebuilt image can never block the lever that exists to rescue a bad release.
 setup 5002
 P5001="legacy $SHA40_A -" P5002="fc_loop $SHA40_B -" run_switch --to legacy
 check    "--to legacy succeeds against a headerless pool" 0 "$RC"
@@ -134,7 +186,7 @@ check    "--to fc also succeeds when 0 is expected"       0 "$RC"
 check    "and the upstream moved"                         5002 "$(port_now)"
 teardown
 
-# The DEPLOYED legacy pool cannot even name its commit; that stays a separate,
+# A pre-2026-09 legacy image cannot name its commit either; that stays a separate,
 # explicitly flagged decision, and it must not be entangled with the header rule.
 setup 5002
 P5001="legacy unknown -" run_switch --to legacy

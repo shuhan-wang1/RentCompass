@@ -578,7 +578,8 @@ def update_search_criteria(accumulated: dict, new_criteria: dict) -> dict:
     return protect_confirmed_criteria(result, accumulated)
 
 
-def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) -> dict:
+def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
+                                     apply_relative_budget: bool = True) -> dict:
     """D2: fold an explicit budget/commute change stated in THIS turn's raw message
     into the accumulated criteria (raise OR lower), so the update survives even when
     the turn produces no search. Returns the SAME object when nothing changed so the
@@ -588,6 +589,14 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     a single source of truth for phrasings ("budget is now X", "actually X max",
     "£1000", "40 minute commute", "half an hour", week↔month). A weekly budget is
     normalised to monthly because accumulated.max_budget is monthly.
+
+    ``apply_relative_budget=False`` is for the executor-side boundaries that RE-apply this
+    turn's text to criteria the state node has already updated (``agent_loop.
+    _inject_search_params``, ``search_properties.ground_hard_constraints``). An absolute
+    change is idempotent there; a relative one ("raise the budget by £200") is not — each
+    re-application added the delta again (2200 -> 2400 -> 2600 -> 2800 in one turn). The
+    state node is the only place that still holds the pre-turn ceiling, so it alone
+    resolves a delta; the boundaries leave the budget exactly as they received it.
     """
     if not current_message:
         return accumulated
@@ -598,7 +607,8 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
         reaffirmed = explicit_feature_requirement_text(current_message)
         if not reaffirmed:
             return accumulated
-        amended = _apply_explicit_criteria_updates(accumulated, reaffirmed)
+        amended = _apply_explicit_criteria_updates(
+            accumulated, reaffirmed, apply_relative_budget=apply_relative_budget)
         result = dict(accumulated)
         sources = dict(accumulated.get('constraint_sources') or {})
         changed = False
@@ -647,7 +657,27 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     if max_changes is not None and result.get('max_changes') != max_changes:
         result['max_changes'] = max_changes
         changed = True
-    if amount:
+    # P1-1 (legacy arch): "raise the budget by £200" states a DELTA, not a ceiling. The
+    # deterministic currency extractor cannot tell the two apart, so £2,200 became £200 and
+    # the search could never match (agenttest-t1-f4b-legacy). detect_relative_budget_delta
+    # is the single place that distinguishes them (it returns None for "raise the budget TO
+    # £2400", which stays a ceiling); resolve_relative_budget applies the delta to the
+    # ceiling standing BEFORE this turn. A relative edit with no prior ceiling CLEARS
+    # max_budget — a delta is not a ceiling, and searching at the delta is exactly the bug.
+    # _states_relative_budget_edit is detect_relative_budget_delta plus the one guard it is
+    # missing (a CEILING marker introducing the same amount — 「预算每月最多2200英镑」 reads as a
+    # +2200 delta because the loose ZH pattern matches 多 inside 最多). Both budget-override
+    # sites in search_properties.py ask through the same predicate, so the three places that
+    # can move a ceiling on the legacy path agree.
+    from core.search_readiness import resolve_relative_budget
+    from core.tools.search_properties import _states_relative_budget_edit
+    if _states_relative_budget_edit(current_message):
+        if apply_relative_budget:
+            resolved = resolve_relative_budget(current_message, result.get('max_budget'))
+            if result.get('max_budget') != resolved:
+                result['max_budget'] = resolved      # None when there was no prior ceiling
+                changed = True
+    elif amount:
         monthly = monthly_from_weekly(amount) if period == 'week' else amount
         result['budget_period'] = 'month'
         if result.get('max_budget') != monthly:
@@ -909,16 +939,24 @@ def build_context_info(extracted_context: dict, tool_name: str, prefs: dict) -> 
         info.append(extracted_context['recommended_index'])
         info.append("")
 
-    # Focus stack (multi-focus): the listings the user has focused, oldest -> newest, with the
-    # LAST marked as CURRENT FOCUS. A singular near reference (this one / 这个房源 / 这套) means
-    # the CURRENT FOCUS; 'the previous focus / 上一个聚焦的' means the one before it.
+    # The listings the user is discussing (internal key: focus_stack), oldest -> newest, the
+    # LAST marked as the one being discussed now. A singular near reference (this one /
+    # 这个房源 / 这套) means that one; "the one before" / 上一个看的 means its predecessor.
+    #
+    # USER-FACING WORDING (P1-9): the model quotes this block's vocabulary back at the reader
+    # — live, an answer said "I don't have a clear **focus stack** showing which listings are
+    # being discussed" (agenttest-t1-f3-fc). So the headings and the instruction below are
+    # written in the words a tenant would use. The dict key, the local variable and every
+    # resolver name stay `focus_stack`; only the prompt TEXT changed, and the two reference
+    # phrasings it now advertises ("the one before", 上一个看的) are both already recognised
+    # by _PREVIOUS_FOCUS_PHRASES / _PREV_FOCUS_RE, so resolution is unchanged.
     focus_stack = extracted_context.get('focus_stack') or []
     if isinstance(focus_stack, list) and focus_stack:
-        info.append("=== FOCUS STACK (listings the user focused, oldest -> newest) ===")
+        info.append("=== LISTINGS THE USER IS DISCUSSING (oldest -> newest) ===")
         for _i, _rec in enumerate(focus_stack, 1):
             if not isinstance(_rec, dict):
                 continue
-            _marker = " [CURRENT FOCUS]" if _i == len(focus_stack) else ""
+            _marker = " [DISCUSSING NOW]" if _i == len(focus_stack) else ""
             info.append(f"{_i}. {_rec.get('address') or _rec.get('name') or 'Listing'}{_marker}")
             if _rec.get('price') not in (None, '', 'N/A'):
                 info.append(f"   Price: {_rec['price']}")
@@ -927,9 +965,11 @@ def build_context_info(extracted_context: dict, tool_name: str, prefs: dict) -> 
             if _rec.get('url'):
                 info.append(f"   Listing URL: {_rec['url']}")
         info.append("A singular near reference (this one / this listing / 这个房源 / 这套) means "
-                    "the CURRENT FOCUS (the last one above). 'the previous focus / 上一个聚焦的' "
-                    "means the one before it.")
-        info.append("=== END FOCUS STACK ===\n")
+                    "the listing marked DISCUSSING NOW (the last one above); "
+                    "'the one before' / 上一个看的 means the one listed above it. "
+                    "When you refer to this list in your reply, call it "
+                    "'the listing we were discussing' or 'the properties I showed you'.")
+        info.append("=== END LISTINGS THE USER IS DISCUSSING ===\n")
 
     if extracted_context.get('property_address'):
         info.append("=== Current Property Context ===")
@@ -3136,6 +3176,28 @@ def _heuristic_fallback(user_query, extracted_context, tool_registry, accumulate
     return {"tool": "web_search", "params": {"query": user_query}, "reason": "Heuristic: default web search"}
 
 
+def _area_named_in_turn(user_query, extracted_context) -> Optional[str]:
+    """The most specific curated UK place named in THIS turn (message first, then the
+    accumulated search area), else None.
+
+    Reads the raw current message rather than ``user_query``: the latter is prefixed with
+    injected memory and prior turns, whose place names must not hijack this turn. Returns
+    a canonical English name ("Shoreditch"), which the geocode ladder resolves as
+    "Shoreditch, London, UK". Never raises — a resolver failure must degrade to the
+    caller's own fallback, not kill the turn."""
+    try:
+        from core.tools.search_properties import most_specific_known_area
+    except Exception:
+        return None
+    ctx = extracted_context if isinstance(extracted_context, dict) else {}
+    msg = _current_msg_for_reference(user_query, ctx)
+    for text in (msg, ctx.get('area'), ctx.get('destination')):
+        area = most_specific_known_area(text) if text else None
+        if area:
+            return area
+    return None
+
+
 def _build_tool_params(tool_name, user_query, extracted_context, tool_registry, accumulated=None):
     """Build appropriate params for the selected tool."""
     if tool_name == 'reasoning_property':
@@ -3150,7 +3212,15 @@ def _build_tool_params(tool_name, user_query, extracted_context, tool_registry, 
             params['reply_language'] = rl
         return {"tool": "search_properties", "params": params, "reason": f"Voted: {tool_name}"}
     elif tool_name == 'search_nearby_pois':
-        addr = _resolve_target_address(user_query, extracted_context) or 'London'
+        # A POI lookup needs a point, and the bare string 'London' is not one: the geocode
+        # ladder rejects it as too generic (search_nearby_pois._is_too_generic), so the old
+        # `or 'London'` fallback turned "What's near Shoreditch in London?" into
+        # "Could not find coordinates for address: London" and zero POIs, on a message that
+        # named the area outright. Resolve the most SPECIFIC place the user actually named
+        # before falling back, and only fall back to the city when nothing was named at all.
+        addr = _resolve_target_address(user_query, extracted_context)
+        if not addr:
+            addr = _area_named_in_turn(user_query, extracted_context) or 'London'
         return {"tool": "search_nearby_pois",
                 "params": {"address": addr, "user_query": user_query, "radius": 1000},
                 "reason": f"Voted: {tool_name}"}
@@ -3755,6 +3825,12 @@ def _make_execute_tool_node(tool_registry):
         raw_data = None
         tool_success = False
         update = {}
+        # Per-tool timing for the artifact ledger (P2-4). Measured around the DISPATCH, not
+        # around the node, so post-call payload validation is not billed to the tool. A
+        # branch that dispatches nothing (reasoning_property) falls back to node time.
+        _node_started = time.monotonic()
+        _dispatch_started = None
+        _dispatch_ended = None
 
         try:
             if tool_name == 'reasoning_property':
@@ -3904,8 +3980,10 @@ def _make_execute_tool_node(tool_registry):
                 )
                 params["idempotency_key"] = invocation.idempotency_key
                 from core.agent_loop import _OffloadedValidationProvider, _offload_tool_call
+                _dispatch_started = time.monotonic()
                 result = await _offload_tool_call(
                     lambda: tool_registry.execute_tool(tool_name, **dict(params)))
+                _dispatch_ended = time.monotonic()
                 tool_success = bool(result.success)
                 # Domain-level outcomes such as ``need_clarification`` deliberately
                 # use success=False but still carry authoritative structured data.
@@ -3981,8 +4059,10 @@ def _make_execute_tool_node(tool_registry):
                     # whether the write lands.
                     _note_legacy_write_dispatch(_inv_key)
                 from core.agent_loop import _offload_tool_call
+                _dispatch_started = time.monotonic()
                 result = await _offload_tool_call(
                     lambda: tool_registry.execute_tool(tool_name, **dict(params)))
+                _dispatch_ended = time.monotonic()
                 tool_success = bool(result.success)
                 raw_data = result.data if result.success else {"success": False, "error": result.error}
 
@@ -4008,10 +4088,13 @@ def _make_execute_tool_node(tool_registry):
         # the answer was correctly forced to say it could not verify a commute. Keep the
         # same raw per-turn ledger used by fc_loop so the formatter can render the search
         # result regardless of which auxiliary tool ran last.
+        _art_started = _dispatch_started if _dispatch_started is not None else _node_started
+        _art_ended = _dispatch_ended if _dispatch_ended is not None else time.monotonic()
         artifacts = list(state.get("tool_artifacts") or [])
         artifacts.append(_legacy_tool_artifact(
             int(state.get("loop_turn", 0)), tool_name, raw_data,
             _params_digest(tool_name, params), success=tool_success,
+            started_at=_art_started, ended_at=_art_ended,
         ))
         update["tool_artifacts"] = artifacts
 
@@ -4250,7 +4333,10 @@ def _params_digest(tool_name: str, params: dict) -> str:
 
 def _legacy_tool_artifact(turn: int, tool: str, raw_data: Any,
                           params_digest: str = "", success: bool = True,
-                          error: Optional[str] = None) -> dict:
+                          error: Optional[str] = None, *,
+                          started_at: Optional[float] = None,
+                          ended_at: Optional[float] = None,
+                          elapsed_ms: Optional[float] = None) -> dict:
     """Create the shared artifact shape without importing the fc-loop module.
 
     ``langgraph_agent`` is also imported by the fc-loop implementation, so importing
@@ -4258,7 +4344,7 @@ def _legacy_tool_artifact(turn: int, tool: str, raw_data: Any,
     The legacy executor needs only the stable base fields; optional budget markers are
     added by the fc-loop executor itself.
     """
-    return {
+    out = {
         "turn": int(turn),
         "tool": tool,
         "raw_data": raw_data,
@@ -4266,6 +4352,23 @@ def _legacy_tool_artifact(turn: int, tool: str, raw_data: Any,
         "success": bool(success),
         "error": error,
     }
+    # Timings, in the SAME field the fc-loop's _artifact writes, so app.py's
+    # _tool_latency_from_artifacts folds both arches with no arch-specific branch. Legacy
+    # used to omit them entirely: every legacy canary record shipped
+    # tool_latency {p50_ms: null, max_ms: null} while tool_ledger_status said "complete",
+    # so the v3 tool-overhead instrument produced nothing at all on the control arm.
+    # started_at/ended_at are time.monotonic() instants (never wall clock: a clock step
+    # must not be able to make a duration negative), kept alongside elapsed_ms because a
+    # duration alone cannot be checked for overlap between two artifacts.
+    if started_at is not None:
+        out["started_at"] = float(started_at)
+    if ended_at is not None:
+        out["ended_at"] = float(ended_at)
+    if elapsed_ms is None and started_at is not None and ended_at is not None:
+        elapsed_ms = (float(ended_at) - float(started_at)) * 1000.0
+    if elapsed_ms is not None:
+        out["elapsed_ms"] = max(0, int(round(float(elapsed_ms))))
+    return out
 
 
 # Which loopable INTENT group is the router's view of a user-visible DIMENSION. Three of the
@@ -4839,6 +4942,81 @@ def _make_critic_node():
                 reply_language=reply_language,
             )
 
+        # ── An EMPTY answer is a hard stop, never a shippable turn (P1-7) ──────────
+        # Live, `agenttest-t2-a5-fc` returned HTTP 200 with a ZERO-character message after
+        # the critic had itself recorded `issues=['empty_answer']`, and it shipped because
+        # a turn where retrieval was not expected is graded `grounded=True` regardless of
+        # whether the model said anything at all — `grounded` answers a different question
+        # from `answered`. Reproduced on a second turn with the same query, on the arch
+        # holding the public edge. One bounded regeneration, then an explicit grounded
+        # fallback; a zero-length 200 is the one outcome that is always wrong.
+        _empty_lang = None
+        if not str(final or "").strip():
+            _ec = state.get("extracted_context") or {}
+            _empty_lang = _reply_language_from_ctx(
+                _ec, _ec.get("current_message") or _current_message(
+                    state.get("user_query") or ""))
+            logger.warning(
+                "critic.empty_answer issues=%s attempts=%s regen=%s",
+                getattr(outcome.verdict, "issues", None),
+                attempts_before + outcome.attempts, _regen is not None,
+                extra={"node": "critic", "tool": tool_name},
+            )
+            retried = ""
+            if _regen is not None:
+                try:
+                    retried = await _regenerate(
+                        "Your previous reply was EMPTY. The user received nothing. Answer "
+                        "their question now in their own language, using only the data "
+                        "above; if the data does not support an answer, say so plainly and "
+                        "state what you would need. Never return an empty reply."
+                    )
+                except Exception:
+                    retried = ""
+                update["critic_attempts"] = attempts_before + outcome.attempts + 1
+            if retried and retried.strip():
+                final = retried
+                logger.info("critic.empty_answer_recovered chars=%d", len(final),
+                            extra={"node": "critic", "tool": tool_name})
+            else:
+                if state.get("tool_artifacts"):
+                    from core.agent_loop import _artifact_grounded_fallback_answer
+                    final = _artifact_grounded_fallback_answer(
+                        state, reason="no_reliable_numbers")
+                else:
+                    final = no_reliable_data_message(_empty_lang)
+                if not str(final or "").strip():
+                    final = no_reliable_data_message(_empty_lang)
+                logger.info("critic.empty_answer_fallback chars=%d", len(final or ""),
+                            extra={"node": "critic", "tool": tool_name})
+
+        # ── A still-ungrounded regeneration ships MARKED, not silently (P1-8) ──────
+        # `stage=regenerated grounded=False issues=['unsupported_external_numbers']` shipped
+        # as-is on both architectures, carrying only the generic double-check caveat. The
+        # figures the critic could not tie to this turn's evidence are the whole finding, so
+        # they are labelled as unverified in the answer the user actually reads.
+        if (retrieval_expected
+                and str(final or "").strip()
+                and not getattr(outcome.verdict, "grounded", False)
+                and "unsupported_external_numbers" in list(
+                    getattr(outcome.verdict, "issues", None) or [])):
+            _ec = state.get("extracted_context") or {}
+            _lang = _empty_lang or _reply_language_from_ctx(
+                _ec, _ec.get("current_message") or _current_message(
+                    state.get("user_query") or ""))
+            _note = (
+                "未核实：以上数字中，凡未来自本轮工具结果的部分均为未经确认的估算，请自行核实后再使用。"
+                if str(_lang or "").lower().startswith("zh") else
+                "Unverified: any figure above that does not come from this turn's tool "
+                "results is an unconfirmed estimate — please check it before relying on it."
+            )
+            if _note not in final:
+                final = f"{final.rstrip()}\n\n{_note}"
+                logger.info(
+                    "critic.unsupported_numbers_marked_unverified",
+                    extra={"node": "critic", "tool": tool_name},
+                )
+
         if retrieval_expected:
             retrieved_evidence = []
             if state.get("tool_raw_data") is not None:
@@ -5388,12 +5566,15 @@ def _make_task_worker_node(tool_registry):
                 _note_legacy_write_dispatch(f"wave:{run_id}:{tid}:{idx}")
         except Exception:
             pass
+        _started = time.monotonic()
+        _ended = None
         try:
             from core.agent_loop import _offload_tool_call
             result = await asyncio.wait_for(
                 _offload_tool_call(
                     lambda: tool_registry.execute_tool(tool_name, **dict(params))),
                 timeout)
+            _ended = time.monotonic()
             if result.success:
                 obs = (result.data.get('results', json.dumps(result.data, ensure_ascii=False))
                        if isinstance(result.data, dict) else str(result.data))
@@ -5404,9 +5585,18 @@ def _make_task_worker_node(tool_registry):
             obs, raw = f"Error: {tool_name} timed out after {timeout}s", None
         except Exception:
             obs, raw = f"Error executing {tool_name}", None
+        if _ended is None:
+            _ended = time.monotonic()
+        # Same monotonic timing fields the execute_tool artifact carries. The wave writes
+        # task_results, NOT tool_artifacts (tool_artifacts has no reducer, so parallel Send
+        # workers cannot append to it), which is why a turn could report tool_batches=1 with
+        # no tool_latency at all. Recording them here lets the turn summariser fold a wave
+        # without changing what the critic/grounding readers see in the artifact ledger.
         return {"task_results": [{
             "id": tid, "index": idx, "tool": tool_name, "params": params,
             "obs": obs if isinstance(obs, str) else str(obs), "raw": raw, "run_id": run_id,
+            "started_at": _started, "ended_at": _ended,
+            "elapsed_ms": max(0, int(round((_ended - _started) * 1000))),
         }]}
     return task_worker_node
 

@@ -1469,7 +1469,14 @@ def _scrape_live(slug, min_beds, max_beds, min_price, max_price, limit, budget_s
         # the native scraper additionally observes the whole acquisition budget.
         kwargs = ({"budget_s": budget_s} if "budget_s" in inspect.signature(
             onthemarket.find_rich_onthemarket).parameters else {})
-        fut = _SCRAPE_EXECUTOR.submit(
+        # `Executor.submit` starts the callable in a fresh, empty context, so an
+        # on-demand scrape logged `request_id: "-"` and could not be attributed to the
+        # turn that triggered it. `submit_with_context` is `submit` plus the caller's
+        # observability context; the future/semaphore handling below is unchanged.
+        from uk_rent_agent.observability import submit_with_context
+
+        fut = submit_with_context(
+            _SCRAPE_EXECUTOR,
             onthemarket.find_rich_onthemarket,
             slug, 1.0, int(min_price), int(max_price),
             limit, int(min_beds), int(max_beds),

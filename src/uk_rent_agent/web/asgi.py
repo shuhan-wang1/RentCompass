@@ -278,15 +278,24 @@ def _check_checkpoint(config: Config) -> dict[str, Any]:
             raise RuntimeError("sqlite checkpoint backend unavailable")
         return {"status": "ok", "required": True, "identity": identity}
     except Exception as exc:
-        # `CheckpointIdentityError` is the one exception here whose TAIL is the
-        # useful part: it ends with the path and "Point CHECKPOINT_DB_PATH at this
-        # runtime's own file ...". The message runs to ~450 characters, so a 200
-        # cap cut the path in half and dropped the remediation entirely, leaving
-        # `/ready` showing a diagnosis with no fix. It keeps its full message; the
-        # generic cap still bounds every other (unbounded) exception string.
+        # The two IDENTITY exceptions are the ones whose TAIL is the useful part:
+        # each ends with the path and the remediation ("Point CHECKPOINT_DB_PATH at
+        # this runtime's own file ...", "... or set CHECKPOINT_ALLOW_NEW_DB=1 ...").
+        # A 200 cap cut the path in half and dropped the fix entirely, leaving
+        # `/ready` showing a diagnosis with no remedy.
+        #
+        # THE CAP IS SIZED FOR THE PATHS, NOT FOR ONE HOST'S PATHS. Both messages
+        # embed absolute paths — the orphan one embeds TWO (the file it refuses to
+        # create and the sibling it would orphan) — so a budget tuned to the lengths
+        # observed on one machine truncates on another: a deep `.runtime` directory,
+        # a container mount, or a long `pytest --basetemp` is enough. Measured at a
+        # 168-character base directory the orphan message is 1 125 characters and the
+        # identity message 720, both past the earlier 900/600 budgets. One generous
+        # limit for both is simpler than two tuned ones and cannot regress this way;
+        # the generic 200 still bounds every other (unbounded) exception string.
         limit = 200
-        if type(exc).__name__ == "CheckpointIdentityError":
-            limit = 600
+        if type(exc).__name__ in {"CheckpointIdentityError", "OrphanedCheckpointError"}:
+            limit = 2000
         return {
             "status": "fail",
             "required": True,
@@ -744,10 +753,58 @@ def _readiness(config: Config) -> tuple[dict[str, Any], int]:
     return body, (503 if failed else 200)
 
 
+def verify_checkpoint_identity(config: Config) -> None:
+    """Open and validate this process's checkpoint database ONCE, at startup.
+
+    The identity stamp was previously only consulted when the checkpointer was first
+    opened — which happens on the first user TURN. A pool pointed at another
+    architecture's database therefore booted cleanly and only failed once real
+    traffic arrived (2026-09-03 T3 中-3). `/ready` did catch it (its
+    `checkpoint_store` check opens the same checkpointer, so a mis-pointed instance
+    answers 503), but a readiness probe is a poll: between process start and the
+    first probe the pool looks alive, and `/live` — which several operator scripts
+    still use — never looked at all.
+
+    So the check runs here, before the first request can be served, and the two
+    MISCONFIGURATION classes abort startup:
+
+      * ``CheckpointIdentityError``  — this file belongs to another runtime.
+      * ``OrphanedCheckpointError``  — creating this file would strand a database
+        this identity already owns (and put its personal graph state out of reach of
+        account erasure).
+
+    Neither can be fixed by retrying and neither is transient, so a crash-loop with
+    the full remediation text on stderr is the correct, loudest signal; a pool that
+    cannot serve a turn must not reach a rollout gate. Every OTHER failure (langgraph
+    absent, a transient I/O error) is left to `/ready` exactly as before — those are
+    not identity mistakes and must not stop an otherwise serviceable process.
+    """
+    if not config.enable_checkpointer or config.checkpoint_path is None:
+        return
+    from uk_rent_agent.agent.persistence import (
+        CheckpointIdentityError,
+        OrphanedCheckpointError,
+        get_sqlite_checkpointer,
+    )
+
+    try:
+        get_sqlite_checkpointer(config.checkpoint_path, identity=config.checkpoint_identity)
+    except (CheckpointIdentityError, OrphanedCheckpointError) as exc:
+        print(f"[STARTUP] FATAL: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        raise
+    except Exception as exc:  # pragma: no cover - reported by /ready, not fatal
+        print(
+            f"[STARTUP] WARNING: checkpoint store unavailable at startup "
+            f"({type(exc).__name__}); /ready will report it.",
+            file=sys.stderr, flush=True,
+        )
+
+
 def create_asgi_app(config: Config | None = None) -> Starlette:
     """Production ASGI shell; SSE-native routes can coexist with legacy Flask routes."""
     configure_logging()
     runtime = config or Config.from_env(require_secret=True)
+    verify_checkpoint_identity(runtime)
     flask_app = create_app(runtime)
     from uk_rent_agent.web.chat_transport import NativeChatEndpoint
     chat = NativeChatEndpoint(flask_app)

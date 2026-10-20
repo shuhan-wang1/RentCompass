@@ -1561,6 +1561,51 @@ def _listing_bindings(validation: dict) -> list[dict]:
     return bindings
 
 
+_SEARCH_TRAVEL_TIME = re.compile(
+    r"^\s*~?\s*(\d{1,3})\s*min(?:ute)?s?\s+to\s+(.+?)(?:\s*\((?:estimated|unverified)[^)]*\))?\s*$", re.I)
+
+
+def _bind_search_travel_times(bindings: list[dict], artifacts: list) -> None:
+    """Per-listing commute evidence that search_properties itself returned (r08 NEW-B).
+
+    A row's ``travel_time`` ("28 min to Liverpool Street", source routing) is that
+    listing's measured figure; an estimated one ("~18 min ... (estimated, unverified)") is
+    quotable only as an estimate. Every commute cell of a 7-listing table shipped as "—"
+    with the Note, though each figure equalled the listing's own travel_time. Bound per
+    listing, so one listing's minutes never license another's."""
+    for artifact in artifacts:
+        if not (isinstance(artifact, dict) and artifact.get("tool") == "search_properties"
+                and _usable_artifact(artifact)):
+            continue
+        raw = artifact["raw_data"]
+        rows = [r for key in ("recommendations", "over_budget_alternatives")
+                for r in (raw.get(key) or []) if isinstance(r, dict)]
+        for row in rows:
+            match = _SEARCH_TRAVEL_TIME.match(str(row.get("travel_time") or ""))
+            if not match:
+                continue
+            minutes = float(match.group(1))
+            destination = match.group(2).strip()
+            measured = str(row.get("travel_time_source") or "").lower() in {
+                "routing", "tfl", "tfl_journey_plan", "measured", "journey_planner"}
+            labels = list(dict.fromkeys(_place_labels(row.get("address"))
+                                        + _place_labels(row.get("provider_address"))))
+            if not labels:
+                continue
+            existing = next((b for b in bindings if not b.get("members")
+                             and set(b.get("labels") or []) & set(labels)), None)
+            if existing is None:
+                existing = {"labels": labels, "minutes": None, "destinations": []}
+                bindings.append(existing)
+            existing["listing"] = True
+            if not existing.get("destinations"):
+                existing["destinations"] = _place_labels(destination)
+            if measured and existing.get("minutes") is None:
+                existing["minutes"] = minutes
+            elif not measured and existing.get("minutes") is None and not existing.get("estimate"):
+                existing["estimate"] = [minutes]
+
+
 def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
     """Combine stale candidate ledgers with this turn's explicitly bound route results.
 
@@ -1568,6 +1613,7 @@ def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
     it is not evidence for an apartment merely because both are in the same town.
     """
     bindings = _listing_bindings(state.get("candidate_validation") or {})
+    _bind_search_travel_times(bindings, state.get("tool_artifacts") or [])
     routes = []
     for artifact in state.get("tool_artifacts") or []:
         if not _usable_artifact(artifact):
@@ -1723,6 +1769,12 @@ def _line_binding(line: str, bindings: list[dict], default: dict | None = None) 
             ambiguous = True
     independent = [label for label in named if not any(
         label != other and label in other for other in named)]
+    listing_hits = [b for b in named_bindings if b.get("listing")]
+    if len(set(independent)) > 1 and len({id(b) for b in listing_hits}) == 1:
+        # A listing row names its own area ("| Jacob House, E8 | Hackney | £1,950 | 28 min |"):
+        # the area's route measured in the same turn does not make the row ambiguous; the
+        # one listing it names owns the row (r08 NEW-B).
+        return listing_hits[0]
     if len(set(independent)) > 1:
         return {"labels": [], "minutes": None, "destinations": [], "members": named_bindings}
     if ambiguous:
@@ -2140,6 +2192,14 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             own = None
             if unattributed_line:
                 local = _line_binding(attached, bindings)
+                if local is None or not local.get("labels") or local.get("members"):
+                    # The clause cut at commas lost the address ("Featherstone Street, Old
+                    # Street, EC1Y at £2,701 (about 14 min estimated)"): retry on the clause
+                    # back to the previous coordinator or sentence end (r08 NEW-B).
+                    lead = _without_abbreviation_dots(body[max(0, m.start() - 200):m.start()])
+                    wider = re.split(r"[;:!?；：。！？)）]|\.(?=\s|$)|\s(?:and|while|but|whereas|vs\.?)\s",
+                                     lead)[-1]
+                    local = _line_binding(wider, bindings)
                 if local is not None and local.get("labels") and not local.get("members"):
                     own = local
             if not _evidenced(m.group(0), own, context=attached,
@@ -2212,7 +2272,12 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 nested_component = bool(inherited and local.get("labels") and any(
                     short.lower() in long.lower() and short.lower() != long.lower()
                     for short in local["labels"] for long in inherited.get("labels") or []))
-                if not nested_component or _asserts_commute(fragment) or "→" in fragment:
+                # A listing row's Area cell ("| Hackney |") names the listing's area, not a
+                # switch to that area's route (r08 NEW-B).
+                area_cell = bool(inherited and inherited.get("listing") and not local.get("listing")
+                                 and not _asserts_commute(fragment))
+                if (not nested_component or _asserts_commute(fragment) or "→" in fragment) \
+                        and not area_cell:
                     inherited = local
             # A parenthetical already checked against its own clause is not re-judged as part
             # of the enclosing clause: "Walk to the exit (5 min)" kept its leg figure above,

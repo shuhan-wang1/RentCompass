@@ -215,6 +215,31 @@ def _render_changes(changes: dict) -> str:
                      for slot, change in changes.items())
 
 
+# Provenance of a semantic row (R4-02). An explicit "please remember …" row is the user's own
+# wording and the reply told them exactly that text was saved; the background job may ADD
+# beside it but never UPDATE or DELETE it.
+SOURCE_EXPLICIT = "explicit_remember"
+SOURCE_AUTO = "auto_extracted"
+# A fact about another person is never touched by a change of the user's search criteria:
+# "my guarantor is in Manchester" became "…in Canary Wharf" when the area slot changed.
+_THIRD_PARTY = re.compile(
+    r"\b(?:guarantor|partner|wife|husband|spouse|son|daughter|child|children|kids?|landlord|"
+    r"friend|mother|mum|mom|father|dad|parents?|brother|sister|colleague|flatmate|roommate|"
+    r"housemate|boss|employer|girlfriend|boyfriend|fianc[ée]e?)\b|"
+    r"担保人|伴侣|老公|老婆|丈夫|妻子|孩子|儿子|女儿|房东|朋友|父母|同事|室友", re.I)
+# A row that states the user's own SEARCH criterion (area, budget, bedrooms, room type,
+# commute requirement) — the only rows a criteria change may rewrite.
+_CRITERIA_FACT = re.compile(
+    r"\b(?:looking|search(?:es|ing)?|find|wants?|needs?|prefers?|budget|rent|max(?:imum)?|"
+    r"under|up\s+to|studio|flat|apartment|bed(?:room)?s?|\d-bed|area|live|living|move|moving|"
+    r"commute)\b|预算|租金|找|想住|区域|通勤|卧室|开间", re.I)
+
+
+def _criteria_row(text: str) -> bool:
+    value = str(text or "")
+    return bool(_CRITERIA_FACT.search(value)) and not _THIRD_PARTY.search(value)
+
+
 def _money_pattern(amount) -> re.Pattern | None:
     try:
         value = int(round(float(amount)))
@@ -904,17 +929,28 @@ class AgentMemory:
     def _consolidate(self, facts, session_id, user_id, changes=None):
         if not facts:
             return
-        existing, seen = [], set()
+        existing, seen, protected = [], set(), set()
         try:
             res = self.col.query(
                 query_texts=facts, n_results=4,
                 where={"$and": [{"user_id": user_id}, {"mtype": "semantic"}]},
             )
-            for docs, ids in zip(res.get("documents") or [], res.get("ids") or []):
-                for d, i in zip(docs or [], ids or []):
+            metas_by_query = res.get("metadatas") or [[] for _ in (res.get("ids") or [])]
+            for docs, ids, metas in zip(res.get("documents") or [], res.get("ids") or [],
+                                        metas_by_query):
+                for position, (d, i) in enumerate(zip(docs or [], ids or [])):
+                    meta = ((metas or [])[position] if position < len(metas or []) else None) or {}
                     if i not in seen:
                         seen.add(i)
-                        existing.append({"id": i, "text": d})
+                        explicit = meta.get("source") == SOURCE_EXPLICIT
+                        existing.append({"id": i, "text": d,
+                                         "kind": "saved" if explicit else "auto"})
+                        # Never UPDATEd or DELETEd by this job: an explicitly saved row, and
+                        # under a criteria change any row that is not the user's own
+                        # auto-extracted search criterion (R4-02).
+                        if explicit or (changes and (meta.get("source") != SOURCE_AUTO
+                                                     or not _criteria_row(d))):
+                            protected.add(i)
         except Exception:
             pass
         prompt = (
@@ -926,7 +962,10 @@ class AgentMemory:
             + (("SEARCH CRITERIA CHANGED THIS TURN (computed by the system from the user's "
                 "messages; not a fact by itself):\n" + _render_changes(changes) + "\n"
                 "An existing memory that states the OLD value of a changed criterion is "
-                "superseded: UPDATE it to the new value or DELETE it. Never keep both values.\n\n")
+                "superseded: UPDATE it to the new value or DELETE it. Never keep both values. "
+                "This applies only to memories of kind \"auto\" about the user's own search; "
+                "never change a memory of kind \"saved\" or a fact about another person "
+                "(guarantor, partner, child, landlord).\n\n")
                if changes else "")
             + f"EXISTING:\n{json.dumps(existing, ensure_ascii=False)}\n\n"
             f"NEW FACTS:\n{json.dumps(facts, ensure_ascii=False)}\n\nJSON: "
@@ -938,15 +977,24 @@ class AgentMemory:
                 ev = (op.get("event") or "").upper()
                 text = (op.get("text") or "").strip()
                 oid = op.get("id")
+                if ev in ("UPDATE", "DELETE") and oid in protected:
+                    # A protected row stays as it is. A genuinely NEW fact the model folded
+                    # into an UPDATE of it is still added beside it, verbatim (R4-02).
+                    if ev == "UPDATE" and text in facts:
+                        self.add(text, "semantic", session_id, user_id, importance=7,
+                                 extra_meta={"source": SOURCE_AUTO})
+                    continue
                 if ev == "ADD" and text:
-                    self.add(text, "semantic", session_id, user_id, importance=7)
+                    self.add(text, "semantic", session_id, user_id, importance=7,
+                             extra_meta={"source": SOURCE_AUTO})
                 elif ev == "UPDATE" and oid and text:
                     update_failed = not self._update_semantic(oid, text, turn_ref)
                     if update_failed:
                         # add() acquires self._lock itself. Run the fallback only after
                         # releasing the non-reentrant lock above, otherwise an UPDATE
                         # failure deadlocks the durable outbox worker forever.
-                        self.add(text, "semantic", session_id, user_id, importance=7)
+                        self.add(text, "semantic", session_id, user_id, importance=7,
+                                 extra_meta={"source": SOURCE_AUTO})
                 elif ev == "DELETE" and oid:
                     with self._lock:
                         try:
@@ -1003,7 +1051,13 @@ class AgentMemory:
         except Exception:
             return 0
         rewritten = 0
-        for oid, doc in zip(rows.get("ids") or [], rows.get("documents") or []):
+        metas = rows.get("metadatas") or []
+        for index, (oid, doc) in enumerate(zip(rows.get("ids") or [], rows.get("documents") or [])):
+            meta = (metas[index] if index < len(metas) else None) or {}
+            # Only an auto-extracted row about the user's own search (R4-02): never an
+            # explicitly saved fact, a legacy row of unknown origin, or a third party's fact.
+            if meta.get("source") != SOURCE_AUTO or not _criteria_row(doc):
+                continue
             new_text = _superseded_text(doc, changes)
             if new_text and self._update_semantic(oid, new_text, turn_ref):
                 rewritten += 1

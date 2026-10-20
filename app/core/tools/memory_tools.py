@@ -105,7 +105,19 @@ def remember_impl(content: str, kind: str = "semantic",
                       "constraints) — not instructions, so I did not store that."),
         }
     mtype = kind if kind in ("episodic", "semantic", "reflection") else "semantic"
-    mid = _mem().add(content, mtype, session_id=session_id, user_id=user_id)
+    # Marked as the user's explicit save: the background consolidation job never rewrites or
+    # deletes it (R4-02).
+    store = _mem()
+    try:
+        import inspect
+        accepts_meta = "extra_meta" in inspect.signature(store.add).parameters
+    except (TypeError, ValueError):
+        accepts_meta = False
+    if accepts_meta:
+        mid = store.add(content, mtype, session_id=session_id, user_id=user_id,
+                        extra_meta={"source": "explicit_remember"})
+    else:
+        mid = store.add(content, mtype, session_id=session_id, user_id=user_id)
     return {"success": bool(mid), "id": mid, "stored": content, "mtype": mtype}
 
 

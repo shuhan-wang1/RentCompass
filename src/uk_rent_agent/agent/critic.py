@@ -1080,14 +1080,55 @@ def has_specific_price_claims(text: str) -> bool:
     return bool(_money_mentions(text or ""))
 
 
+_SENTENCE_PIECES = re.compile(r"[^.!?。！？\n]*(?:[.!?。！？](?=\s|$)|[。！？]|$)")
+# The minimum an answer must keep, once its unsupported figures are withdrawn, to ship
+# instead of the generic no-reliable-data template.
+_MIN_SURVIVING_CHARS = 120
+_FAILURE_STATEMENT = re.compile(
+    r"\b(?:unavailable|failed|could\s+not|couldn't|was\s+not\s+able|wasn't\s+able|"
+    r"did\s+not\s+(?:return|work|respond)|down|unreachable|error)\b|"
+    r"不可用|失败|无法|没能|未能", re.I)
+
+
+def _without_unsupported_money(response: str, supported: set) -> str:
+    """``response`` minus each sentence quoting a money figure that ``supported`` lacks.
+
+    A bullet or line that loses every sentence goes with them; headings and figure-free
+    sentences stay. Linear in the text."""
+    lines = []
+    for line in str(response or "").split("\n"):
+        if not _money_mentions(line):
+            lines.append(line)
+            continue
+        kept = []
+        for match in _SENTENCE_PIECES.finditer(line):
+            piece = match.group()
+            if not piece:
+                continue
+            if any(not _close_to_any(value, supported) for value, _unit in _money_mentions(piece)):
+                continue
+            kept.append(piece)
+        rebuilt = "".join(kept).rstrip()
+        if re.search(r"[0-9A-Za-z\u4e00-\u9fff]", re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", rebuilt)):
+            lines.append(rebuilt)
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+
+
 def enforce_no_evidence_numeric_contract(response: str, *, retrieved_evidence: Any,
-                                        user_message: str = "", reply_language: str = "") -> str:
+                                        user_message: str = "", reply_language: str = "",
+                                        failed_lookups: Optional[list] = None) -> str:
     """Fail closed on external money claims when retrieval returned no usable data.
 
     The current user message is an explicit provenance source: repeating ``£900/month``
     that the user supplied is allowed. A new market/listing amount is not. This helper is
     intentionally separate from the general critic so callers can apply the same final
     response guard after regeneration and on deterministic fallback paths.
+
+    The unsupported figures are withdrawn sentence by sentence; the rest of the answer
+    stays when enough of it survives. "I tried to search the web twice, but the search
+    service is currently unavailable…" was replaced whole by the generic template because
+    the draft also quoted £50 and £50,000 (R3-04). ``failed_lookups`` (e.g. ["web search"])
+    names the retrieval that failed; the answer says so when it does not already.
     """
     if evidence_usable(retrieved_evidence) or not has_specific_price_claims(response):
         return response
@@ -1097,9 +1138,24 @@ def enforce_no_evidence_numeric_contract(response: str, *, retrieved_evidence: A
         supported |= _derivations(value, unit)
     unsupported = [value for value, _unit in _money_mentions(response)
                    if not _close_to_any(value, supported)]
-    if unsupported:
-        return no_reliable_data_message(reply_language)
-    return response
+    if not unsupported:
+        return response
+    zh = (reply_language or "").lower().startswith("zh")
+    failed = [str(name) for name in (failed_lookups or []) if str(name or "").strip()]
+    notice = ""
+    if failed:
+        names = "、".join(dict.fromkeys(failed)) if zh else ", ".join(dict.fromkeys(failed))
+        notice = (f"本轮的{names}查询失败，以上内容未经实时来源核实。" if zh else
+                  f"The {names} lookup failed this turn, so nothing above was checked against "
+                  "live sources.")
+    kept = _without_unsupported_money(response, supported)
+    if (len(re.sub(r"\s+", "", kept)) >= _MIN_SURVIVING_CHARS
+            and all(_close_to_any(value, supported) for value, _unit in _money_mentions(kept))):
+        if notice and not (failed and _FAILURE_STATEMENT.search(kept)):
+            kept = f"{kept}\n\n{notice}"
+        return kept
+    generic = no_reliable_data_message(reply_language)
+    return f"{generic}\n\n{notice}" if notice else generic
 
 
 # ── evidence usability (H3) ──────────────────────────────────────────────────

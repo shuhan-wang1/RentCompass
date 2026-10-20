@@ -5200,8 +5200,18 @@ def _make_critic_node():
                         and artifact.get("success", True) is not False):
                     retrieved_evidence.append(artifact.get("raw_data"))
             ec = state.get("extracted_context") or {}
+            # The retrieval that FAILED this turn is named in the answer (R3-04).
+            _lookup_names = {"web_search": "web search", "search_properties": "listing search",
+                             "get_transport_info": "TfL journey", "check_safety": "safety data"}
+            failed_lookups = [
+                _lookup_names.get(str(a.get("tool")), str(a.get("tool") or "").replace("_", " "))
+                for a in artifacts
+                if _is_retrieval_tool(a.get("tool")) and (
+                    a.get("success") is False
+                    or (isinstance(a.get("raw_data"), dict) and a["raw_data"].get("success") is False))]
             final = enforce_no_evidence_numeric_contract(
                 final,
+                failed_lookups=failed_lookups,
                 retrieved_evidence=retrieved_evidence,
                 user_message=ec.get("current_message") or _current_message(
                     state.get("user_query") or ""),

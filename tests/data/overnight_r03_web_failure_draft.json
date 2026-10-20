@@ -1,0 +1,61 @@
+{
+ "source": "r04 conv 04e7bbcd789a44ea85776b6e7124b93c rid 92c2254f",
+ "message": "What are the typical tenant fees and deposit rules for renting in England in 2026? Search the web.",
+ "draft": "I tried to search the web twice, but the search service is currently unavailable, so I could not verify anything against live sources this time. Rather than pass off unverified figures as fresh research, here is the general framework I know, with the caveat that you should confirm the current numbers on gov.uk before you sign anything.\n\n**The core rule: most fees are banned**\nSince the Tenant Fees Act 2019 (England), letting agents and landlords can only charge \"permitted payments\". Anything not on that list is prohibited, and a banned fee can be reclaimed.\n\n**Permitted payments typically include:**\n- Rent\n- A refundable tenancy deposit\n- A refundable holding deposit (to reserve a property)\n- Payments for utilities, council tax, TV licence, and communication services (broadband, phone) where the tenancy makes the tenant liable\n- A default fee for late rent (only after 14 days late, capped at 3% above the Bank of England base rate per annum on the outstanding amount)\n- A fee for replacing a lost key or security device, if the tenancy agreement allows it, limited to reasonable cost with evidence\n- A charge for a variation, assignment or novation of the tenancy requested by the tenant, capped at £50 (or reasonable costs if higher and evidenced)\n- A charge for early termination of the tenancy when the tenant requests it\n\n**Deposit rules**\n- The tenancy deposit is capped at five weeks' rent where annual rent is under £50,000, and six weeks' rent where annual rent is £50,000 or more.\n- The holding deposit is capped at one week's rent, and it must be refunded unless a permitted reason applies (for example, the tenant provides false information, fails a right-to-rent check, or withdraws). The landlord generally has 15 days to enter the tenancy or refund it.\n- Deposits must be protected in a government-approved scheme (TDS, MyDeposits, or DPS) within 30 days, and you must be given the prescribed information.\n\n**What you should never be asked to pay**\nAdmin fees, referencing fees, inventory check-out fees, \"professional cleaning\" clauses, guarantor fees, or renewal fees. If an agent asks for these, that is a red flag.\n\n**Practical checks before paying anything**\n- Ask for the tenancy agreement and the deposit scheme details in writing before transferring money.\n- Confirm the deposit amount in weeks of rent, not just pounds.\n- Get a receipt for the holding deposit and note the deadline for the tenancy to start.\n- For student accommodation, purpose-built student halls often use licence agreements rather than tenancies, and the fee rules can differ slightly, so check the provider's terms.\n\nIf you tell me which city or specific listing you are looking at, I can pull the actual advertised deposit and any fees from the listing details so you can compare them against these rules.",
+ "tool_artifacts": [
+  {
+   "turn": 1,
+   "tool": "web_search",
+   "raw_data": {
+    "success": false,
+    "error": "SearXNG search service is unavailable; no web evidence was verified",
+    "error_code": "search_service_unavailable",
+    "service_status": "unavailable",
+    "search_health": {
+     "web_search": {
+      "provider": "SearXNG",
+      "service_status": "unavailable",
+      "reason": "cooldown",
+      "attempt_count": 0,
+      "attempts": []
+     }
+    },
+    "query_metadata": {
+     "length": 91
+    },
+    "results": "",
+    "detailed_data": {}
+   },
+   "success": false,
+   "error": "SearXNG search service is unavailable; no web evidence was verified",
+   "params_digest": "ff8ae65230d6dc2c"
+  },
+  {
+   "turn": 2,
+   "tool": "web_search",
+   "raw_data": {
+    "success": false,
+    "error": "SearXNG search service is unavailable; no web evidence was verified",
+    "error_code": "search_service_unavailable",
+    "service_status": "unavailable",
+    "search_health": {
+     "web_search": {
+      "provider": "SearXNG",
+      "service_status": "unavailable",
+      "reason": "cooldown",
+      "attempt_count": 0,
+      "attempts": []
+     }
+    },
+    "query_metadata": {
+     "length": 88
+    },
+    "results": "",
+    "detailed_data": {}
+   },
+   "success": false,
+   "error": "SearXNG search service is unavailable; no web evidence was verified",
+   "params_digest": "2a1e7a06aed7a24a"
+  }
+ ]
+}

@@ -39,3 +39,18 @@ def test_an_estimate_is_not_licensed_as_a_measured_figure():
     state = copy.deepcopy(CASE["state"])
     draft = "King Square, EC1V takes 18 minutes to Liverpool Street."
     assert "18 minutes" not in validate_commute_response(draft, state)
+
+
+# ── r08 NEW-D: a capability offer with no figure is not a commute claim ───────────────
+def test_generic_offer_is_out_of_scope_and_gets_no_note():
+    text = ("I don't have your name on file. In the meantime, I can help with housing around Canary "
+            "Wharf — for example, flats within a certain budget or commute time, or how different "
+            "nearby areas compare.")
+    out = validate_commute_response(text, CASE["state"])
+    assert out == text and NOTE not in out
+
+
+def test_a_real_commute_verdict_is_still_checked():
+    from core.candidate_validation import _asserts_commute
+    assert _asserts_commute("this flat is within your commute limit")
+    assert not _asserts_commute("flats within a certain budget or commute time")

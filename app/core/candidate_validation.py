@@ -1246,7 +1246,16 @@ def _asserts_commute(fragment: str) -> bool:
     text = _without_money_or_weather(text)
     if _denies_commute(text):
         return False
+    if _GENERIC_COMMUTE_REFERENCE.search(text):
+        # "flats within a certain budget or commute time" offers a kind of search; it
+        # asserts nothing about any journey (r08 NEW-D).
+        return False
     return bool(_COMMUTE_WORD.search(text) and _FIT_WORD.search(text))
+
+
+_GENERIC_COMMUTE_REFERENCE = re.compile(
+    r"\b(?:within|under|below|inside)\s+(?:(?:a|an|some)\s+(?:certain|given|specific|chosen|particular)|any)"
+    r"\s+(?:\w+\s+(?:or|and)\s+)?(?:commute|travel|journey)(?:\s+time)?\b", re.I)
 
 
 def _honest_commute_reference(fragment: str, caps: set) -> bool:

@@ -255,6 +255,11 @@ def _key_segments(key: Any) -> list[str]:
     return [s for s in _KEY_SPLIT.split(_CAMEL_HUMP.sub("_", str(key))).__iter__() if s]
 
 
+_STATISTIC_KEY = re.compile(
+    r"(?:median|mean|average|avg|min|max|minimum|maximum|low|high|lower|upper|typical|"
+    r"p\d{1,2}|q[13]|lower_quartile|upper_quartile|monthly|weekly|value)", re.I)
+
+
 def _is_money_key(key: Any) -> bool:
     """True when a segment of ``key`` names money, so its numbers are rent-like."""
     return any(seg.lower() in _MONEY_KEY_SEGMENTS for seg in _key_segments(key))
@@ -283,7 +288,13 @@ def _evidence_money_mentions(evidence: Any, key: Any = "") -> list[tuple[float, 
     if evidence is None or isinstance(evidence, bool):
         return out
     if isinstance(evidence, dict):
+        money_parent = _is_money_key(key)
         for child_key, value in evidence.items():
+            # A statistic of a money field is money: compare_or_rank_areas returns
+            # ``areas[].rent = {"median": 2400.0, "min": …}``, and reading "median" alone
+            # flagged correct medians as unsupported_prices (R3-06).
+            if money_parent and _STATISTIC_KEY.fullmatch(str(child_key)):
+                child_key = f"{key}_{child_key}"
             out.extend(_evidence_money_mentions(value, child_key))
         return out
     if isinstance(evidence, (list, tuple, set)):

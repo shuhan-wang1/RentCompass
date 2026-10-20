@@ -212,38 +212,55 @@ def _geocode_failed(crime_data) -> bool:
 def _coarser_reference(location: str, area: str, failed: dict) -> dict:
     """Retry an ungeocodable address at its postcode district, then at its area (R3-08).
 
-    "Highgate West Hill, London, N6" could not be geocoded and the turn got no safety data at
-    all, although the district (N6) and the area (Highgate) resolve. The coarser point is
-    used with HONEST precision: reference_point says which fallback it is and that it is not
-    the listing's own location."""
+    The district is resolved by an OUTCODE lookup, never by free text: "N6, London" was
+    geocoded to Heathrow and its crime data shipped as Highgate's, labelled precision
+    "address" (R4-03). An area fallback must resolve to a place that names the area. The
+    reference point says which fallback it is, at "postcode_district" or "area" precision;
+    when nothing plausible resolves the honest geocode failure is kept."""
+    from core import maps_service
     london = 'london' in location.lower()
-    candidates = []
     district = _POSTCODE_DISTRICT.search(location.strip().rstrip('.,'))
     if district:
         code = district.group(1).upper()
-        candidates.append(('postcode_district', f"{code}, London" if london else code))
+        point = maps_service.geocode_outcode(code)
+        if point:
+            try:
+                data = get_crime_data_by_location(
+                    f"{code} postcode district", latitude=point['lat'], longitude=point['lng'])
+            except Exception:
+                data = None
+            if isinstance(data, dict) and not data.get('error'):
+                return _labelled(data, location, 'postcode_district', code, point)
     if area and area.strip().lower() != location.strip().lower():
         name = area.strip()
-        candidates.append(('area', f"{name}, London" if london and 'london' not in name.lower() else name))
-    for kind, query in candidates:
+        query = f"{name}, London" if london and 'london' not in name.lower() else name
         try:
             data = get_crime_data_by_location(query)
         except Exception:
-            continue
-        if not isinstance(data, dict) or data.get('error'):
-            continue
-        ref = dict(data.get('reference_point') or {})
-        ref.update({
-            'fallback_from': location,
-            'fallback_kind': kind,
-            'queried_location': query,
-            'is_specific_address': False,
-            'measured_from': (
-                f"the {kind.replace('_', ' ')} {query!r}, because {location!r} could not be "
-                "geocoded; this is not the listing's own location"),
-        })
-        return {**data, 'reference_point': ref}
+            data = None
+        if isinstance(data, dict) and not data.get('error'):
+            ref = data.get('reference_point') or {}
+            resolved = str(ref.get('resolved_name') or '')
+            if name.lower() in resolved.lower():
+                return _labelled(data, location, 'area', query, None)
     return failed
+
+
+def _labelled(data: dict, location: str, kind: str, query: str, point) -> dict:
+    ref = dict(data.get('reference_point') or {})
+    ref.update({
+        'fallback_from': location,
+        'fallback_kind': kind,
+        'queried_location': query,
+        'precision': kind,
+        'is_specific_address': False,
+        'measured_from': (
+            f"the {kind.replace('_', ' ')} {query!r}, because {location!r} could not be "
+            "geocoded; this is not the listing's own location"),
+    })
+    if point:
+        ref['coordinate_source'] = point.get('geocoder')
+    return {**data, 'reference_point': ref}
 
 
 def _detect_chinese(text: str) -> bool:

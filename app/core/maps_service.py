@@ -500,6 +500,32 @@ def _free_geocode(address: str, *, deadline: Optional[float] = None) -> dict | N
     return result
 
 
+_OUTCODE_RE = re.compile(r"^[A-Z]{1,2}\d[A-Z\d]?$")
+
+
+def geocode_outcode(outcode: str) -> dict | None:
+    """Centroid of a UK postcode DISTRICT (outward code) from postcodes.io, or None.
+
+    A free-text geocode of "N6, London" resolved to "N6, Airside Road Tunnel … TW6 1PZ" at
+    Heathrow, and Heathrow's crime data shipped as Highgate's (R4-03). The outcode endpoint
+    answers exactly the district asked for."""
+    code = str(outcode or "").strip().upper().replace(" ", "")
+    if not _OUTCODE_RE.match(code):
+        return None
+    try:
+        r = requests.get(f"https://api.postcodes.io/outcodes/{code}", timeout=8)
+        if r.status_code != 200:
+            return None
+        d = (r.json() or {}).get('result') or {}
+        if d.get('latitude') is None or str(d.get('outcode') or '').upper() != code:
+            return None
+        return {'lat': float(d['latitude']), 'lng': float(d['longitude']), 'outcode': code,
+                'geocoder': 'postcodes.io/outcodes'}
+    except Exception as e:
+        print(f"  [geocode] Postcodes.io outcode error exception_type={type(e).__name__}")
+        return None
+
+
 def _get_coordinates(address: str) -> dict | None:
     """Return coordinates and the geocoder's precision/provenance, or None."""
     geo = _free_geocode(address)

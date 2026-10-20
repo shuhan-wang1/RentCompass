@@ -463,6 +463,83 @@ _TOOLMSG_CAPS = {
 }
 _TOOLMSG_CAP_DEFAULT = 4000
 
+# search_properties' model-facing view is a deterministic PROJECTION, not a hard cut: the raw
+# payload ran 17k-43k chars, "[:6000]" showed the model ~4 of 12 listings, and it then said
+# two areas "come out level" or that it lacked a commute time the cards showed (R4-06).
+# Every listing keeps its identity and decision fields; optional fields go first.
+_SEARCH_LEAD_KEYS = ("status", "message", "summary", "suggestion", "partial", "partial_note",
+                     "incomplete_areas", "total_found", "total_matches", "search_criteria",
+                     "known_criteria")
+_SEARCH_LIST_KEYS = ("recommendations", "over_budget_alternatives", "similar_properties",
+                     "unverified_candidates")
+_LISTING_CORE = ("rank", "address", "area", "price", "bedrooms", "property_type", "room_type",
+                 "match_type", "budget_status", "travel_time", "travel_time_minutes",
+                 "travel_time_source", "distance_miles")
+# Dropped in this order while the projection is still over the cap.
+_LISTING_OPTIONAL_STAGES = (
+    ("explanation",),
+    ("url", "source", "possibly_outdated"),
+    ("available_from", "availability_status"),
+    ("verified_features", "unverified_features", "absent_features"),
+)
+_SEARCH_DROP_KEYS = {"images", "description", "score", "score_breakdown", "provider_address",
+                     "geo_location", "commute_evidence"}
+
+
+def _project_listing(row: dict, stage: int) -> dict:
+    out = {k: row[k] for k in _LISTING_CORE if k in row and row[k] not in (None, "", [])}
+    for index, keys in enumerate(_LISTING_OPTIONAL_STAGES):
+        if index < stage:
+            continue
+        for key in keys:
+            value = row.get(key)
+            if value in (None, "", []):
+                continue
+            if key == "explanation":
+                value = " ".join(str(value).split())[:160]
+            out[key] = value
+    return out
+
+
+def _project_validation(validation: dict) -> dict:
+    """Counts plus one short line per listing status; the full ledger stays in the artifact."""
+    if not isinstance(validation, dict):
+        return validation
+    out = {k: validation[k] for k in ("constraints", "eligible_count", "excluded_count",
+                                      "unknown_count") if k in validation}
+    for bucket in ("eligible", "excluded", "unknown"):
+        rows = validation.get(bucket)
+        if isinstance(rows, list):
+            out[bucket] = [{"address": r.get("address"),
+                            "reasons": [str(x)[:80] for x in (r.get("reasons") or [])][:3]}
+                           if isinstance(r, dict) else r for r in rows]
+    return out
+
+
+def project_search_payload(raw: dict, cap: int) -> dict:
+    """The compact model-facing view of a search_properties payload, within ``cap`` chars."""
+    lead = {k: raw[k] for k in _SEARCH_LEAD_KEYS if k in raw}
+    rest = {k: v for k, v in raw.items()
+            if k not in lead and k not in _SEARCH_LIST_KEYS and k not in _SEARCH_DROP_KEYS
+            and k != "candidate_validation"}
+    lists = {k: raw[k] for k in _SEARCH_LIST_KEYS if isinstance(raw.get(k), list) and raw[k]}
+    projected: dict = {}
+    for stage in range(len(_LISTING_OPTIONAL_STAGES) + 1):
+        projected = dict(lead)
+        for key, rows in lists.items():
+            projected[key] = [_project_listing(r, stage) if isinstance(r, dict) else r for r in rows]
+        if "candidate_validation" in raw:
+            projected["candidate_validation"] = _project_validation(raw["candidate_validation"])
+        projected.update(rest)
+        if len(json.dumps(projected, ensure_ascii=False, default=str)) <= cap - 400:
+            return projected
+    # Still over: the listings come before the auxiliary keys.
+    for key in list(rest) + ["candidate_validation"]:
+        projected.pop(key, None)
+        if len(json.dumps(projected, ensure_ascii=False, default=str)) <= cap - 400:
+            break
+    return projected
+
 # Kinds whose latest artifact drives a structured card in format_output_fc.
 _CARD_FORMATTERS = {
     "check_safety": _format_safety,
@@ -3595,6 +3672,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         untrusted data sanitized, length-capped. Returns (content, tainted)."""
         raw = getattr(result, "data", None)
         tainted = False
+        cap = _TOOLMSG_CAPS.get(tool, _TOOLMSG_CAP_DEFAULT)
+        if tool == "search_properties" and isinstance(raw, dict):
+            # The raw artifact stays untouched; only the model channel is projected (R4-06).
+            raw = project_search_payload(raw, cap)
         if tool in _UNTRUSTED_TOOLS and raw is not None:
             data_view = sanitize_untrusted(
                 json.dumps(raw, ensure_ascii=False, default=str)).text
@@ -3617,7 +3698,6 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         if getattr(result, "outcome", None):
             payload["outcome"] = result.outcome
         content = json.dumps(payload, ensure_ascii=False, default=str)
-        cap = _TOOLMSG_CAPS.get(tool, _TOOLMSG_CAP_DEFAULT)
         if len(content) > cap:
             logger.info("fc_loop.toolmsg_truncated tool=%s len=%d cap=%d", tool, len(content), cap)
             content = content[:cap] + "\n...[truncated]"

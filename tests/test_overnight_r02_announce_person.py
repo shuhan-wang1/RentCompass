@@ -85,3 +85,21 @@ def test_r2_02_the_recital_ships_without_nudge_or_stub_marker():
     assert "you are looking for a studio in Hackney" in state["final_response"]
     assert not any(agent_loop._ANNOUNCED_TOOL_NUDGE_MARKER in (getattr(m, "additional_kwargs", None) or {})
                    for m in state.get("messages") or [])
+
+
+# ── R2-08: fresh-conversation recall and option lists ─────────────────────────────────
+@pytest.mark.parametrize("text", [
+    "Here's what I have saved about you:\n\n- You work at Canary Wharf.\n"
+    "- You're looking for a 1-bed flat in Hackney.\n- Your budget is £2,000 per month.\n\n"
+    "Would you like me to search for 1-bed flats in Hackney within that budget?",
+    "A couple of options:\n- Raise the budget a little (studios in Stratford often sit above "
+    "£1,500/month) and I'll search again.\n- Widen the area and I'll check again.\n\n"
+    "Tell me which you'd prefer and I'll run the search.",
+])
+def test_r2_08_a_recall_or_an_option_list_is_not_an_announcement(text):
+    assert announces_unexecuted_tool(text, []) is False
+
+
+def test_r2_08_the_nudge_never_asks_the_model_to_talk_about_a_promise():
+    text = agent_loop._ANNOUNCED_TOOL_NUDGE_TEXT
+    assert "do not mention this check" in text and "previous message" in text

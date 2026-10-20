@@ -158,7 +158,9 @@ _ANNOUNCED_TOOL_NUDGE_TEXT = (
     "COMPLETION CHECK: your last message announced a lookup ('let me search…' / "
     "'I'll check…' / 「让我查一下…」) but no tool ran this turn, so the user would receive a "
     "promise instead of an answer. Either CALL the tool you named now, or answer directly "
-    "from what you already have — do not announce a lookup you are not making."
+    "from what you already have — do not announce a lookup you are not making. Write the "
+    "answer itself: do not mention this check, a 'promise' or a 'lookup', and do not refer "
+    "to your previous message."
 )
 
 
@@ -183,7 +185,8 @@ def announces_unexecuted_tool(text, artifacts=None) -> bool:
             start = max(body.rfind(mark, 0, match.start()) for mark in ".!?\n。！？")
             ends = [i for i in (body.find(mark, match.end()) for mark in ".!?\n。！？") if i >= 0]
             sentence = body[start + 1:min(ends) + 1 if ends else len(body)]
-            if _OFFER_SENTENCE.search(sentence) or sentence.rstrip().endswith(("?", "？")):
+            if (_OFFER_SENTENCE.search(sentence) or _IMPERATIVE_OFFER.search(sentence)
+                    or sentence.rstrip().endswith(("?", "？"))):
                 continue
             if not _announced_by_the_assistant(body[start + 1:match.start()], match.group(0)):
                 continue
@@ -216,6 +219,12 @@ def _announced_by_the_assistant(before: str, matched: str) -> bool:
     return bool(_FIRST_PERSON_SUBJECT.search(lead) or _SENTENCE_OPENER.match(lead))
 
 
+# "- Raise the budget a little and I'll search again." — the user's move first, then the
+# lookup: an offer, not an announcement (R2-08).
+_IMPERATIVE_OFFER = re.compile(
+    r"^\s*(?:[-*•]|\d+[.)])?\s*(?:raise|widen|relax|lower|increase|drop|change|add|remove|give|tell|"
+    r"send|share|pick|choose|confirm|say|reply|try|loosen|extend|expand|name)\b[^.!?\n]{0,160}"
+    r"\b(?:and|then)\s+i(?:'|’)?ll\b", re.IGNORECASE)
 _OFFER_SENTENCE = re.compile(
     r"\b(?:if|once|whenever|when you|say|tell me|let me know|would you like|do you want|"
     r"want me to|shall i|should i|happy to|i can(?!['’]t|not)|i could(?!n['’]t| not))\b"

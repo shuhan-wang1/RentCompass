@@ -7,6 +7,7 @@ from core.tool_system import Tool
 from core.maps_service import get_crime_data_by_location
 from core.tools._argtext import clean_arg_text
 from typing import Optional
+import re
 
 from core.safety_reference import (
     CAVEAT_EN, CAVEAT_ZH, reference_note, score_from_monthly_count,
@@ -65,6 +66,8 @@ def check_safety_impl(
             )
         else:
             crime_data = get_crime_data_by_location(location)
+            if _geocode_failed(crime_data):
+                crime_data = _coarser_reference(location, clean_arg_text(area), crime_data)
         
         # Score against a reference distribution, never against a bare count. The old formula
         # was `max(0, 100 - total_crimes // 2)`: no normalisation, so it measured how many
@@ -195,6 +198,52 @@ def check_safety_impl(
             'safety_analysis': "Unable to perform safety analysis due to an error.",
             'retryable': True,
         }
+
+
+# UK outward code (postcode district) at the end of an address: "…, London, N6", "… E1 6AN".
+_POSTCODE_DISTRICT = re.compile(
+    r"\b([A-Z]{1,2}\d[A-Z\d]?)(?:\s+\d[A-Z]{2})?\s*$", re.I)
+
+
+def _geocode_failed(crime_data) -> bool:
+    return isinstance(crime_data, dict) and crime_data.get('error') == "Could not geocode address."
+
+
+def _coarser_reference(location: str, area: str, failed: dict) -> dict:
+    """Retry an ungeocodable address at its postcode district, then at its area (R3-08).
+
+    "Highgate West Hill, London, N6" could not be geocoded and the turn got no safety data at
+    all, although the district (N6) and the area (Highgate) resolve. The coarser point is
+    used with HONEST precision: reference_point says which fallback it is and that it is not
+    the listing's own location."""
+    london = 'london' in location.lower()
+    candidates = []
+    district = _POSTCODE_DISTRICT.search(location.strip().rstrip('.,'))
+    if district:
+        code = district.group(1).upper()
+        candidates.append(('postcode_district', f"{code}, London" if london else code))
+    if area and area.strip().lower() != location.strip().lower():
+        name = area.strip()
+        candidates.append(('area', f"{name}, London" if london and 'london' not in name.lower() else name))
+    for kind, query in candidates:
+        try:
+            data = get_crime_data_by_location(query)
+        except Exception:
+            continue
+        if not isinstance(data, dict) or data.get('error'):
+            continue
+        ref = dict(data.get('reference_point') or {})
+        ref.update({
+            'fallback_from': location,
+            'fallback_kind': kind,
+            'queried_location': query,
+            'is_specific_address': False,
+            'measured_from': (
+                f"the {kind.replace('_', ' ')} {query!r}, because {location!r} could not be "
+                "geocoded; this is not the listing's own location"),
+        })
+        return {**data, 'reference_point': ref}
+    return failed
 
 
 def _detect_chinese(text: str) -> bool:

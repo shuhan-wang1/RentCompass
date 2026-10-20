@@ -490,7 +490,7 @@ _SEARCH_LEAD_KEYS = ("status", "message", "summary", "suggestion", "partial", "p
                      "incomplete_areas", "total_found", "total_matches", "search_criteria",
                      "known_criteria")
 _SEARCH_LIST_KEYS = ("recommendations", "over_budget_alternatives", "similar_properties",
-                     "unverified_candidates")
+                     "unverified_candidates", "excluded_candidates", "candidate_states")
 _LISTING_CORE = ("rank", "address", "area", "price", "bedrooms", "property_type", "room_type",
                  "match_type", "budget_status", "travel_time", "travel_time_minutes",
                  "travel_time_source", "distance_miles")
@@ -520,18 +520,37 @@ def _project_listing(row: dict, stage: int) -> dict:
     return out
 
 
+def _validation_row(row) -> dict:
+    """One ledger row as {address, status, reasons}. The ledger keeps the listing under
+    ``candidate``; reading ``address`` off the row itself gave "address": null for every
+    row, so the model could not tell which listing a reason belonged to (R4-06 NEW-C)."""
+    if not isinstance(row, dict):
+        return {"address": None}
+    candidate = row.get("candidate") if isinstance(row.get("candidate"), dict) else {}
+    address = (row.get("address") or candidate.get("address") or candidate.get("title")
+               or row.get("candidate_key"))
+    reasons = list(row.get("reasons") or []) + list(row.get("unknown_reasons") or [])
+    out = {"address": address}
+    if row.get("status"):
+        out["status"] = row["status"]
+    if reasons:
+        out["reasons"] = [str(x)[:80] for x in reasons][:3]
+    return out
+
+
 def _project_validation(validation: dict) -> dict:
-    """Counts plus one short line per listing status; the full ledger stays in the artifact."""
+    """One short line per listing status; the full ledger stays in the artifact."""
     if not isinstance(validation, dict):
         return validation
-    out = {k: validation[k] for k in ("constraints", "eligible_count", "excluded_count",
-                                      "unknown_count") if k in validation}
+    out = {k: validation[k] for k in ("eligible_count", "excluded_count", "unknown_count")
+           if k in validation}
+    if isinstance(validation.get("statuses"), list):
+        out["statuses"] = [_validation_row(r) for r in validation["statuses"]]
+        return out
     for bucket in ("eligible", "excluded", "unknown"):
         rows = validation.get(bucket)
         if isinstance(rows, list):
-            out[bucket] = [{"address": r.get("address"),
-                            "reasons": [str(x)[:80] for x in (r.get("reasons") or [])][:3]}
-                           if isinstance(r, dict) else r for r in rows]
+            out[bucket] = [_validation_row(r) for r in rows]
     return out
 
 
@@ -552,12 +571,38 @@ def project_search_payload(raw: dict, cap: int) -> dict:
         projected.update(rest)
         if len(json.dumps(projected, ensure_ascii=False, default=str)) <= cap - 400:
             return projected
-    # Still over: the listings come before the auxiliary keys.
+    # Still over: one compact line per listing (every listing, its decision fields), the
+    # validation ledger as one line per status, and the auxiliary keys last (r08 NEW-A).
+    compact = {k: v for k, v in lead.items() if k != "known_criteria"}
+    compact["listing_fields"] = ("rank | address | area | price | bedrooms | property type | "
+                                 "room type | match | budget | travel time | distance (mi)")
+    for key, rows in lists.items():
+        compact[key] = [_compact_listing(r) if isinstance(r, dict) else r for r in rows]
+    validation = raw.get("candidate_validation")
+    if isinstance(validation, dict):
+        compact["candidate_validation"] = [
+            " | ".join(str(x) for x in (row.get("address"), row.get("status"),
+                                         "; ".join(row.get("reasons") or [])) if x)
+            for row in (_project_validation(validation).get("statuses") or [])]
+    for key, value in rest.items():
+        compact[key] = value
     for key in list(rest) + ["candidate_validation"]:
-        projected.pop(key, None)
-        if len(json.dumps(projected, ensure_ascii=False, default=str)) <= cap - 400:
+        if len(json.dumps(compact, ensure_ascii=False, default=str)) <= cap - 400:
             break
-    return projected
+        compact.pop(key, None)
+    return compact
+
+
+def _compact_listing(row: dict) -> str:
+    """One line with a listing's identity and decision fields, in ``listing_fields`` order."""
+    travel = row.get("travel_time")
+    if travel and row.get("travel_time_source"):
+        travel = f"{travel} ({row['travel_time_source']})"
+    budget = re.sub(r"[^\w\s£/.-]", "", str(row.get("budget_status") or "")).strip()
+    values = (row.get("rank"), row.get("address"), row.get("area"), row.get("price"),
+              row.get("bedrooms"), row.get("property_type"), row.get("room_type"),
+              row.get("match_type"), budget, travel, row.get("distance_miles"))
+    return " | ".join("" if v in (None, "") else str(v) for v in values)
 
 # Kinds whose latest artifact drives a structured card in format_output_fc.
 _CARD_FORMATTERS = {
@@ -3694,7 +3739,27 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         cap = _TOOLMSG_CAPS.get(tool, _TOOLMSG_CAP_DEFAULT)
         if tool == "search_properties" and isinstance(raw, dict):
             # The raw artifact stays untouched; only the model channel is projected (R4-06).
-            raw = project_search_payload(raw, cap)
+            # The budget is measured on the FINAL string, after the untrusted wrapper has
+            # JSON-escaped the projection a second time (+12-25%): sized on raw JSON, a
+            # 15-listing search still overshot and lost its last 3 listings (r08 NEW-A).
+            source, budget = raw, cap - 200
+            for _attempt in range(6):
+                view = project_search_payload(source, budget)
+                content, tainted = _render_toolmsg(tool, view, result)
+                if len(content) <= cap:
+                    return content, tainted
+                budget -= (len(content) - cap) + 150
+            logger.info("fc_loop.toolmsg_truncated tool=%s len=%d cap=%d", tool, len(content), cap)
+            return content[:cap] + "\n...[truncated]", tainted
+        content, tainted = _render_toolmsg(tool, raw, result)
+        if len(content) > cap:
+            logger.info("fc_loop.toolmsg_truncated tool=%s len=%d cap=%d", tool, len(content), cap)
+            content = content[:cap] + "\n...[truncated]"
+        return content, tainted
+
+    def _render_toolmsg(tool: str, raw, result) -> tuple[str, bool]:
+        """The model-facing JSON for ``raw`` (sanitized when untrusted), uncapped."""
+        tainted = False
         if tool in _UNTRUSTED_TOOLS and raw is not None:
             data_view = sanitize_untrusted(
                 json.dumps(raw, ensure_ascii=False, default=str)).text
@@ -3716,11 +3781,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         payload["error"] = getattr(result, "error", None)
         if getattr(result, "outcome", None):
             payload["outcome"] = result.outcome
-        content = json.dumps(payload, ensure_ascii=False, default=str)
-        if len(content) > cap:
-            logger.info("fc_loop.toolmsg_truncated tool=%s len=%d cap=%d", tool, len(content), cap)
-            content = content[:cap] + "\n...[truncated]"
-        return content, tainted
+        return json.dumps(payload, ensure_ascii=False, default=str), tainted
 
     async def execute_tools_node(state: AgentState) -> Command[Literal["agent"]]:
         messages = list(state.get("messages") or [])

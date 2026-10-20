@@ -68,3 +68,53 @@ def test_raw_artifact_untouched_and_model_message_not_hard_cut():
     tmsg = next(m for m in state["messages"] if isinstance(m, ToolMessage))
     assert "...[truncated]" not in tmsg.content
     assert "12 Example Street" in tmsg.content and "31 min to Euston" in tmsg.content
+
+
+# ── r08 NEW-A / NEW-C: measured on the FINAL string, through the untrusted wrapper ─────
+import pathlib  # noqa: E402
+
+from core.candidate_validation import validate_candidates  # noqa: E402
+
+REAL_15 = json.loads((pathlib.Path(__file__).parent / "data" /
+                      "overnight_r04_search_15.json").read_text(encoding="utf-8"))
+
+
+def _with_ledger(payload):
+    data = dict(payload)
+    data["candidate_validation"] = validate_candidates(
+        data["recommendations"] + list(data.get("over_budget_alternatives") or []),
+        data.get("search_criteria") or {}, [])
+    data["excluded_candidates"] = [dict(r, images=["https://img/x.jpg"] * 10, score_breakdown={"a": 1})
+                                   for r in data.get("over_budget_alternatives") or []]
+    return data
+
+
+def test_real_15_listing_search_reaches_the_model_whole_through_the_untrusted_wrapper():
+    data = _with_ledger(REAL_15)
+    assert len(data["recommendations"]) == 15
+    specs = [FakeSpec("search_properties")]
+    provider = FakeProvider(specs, {"search_properties": FakeResult(True, data)})
+    chat = FakeChat([
+        AIMessage(content="", tool_calls=[_tc("search_properties", {"user_query": "1-bed"}, "c1")]),
+        AIMessage(content="done"),
+    ])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    state = asyncio.run(_drive(nodes, _base_state()))
+    tmsg = next(m for m in state["messages"] if isinstance(m, ToolMessage))
+    assert "UNTRUSTED" in tmsg.content            # the real wrapper was applied
+    assert "...[truncated]" not in tmsg.content
+    assert len(tmsg.content) <= _TOOLMSG_CAPS["search_properties"]
+    for row in data["recommendations"]:
+        assert row["address"].split(",")[0] in tmsg.content, row["address"]
+
+
+def test_projected_ledger_keeps_each_listing_identity():
+    data = _with_ledger(REAL_15)
+    from core.agent_loop import _project_validation
+    rows = _project_validation(data["candidate_validation"])["statuses"]
+    assert len(rows) == 15 + len(data.get("over_budget_alternatives") or [])
+    assert all(row["address"] for row in rows)
+    view = project_search_payload(data, 6000)
+    ledger = view.get("candidate_validation")
+    if isinstance(ledger, list):        # compact stage: "address | status | reasons"
+        assert all(line and not line.startswith(("None", " |")) for line in ledger)

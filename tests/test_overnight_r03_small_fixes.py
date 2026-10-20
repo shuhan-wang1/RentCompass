@@ -72,3 +72,43 @@ def test_r3_09_walking_mode_still_reports_no_fare(monkeypatch):
     monkeypatch.setattr(maps_service, "calculate_travel_basis", _short_measured_route)
     result = calculate_commute_cost_impl("Whitechapel Road, London E1", "Bank, London", mode="walking")
     assert result["summary"]["monthly_transport_cost"] == "£0.00"
+
+
+# ── R3-10: a small gap between two areas is not stretched to 100 points ───────────────
+def test_r3_10_six_minutes_is_not_a_hundred_points():
+    from core.tools.compare_or_rank_areas import _commute_components
+    comps = _commute_components({"hackney": 24, "stratford": 30}, None)
+    assert comps["hackney"] == 100.0
+    assert comps["stratford"] == 80.0
+
+
+def test_r3_10_large_commute_gaps_still_separate():
+    from core.tools.compare_or_rank_areas import _commute_components
+    comps = _commute_components({"islington": 15, "hackney": 38, "camden": 42}, None)
+    assert comps["islington"] == 100.0
+    assert comps["camden"] == 10.0 and comps["hackney"] == 23.3
+
+
+def test_r3_10_small_rent_gap_stays_small():
+    from core.tools.compare_or_rank_areas import _value_components
+    stats = {"a": {"median": 1500.0, "sample_size": 50}, "b": {"median": 1550.0, "sample_size": 50}}
+    comps = _value_components(stats, budget_present=False)
+    assert comps["a"] == 100.0 and comps["b"] > 80.0
+
+
+def test_r3_10_priorities_source_is_recorded(monkeypatch):
+    import asyncio
+    import core.area_stats as area_stats
+    import core.tools.compare_or_rank_areas as cra
+
+    async def candidates(*_args, **_kwargs):
+        return [{"name": "Camden", "slug": "camden", "commute_minutes": None}]
+    monkeypatch.setattr(cra, "_resolve_candidates", candidates)
+    monkeypatch.setattr(area_stats, "aggregate", lambda *_a: {"camden": area_stats._empty()})
+    default = asyncio.run(cra.compare_or_rank_areas_impl(city="London", reply_language="en"))
+    assert default["priorities_source"] == "default"
+    assert "your priorities" not in " ".join(default["explanation_notes"])
+    supplied = asyncio.run(cra.compare_or_rank_areas_impl(
+        city="London", reply_language="en", priorities=["commute", "value"]))
+    assert supplied["priorities_source"] == "caller_supplied"
+    assert "user's own" in supplied["priorities_note"]

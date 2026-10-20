@@ -65,6 +65,15 @@ def _weights(priorities: list, usable: set) -> dict:
     return rounded
 
 
+# Scale-aware normalisation (R3-10). Min-max over the candidate set turned Hackney 24 min vs
+# Stratford 30 min into commute 100 vs 0 and a total of 74 vs 29.8 "wins clearly". The best
+# area still scores 100, but a gap is measured against at least this spread, so a 6-minute
+# difference costs 20 points, not 100. Rent uses a spread of at least 20% of the dearest
+# median for the same reason.
+_MIN_COMMUTE_SPREAD_MIN = 30.0
+_MIN_RENT_SPREAD_FRACTION = 0.20
+
+
 def _value_components(stats_by_slug: dict, budget_present: bool) -> dict:
     """Value component (0-100) per slug: inverse median rent normalised WITHIN the
     candidate set (cheaper -> higher), adjusted by budget_match_rate when a budget is
@@ -76,9 +85,10 @@ def _value_components(stats_by_slug: dict, budget_present: bool) -> dict:
     if not medians:
         return {}
     lo, hi = min(medians.values()), max(medians.values())
+    spread = max(hi - lo, _MIN_RENT_SPREAD_FRACTION * hi)
     comps: dict = {}
     for s, m in medians.items():
-        base = 100.0 if hi == lo else (hi - m) / (hi - lo) * 100.0
+        base = 100.0 if spread <= 0 else (1.0 - (m - lo) / spread) * 100.0
         st = stats_by_slug[s]
         if budget_present and st.get("budget_match_rate") is not None:
             base = 0.6 * base + 0.4 * (st["budget_match_rate"] * 100.0)
@@ -100,8 +110,9 @@ def _commute_components(commute_by_slug: dict, max_commute: Optional[int]) -> di
             comps[s] = round(max(0.0, min(1.0, 1.0 - c / float(max_commute))) * 100.0, 1)
     else:
         lo, hi = min(vals.values()), max(vals.values())
+        spread = max(hi - lo, _MIN_COMMUTE_SPREAD_MIN)
         for s, c in vals.items():
-            comps[s] = round(100.0 if hi == lo else (hi - c) / (hi - lo) * 100.0, 1)
+            comps[s] = round((1.0 - (c - lo) / spread) * 100.0, 1)
     return comps
 
 
@@ -167,7 +178,11 @@ async def compare_or_rank_areas_impl(
     # ---- Normalise inputs ------------------------------------------------
     city = city.strip() if isinstance(city, str) and city.strip() else None
     destination = destination.strip() if isinstance(destination, str) and destination.strip() else None
-    priorities = [p for p in (priorities or []) if p in _PRIORITY_ENUM] or ["value", "commute"]
+    supplied_priorities = [p for p in (priorities or []) if p in _PRIORITY_ENUM]
+    # Who set the priorities: the tool cannot know whether the caller copied them from the
+    # user, so the answer must not narrate them as "your stated priorities" (R3-10).
+    priorities_source = "caller_supplied" if supplied_priorities else "default"
+    priorities = supplied_priorities or ["value", "commute"]
     try:
         max_commute_minutes = int(max_commute_minutes) if max_commute_minutes else None
     except (TypeError, ValueError):
@@ -344,9 +359,16 @@ async def compare_or_rank_areas_impl(
         is_zh,
         "Composite score = weighted sum of 0-100 components (value = lower median rent, "
         "adjusted by how many cached listings fall under budget; commute = shorter time). "
-        "Weights come from your priorities and sum to 1: " + _fmt_weights(weights, is_zh) + ".",
+        "Weights come from the ranking priorities ("
+        + ("defaults" if priorities_source == "default" else "as passed to the tool")
+        + ") and sum to 1: " + _fmt_weights(weights, is_zh) + ". The best area on a component "
+        "scores 100; gaps are measured against at least a 30-minute commute spread and a rent "
+        "spread of 20% of the dearest median, so small differences stay small.",
         "综合分 = 各 0-100 分项的加权和（value=更低的中位租金，并按缓存中低于预算的房源占比调整；"
-        "commute=更短的通勤）。权重来自你的优先级、总和为 1：" + _fmt_weights(weights, is_zh) + "。",
+        "commute=更短的通勤）。权重来自排序优先级（"
+        + ("默认值" if priorities_source == "default" else "调用时传入")
+        + "）、总和为 1：" + _fmt_weights(weights, is_zh) + "。各分项最优的区域为 100 分；差距至少按 "
+        "30 分钟通勤跨度和最高中位租金 20% 的租金跨度计算，小差距不会被放大。",
     ))
     if not commute_available:
         notes.append(_L(
@@ -412,6 +434,9 @@ async def compare_or_rank_areas_impl(
         "areas": areas,
         "explanation_notes": notes,
         "priorities": priorities,
+        "priorities_source": priorities_source,
+        "priorities_note": ("Do not describe these priorities as the user's own unless the user "
+                            "stated them in this conversation."),
         "weights": weights,
         "evidence_scope": evidence_scope,
         "not_evaluated": not_evaluated,

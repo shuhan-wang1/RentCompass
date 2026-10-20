@@ -3131,6 +3131,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         messages = list(state.get("messages") or [])
         explicit_memory_required = False
         ec = state.get("extracted_context") or {}
+        # Bound on EVERY entry: the terminal ask_user branch reads it after a tool round too
+        # (search -> remember -> ask_user crashed with UnboundLocalError, R4-01).
+        current_message = (ec.get("current_message")
+                           or _current_message(state.get("user_query") or ""))
         reply_language = _reply_language_from_ctx(
             ec, ec.get("current_message") or _current_message(state.get("user_query") or ""))
         from core.constraint_updates import independent_memory_task

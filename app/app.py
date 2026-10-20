@@ -2213,6 +2213,7 @@ async def api_alex():
                 "request_id": request_id,
                 "conversation_id": conversation_id,
                 "error_type": type(e).__name__,
+                "error_location": _exception_location(e),
                 "agent_arch": AGENT_ARCH,
             },
         )
@@ -2927,6 +2928,20 @@ def _queue_background_job(job: dict) -> bool:
         return False
     jobs.append(copy.deepcopy(job))
     return True
+
+
+def _exception_location(exc: BaseException) -> str:
+    """``file.py:line:function`` of the innermost frame, never a message or value (R4-01)."""
+    try:
+        import os as _os
+        import traceback as _traceback
+        frames = _traceback.extract_tb(exc.__traceback__)
+        if not frames:
+            return "-"
+        frame = frames[-1]
+        return f"{_os.path.basename(frame.filename)}:{frame.lineno}:{frame.name}"[:160]
+    except Exception:
+        return "-"
 
 
 def _turn_memory_contract(final_state: dict) -> dict:

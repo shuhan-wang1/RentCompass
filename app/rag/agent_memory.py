@@ -978,7 +978,12 @@ class AgentMemory:
                     meta["hash"] = hashlib.md5(
                         f"{meta.get('mtype') or 'semantic'}|{meta['user_id']}|{text}"
                         .encode("utf-8")).hexdigest()
-                self.col.update(ids=[oid], documents=[text], metadatas=[meta])
+                if meta.get("user_id"):
+                    self.col.update(ids=[oid], documents=[text], metadatas=[meta])
+                else:
+                    # The current metadata could not be read: never replace it with a
+                    # partial dict (that would drop user_id and orphan the row).
+                    self.col.update(ids=[oid], documents=[text])
                 return True
             except Exception:
                 return False

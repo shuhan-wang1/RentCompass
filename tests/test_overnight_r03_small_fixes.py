@@ -45,3 +45,30 @@ def test_r3_11_calculate_commute_cost_route_failure_is_english(monkeypatch):
     result = calculate_commute_cost_impl("Nowhere Street", "Bank", mode="transit")
     assert result["success"] is False
     assert not _has_cjk(result["error"]) and "route" in result["error"]
+
+
+# ── R3-09: a transit request never shows £0 as its transport cost ─────────────────────
+def _short_measured_route(*a, **k):
+    return {"duration_minutes": 15, "source": "tfl_journey_plan", "basis": "tfl_journey_plan"}
+
+
+def test_r3_09_transit_mode_short_route_has_unknown_cost_not_zero(monkeypatch):
+    import core.maps_service as maps_service
+    from core.tools.calculate_commute_cost import calculate_commute_cost_impl
+    monkeypatch.setattr(maps_service, "calculate_travel_basis", _short_measured_route)
+    result = calculate_commute_cost_impl("Whitechapel Road, London E1", "Bank, London", mode="transit")
+    assert result["success"] is True
+    summary = result["summary"]
+    assert summary["monthly_transport_cost"] is None
+    assert summary["transport_cost_status"] == "unknown"
+    assert "£0" not in str(summary["note"]).replace("not £0", "")
+    assert result["transport_cost_available"] is False
+    assert result["uses_public_transport"] is None
+
+
+def test_r3_09_walking_mode_still_reports_no_fare(monkeypatch):
+    import core.maps_service as maps_service
+    from core.tools.calculate_commute_cost import calculate_commute_cost_impl
+    monkeypatch.setattr(maps_service, "calculate_travel_basis", _short_measured_route)
+    result = calculate_commute_cost_impl("Whitechapel Road, London E1", "Bank, London", mode="walking")
+    assert result["summary"]["monthly_transport_cost"] == "£0.00"

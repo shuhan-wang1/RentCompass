@@ -539,6 +539,22 @@ def calculate_commute_cost_impl(
                         f"£{transport_cost_info['monthly_cost']:.2f} transport"
                         f"{hours_clause}"),
                 }
+        elif not uses_transit and mode == "transit":
+            # A public-transport request whose route the heuristic judged short enough to walk
+            # is NOT a free commute: no fare was established, so the cost is unknown. Whitechapel
+            # Road -> Bank (15 min) showed "£0.00, walking/cycling only" beside
+            # transport_cost_available=false (R3-09).
+            result['uses_public_transport'] = None
+            result['summary'] = {
+                'commute_time': commute_time_txt,
+                'monthly_transport_cost': None,
+                'transport_cost_status': 'unknown',
+                'uses_public_transport': 'Not established',
+                'note': ('The route is short enough that it may be walkable, so no public-'
+                         'transport fare was looked up for it. The monthly transport cost is '
+                         'unknown here, not £0; if you take the tube or bus, check the fare at '
+                         'tfl.gov.uk/fares.'),
+            }
         elif not uses_transit:
             # 如果不使用公共交通，明确说明无交通成本
             result['summary'] = {

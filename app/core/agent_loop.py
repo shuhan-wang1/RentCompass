@@ -408,6 +408,36 @@ _INVALID_TOOL_CALL_NUDGE_TEXT = (
 )
 
 
+_JSON_ERROR_CLASSES = (
+    "Expecting ',' delimiter", "Expecting ':' delimiter", "Expecting property name",
+    "Expecting value", "Unterminated string", "Invalid control character",
+    "Invalid \\escape", "Extra data", "Invalid \\uXXXX escape",
+)
+
+
+def _invalid_call_diagnostics(calls) -> str:
+    """The parse-error CLASS of each malformed tool call, never its content (R3-07).
+
+    ``get_property_details`` came back malformed 3/3 for ordinal follow-ups and the log said
+    only "names=get_property_details". This records, per call: the JSON error class, the
+    argument length, whether the arguments were empty, object-shaped and closed — enough to
+    tell truncation from bad escaping from a non-object payload, with no user text."""
+    out = []
+    for call in calls or []:
+        if not isinstance(call, dict):
+            continue
+        args = call.get("args")
+        text = args if isinstance(args, str) else ("" if args is None else str(args))
+        error = str(call.get("error") or "")
+        kind = next((k for k in _JSON_ERROR_CLASSES if k in error), None)
+        if kind is None:
+            kind = "none_args" if args is None else ("TypeError" if "TypeError" in error else "other")
+        stripped = text.strip()
+        out.append(f"{str(call.get('name') or 'unknown')[:40]}:{kind}:len={len(text)}"
+                   f":obj={int(stripped.startswith('{'))}:closed={int(stripped.endswith('}'))}")
+    return ";".join(out)[:500] or "-"
+
+
 def _has_invalid_call_nudge(messages) -> bool:
     return any(
         isinstance(getattr(m, "additional_kwargs", None), dict)
@@ -2435,7 +2465,8 @@ def _completed_empty_search_raw(artifacts: list) -> Optional[dict]:
 _MAX_FALLBACK_RECS = 5
 
 
-def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_budget") -> str:
+def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_budget",
+                                      failed_tools=None) -> str:
     """Build a compact, honest final answer directly from the gathered tool_artifacts. Shared
     by two callers that differ ONLY in framing (opener + closer), never in the body:
 
@@ -2498,6 +2529,15 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
     web_failed = (any(a.get("tool") == "web_search" for a in artifacts)
                   and not any(a.get("tool") == "web_search" and _is_executed(a) and a.get("success")
                               for a in artifacts))
+    # The conversation already SHOWED listings (an ordinal follow-up such as "Does the first
+    # one allow pets?"). A failed details lookup is that lookup failing, never "I do not yet
+    # have listing results" about listings the user is looking at (R3-07).
+    prior_listings = bool(ec.get("recommended_registry") or ec.get("last_results")
+                          or ec.get("recommended_index"))
+    failed_names = {str(name) for name in (failed_tools or [])}
+    details_failed = (not searched and (
+        "get_property_details" in failed_names
+        or (reason == "tool_call_error" and prior_listings)))
     empty_criteria = {}
     if isinstance(empty_raw, dict):
         empty_criteria = (empty_raw.get("search_criteria")
@@ -2555,6 +2595,11 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
                          "（数据来源 OnTheMarket）。")
         elif web_failed and not searched:
             lines.append("本轮的网页查询失败，所以没能核实你问的内容。")
+        elif details_failed:
+            lines.append("这次没能查到你问的那套房源的详情（查询未能执行），所以还无法回答；"
+                         "之前列出的房源仍然有效。")
+        elif reason == "tool_call_error" and not searched:
+            lines.append("这次的查询未能执行，所以还没能核实你问的内容。")
         else:
             lines.append("目前还没有可以直接展示的房源结果。")
         for place, score, level in safety_lines[:4]:
@@ -2608,6 +2653,11 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
                          "criteria (data from OnTheMarket).")
         elif web_failed and not searched:
             lines.append("The web lookup failed this turn, so I could not check what you asked.")
+        elif details_failed:
+            lines.append("The details lookup for that listing failed this turn, so I can't answer "
+                         "that yet; the listings shown earlier are still available.")
+        elif reason == "tool_call_error" and not searched:
+            lines.append("The lookup failed this turn, so I could not check what you asked.")
         else:
             lines.append("I do not yet have listing results ready to show.")
         for place, score, level in safety_lines[:4]:
@@ -3215,8 +3265,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         if invalid_calls and not tool_calls:
             names = ", ".join(sorted({str(c.get("name") or "unknown") for c in invalid_calls
                                       if isinstance(c, dict)})) or "unknown"
-            logger.warning("fc_loop.invalid_tool_calls count=%d names=%s loop_turn=%d",
-                           len(invalid_calls), names, loop_turn)
+            logger.warning("fc_loop.invalid_tool_calls count=%d names=%s loop_turn=%d diag=%s",
+                           len(invalid_calls), names, loop_turn,
+                           _invalid_call_diagnostics(invalid_calls))
             content = getattr(resp, "content", "") or ""
             if not _has_invalid_call_nudge(messages):
                 nudge = HumanMessage(
@@ -3310,7 +3361,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         text = clean_response(resp.content if hasattr(resp, "content") else str(resp))
         if not str(text or "").strip() and invalid_calls:
             # Never ship a blank answer for a turn whose tool call could not be parsed.
-            text = _artifact_grounded_fallback_answer(state, reason="tool_call_error")
+            text = _artifact_grounded_fallback_answer(
+                state, reason="tool_call_error",
+                failed_tools=[c.get("name") for c in invalid_calls if isinstance(c, dict)])
 
         # Never terminate a turn on an answer that ANNOUNCES a tool call it did not make.
         # Live, a follow-up turn shipped a 105-char "Let me search for actual one-bedroom

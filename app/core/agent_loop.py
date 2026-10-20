@@ -74,6 +74,7 @@ from core.search_readiness import (
     resolve_relative_budget,
 )
 from core.candidate_validation import (
+    register_protected_system_text,
     render_candidate_status,
     render_similar_listings,
     validate_commute_response,
@@ -303,6 +304,8 @@ AUTOMATIC_MEMORY_DISCLOSURE_EN = (
 AUTOMATIC_MEMORY_DISCLOSURE_ZH = (
     "关于记忆的说明：除了你明确要求我记住的内容外，本服务还会自动保存你的请求摘要、提取你说过的长期信息"
     "（如预算、区域、通勤），并形成对你偏好的推断，跨对话保留。你可以随时询问我保存了什么，或要求我删除。")
+# Fixed system text: no commute redaction pass may edit it (R3-01).
+register_protected_system_text(AUTOMATIC_MEMORY_DISCLOSURE_EN, AUTOMATIC_MEMORY_DISCLOSURE_ZH)
 
 
 def disclose_automatic_memory(text: str, message: str, reply_language: str = "en") -> str:

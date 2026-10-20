@@ -1069,7 +1069,13 @@ _COMMUTE_WORD = re.compile(
 _FIT_WORD = re.compile(
     r"符合|满足|不满足|未满足|超过|超出|超标|未超过|以内|之内|范围内|达标|未达|"
     r"更远|更近|太远|够近|不远|"
-    r"\b(?:meets?|met|within|under|over|about|around|"
+    r"\b(?:meets?|met|within|"
+    # "about/around/over/under" compare a TIME or a LIMIT only when one follows: "about 40
+    # minutes", "over an hour", "under your limit". "forms its own inferences about your
+    # priorities" beside the word commute is not a commute claim (R3-01, R2-19).
+    r"(?:under|over|about|around)(?=\s+(?:(?:your|the|my|its|a|an|half|just|roughly|about|around|commute|"
+    r"commuting|journey|travel|time|daily|stated|maximum|max)\s+){0,3}"
+    r"(?:\d|(?:hours?|hrs?|limit|cap|max|maximum|target|threshold|ceiling|requirement|minutes?|mins?)\b))|"
     # "takes about 40 minutes" / "takes an hour" — never "take an umbrella" (R2-01 f).
     r"(?:takes?|took)(?=\s+(?:about|around|roughly|approximately|over|under|less|more|an?\s+"
     r"(?:hour|while|bit|long)|\d|just|only|at\s+least|up\s+to|nearly|almost|half|longer|"
@@ -1085,6 +1091,7 @@ _FIT_WORD = re.compile(
 _FRAGMENT_SPLIT = re.compile(
     r"((?<!\d),|,(?!\d)|(?<!\d):|:(?!\d)|[，；;、。！？：|]|\.(?=\s|$)|[!?](?=\s|$)"
     r"|(?<!\s)\s+[–—-]\s+)")
+_BRACKET_SPAN = re.compile(r"[（(][^()（）\n]{0,400}[)）]")
 _SCOPE_SENTENCE_SPLIT = re.compile(r"(?<=[.!?。！？])\s+|\n|[；;]")
 _NAME_ABBREVIATION = r"(?:St|Dr|Mr|Mrs|Ms|Prof|Sr|Jr)"
 
@@ -1103,6 +1110,12 @@ def _guard_text_parts(text: str, *, sentences: bool = False) -> list[str]:
     """
     protected = [(match.start(), match.start() + len(match.group().rstrip('.,;:!?')))
                  for match in re.finditer(r"(?:https?://|www\.)[^\s<>\"'()]+", text, re.I)]
+    if not sentences:
+        # A bracketed aside is one unit: "(that commute figure is an estimate, not a verified
+        # journey time)" split at its comma, the clause before it went and ")." shipped alone
+        # (R3-01). Bounded and unnested, so linear.
+        protected.extend((match.start() + 1, match.end() - 1)
+                         for match in _BRACKET_SPAN.finditer(text))
     parts = []
     start = 0
     pattern = _SCOPE_SENTENCE_SPLIT if sentences else _FRAGMENT_SPLIT
@@ -1830,6 +1843,34 @@ _MINUTE_LIST_VALUE = re.compile(
     r"\d{1,3}(?:\.\d{1,2})?){0,8}[ \t]{0,3}[-–]?[ \t]{0,3}(?:minutes?|mins?\b|分钟))", re.IGNORECASE)
 
 
+_ROUTE_COMPARATIVE = re.compile(
+    r"\b(?:slower|faster|quicker|longer|shorter)\b|更慢|更快|更长|更短", re.I)
+
+
+def _compares_own_routes(fragment: str, values: list, binding: dict) -> bool:
+    """"A slightly slower alternative is about 40 minutes" compares two itineraries the
+    planner returned for this route (37 and 40 minutes); it is no verdict on a limit (R3-01).
+
+    Holds only when the only verdict words are comparatives, every figure is one of the
+    route's own whole-trip measurements, and the comparison points the right way."""
+    figures = [binding.get("minutes")] + list(binding.get("alt_minutes") or [])
+    figures = [f for f in figures if isinstance(f, (int, float))]
+    if not values or len(set(figures)) < 2:
+        return False
+    rest = _ROUTE_COMPARATIVE.sub(" ", fragment)
+    if _PASS_VERDICT.search(rest) or _FAIL_VERDICT.search(rest):
+        return False
+    if not all(any(abs(v - f) < 1e-9 for f in figures) for v in values):
+        return False
+    slower = re.search(r"\b(?:slower|longer)\b|更慢|更长", fragment, re.I)
+    faster = re.search(r"\b(?:faster|quicker|shorter)\b|更快|更短", fragment, re.I)
+    if slower and faster:
+        return False
+    if slower:
+        return all(v > min(figures) for v in values)
+    return all(v < max(figures) for v in values)
+
+
 def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
                         context: str = "", heading: str = "",
                         itinerary: frozenset | set = frozenset(),
@@ -1922,6 +1963,8 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
     if asserts_pass or asserts_fail:
         quoted_caps = [value for value in values
                        if any(abs(value - cap) < 1e-9 for cap in caps)]
+        if not quoted_caps and _compares_own_routes(fragment, values, binding):
+            return True
         against = quoted_caps or sorted(caps)
         if not against:
             return False  # a verdict with no limit to measure it against
@@ -2089,6 +2132,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             vetted.append(m.group(0))
             return m.group(0)
 
+        original_body = body
         body = _PARENTHETICAL.sub(_parenthetical, body)
 
         labels = sorted({label for item in bindings for label in item["labels"] if label},
@@ -2125,6 +2169,9 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
         sentence_dropped = False    # something was withdrawn from the current sentence
         inherited = binding
         commute_context = False
+        last_fragment = ""          # the previous clause of the current sentence
+        continuation_broken = False  # a kept clause leans on a withdrawn one ("…, but I have
+                                     # not verified that") — no clean cut exists (R3-01)
 
         def _close_sentence() -> None:
             # A sentence that lost its claim and kept only a lead-in ("If you want to continue
@@ -2138,6 +2185,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
         for index in range(0, len(parts), 2):
             fragment = parts[index]
             separator = parts[index + 1] if index + 1 < len(parts) else ""
+            context_fragment = last_fragment
+            last_fragment = "" if _SENTENCE_END.search(separator) else fragment
             local = _line_binding(fragment, bindings)
             if local is not None:
                 # A comma-delimited address component ("North Approach, Watford, WD25")
@@ -2164,8 +2213,13 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                        (commute_context and _FIT_WORD.search(_without_money_or_weather(claim))
                         and not monetary_or_independent))
             sentence_marked = marked_at.get(index, False)
+            # A bare figure split off by a dash belongs to the clause before it: "Northern
+            # line from King's Cross St. Pancras to Moorgate — 6 min" is the leg's own measured
+            # time, judged alone it named no leg and was withdrawn (R3-01, R2-01 a).
+            bare_figure = bool(_BARE_FIGURE.fullmatch(claim.strip()))
             drop = fragment.strip() and asserts and not _evidenced(
-                claim, inherited, sentence_marked=sentence_marked)
+                claim, inherited, context=context_fragment if bare_figure else "",
+                sentence_marked=sentence_marked)
             # A dependent clause after a redacted one restates its verdict without repeating
             # its subject ("…, which is well within your limit"), so it goes with it.
             # Across a sentence boundary only a dependent VERDICT still leans on the withdrawn
@@ -2201,6 +2255,9 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                     kept.append(" — " + separator)
                 continue  # its trailing separator goes with it
             if within:
+                if (_LEANING_CONTINUATION.match(fragment)
+                        and _CAVEAT_ON_PREVIOUS.search(fragment)):
+                    continuation_broken = True
                 # "Features: and the listing says ..." - a coordinator left at the front.
                 fragment = _LEADING_COORDINATOR.sub(r"\1", fragment)
             crossed_sentence = False
@@ -2218,6 +2275,10 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             lines.append(line)
             continue
         rebuilt = "".join(kept)
+        if continuation_broken or _unbalanced_after_removal(rebuilt, original_body):
+            # No clean clause cut exists: a bracket lost its partner or a kept clause leans on
+            # the withdrawn one. Drop each sentence a withdrawal touched, whole (R3-01).
+            rebuilt = _without_touched_sentences(original_body, removed[removed_before_line:])
         if re.fullmatch(r"[*_#\s]*[^:：\n]{1,40}[:：]\s*[*_]*\s*", rebuilt) and not _MINUTE_TOKEN.search(rebuilt):
             rebuilt = ""         # "Cheapest route:" with nothing left after it (R1-10)
         # Tidy up after removal: no doubled or dangling separators.
@@ -2253,6 +2314,64 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
 _COMPARATIVE_DIFFERENCE = re.compile(
     r"\b(?:shorter|longer|quicker|faster|slower|less|more|saves?|saving|extra|difference|"
     r"cuts?|adds?)\b|更短|更长|更快|更慢|节省|省|多出|相差", re.I)
+
+
+_BARE_FIGURE = re.compile(
+    r"(?:about|around|roughly|approx(?:imately|\.)?|~|≈|约|大约)?\s*\d{1,3}(?:\.\d{1,2})?"
+    r"(?:\s*[-–]\s*\d{1,3})?\s*[-–]?\s*(?:minutes?|mins?|分钟)\.?", re.I)
+# A kept clause that leans on the withdrawn one before it: "…25 to 35 minutes, but I have
+# not verified that with a live TfL plan" leaves "I have not verified that" pointing at
+# nothing. "and" is not here: "…, and the rent is £1,500" stands on its own.
+_LEANING_CONTINUATION = re.compile(
+    r"^\s*(?:but|so|yet|though|although|whereas|however)\b|^\s*(?:但是|但|所以|因此|不过|然而)", re.I)
+# ... and the leaning clause is a caveat ABOUT the withdrawn claim ("I have not verified that",
+# "before relying on it"). "…, but it is the largest of the three" is a fact of its own.
+_CAVEAT_ON_PREVIOUS = re.compile(
+    r"\b(?:verif\w*|confirm\w*|check\w*|measur\w*|rely\w*|trust\w*)\b[^.;!?]{0,20}?"
+    r"\b(?:that|this|it|them|these|those)\b(?!\s+(?:is|are|was|has)\b)|"
+    r"(?:核实|确认|验证)(?:过)?(?:这|该|此)", re.I)
+_BRACKET_PAIRS = (("(", ")"), ("（", "）"), ("[", "]"), ("【", "】"))
+
+
+def _unbalanced_after_removal(rebuilt: str, original: str) -> bool:
+    """True when a withdrawal left a bracket without its partner (R3-01)."""
+    return any(rebuilt.count(o) - rebuilt.count(c) != original.count(o) - original.count(c)
+               for o, c in _BRACKET_PAIRS)
+
+
+_SENTENCE_BOUNDARY = re.compile(r"[.!?](?=\s|$)|[。！？]")
+
+
+def _without_touched_sentences(body: str, removed_fragments: list) -> str:
+    """``body`` without every sentence that contains one of ``removed_fragments``.
+
+    The whole-sentence fallback for a withdrawal with no clean clause cut: "drop the
+    sentence rather than leave a fragment". Abbreviation and decimal points do not end a
+    sentence ("St. Pancras", "7.79 km")."""
+    sentences: list[str] = []
+    start = 0
+    for match in _SENTENCE_BOUNDARY.finditer(body):
+        position = match.start()
+        if body[position] == ".":
+            if re.search(r"\b" + _NAME_ABBREVIATION + r"\.$", body[:position + 1], re.I):
+                continue
+            if position + 1 < len(body) and body[position + 1].isdigit():
+                continue
+        sentences.append(body[start:match.end()])
+        start = match.end()
+    if body[start:].strip():
+        sentences.append(body[start:])
+    keys = []
+    for fragment in removed_fragments:
+        key = " ".join(str(fragment or "").split())
+        key = key.strip(" ,，;；:：")[:30]
+        if _HAS_CONTENT.search(key):
+            keys.append(key)
+    kept = [sentence for sentence in sentences
+            if not any(key in " ".join(sentence.split()) for key in keys)]
+    if len(kept) == len(sentences):
+        return ""            # the withdrawal cannot be located: keep nothing of this line
+    return "".join(kept).strip()
 
 
 def _stub_remnant(text: str) -> bool:
@@ -2718,7 +2837,58 @@ def bound_validator_input(text: str) -> str:
     return value
 
 
+# Fixed text the SYSTEM composes (the automatic-memory disclosure, this validator's own note).
+# It is never a commute claim, so it is never redacted, and validating twice is idempotent:
+# a second pass over a plain answer deleted "areas or commute) and forms its own inferences
+# about your priorities," from the disclosure and added a note about it (R3-01, R2-19).
+_PROTECTED_SYSTEM_TEXTS: list[str] = []
+
+
+def register_protected_system_text(*texts: str) -> None:
+    """Mark fixed system-composed text as out of the commute redactor's scope."""
+    for text in texts:
+        value = str(text or "").strip()
+        if value and value not in _PROTECTED_SYSTEM_TEXTS:
+            _PROTECTED_SYSTEM_TEXTS.append(value)
+
+
+_PLACEHOLDER = "\u27e6SYSTEXT{}\u27e7"
+_CONTENT_CHARS = re.compile(r"[0-9A-Za-z\u4e00-\u9fff£$€%]")
+
+
+def _visible_content(text: str) -> str:
+    return "".join(_CONTENT_CHARS.findall(str(text or "")))
+
+
 def validate_commute_response(response: str, state: dict) -> str:
+    """Remove only unsupported commute assertions; never touch fixed system text.
+
+    System-composed passages (``register_protected_system_text``) and this validator's own
+    note are masked before redaction and restored after it, in place. The note is appended
+    only when this pass removed visible text, and never twice (R3-01)."""
+    text = str(response or "")
+    notes = (_commute_unverified_note(False), _commute_unverified_note(True))
+    protected = [t for t in list(_PROTECTED_SYSTEM_TEXTS) + list(notes) if t in text]
+    if not protected:
+        return _validate_commute_response(text, state)
+    masked = text
+    for index, passage in enumerate(protected):
+        masked = masked.replace(passage, _PLACEHOLDER.format(index))
+    result = _validate_commute_response(masked, state,
+                                        note_present=any(n in protected for n in notes))
+    missing = []
+    for index, passage in enumerate(protected):
+        token = _PLACEHOLDER.format(index)
+        if token in result:
+            result = result.replace(token, passage)
+        else:
+            missing.append(passage)
+    if missing:
+        result = result.rstrip() + "".join(f"\n\n{passage}" for passage in missing)
+    return result
+
+
+def _validate_commute_response(response: str, state: dict, *, note_present: bool = False) -> str:
     """Remove only unsupported journey assertions; keep independent evidence and caveats.
 
     The return type and state contract are unchanged. Candidate qualification does not
@@ -2783,12 +2953,16 @@ def validate_commute_response(response: str, state: dict) -> str:
             redacted = f"{redacted}\n\n" + "\n".join(missing_lines)
     if redacted.strip() == original.strip():
         return original
-    if not removed:
+    if (not any(_HAS_CONTENT.search(str(fragment)) for fragment in removed)
+            or _visible_content(redacted) == _visible_content(original)):
         # Only orphaned leftovers of an earlier pass were tidied (or nothing at all): no
-        # commute claim was withdrawn by THIS pass, so no note claims one was (R1-10).
+        # visible commute claim was withdrawn by THIS pass, so no note claims one was (R1-10,
+        # R3-01).
         return redacted
     note = _commute_unverified_note(zh)
-    return redacted if note in redacted else f"{redacted}\n\n{note}"
+    if note_present or note in redacted or _commute_unverified_note(not zh) in redacted:
+        return redacted
+    return f"{redacted}\n\n{note}"
 
 
 def _listing_source_texts(state: dict) -> list[str]:

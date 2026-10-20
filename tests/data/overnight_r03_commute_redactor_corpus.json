@@ -1,0 +1,2285 @@
+{
+ "r2_01a_leg_minutes": {
+  "source": "r04 conv f366d6fb32ed4338a847c758de5368e0 rid e6a4087b",
+  "draft": "Here's the plan for tomorrow (Wednesday 21 October), departing King's Cross at 09:00, from the official TfL Journey Planner:\n\n**Fastest route: about 23 minutes, 1 change**\n1. Northern line from King's Cross St. Pancras to Moorgate — 6 min\n2. Walk to Liverpool Street — 5 min\n3. Elizabeth line from Liverpool Street to Canary Wharf — 7 min\n4. Walk to Canary Wharf station — 5 min\n\n**Fare:** the TfL Single Fare Finder gives £3.60 peak / £3.10 off-peak for the King's Cross St. Pancras to Canary Wharf station pair (adult pay-as-you-go, contactless or Oyster). Note this is a station-pair fare, not a fare confirmed for this exact itinerary, so treat it as a good indication rather than a guaranteed price for the route above.\n\nA 09:00 departure falls in peak time, so £3.60 is the figure to budget for. If you'd like, I can also check live line status for the Northern and Elizabeth lines tomorrow morning, or price a weekly/monthly Travelcard for this commute.",
+  "state": {
+   "accumulated_search_criteria": {
+    "destination": null,
+    "max_budget": null,
+    "max_travel_time": null,
+    "property_features": [],
+    "soft_preferences": [],
+    "amenities_of_interest": []
+   },
+   "candidate_validation": {},
+   "extracted_context": {
+    "current_date": "2026-10-20",
+    "current_message": "Journey from King's Cross to Canary Wharf tomorrow at 9am",
+    "history": [],
+    "reply_language": "en"
+   },
+   "tool_artifacts": [
+    {
+     "turn": 1,
+     "tool": "get_transport_info",
+     "raw_data": {
+      "success": true,
+      "query_type": "journey",
+      "coverage": "london",
+      "from": {
+       "input": "King's Cross, London",
+       "resolved_station": "King's Cross St. Pancras Underground Station",
+       "naptan": "940GZZLUKSX"
+      },
+      "to": {
+       "input": "Canary Wharf, London",
+       "resolved_station": "Canary Wharf Underground Station",
+       "naptan": "940GZZLUCYF"
+      },
+      "duration_minutes": 23,
+      "changes_count": 1,
+      "route_summary": "Tube Northern to Moorgate Underground Station (6 min) -> Walk to Liverpool Street Station (5 min) -> Elizabeth-line Elizabeth line to Canary Wharf (7 min) -> Walk to Canary Wharf Underground Station (5 min)",
+      "route_legs": [
+       {
+        "mode": "tube",
+        "lines": [
+         "Northern"
+        ],
+        "duration_minutes": 6,
+        "summary": "Northern line to Moorgate",
+        "from": "King's Cross St. Pancras Underground Station",
+        "to": "Moorgate Underground Station"
+       },
+       {
+        "mode": "walking",
+        "lines": [],
+        "duration_minutes": 5,
+        "summary": "Walk to Liverpool Street Station",
+        "from": "Moorgate Underground Station",
+        "to": "Liverpool Street Station"
+       },
+       {
+        "mode": "elizabeth-line",
+        "lines": [
+         "Elizabeth line"
+        ],
+        "duration_minutes": 7,
+        "summary": "Elizabeth line to Canary Wharf Rail Station",
+        "from": "Liverpool Street Station",
+        "to": "Canary Wharf"
+       },
+       {
+        "mode": "walking",
+        "lines": [],
+        "duration_minutes": 5,
+        "summary": "Walk to Canary Wharf Underground Station",
+        "from": "Canary Wharf",
+        "to": "Canary Wharf Underground Station"
+       }
+      ],
+      "selected_itinerary_id": "tfl:ec19c8d9abdad1a4",
+      "fastest_journey": {
+       "itinerary_id": "tfl:ec19c8d9abdad1a4",
+       "duration_minutes": 23,
+       "changes_count": 1,
+       "route_summary": "Tube Northern to Moorgate Underground Station (6 min) -> Walk to Liverpool Street Station (5 min) -> Elizabeth-line Elizabeth line to Canary Wharf (7 min) -> Walk to Canary Wharf Underground Station (5 min)",
+       "route_legs": [
+        {
+         "mode": "tube",
+         "lines": [
+          "Northern"
+         ],
+         "duration_minutes": 6,
+         "summary": "Northern line to Moorgate",
+         "from": "King's Cross St. Pancras Underground Station",
+         "to": "Moorgate Underground Station"
+        },
+        {
+         "mode": "walking",
+         "lines": [],
+         "duration_minutes": 5,
+         "summary": "Walk to Liverpool Street Station",
+         "from": "Moorgate Underground Station",
+         "to": "Liverpool Street Station"
+        },
+        {
+         "mode": "elizabeth-line",
+         "lines": [
+          "Elizabeth line"
+         ],
+         "duration_minutes": 7,
+         "summary": "Elizabeth line to Canary Wharf Rail Station",
+         "from": "Liverpool Street Station",
+         "to": "Canary Wharf"
+        },
+        {
+         "mode": "walking",
+         "lines": [],
+         "duration_minutes": 5,
+         "summary": "Walk to Canary Wharf Underground Station",
+         "from": "Canary Wharf",
+         "to": "Canary Wharf Underground Station"
+        }
+       ],
+       "source": "TfL Unified API Journey Planner",
+       "fare_available": false,
+       "fare_basis": null
+      },
+      "cheapest_journey": null,
+      "source": "TfL Unified API Journey Planner",
+      "from_cache": false,
+      "cache_status": "miss",
+      "planned_for": "2026-10-21T09:00:00+01:00",
+      "journey_time": {
+       "timezone": "Europe/London",
+       "time_basis": "user_requested",
+       "date": "2026-10-21",
+       "time": "09:00",
+       "time_is": "departure",
+       "requested_at": "2026-10-21T09:00:00+01:00"
+      },
+      "stations_used": "King's Cross St. Pancras Underground Station -> Canary Wharf Underground Station",
+      "fare_available": true,
+      "fare_gbp": 3.6,
+      "fare_pence": 360,
+      "fare_display": "£3.60",
+      "fare_basis": "station_pair",
+      "fare_itinerary_id": null,
+      "fare_matches_itinerary": false,
+      "station_fare": {
+       "off_peak_gbp": 3.1,
+       "peak_gbp": 3.6,
+       "from_naptan": "940GZZLUKSX",
+       "to_naptan": "940GZZLUCYF",
+       "source": "TfL Single Fare Finder",
+       "fare_basis": "station_pair",
+       "note": "Station-pair single fares; not verified for the selected journey's route or timing."
+      },
+      "fare_off_peak_gbp": 3.1,
+      "fare_off_peak_display": "£3.10",
+      "fare_note": "Adult pay-as-you-go single: £3.60 peak / £3.10 off-peak (contactless / Oyster, TfL Single Fare Finder). This is a station-pair fare, not a fare confirmed for the selected itinerary; do not combine it with that itinerary's duration as a verified time/price offer."
+     },
+     "params_digest": "36c8218a76af7462",
+     "success": true,
+     "error": null,
+     "elapsed_ms": 9406
+    }
+   ],
+   "user_query": "Journey from King's Cross to Canary Wharf tomorrow at 9am"
+  }
+ },
+ "r2_19_disclosure": {
+  "source": "r04 conv a0cca32f96ad4db1b3c444c393971794 rid ea4e5e12",
+  "draft": "Yes, honestly — some things are stored without you asking.\n\nBeyond anything you explicitly ask me to remember, this service automatically keeps a short log of your requests, extracts durable facts you state (like your budget, preferred areas, commute needs), and forms its own inferences from them, across conversations. That is how I already know you were looking for a 1-bed flat in Bow around £1,700 before you repeated it in this message.\n\nSo the short answer: yes, automatic storage happens, not only when you ask for it. If you would like, I can tell you what I currently hold about your search, or you can ask for it to be cleared.\n\nAnd to keep the housing side moving: the three Bow 1-bed flats within your £1,700 budget are Brymay Close (E3 2SY, £1,650), Tredegar Square (E3, £1,650) and Bevin House (E3 2BB, £1,700). Want me to pull full details on any of them?",
+  "state": {
+   "accumulated_search_criteria": {
+    "destination": null,
+    "max_budget": 1700,
+    "max_travel_time": null,
+    "property_features": [],
+    "soft_preferences": [],
+    "amenities_of_interest": [],
+    "budget_period": "month",
+    "room_type": "whole",
+    "bedrooms": 1,
+    "bedrooms_minimum": false,
+    "constraint_sources": {
+     "max_budget": {
+      "source": "user_message",
+      "value": 1700,
+      "text": "I'm looking for a flat in Bow, 1 bed, around £1,700."
+     },
+     "budget_period": {
+      "source": "user_message",
+      "value": "month",
+      "text": "I'm looking for a flat in Bow, 1 bed, around £1,700."
+     },
+     "bedrooms": {
+      "source": "user_message",
+      "value": 1,
+      "text": "I'm looking for a flat in Bow, 1 bed, around £1,700."
+     },
+     "bedrooms_minimum": {
+      "source": "user_message",
+      "value": false,
+      "text": "I'm looking for a flat in Bow, 1 bed, around £1,700."
+     },
+     "room_type": {
+      "source": "user_message",
+      "value": "whole",
+      "text": "I'm looking for a flat in Bow, 1 bed, around £1,700."
+     }
+    },
+    "area": "Bow",
+    "areas": [
+     "Bow"
+    ],
+    "no_commute": false
+   },
+   "candidate_validation": {},
+   "extracted_context": {
+    "search_retrieval": {
+     "retrieval_outcome": "candidates_returned",
+     "partial": false,
+     "incomplete_areas": [],
+     "area_status": {
+      "Bow": "results"
+     },
+     "data_source": "OnTheMarket (cached)"
+    },
+    "view_results": [
+     {
+      "rank": 1,
+      "address": "Brymay Close, Tower Hamlets, E3 2SY",
+      "provider_address": "Brymay Close, Tower Hamlets, E3 2SY",
+      "price": "£1650/month",
+      "budget_status": "✅ 在预算内",
+      "score": 57.05,
+      "score_breakdown": {
+       "price": 32.49,
+       "semantic": 11.1,
+       "freshness": 13.46
+      },
+      "property_type": "1 bed Flat",
+      "room_type": "whole",
+      "bedrooms": 1,
+      "match_type": "perfect",
+      "source": "OnTheMarket (cached)",
+      "possibly_outdated": false,
+      "url": "https://www.onthemarket.com/details/20000555/",
+      "images": [
+       "https://media.onthemarket.com/properties/20000555/1631730259/image-0-480x320.jpg",
+       "https://media.onthemarket.com/properties/20000555/1631733976/image-1-480x320.jpg",
+       "https://media.onthemarket.com/properties/20000555/1631733976/image-2-480x320.jpg",
+       "https://media.onthemarket.com/properties/20000555/1631733976/image-3-480x320.jpg",
+       "https://media.onthemarket.com/properties/20000555/1631733976/image-4-480x320.jpg"
+      ],
+      "geo_location": "51.5311046, -0.0190746",
+      "distance_miles": 0.36,
+      "explanation": "1 bedroom flat to rent in Brymay Close, Tower Hamlets, E3 2SY",
+      "area": "Bow",
+      "description": "",
+      "available_from": "",
+      "availability_status": "",
+      "verified_features": [],
+      "unverified_features": [],
+      "absent_features": [],
+      "qualification": {
+       "status": "eligible",
+       "reasons": [],
+       "unknown_reasons": [],
+       "constraints": {
+        "max_budget_monthly": 1700.0,
+        "monthly_total_budget": null,
+        "office_days_per_week": null,
+        "max_commute_minutes": null,
+        "commute_destination": null,
+        "no_commute": false,
+        "max_changes": null,
+        "bedrooms": 1.0,
+        "bedrooms_minimum": false,
+        "room_type": "whole",
+        "areas": [
+         "bow"
+        ],
+        "move_in_date": null,
+        "property_features": []
+       },
+       "source": "structured_listing",
+       "reason_messages": {
+        "en": [],
+        "zh": []
+       }
+      },
+      "budget_basis": 1700.0,
+      "candidate_status": "eligible",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [],
+      "budget_status_code": "within"
+     },
+     {
+      "rank": 2,
+      "address": "Tredegar Square, London, E3",
+      "provider_address": "Tredegar Square, London, E3",
+      "price": "£1650/month",
+      "budget_status": "✅ 在预算内",
+      "score": 55.6,
+      "score_breakdown": {
+       "price": 32.49,
+       "semantic": 9.65,
+       "freshness": 13.46
+      },
+      "property_type": "1 bed Flat",
+      "room_type": "whole",
+      "bedrooms": 1,
+      "match_type": "perfect",
+      "source": "OnTheMarket (cached)",
+      "possibly_outdated": false,
+      "url": "https://www.onthemarket.com/details/20006277/",
+      "images": [
+       "https://media.onthemarket.com/properties/20006277/1631938178/image-0-480x320.jpg",
+       "https://media.onthemarket.com/properties/20006277/1631938178/image-1-480x320.jpg",
+       "https://media.onthemarket.com/properties/20006277/1631938178/image-2-480x320.jpg",
+       "https://media.onthemarket.com/properties/20006277/1631938178/image-3-480x320.jpg",
+       "https://media.onthemarket.com/properties/20006277/1631938178/image-4-480x320.jpg"
+      ],
+      "geo_location": "51.527053, -0.031324",
+      "distance_miles": 0.32,
+      "explanation": "1 bedroom flat to rent in Tredegar Square, London, E3",
+      "area": "Bow",
+      "description": "",
+      "available_from": "",
+      "availability_status": "",
+      "verified_features": [],
+      "unverified_features": [],
+      "absent_features": [],
+      "qualification": {
+       "status": "eligible",
+       "reasons": [],
+       "unknown_reasons": [],
+       "constraints": {
+        "max_budget_monthly": 1700.0,
+        "monthly_total_budget": null,
+        "office_days_per_week": null,
+        "max_commute_minutes": null,
+        "commute_destination": null,
+        "no_commute": false,
+        "max_changes": null,
+        "bedrooms": 1.0,
+        "bedrooms_minimum": false,
+        "room_type": "whole",
+        "areas": [
+         "bow"
+        ],
+        "move_in_date": null,
+        "property_features": []
+       },
+       "source": "structured_listing",
+       "reason_messages": {
+        "en": [],
+        "zh": []
+       }
+      },
+      "budget_basis": 1700.0,
+      "candidate_status": "eligible",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [],
+      "budget_status_code": "within"
+     },
+     {
+      "rank": 3,
+      "address": "Bevin House, Tower Hamlets, E3 2BB",
+      "provider_address": "Bevin House, Tower Hamlets, E3 2BB",
+      "price": "£1700/month",
+      "budget_status": "✅ 在预算内",
+      "score": 56.39,
+      "score_breakdown": {
+       "price": 31.73,
+       "semantic": 11.2,
+       "freshness": 13.46
+      },
+      "property_type": "1 bed Flat",
+      "room_type": "whole",
+      "bedrooms": 1,
+      "match_type": "perfect",
+      "source": "OnTheMarket (cached)",
+      "possibly_outdated": false,
+      "url": "https://www.onthemarket.com/details/20000899/",
+      "images": [
+       "https://media.onthemarket.com/properties/20000899/1631741241/image-0-480x320.jpg",
+       "https://media.onthemarket.com/properties/20000899/1631741241/image-1-480x320.jpg",
+       "https://media.onthemarket.com/properties/20000899/1631741241/image-2-480x320.jpg",
+       "https://media.onthemarket.com/properties/20000899/1631741241/image-3-480x320.jpg",
+       "https://media.onthemarket.com/properties/20000899/1631741241/image-4-480x320.jpg"
+      ],
+      "geo_location": "51.528713, -0.0260305",
+      "distance_miles": 0.17,
+      "explanation": "1 bedroom flat to rent in Bevin House, Tower Hamlets, E3 2BB",
+      "area": "Bow",
+      "description": "",
+      "available_from": "",
+      "availability_status": "",
+      "verified_features": [],
+      "unverified_features": [],
+      "absent_features": [],
+      "qualification": {
+       "status": "eligible",
+       "reasons": [],
+       "unknown_reasons": [],
+       "constraints": {
+        "max_budget_monthly": 1700.0,
+        "monthly_total_budget": null,
+        "office_days_per_week": null,
+        "max_commute_minutes": null,
+        "commute_destination": null,
+        "no_commute": false,
+        "max_changes": null,
+        "bedrooms": 1.0,
+        "bedrooms_minimum": false,
+        "room_type": "whole",
+        "areas": [
+         "bow"
+        ],
+        "move_in_date": null,
+        "property_features": []
+       },
+       "source": "structured_listing",
+       "reason_messages": {
+        "en": [],
+        "zh": []
+       }
+      },
+      "budget_basis": 1700.0,
+      "candidate_status": "eligible",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [],
+      "budget_status_code": "within"
+     }
+    ],
+    "previous_search_results": "\n1. **Brymay Close**\n   - Full Address: Brymay Close, Tower Hamlets, E3 2SY\n   - Price: £1650/month\n   - Commute: N/A\n   - Bedrooms: 1\n   - Type: 1 bed Flat\n   - Area: Bow\n   - Budget: ✅ 在预算内\n   - URL: https://www.onthemarket.com/details/20000555/\n\n2. **Tredegar Square**\n   - Full Address: Tredegar Square, London, E3\n   - Price: £1650/month\n   - Commute: N/A\n   - Bedrooms: 1\n   - Type: 1 bed Flat\n   - Area: Bow\n   - Budget: ✅ 在预算内\n   - URL: https://www.onthemarket.com/details/20006277/\n\n3. **Bevin House**\n   - Full Address: Bevin House, Tower Hamlets, E3 2BB\n   - Price: £1700/month\n   - Commute: N/A\n   - Bedrooms: 1\n   - Type: 1 bed Flat\n   - Area: Bow\n   - Budget: ✅ 在预算内\n   - URL: https://www.onthemarket.com/details/20000899/\n\n",
+    "last_results": [
+     {
+      "name": "Brymay Close",
+      "address": "Brymay Close, Tower Hamlets, E3 2SY",
+      "price": "£1650/month",
+      "travel_time": "N/A",
+      "bedrooms": 1,
+      "property_type": "1 bed Flat",
+      "budget_status": "✅ 在预算内",
+      "source": "OnTheMarket (cached)",
+      "url": "https://www.onthemarket.com/details/20000555/",
+      "explanation": "1 bedroom flat to rent in Brymay Close, Tower Hamlets, E3 2SY",
+      "geo_location": "51.5311046, -0.0190746",
+      "area": "Bow",
+      "description": "",
+      "available_from": "",
+      "availability_status": ""
+     },
+     {
+      "name": "Tredegar Square",
+      "address": "Tredegar Square, London, E3",
+      "price": "£1650/month",
+      "travel_time": "N/A",
+      "bedrooms": 1,
+      "property_type": "1 bed Flat",
+      "budget_status": "✅ 在预算内",
+      "source": "OnTheMarket (cached)",
+      "url": "https://www.onthemarket.com/details/20006277/",
+      "explanation": "1 bedroom flat to rent in Tredegar Square, London, E3",
+      "geo_location": "51.527053, -0.031324",
+      "area": "Bow",
+      "description": "",
+      "available_from": "",
+      "availability_status": ""
+     },
+     {
+      "name": "Bevin House",
+      "address": "Bevin House, Tower Hamlets, E3 2BB",
+      "price": "£1700/month",
+      "travel_time": "N/A",
+      "bedrooms": 1,
+      "property_type": "1 bed Flat",
+      "budget_status": "✅ 在预算内",
+      "source": "OnTheMarket (cached)",
+      "url": "https://www.onthemarket.com/details/20000899/",
+      "explanation": "1 bedroom flat to rent in Bevin House, Tower Hamlets, E3 2BB",
+      "geo_location": "51.528713, -0.0260305",
+      "area": "Bow",
+      "description": "",
+      "available_from": "",
+      "availability_status": ""
+     }
+    ],
+    "recommended_registry": [
+     {
+      "index": 1,
+      "address": "Brymay Close, Tower Hamlets, E3 2SY",
+      "price": "£1650/month",
+      "area": "Bow",
+      "travel_time": null,
+      "url": "https://www.onthemarket.com/details/20000555/",
+      "available_from": "",
+      "geo_location": "51.5311046, -0.0190746"
+     },
+     {
+      "index": 2,
+      "address": "Tredegar Square, London, E3",
+      "price": "£1650/month",
+      "area": "Bow",
+      "travel_time": null,
+      "url": "https://www.onthemarket.com/details/20006277/",
+      "available_from": "",
+      "geo_location": "51.527053, -0.031324"
+     },
+     {
+      "index": 3,
+      "address": "Bevin House, Tower Hamlets, E3 2BB",
+      "price": "£1700/month",
+      "area": "Bow",
+      "travel_time": null,
+      "url": "https://www.onthemarket.com/details/20000899/",
+      "available_from": "",
+      "geo_location": "51.528713, -0.0260305"
+     }
+    ],
+    "current_date": "2026-10-20",
+    "last_results_full": [
+     {
+      "rank": 1,
+      "address": "Brymay Close, Tower Hamlets, E3 2SY",
+      "provider_address": "Brymay Close, Tower Hamlets, E3 2SY",
+      "price": "£1650/month",
+      "budget_status": "✅ 在预算内",
+      "score": 57.05,
+      "score_breakdown": {
+       "price": 32.49,
+       "semantic": 11.1,
+       "freshness": 13.46
+      },
+      "property_type": "1 bed Flat",
+      "room_type": "whole",
+      "bedrooms": 1,
+      "match_type": "perfect",
+      "source": "OnTheMarket (cached)",
+      "possibly_outdated": false,
+      "url": "https://www.onthemarket.com/details/20000555/",
+      "images": [
+       "https://media.onthemarket.com/properties/20000555/1631730259/image-0-480x320.jpg",
+       "https://media.onthemarket.com/properties/20000555/1631733976/image-1-480x320.jpg",
+       "https://media.onthemarket.com/properties/20000555/1631733976/image-2-480x320.jpg",
+       "https://media.onthemarket.com/properties/20000555/1631733976/image-3-480x320.jpg",
+       "https://media.onthemarket.com/properties/20000555/1631733976/image-4-480x320.jpg"
+      ],
+      "geo_location": "51.5311046, -0.0190746",
+      "distance_miles": 0.36,
+      "explanation": "1 bedroom flat to rent in Brymay Close, Tower Hamlets, E3 2SY",
+      "area": "Bow",
+      "description": "",
+      "available_from": "",
+      "availability_status": "",
+      "verified_features": [],
+      "unverified_features": [],
+      "absent_features": [],
+      "qualification": {
+       "status": "eligible",
+       "reasons": [],
+       "unknown_reasons": [],
+       "constraints": {
+        "max_budget_monthly": 1700.0,
+        "monthly_total_budget": null,
+        "office_days_per_week": null,
+        "max_commute_minutes": null,
+        "commute_destination": null,
+        "no_commute": false,
+        "max_changes": null,
+        "bedrooms": 1.0,
+        "bedrooms_minimum": false,
+        "room_type": "whole",
+        "areas": [
+         "bow"
+        ],
+        "move_in_date": null,
+        "property_features": []
+       },
+       "source": "structured_listing",
+       "reason_messages": {
+        "en": [],
+        "zh": []
+       }
+      },
+      "budget_basis": 1700.0,
+      "candidate_status": "eligible",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [],
+      "budget_status_code": "within"
+     },
+     {
+      "rank": 2,
+      "address": "Tredegar Square, London, E3",
+      "provider_address": "Tredegar Square, London, E3",
+      "price": "£1650/month",
+      "budget_status": "✅ 在预算内",
+      "score": 55.6,
+      "score_breakdown": {
+       "price": 32.49,
+       "semantic": 9.65,
+       "freshness": 13.46
+      },
+      "property_type": "1 bed Flat",
+      "room_type": "whole",
+      "bedrooms": 1,
+      "match_type": "perfect",
+      "source": "OnTheMarket (cached)",
+      "possibly_outdated": false,
+      "url": "https://www.onthemarket.com/details/20006277/",
+      "images": [
+       "https://media.onthemarket.com/properties/20006277/1631938178/image-0-480x320.jpg",
+       "https://media.onthemarket.com/properties/20006277/1631938178/image-1-480x320.jpg",
+       "https://media.onthemarket.com/properties/20006277/1631938178/image-2-480x320.jpg",
+       "https://media.onthemarket.com/properties/20006277/1631938178/image-3-480x320.jpg",
+       "https://media.onthemarket.com/properties/20006277/1631938178/image-4-480x320.jpg"
+      ],
+      "geo_location": "51.527053, -0.031324",
+      "distance_miles": 0.32,
+      "explanation": "1 bedroom flat to rent in Tredegar Square, London, E3",
+      "area": "Bow",
+      "description": "",
+      "available_from": "",
+      "availability_status": "",
+      "verified_features": [],
+      "unverified_features": [],
+      "absent_features": [],
+      "qualification": {
+       "status": "eligible",
+       "reasons": [],
+       "unknown_reasons": [],
+       "constraints": {
+        "max_budget_monthly": 1700.0,
+        "monthly_total_budget": null,
+        "office_days_per_week": null,
+        "max_commute_minutes": null,
+        "commute_destination": null,
+        "no_commute": false,
+        "max_changes": null,
+        "bedrooms": 1.0,
+        "bedrooms_minimum": false,
+        "room_type": "whole",
+        "areas": [
+         "bow"
+        ],
+        "move_in_date": null,
+        "property_features": []
+       },
+       "source": "structured_listing",
+       "reason_messages": {
+        "en": [],
+        "zh": []
+       }
+      },
+      "budget_basis": 1700.0,
+      "candidate_status": "eligible",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [],
+      "budget_status_code": "within"
+     },
+     {
+      "rank": 3,
+      "address": "Bevin House, Tower Hamlets, E3 2BB",
+      "provider_address": "Bevin House, Tower Hamlets, E3 2BB",
+      "price": "£1700/month",
+      "budget_status": "✅ 在预算内",
+      "score": 56.39,
+      "score_breakdown": {
+       "price": 31.73,
+       "semantic": 11.2,
+       "freshness": 13.46
+      },
+      "property_type": "1 bed Flat",
+      "room_type": "whole",
+      "bedrooms": 1,
+      "match_type": "perfect",
+      "source": "OnTheMarket (cached)",
+      "possibly_outdated": false,
+      "url": "https://www.onthemarket.com/details/20000899/",
+      "images": [
+       "https://media.onthemarket.com/properties/20000899/1631741241/image-0-480x320.jpg",
+       "https://media.onthemarket.com/properties/20000899/1631741241/image-1-480x320.jpg",
+       "https://media.onthemarket.com/properties/20000899/1631741241/image-2-480x320.jpg",
+       "https://media.onthemarket.com/properties/20000899/1631741241/image-3-480x320.jpg",
+       "https://media.onthemarket.com/properties/20000899/1631741241/image-4-480x320.jpg"
+      ],
+      "geo_location": "51.528713, -0.0260305",
+      "distance_miles": 0.17,
+      "explanation": "1 bedroom flat to rent in Bevin House, Tower Hamlets, E3 2BB",
+      "area": "Bow",
+      "description": "",
+      "available_from": "",
+      "availability_status": "",
+      "verified_features": [],
+      "unverified_features": [],
+      "absent_features": [],
+      "qualification": {
+       "status": "eligible",
+       "reasons": [],
+       "unknown_reasons": [],
+       "constraints": {
+        "max_budget_monthly": 1700.0,
+        "monthly_total_budget": null,
+        "office_days_per_week": null,
+        "max_commute_minutes": null,
+        "commute_destination": null,
+        "no_commute": false,
+        "max_changes": null,
+        "bedrooms": 1.0,
+        "bedrooms_minimum": false,
+        "room_type": "whole",
+        "areas": [
+         "bow"
+        ],
+        "move_in_date": null,
+        "property_features": []
+       },
+       "source": "structured_listing",
+       "reason_messages": {
+        "en": [],
+        "zh": []
+       }
+      },
+      "budget_basis": 1700.0,
+      "candidate_status": "eligible",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [],
+      "budget_status_code": "within"
+     }
+    ],
+    "recommended_index": "=== RECOMMENDED LISTINGS INDEX (every listing shown so far; summaries only) ===\nEach line is a SUMMARY. For a listing's full details (description, amenities, bills, guest/payment policy) call the get_property_details tool with that listing's exact URL below. Never invent details that are not shown here.\nA listing is identified by its [N] and its URL, NOT by its name: two lines may share an address and still be different properties. If the user's reference fits more than one line, ask which [N] they mean (quote the distinguishing price/commute) instead of picking one.\n[1] Brymay Close, Tower Hamlets, E3 2SY | price £1650/month | area Bow | https://www.onthemarket.com/details/20000555/\n[2] Tredegar Square, London, E3 | price £1650/month | area Bow | https://www.onthemarket.com/details/20006277/\n[3] Bevin House, Tower Hamlets, E3 2BB | price £1700/month | area Bow | https://www.onthemarket.com/details/20000899/\n=== END RECOMMENDED LISTINGS INDEX ===",
+    "current_message": "Do you store anything about me when I haven't asked you to remember it? Be honest.",
+    "history": [
+     {
+      "user": "I'm looking for a flat in Bow, 1 bed, around £1,700.",
+      "assistant": "Meets all declared conditions (verified):\n- Brymay Close, Tower Hamlets, E3 2SY (£1650/month)\n- Tredegar Square, London, E3 (£1650/month)\n- Bevin House, Tower Hamlets, E3 2BB (£1700/month)\nExcluded / does not meet:\n- Roman Road, Bow E3: alternative is outside the declared hard result set; monthly price 1800 exceeds budget 1700\n- Queensgate House, 1 Bow Central, Hereford Road, Bow, E3: alternative is outside the declared hard result set; monthly price 1950 exceeds budget 1700\nThese listings are c"
+     }
+    ],
+    "reply_language": "en"
+   },
+   "tool_artifacts": [],
+   "user_query": "Previous conversation:\nUser: I'm looking for a flat in Bow, 1 bed, around £1,700.\nAlex: Meets all declared conditions (verified):\n- Brymay Close, Tower Hamlets, E3 2SY (£1650/month)\n- Tredegar Square, London, E3 (£1650/month)\n- Bevin House, Tower Hamlets, E3 2BB (£1700/month)\nExcluded / does not meet:\n- Roman Road, Bow E3: alternative is outside the declared hard result set; monthly price 1800 exceeds budget 1700\n- Queensgate House, 1 Bow Central, Hereford Road, Bow, E3: alternative is outside the declared hard result set; monthly price 1950 exceeds budget 1700\nThese listings are c\n\nCurrent user message: Do you store anything about me when I haven't asked you to remember it? Be honest."
+  }
+ },
+ "r2_01c_unclosed_bracket": {
+  "source": "r04 conv 3a2df779af6b43c082b8568ec0bd5c6f rid 6e8472e8",
+  "draft": "I couldn't get a measured journey time for this one. The TfL journey planner returned no itinerary for King's Cross to Canary Wharf, so I can only give you an estimate.\n\n**Estimated: roughly 34 to 51 minutes** (central estimate about 41 minutes), derived from the 7.79 km straight-line distance between the two points, not from an actual route. Treat it as a rough range rather than a timetable figure.\n\nFor reference, the real journey on the Jubilee line (King's Cross St Pancras to Canary Wharf, changing at London Bridge or taking the Northern/Jubilee combination) is typically in the region of 25 to 35 minutes door to platform, but I have not verified that with a live TfL plan, so please check the TfL Journey Planner or Citymapper before relying on it for a viewing or a commute decision.\n\nIf you tell me a specific address in King's Cross (a postcode or building name), I can try the journey again from that exact point, and I can also price the monthly travel cost for you.",
+  "state": {
+   "accumulated_search_criteria": {
+    "destination": "Canary Wharf, London E14 5AB",
+    "max_budget": null,
+    "max_travel_time": null,
+    "property_features": [],
+    "soft_preferences": [],
+    "amenities_of_interest": [],
+    "commute_destination": "Canary Wharf, London E14 5AB",
+    "no_commute": false,
+    "constraint_sources": {
+     "commute_destination": {
+      "source": "user_message",
+      "value": "Canary Wharf, London E14 5AB",
+      "text": "How long is the commute from King's Cross to Canary Wharf by tube?"
+     },
+     "destination": {
+      "source": "user_message",
+      "value": "Canary Wharf, London E14 5AB",
+      "text": "How long is the commute from King's Cross to Canary Wharf by tube?"
+     },
+     "no_commute": {
+      "source": "user_message",
+      "value": false,
+      "text": "How long is the commute from King's Cross to Canary Wharf by tube?"
+     }
+    }
+   },
+   "candidate_validation": {},
+   "extracted_context": {
+    "current_date": "2026-10-20",
+    "current_message": "How long is the commute from King's Cross to Canary Wharf by tube?",
+    "history": [],
+    "reply_language": "en"
+   },
+   "tool_artifacts": [
+    {
+     "turn": 1,
+     "tool": "calculate_commute",
+     "raw_data": {
+      "from_address": "King's Cross, London",
+      "to_address": "Canary Wharf, London E14 5AB",
+      "mode": "transit",
+      "route_summary": "No route available: TfL returned no journey for this pair.",
+      "route_legs": [],
+      "changes_count": null,
+      "route_source": "estimate",
+      "basis": "straight_line_estimate",
+      "basis_note": "Estimated from 7.79 km straight-line distance because TfL returned no journey for this pair, then corrected by the model fitted to 14 measured TfL journeys (t = 3.7 + 11.4 x km^0.58); the raw straight-line formula reads 40 minutes here, which the fit corrects UP by 1.03x. Plausible range 34-51 minutes (0.84x-1.24x, the fit's residual spread). Not a measured journey time.",
+      "success": true,
+      "duration_minutes": null,
+      "estimated_duration_minutes": 41,
+      "estimate_low_minutes": 34,
+      "estimate_high_minutes": 51,
+      "straight_line_km": 7.79,
+      "estimate_model": "calibrated_overhead_plus_power_pace_v1",
+      "is_acceptable": null,
+      "duration_category": null,
+      "caveat": "This is NOT a journey plan. No TfL itinerary was available for this pair, so the figure is a straight-line estimate: the distance is put through a model fitted to 14 real TfL journeys in London (a fixed 3.7-minute access overhead plus a pace of 11.4 x km^-0.42 minutes per km, so short hops are charged the walking, waiting and interchange time the raw formula ignored). Across those 14 journeys the fitted figure ran between 0.84x and 1.24x the true time; quote it with that range, never as a journey time. It is fitted only over 0.47-16.71 km and only for public transport, and only inside London — the case where it actually fires is outside TfL coverage, where no reference exists to check it against.",
+      "recommendation": "There is no journey plan for this pair. If you mention a time at all, give it as an estimated 34-51 minute range and say it is estimated from the straight-line distance, not measured. Never state '41 minutes' as the commute. Basis to disclose: Estimated from 7.79 km straight-line distance because TfL returned no journey for this pair, then corrected by the model fitted to 14 measured TfL journeys (t = 3.7 + 11.4 x km^0.58); the raw straight-line formula reads 40 minutes here, which the fit corrects UP by 1.03x. Plausible range 34-51 minutes (0.84x-1.24x, the fit's residual spread). Not a measured journey time."
+     },
+     "params_digest": "97115dfc1e73d21f",
+     "success": true,
+     "error": null,
+     "elapsed_ms": 63
+    }
+   ],
+   "user_query": "How long is the commute from King's Cross to Canary Wharf by tube?"
+  }
+ },
+ "r05_zh_bracket_fragment": {
+  "source": "r05 conv 38cd6205498243dcb349b3faaa8f6dda rid 1b98f6fe",
+  "draft": "Islington 这批房源里最便宜的是 King Square, London, EC1V，月租 £1,800，是一套一居室整租公寓（1 bed flat），到 King's Cross 通勤约 20 分钟（这是根据坐标估算的时间，并非实际查询到的行程时间）。\n\n需要提醒的是：这是缓存中的挂牌价格，当前实际租金和是否仍可租需要向中介确认。另外，£1,800 正好等于你的预算上限，没有余量。",
+  "state": {
+   "accumulated_search_criteria": {
+    "destination": "King's Cross",
+    "max_budget": 1800,
+    "max_travel_time": null,
+    "property_features": [],
+    "soft_preferences": [
+     "no pets needed"
+    ],
+    "amenities_of_interest": [],
+    "budget_period": "month",
+    "commute_destination": "King's Cross",
+    "area": "Islington",
+    "areas": [
+     "Islington"
+    ],
+    "room_type": "whole",
+    "bedrooms": 1,
+    "bedrooms_minimum": false,
+    "no_commute": false,
+    "constraint_sources": {
+     "area": {
+      "source": "user_message",
+      "value": "Islington",
+      "text": "Actually make the budget £1,800 and look in Islington instead"
+     },
+     "areas": {
+      "source": "user_message",
+      "value": [
+       "Islington"
+      ],
+      "text": "Actually make the budget £1,800 and look in Islington instead"
+     },
+     "max_budget": {
+      "source": "user_message",
+      "value": 1800,
+      "text": "Actually make the budget £1,800 and look in Islington instead"
+     },
+     "budget_period": {
+      "source": "user_message",
+      "value": "month",
+      "text": "Find me a 1-bed flat in Camden under £2,200/month, pets not needed, I work near King's Cross"
+     },
+     "bedrooms": {
+      "source": "user_message",
+      "value": 1,
+      "text": "Find me a 1-bed flat in Camden under £2,200/month, pets not needed, I work near King's Cross"
+     },
+     "bedrooms_minimum": {
+      "source": "user_message",
+      "value": false,
+      "text": "Find me a 1-bed flat in Camden under £2,200/month, pets not needed, I work near King's Cross"
+     },
+     "room_type": {
+      "source": "user_message",
+      "value": "whole",
+      "text": "Find me a 1-bed flat in Camden under £2,200/month, pets not needed, I work near King's Cross"
+     },
+     "commute_destination": {
+      "source": "user_message",
+      "value": "King's Cross",
+      "text": "Find me a 1-bed flat in Camden under £2,200/month, pets not needed, I work near King's Cross"
+     },
+     "destination": {
+      "source": "user_message",
+      "value": "King's Cross",
+      "text": "Find me a 1-bed flat in Camden under £2,200/month, pets not needed, I work near King's Cross"
+     },
+     "no_commute": {
+      "source": "user_message",
+      "value": false,
+      "text": "Find me a 1-bed flat in Camden under £2,200/month, pets not needed, I work near King's Cross"
+     }
+    }
+   },
+   "candidate_validation": {},
+   "extracted_context": {
+    "search_retrieval": {
+     "retrieval_outcome": "candidates_returned",
+     "partial": false,
+     "incomplete_areas": [],
+     "area_status": {
+      "Islington": "results"
+     },
+     "data_source": "OnTheMarket (cached)"
+    },
+    "view_results": [
+     {
+      "rank": 1,
+      "address": "King Square, London, EC1V",
+      "provider_address": "King Square, London, EC1V",
+      "price": "£1800/month",
+      "budget_status": "✅ 在预算内",
+      "score": 58.01,
+      "score_breakdown": {
+       "price": 31.73,
+       "semantic": 12.82,
+       "freshness": 13.46
+      },
+      "property_type": "1 bed Flat",
+      "room_type": "whole",
+      "bedrooms": 1,
+      "match_type": "perfect",
+      "source": "OnTheMarket (cached)",
+      "possibly_outdated": false,
+      "url": "https://www.onthemarket.com/details/20260886/",
+      "images": [
+       "https://media.onthemarket.com/properties/20260886/1641668302/image-0-480x320.jpg",
+       "https://media.onthemarket.com/properties/20260886/1641668302/image-1-480x320.jpg",
+       "https://media.onthemarket.com/properties/20260886/1641668302/image-2-480x320.jpg",
+       "https://media.onthemarket.com/properties/20260886/1641668302/image-3-480x320.jpg",
+       "https://media.onthemarket.com/properties/20260886/1641668302/image-4-480x320.jpg"
+      ],
+      "geo_location": "51.527443, -0.09749",
+      "distance_miles": 0.76,
+      "explanation": "1 bedroom flat to rent in King Square, London, EC1V (estimated from coordinates: ~20 min to King's Cross, not a verified journey time)",
+      "area": "Islington",
+      "description": "",
+      "available_from": "",
+      "availability_status": "",
+      "verified_features": [],
+      "unverified_features": [],
+      "absent_features": [],
+      "travel_time": "~20 min to King's Cross (estimated, unverified)",
+      "travel_time_source": "estimate",
+      "qualification": {
+       "status": "eligible",
+       "reasons": [],
+       "unknown_reasons": [],
+       "constraints": {
+        "max_budget_monthly": 1800.0,
+        "monthly_total_budget": null,
+        "office_days_per_week": null,
+        "max_commute_minutes": null,
+        "commute_destination": "King's Cross",
+        "no_commute": false,
+        "max_changes": null,
+        "bedrooms": 1.0,
+        "bedrooms_minimum": false,
+        "room_type": "whole",
+        "areas": [
+         "islington"
+        ],
+        "move_in_date": null,
+        "property_features": []
+       },
+       "source": "structured_listing",
+       "reason_messages": {
+        "en": [],
+        "zh": []
+       }
+      },
+      "budget_basis": 1800.0,
+      "candidate_status": "eligible",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [],
+      "budget_status_code": "within"
+     }
+    ],
+    "previous_search_results": "\n1. **King Square**\n   - Full Address: King Square, London, EC1V\n   - Price: £1800/month\n   - Commute: ~20 min to King's Cross (estimated, unverified)\n   - Bedrooms: 1\n   - Type: 1 bed Flat\n   - Area: Islington\n   - Budget: ✅ 在预算内\n   - URL: https://www.onthemarket.com/details/20260886/\n\n",
+    "last_results": [
+     {
+      "name": "King Square",
+      "address": "King Square, London, EC1V",
+      "price": "£1800/month",
+      "travel_time": "~20 min to King's Cross (estimated, unverified)",
+      "bedrooms": 1,
+      "property_type": "1 bed Flat",
+      "budget_status": "✅ 在预算内",
+      "source": "OnTheMarket (cached)",
+      "url": "https://www.onthemarket.com/details/20260886/",
+      "explanation": "1 bedroom flat to rent in King Square, London, EC1V (estimated from coordinates: ~20 min to King's Cross, not a verified journey time)",
+      "geo_location": "51.527443, -0.09749",
+      "area": "Islington",
+      "description": "",
+      "available_from": "",
+      "availability_status": ""
+     }
+    ],
+    "recommended_registry": [
+     {
+      "index": 1,
+      "address": "Gloucester Avenue, London, NW1",
+      "price": "£2150/month",
+      "area": "Camden",
+      "travel_time": "24 min to King's Cross",
+      "url": "https://www.onthemarket.com/details/20259659/",
+      "available_from": "",
+      "geo_location": "51.537379, -0.148066"
+     },
+     {
+      "index": 2,
+      "address": "Highgate West Hill, London, N6",
+      "price": "£2000/month",
+      "area": "Camden",
+      "travel_time": "~28 min to King's Cross (estimated, unverified)",
+      "url": "https://www.onthemarket.com/details/20262641/",
+      "available_from": "",
+      "geo_location": "51.561483, -0.151028"
+     },
+     {
+      "index": 3,
+      "address": "King Square, London, EC1V",
+      "price": "£1800/month",
+      "area": "Islington",
+      "travel_time": "~20 min to King's Cross (estimated, unverified)",
+      "url": "https://www.onthemarket.com/details/20260886/",
+      "available_from": "",
+      "geo_location": "51.527443, -0.09749"
+     }
+    ],
+    "current_date": "2026-10-20",
+    "last_results_full": [
+     {
+      "rank": 1,
+      "address": "King Square, London, EC1V",
+      "provider_address": "King Square, London, EC1V",
+      "price": "£1800/month",
+      "budget_status": "✅ 在预算内",
+      "score": 58.01,
+      "score_breakdown": {
+       "price": 31.73,
+       "semantic": 12.82,
+       "freshness": 13.46
+      },
+      "property_type": "1 bed Flat",
+      "room_type": "whole",
+      "bedrooms": 1,
+      "match_type": "perfect",
+      "source": "OnTheMarket (cached)",
+      "possibly_outdated": false,
+      "url": "https://www.onthemarket.com/details/20260886/",
+      "images": [
+       "https://media.onthemarket.com/properties/20260886/1641668302/image-0-480x320.jpg",
+       "https://media.onthemarket.com/properties/20260886/1641668302/image-1-480x320.jpg",
+       "https://media.onthemarket.com/properties/20260886/1641668302/image-2-480x320.jpg",
+       "https://media.onthemarket.com/properties/20260886/1641668302/image-3-480x320.jpg",
+       "https://media.onthemarket.com/properties/20260886/1641668302/image-4-480x320.jpg"
+      ],
+      "geo_location": "51.527443, -0.09749",
+      "distance_miles": 0.76,
+      "explanation": "1 bedroom flat to rent in King Square, London, EC1V (estimated from coordinates: ~20 min to King's Cross, not a verified journey time)",
+      "area": "Islington",
+      "description": "",
+      "available_from": "",
+      "availability_status": "",
+      "verified_features": [],
+      "unverified_features": [],
+      "absent_features": [],
+      "travel_time": "~20 min to King's Cross (estimated, unverified)",
+      "travel_time_source": "estimate",
+      "qualification": {
+       "status": "eligible",
+       "reasons": [],
+       "unknown_reasons": [],
+       "constraints": {
+        "max_budget_monthly": 1800.0,
+        "monthly_total_budget": null,
+        "office_days_per_week": null,
+        "max_commute_minutes": null,
+        "commute_destination": "King's Cross",
+        "no_commute": false,
+        "max_changes": null,
+        "bedrooms": 1.0,
+        "bedrooms_minimum": false,
+        "room_type": "whole",
+        "areas": [
+         "islington"
+        ],
+        "move_in_date": null,
+        "property_features": []
+       },
+       "source": "structured_listing",
+       "reason_messages": {
+        "en": [],
+        "zh": []
+       }
+      },
+      "budget_basis": 1800.0,
+      "candidate_status": "eligible",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [],
+      "budget_status_code": "within"
+     }
+    ],
+    "recommended_index": "=== RECOMMENDED LISTINGS INDEX (every listing shown so far; summaries only) ===\nEach line is a SUMMARY. For a listing's full details (description, amenities, bills, guest/payment policy) call the get_property_details tool with that listing's exact URL below. Never invent details that are not shown here.\nA listing is identified by its [N] and its URL, NOT by its name: two lines may share an address and still be different properties. If the user's reference fits more than one line, ask which [N] they mean (quote the distinguishing price/commute) instead of picking one.\n[1] Gloucester Avenue, London, NW1 | price £2150/month | area Camden | commute 24 min to King's Cross | https://www.onthemarket.com/details/20259659/\n[2] Highgate West Hill, London, N6 | price £2000/month | area Camden | commute ~28 min to King's Cross (estimated, unverified) | https://www.onthemarket.com/details/20262641/\n[3] King Square, London, EC1V | price £1800/month | area Islington | commute ~20 min to King's Cross (estimated, unverified) | https://www.onthemarket.com/details/20260886/\n=== END RECOMMENDED LISTINGS INDEX ===",
+    "current_message": "请用中文告诉我 Islington 这些房源里最便宜的是哪一个?",
+    "history": [
+     {
+      "user": "Find me a 1-bed flat in Camden under £2,200/month, pets not needed, I work near King's Cross",
+      "assistant": "Meets all declared conditions (verified):\n- Gloucester Avenue, London, NW1 (£2150/month)\n- Highgate West Hill, London, N6 (£2000/month)\nExcluded / does not meet:\n- Little Russell Street, London, WC1A: alternative is outside the declared hard result set; monthly price 2500 exceeds budget 2200\n- Belsize Avenue, Belsize Park, London, NW3: alternative is outside the declared hard result set; monthly price 2491 exceeds budget 2200\nThese listings are cached; prices and availability may have changed. C"
+     },
+     {
+      "user": "Show me the cheapest two of those and tell me the exact rent and address of each",
+      "assistant": "The two cheapest from the listings we looked at:\n\n1. Highgate West Hill, London, N6 — £2000/month, 1-bed flat, not a verified journey time).\n2. Gloucester Avenue, London, NW1 — £2150/month, 1-bed flat.\n\nBoth are within your £2,200 monthly budget. Note these are cached listing prices, so the current asking rent and availability should be confirmed with the agent before you rely on them.\n\nOne thing worth flagging: the Highgate West Hill listing is tagged as Camden in our records, but N6 is Highgat"
+     },
+     {
+      "user": "How long is the commute from the first one to UCL by tube, and what's the fare?",
+      "assistant": "The commute from Highgate West Hill (the first of the two cheapest) to UCL is 21 minutes, with no changes, per the TfL Journey Planner. Note that the route returned is actually a bus, not the tube: the N20 bus from Highgate Station to Goodge Street Station, which is the closest stop to UCL's Gower Street campus.\n\nThe fare for that journey is £1.75 — an adult pay-as-you-go single (contactless or Oyster). That is the fare attached to the 21-minute itinerary itself.\n\nA couple of practical points:\n-"
+     },
+     {
+      "user": "What's the weather like there this week?",
+      "assistant": "The weather data I have covers Highgate, London — the area of the Highgate West Hill listing — for this morning, not a full week's forecast. Here is what it shows:\n\n- Temperature: 11.9°C, feeling like 10.0°C\n- Condition: light drizzle\n- Humidity: 95%\n- Wind: 14.8 (as reported by the source)\n- UV index: 0.15\n- Chance of rainfall: 63%\n\nPractical takeaway: with a 63% chance of rain and drizzle already reported, bring an umbrella if you are viewing properties in Highgate this week. The data does not"
+     },
+     {
+      "user": "Is the area safe? Any crime stats nearby?",
+      "assistant": "I tried to pull crime data for Highgate West Hill, London, N6, but the lookup failed: the address could not be geocoded, so no crime records were returned and no safety score could be calculated. That is not evidence that the area is safe or unsafe — it simply means the data is unavailable for this location.\n\nWhat this means for you:\n- No crime counts, no per-month figures, and no safety rating can be given for Highgate West Hill from this source.\n- The underlying source is data.police.uk (polic"
+     },
+     {
+      "user": "What supermarkets and gyms are near the first listing?",
+      "assistant": "The nearby-places lookup failed this time — the OpenStreetMap service is temporarily unavailable (it reported a cooldown), so both the supermarket and gym searches returned errors rather than results. That means I have no verified information about supermarkets or gyms near Highgate West Hill, and I won't guess at names or distances.\n\nTo be clear about what this does and does not mean: this is a failed lookup, not a finding that there are no supermarkets or gyms nearby. Highgate has shops and le"
+     },
+     {
+      "user": "Actually make the budget £1,800 and look in Islington instead",
+      "assistant": "Here is your updated search: budget £1,800/month, Islington, 1-bed whole flat, commute to King's Cross.\n\n**One matching listing found**\n\n**King Square, London, EC1V**\n- Price: £1,800/month — within your new budget\n- Type: 1 bed flat (whole property)\n- Area: Islington\n- Commute: ~20 min to King's Cross (estimated from coordinates, not a verified journey time)\n- Distance: 0.76 miles from the reference point\n- Source: OnTheMarket (cached), not flagged as possibly outdated\n- Link: https://www.onthem"
+     }
+    ],
+    "reply_language": "zh"
+   },
+   "tool_artifacts": [],
+   "user_query": "Previous conversation:\nUser: Is the area safe? Any crime stats nearby?\nAlex: I tried to pull crime data for Highgate West Hill, London, N6, but the lookup failed: the address could not be geocoded, so no crime records were returned and no safety score could be calculated. That is not evidence that the area is safe or unsafe — it simply means the data is unavailable for this location.\n\nWhat this means for you:\n- No crime counts, no per-month figures, and no safety rating can be given for Highgate West Hill from this source.\n- The underlying source is data.police.uk (polic\nUser: What supermarkets and gyms are near the first listing?\nAlex: The nearby-places lookup failed this time — the OpenStreetMap service is temporarily unavailable (it reported a cooldown), so both the supermarket and gym searches returned errors rather than results. That means I have no verified information about supermarkets or gyms near Highgate West Hill, and I won't guess at names or distances.\n\nTo be clear about what this does and does not mean: this is a failed lookup, not a finding that there are no supermarkets or gyms nearby. Highgate has shops and le\nUser: Actually make the budget £1,800 and look in Islington instead\nAlex: Here is your updated search: budget £1,800/month, Islington, 1-bed whole flat, commute to King's Cross.\n\n**One matching listing found**\n\n**King Square, London, EC1V**\n- Price: £1,800/month — within your new budget\n- Type: 1 bed flat (whole property)\n- Area: Islington\n- Commute: ~20 min to King's Cross (estimated from coordinates, not a verified journey time)\n- Distance: 0.76 miles from the reference point\n- Source: OnTheMarket (cached), not flagged as possibly outdated\n- Link: https://www.onthem\n\nCurrent user message: 请用中文告诉我 Islington 这些房源里最便宜的是哪一个?"
+  }
+ },
+ "r05_zh_list_item_fragment": {
+  "source": "r05 conv 1f9066a69477407889cd913fb0a9a943 rid bd5f4074",
+  "draft": "在 Hackney 按每月 £1,300 的预算重新搜索后，目前只找到一套符合的房源：\n\n**Flat Share - ALL Bills & Wifi Included - Bethnal Green**\n- 价格：£875/月（在预算内，且包含全部账单和网络）\n- 类型：一居室合租（flat share）\n- 位置：Bethnal Green，属 Hackney 一带\n- 到 UCL 的通勤：约 33 分钟（这是根据坐标估算的，并非实际查询到的行程时间，仅供参考）\n- 来源：OnTheMarket（缓存数据）\n\n需要说明的是，这套房源在缓存里没有更详细的描述、可入住日期和设施信息，所以租金和空房情况还需要向中介确认。如果你希望我查一下 Bethnal Green 这一带的治安数据，或者看看周边超市、车站等生活配套，告诉我即可。\n\n另外，如果你愿意把预算稍微放宽一点，或者把范围扩大到 Hackney 周边的区域（比如 Shoreditch、Dalston），可选房源通常会更多一些。",
+  "state": {
+   "accumulated_search_criteria": {
+    "destination": "University College London, Gower Street, London WC1E 6BT",
+    "max_budget": 1300,
+    "max_travel_time": null,
+    "property_features": [],
+    "soft_preferences": [],
+    "amenities_of_interest": [],
+    "budget_period": "month",
+    "commute_destination": "University College London, Gower Street, London WC1E 6BT",
+    "area": "Hackney",
+    "areas": [
+     "Hackney"
+    ],
+    "no_commute": false,
+    "constraint_sources": {
+     "area": {
+      "source": "user_message",
+      "value": "Hackney",
+      "text": "我更想住在 Hackney,预算 £1,300,帮我重新找"
+     },
+     "areas": {
+      "source": "user_message",
+      "value": [
+       "Hackney"
+      ],
+      "text": "我更想住在 Hackney,预算 £1,300,帮我重新找"
+     },
+     "max_budget": {
+      "source": "user_message",
+      "value": 1300,
+      "text": "我更想住在 Hackney,预算 £1,300,帮我重新找"
+     },
+     "budget_period": {
+      "source": "user_message",
+      "value": "month",
+      "text": "I'm a student at UCL, looking for a room in Bloomsbury or King's Cross under £1,100 a month"
+     },
+     "commute_destination": {
+      "source": "user_message",
+      "value": "University College London, Gower Street, London WC1E 6BT",
+      "text": "I'm a student at UCL, looking for a room in Bloomsbury or King's Cross under £1,100 a month"
+     },
+     "destination": {
+      "source": "user_message",
+      "value": "University College London, Gower Street, London WC1E 6BT",
+      "text": "I'm a student at UCL, looking for a room in Bloomsbury or King's Cross under £1,100 a month"
+     },
+     "no_commute": {
+      "source": "user_message",
+      "value": false,
+      "text": "I'm a student at UCL, looking for a room in Bloomsbury or King's Cross under £1,100 a month"
+     }
+    },
+    "bedrooms_minimum": false
+   },
+   "candidate_validation": {
+    "constraints": {
+     "max_budget_monthly": 1300.0,
+     "monthly_total_budget": null,
+     "office_days_per_week": null,
+     "max_commute_minutes": null,
+     "commute_destination": "University College London, Gower Street, London WC1E 6BT",
+     "no_commute": false,
+     "max_changes": null,
+     "bedrooms": null,
+     "bedrooms_minimum": false,
+     "room_type": null,
+     "areas": [
+      "hackney"
+     ],
+     "move_in_date": null,
+     "property_features": []
+    },
+    "statuses": [
+     {
+      "candidate": {
+       "rank": 1,
+       "address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+       "provider_address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+       "price": "£875/month",
+       "budget_status": "✅ 在预算内",
+       "score": 65.23,
+       "score_breakdown": {
+        "price": 40.22,
+        "semantic": 11.55,
+        "freshness": 13.46
+       },
+       "property_type": "1 bed Flat share",
+       "room_type": null,
+       "bedrooms": 1,
+       "match_type": "perfect",
+       "source": "OnTheMarket (cached)",
+       "possibly_outdated": false,
+       "url": "https://www.onthemarket.com/details/11897043/",
+       "images": [
+        "https://media.onthemarket.com/properties/11897043/1630917749/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/11897043/1630917749/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/11897043/1630917749/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/11897043/1630917749/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/11897043/1630917749/image-4-480x320.jpg"
+       ],
+       "geo_location": "51.528986, -0.058316",
+       "distance_miles": 1.06,
+       "explanation": "1 bedroom in a flat share to rent in Flat Share - ALL Bills & Wifi Included - Bethnal Green (estimated from coordinates: ~33 min to University College London, Gower Street, London WC1E 6BT, not a verified journey time)",
+       "area": "Hackney",
+       "description": "",
+       "available_from": "",
+       "availability_status": "",
+       "verified_features": [],
+       "unverified_features": [],
+       "absent_features": [],
+       "travel_time": "~33 min to University College London, Gower Street, London WC1E 6BT (estimated, unverified)",
+       "travel_time_source": "estimate",
+       "candidate_status": "eligible",
+       "candidate_reasons": [],
+       "candidate_unknown_reasons": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/11897043",
+      "index": 0,
+      "status": "eligible",
+      "reasons": [],
+      "unknown_reasons": [],
+      "evidence_status": "not_required",
+      "transport_cost_evidence_status": "not_required"
+     }
+    ],
+    "eligible": [
+     {
+      "candidate": {
+       "rank": 1,
+       "address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+       "provider_address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+       "price": "£875/month",
+       "budget_status": "✅ 在预算内",
+       "score": 65.23,
+       "score_breakdown": {
+        "price": 40.22,
+        "semantic": 11.55,
+        "freshness": 13.46
+       },
+       "property_type": "1 bed Flat share",
+       "room_type": null,
+       "bedrooms": 1,
+       "match_type": "perfect",
+       "source": "OnTheMarket (cached)",
+       "possibly_outdated": false,
+       "url": "https://www.onthemarket.com/details/11897043/",
+       "images": [
+        "https://media.onthemarket.com/properties/11897043/1630917749/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/11897043/1630917749/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/11897043/1630917749/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/11897043/1630917749/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/11897043/1630917749/image-4-480x320.jpg"
+       ],
+       "geo_location": "51.528986, -0.058316",
+       "distance_miles": 1.06,
+       "explanation": "1 bedroom in a flat share to rent in Flat Share - ALL Bills & Wifi Included - Bethnal Green (estimated from coordinates: ~33 min to University College London, Gower Street, London WC1E 6BT, not a verified journey time)",
+       "area": "Hackney",
+       "description": "",
+       "available_from": "",
+       "availability_status": "",
+       "verified_features": [],
+       "unverified_features": [],
+       "absent_features": [],
+       "travel_time": "~33 min to University College London, Gower Street, London WC1E 6BT (estimated, unverified)",
+       "travel_time_source": "estimate",
+       "candidate_status": "eligible",
+       "candidate_reasons": [],
+       "candidate_unknown_reasons": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/11897043",
+      "index": 0,
+      "status": "eligible",
+      "reasons": [],
+      "unknown_reasons": [],
+      "evidence_status": "not_required",
+      "transport_cost_evidence_status": "not_required"
+     }
+    ],
+    "excluded": [],
+    "unknown": []
+   },
+   "extracted_context": {
+    "search_retrieval": {
+     "retrieval_outcome": "no_source_candidates",
+     "partial": false,
+     "incomplete_areas": [],
+     "area_status": {
+      "King's Cross": "empty"
+     },
+     "data_source": "OnTheMarket (cached)"
+    },
+    "view_results": [],
+    "previous_search_results": null,
+    "last_results": null,
+    "recommended_registry": [],
+    "current_date": "2026-10-20",
+    "current_message": "我更想住在 Hackney,预算 £1,300,帮我重新找",
+    "history": [
+     {
+      "user": "I'm a student at UCL, looking for a room in Bloomsbury or King's Cross under £1,100 a month",
+      "assistant": "I couldn't find listings near King's Cross in the retrieved data that match: up to £1,100/month. Loosening one of these (for example the budget) may help; you can also use the search form on the right. No usable source candidates were retrieved; this does not establish that the market is empty."
+     },
+     {
+      "user": "What's the safety like around the cheapest one?",
+      "assistant": "One thing first: there is no \"cheapest one\" to point at. The last search for King's Cross under £1,100 a month returned no listings, so I have no specific property to check. What I can give you is the safety picture for the King's Cross area itself.\n\nKing's Cross area safety (source: data.police.uk, months covered June, July and August 2026, roughly a 1 mile radius around the geocoded point for King's Cross, N1C 4AP):\n\n- 7,941 recorded incidents over the three months, about 2,647 per month, and "
+     }
+    ],
+    "reply_language": "zh"
+   },
+   "tool_artifacts": [
+    {
+     "turn": 1,
+     "tool": "search_properties",
+     "raw_data": {
+      "success": true,
+      "status": "found",
+      "total_found": 1,
+      "data_source": "OnTheMarket (cached)",
+      "possibly_outdated": false,
+      "search_criteria": {
+       "area": "Hackney",
+       "areas": [
+        "Hackney"
+       ],
+       "commute_destination": "University College London, Gower Street, London WC1E 6BT",
+       "no_commute": false,
+       "bedrooms": null,
+       "bedrooms_minimum": false,
+       "budget_period": "month",
+       "room_type": null,
+       "move_in_date": null,
+       "destination": "University College London, Gower Street, London WC1E 6BT",
+       "max_budget": 1300.0,
+       "max_travel_time": null,
+       "monthly_total_budget": null,
+       "office_days_per_week": null,
+       "max_changes": null,
+       "property_features": [],
+       "soft_preferences": []
+      },
+      "known_criteria": {
+       "area": "Hackney",
+       "areas": [
+        "Hackney"
+       ],
+       "commute_destination": "University College London, Gower Street, London WC1E 6BT",
+       "max_budget": 1300.0,
+       "max_travel_time": null,
+       "monthly_total_budget": null,
+       "office_days_per_week": null,
+       "max_changes": null,
+       "no_commute": false,
+       "bedrooms": null,
+       "bedrooms_minimum": false,
+       "budget_period": "month",
+       "room_type": null,
+       "move_in_date": null,
+       "property_features": [],
+       "soft_preferences": []
+      },
+      "recommendations": [
+       {
+        "rank": 1,
+        "address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+        "provider_address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+        "price": "£875/month",
+        "budget_status": "✅ 在预算内",
+        "score": 65.23,
+        "score_breakdown": {
+         "price": 40.22,
+         "semantic": 11.55,
+         "freshness": 13.46
+        },
+        "property_type": "1 bed Flat share",
+        "room_type": null,
+        "bedrooms": 1,
+        "match_type": "perfect",
+        "source": "OnTheMarket (cached)",
+        "possibly_outdated": false,
+        "url": "https://www.onthemarket.com/details/11897043/",
+        "images": [
+         "https://media.onthemarket.com/properties/11897043/1630917749/image-0-480x320.jpg",
+         "https://media.onthemarket.com/properties/11897043/1630917749/image-1-480x320.jpg",
+         "https://media.onthemarket.com/properties/11897043/1630917749/image-2-480x320.jpg",
+         "https://media.onthemarket.com/properties/11897043/1630917749/image-3-480x320.jpg",
+         "https://media.onthemarket.com/properties/11897043/1630917749/image-4-480x320.jpg"
+        ],
+        "geo_location": "51.528986, -0.058316",
+        "distance_miles": 1.06,
+        "explanation": "1 bedroom in a flat share to rent in Flat Share - ALL Bills & Wifi Included - Bethnal Green (estimated from coordinates: ~33 min to University College London, Gower Street, London WC1E 6BT, not a verified journey time)",
+        "area": "Hackney",
+        "description": "",
+        "available_from": "",
+        "availability_status": "",
+        "verified_features": [],
+        "unverified_features": [],
+        "absent_features": [],
+        "travel_time": "~33 min to University College London, Gower Street, London WC1E 6BT (estimated, unverified)",
+        "travel_time_source": "estimate"
+       }
+      ],
+      "over_budget_alternatives": [],
+      "over_budget_alternatives_label": "",
+      "perfect_count": 1,
+      "soft_count": 0,
+      "summary": "在 Hackney 为你找到 1 套当前房源。价格约 £875/月。已应用筛选：预算 ≤£1300.0/月、通勤至 University College London, Gower Street, London WC1E 6BT。完整房源见右侧列表。",
+      "area_recommendations": [],
+      "partial": false,
+      "incomplete_areas": [],
+      "partial_note": "",
+      "cache_stats": {
+       "hits": 1,
+       "misses": 0
+      },
+      "area_status": {
+       "Hackney": "results"
+      },
+      "retrieval_outcome": "candidates_returned",
+      "commute_unverified": false,
+      "commute_note": "",
+      "candidate_validation": {
+       "constraints": {
+        "max_budget_monthly": 1300.0,
+        "monthly_total_budget": null,
+        "office_days_per_week": null,
+        "max_commute_minutes": null,
+        "commute_destination": "University College London, Gower Street, London WC1E 6BT",
+        "no_commute": false,
+        "max_changes": null,
+        "bedrooms": null,
+        "bedrooms_minimum": false,
+        "room_type": null,
+        "areas": [
+         "hackney"
+        ],
+        "move_in_date": null,
+        "property_features": []
+       },
+       "statuses": [
+        {
+         "candidate": {
+          "rank": 1,
+          "address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+          "provider_address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+          "price": "£875/month",
+          "budget_status": "✅ 在预算内",
+          "score": 65.23,
+          "score_breakdown": {
+           "price": 40.22,
+           "semantic": 11.55,
+           "freshness": 13.46
+          },
+          "property_type": "1 bed Flat share",
+          "room_type": null,
+          "bedrooms": 1,
+          "match_type": "perfect",
+          "source": "OnTheMarket (cached)",
+          "possibly_outdated": false,
+          "url": "https://www.onthemarket.com/details/11897043/",
+          "images": [
+           "https://media.onthemarket.com/properties/11897043/1630917749/image-0-480x320.jpg",
+           "https://media.onthemarket.com/properties/11897043/1630917749/image-1-480x320.jpg",
+           "https://media.onthemarket.com/properties/11897043/1630917749/image-2-480x320.jpg",
+           "https://media.onthemarket.com/properties/11897043/1630917749/image-3-480x320.jpg",
+           "https://media.onthemarket.com/properties/11897043/1630917749/image-4-480x320.jpg"
+          ],
+          "geo_location": "51.528986, -0.058316",
+          "distance_miles": 1.06,
+          "explanation": "1 bedroom in a flat share to rent in Flat Share - ALL Bills & Wifi Included - Bethnal Green (estimated from coordinates: ~33 min to University College London, Gower Street, London WC1E 6BT, not a verified journey time)",
+          "area": "Hackney",
+          "description": "",
+          "available_from": "",
+          "availability_status": "",
+          "verified_features": [],
+          "unverified_features": [],
+          "absent_features": [],
+          "travel_time": "~33 min to University College London, Gower Street, London WC1E 6BT (estimated, unverified)",
+          "travel_time_source": "estimate",
+          "candidate_status": "eligible",
+          "candidate_reasons": [],
+          "candidate_unknown_reasons": []
+         },
+         "candidate_key": "url:https://www.onthemarket.com/details/11897043",
+         "index": 0,
+         "status": "eligible",
+         "reasons": [],
+         "unknown_reasons": [],
+         "evidence_status": "not_required",
+         "transport_cost_evidence_status": "not_required"
+        }
+       ],
+       "eligible": [
+        {
+         "candidate": {
+          "rank": 1,
+          "address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+          "provider_address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+          "price": "£875/month",
+          "budget_status": "✅ 在预算内",
+          "score": 65.23,
+          "score_breakdown": {
+           "price": 40.22,
+           "semantic": 11.55,
+           "freshness": 13.46
+          },
+          "property_type": "1 bed Flat share",
+          "room_type": null,
+          "bedrooms": 1,
+          "match_type": "perfect",
+          "source": "OnTheMarket (cached)",
+          "possibly_outdated": false,
+          "url": "https://www.onthemarket.com/details/11897043/",
+          "images": [
+           "https://media.onthemarket.com/properties/11897043/1630917749/image-0-480x320.jpg",
+           "https://media.onthemarket.com/properties/11897043/1630917749/image-1-480x320.jpg",
+           "https://media.onthemarket.com/properties/11897043/1630917749/image-2-480x320.jpg",
+           "https://media.onthemarket.com/properties/11897043/1630917749/image-3-480x320.jpg",
+           "https://media.onthemarket.com/properties/11897043/1630917749/image-4-480x320.jpg"
+          ],
+          "geo_location": "51.528986, -0.058316",
+          "distance_miles": 1.06,
+          "explanation": "1 bedroom in a flat share to rent in Flat Share - ALL Bills & Wifi Included - Bethnal Green (estimated from coordinates: ~33 min to University College London, Gower Street, London WC1E 6BT, not a verified journey time)",
+          "area": "Hackney",
+          "description": "",
+          "available_from": "",
+          "availability_status": "",
+          "verified_features": [],
+          "unverified_features": [],
+          "absent_features": [],
+          "travel_time": "~33 min to University College London, Gower Street, London WC1E 6BT (estimated, unverified)",
+          "travel_time_source": "estimate",
+          "candidate_status": "eligible",
+          "candidate_reasons": [],
+          "candidate_unknown_reasons": []
+         },
+         "candidate_key": "url:https://www.onthemarket.com/details/11897043",
+         "index": 0,
+         "status": "eligible",
+         "reasons": [],
+         "unknown_reasons": [],
+         "evidence_status": "not_required",
+         "transport_cost_evidence_status": "not_required"
+        }
+       ],
+       "excluded": [],
+       "unknown": []
+      },
+      "candidate_states": [
+       {
+        "candidate": {
+         "rank": 1,
+         "address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+         "provider_address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+         "price": "£875/month",
+         "budget_status": "✅ 在预算内",
+         "score": 65.23,
+         "score_breakdown": {
+          "price": 40.22,
+          "semantic": 11.55,
+          "freshness": 13.46
+         },
+         "property_type": "1 bed Flat share",
+         "room_type": null,
+         "bedrooms": 1,
+         "match_type": "perfect",
+         "source": "OnTheMarket (cached)",
+         "possibly_outdated": false,
+         "url": "https://www.onthemarket.com/details/11897043/",
+         "images": [
+          "https://media.onthemarket.com/properties/11897043/1630917749/image-0-480x320.jpg",
+          "https://media.onthemarket.com/properties/11897043/1630917749/image-1-480x320.jpg",
+          "https://media.onthemarket.com/properties/11897043/1630917749/image-2-480x320.jpg",
+          "https://media.onthemarket.com/properties/11897043/1630917749/image-3-480x320.jpg",
+          "https://media.onthemarket.com/properties/11897043/1630917749/image-4-480x320.jpg"
+         ],
+         "geo_location": "51.528986, -0.058316",
+         "distance_miles": 1.06,
+         "explanation": "1 bedroom in a flat share to rent in Flat Share - ALL Bills & Wifi Included - Bethnal Green (estimated from coordinates: ~33 min to University College London, Gower Street, London WC1E 6BT, not a verified journey time)",
+         "area": "Hackney",
+         "description": "",
+         "available_from": "",
+         "availability_status": "",
+         "verified_features": [],
+         "unverified_features": [],
+         "absent_features": [],
+         "travel_time": "~33 min to University College London, Gower Street, London WC1E 6BT (estimated, unverified)",
+         "travel_time_source": "estimate",
+         "candidate_status": "eligible",
+         "candidate_reasons": [],
+         "candidate_unknown_reasons": []
+        },
+        "candidate_key": "url:https://www.onthemarket.com/details/11897043",
+        "index": 0,
+        "status": "eligible",
+        "reasons": [],
+        "unknown_reasons": [],
+        "evidence_status": "not_required",
+        "transport_cost_evidence_status": "not_required"
+       }
+      ],
+      "commute_evidence": [],
+      "unverified_candidates": [],
+      "excluded_candidates": []
+     },
+     "params_digest": "8d12be245fa5a11b",
+     "success": true,
+     "error": null,
+     "elapsed_ms": 4786
+    }
+   ],
+   "user_query": "Previous conversation:\nUser: I'm a student at UCL, looking for a room in Bloomsbury or King's Cross under £1,100 a month\nAlex: I couldn't find listings near King's Cross in the retrieved data that match: up to £1,100/month. Loosening one of these (for example the budget) may help; you can also use the search form on the right. No usable source candidates were retrieved; this does not establish that the market is empty.\nUser: What's the safety like around the cheapest one?\nAlex: One thing first: there is no \"cheapest one\" to point at. The last search for King's Cross under £1,100 a month returned no listings, so I have no specific property to check. What I can give you is the safety picture for the King's Cross area itself.\n\nKing's Cross area safety (source: data.police.uk, months covered June, July and August 2026, roughly a 1 mile radius around the geocoded point for King's Cross, N1C 4AP):\n\n- 7,941 recorded incidents over the three months, about 2,647 per month, and \n\nCurrent user message: 我更想住在 Hackney,预算 £1,300,帮我重新找"
+  }
+ },
+ "r05_en_bracket_fragment": {
+  "source": "r05 conv 38cd6205498243dcb349b3faaa8f6dda rid b48612d7",
+  "draft": "The two cheapest from the listings we looked at:\n\n1. Highgate West Hill, London, N6 — £2,000/month, 1-bed flat, roughly 28 minutes to King's Cross (that commute figure is an estimate, not a verified journey time).\n2. Gloucester Avenue, London, NW1 — £2,150/month, 1-bed flat, 24 minutes to King's Cross.\n\nBoth are within your £2,200 monthly budget. Note these are cached listing prices, so the current asking rent and availability should be confirmed with the agent before you rely on them.\n\nOne thing worth flagging: the Highgate West Hill listing is tagged as Camden in our records, but N6 is Highgate, which is a fair way north of Camden proper. If being inside Camden matters to you, Gloucester Avenue in NW1 is the more accurate fit.",
+  "state": {
+   "accumulated_search_criteria": {
+    "destination": "King's Cross",
+    "max_budget": 2200,
+    "max_travel_time": null,
+    "property_features": [],
+    "soft_preferences": [
+     "no pets needed"
+    ],
+    "amenities_of_interest": [],
+    "budget_period": "month",
+    "commute_destination": "King's Cross",
+    "area": "Camden",
+    "areas": [
+     "Camden"
+    ],
+    "room_type": "whole",
+    "bedrooms": 1,
+    "bedrooms_minimum": false,
+    "no_commute": false,
+    "constraint_sources": {
+     "area": {
+      "source": "user_message",
+      "value": "Camden",
+      "text": "Find me a 1-bed flat in Camden under £2,200/month, pets not needed, I work near King's Cross"
+     },
+     "areas": {
+      "source": "user_message",
+      "value": [
+       "Camden"
+      ],
+      "text": "Find me a 1-bed flat in Camden under £2,200/month, pets not needed, I work near King's Cross"
+     },
+     "max_budget": {
+      "source": "user_message",
+      "value": 2200,
+      "text": "Find me a 1-bed flat in Camden under £2,200/month, pets not needed, I work near King's Cross"
+     },
+     "budget_period": {
+      "source": "user_message",
+      "value": "month",
+      "text": "Find me a 1-bed flat in Camden under £2,200/month, pets not needed, I work near King's Cross"
+     },
+     "bedrooms": {
+      "source": "user_message",
+      "value": 1,
+      "text": "Find me a 1-bed flat in Camden under £2,200/month, pets not needed, I work near King's Cross"
+     },
+     "bedrooms_minimum": {
+      "source": "user_message",
+      "value": false,
+      "text": "Find me a 1-bed flat in Camden under £2,200/month, pets not needed, I work near King's Cross"
+     },
+     "room_type": {
+      "source": "user_message",
+      "value": "whole",
+      "text": "Find me a 1-bed flat in Camden under £2,200/month, pets not needed, I work near King's Cross"
+     },
+     "commute_destination": {
+      "source": "user_message",
+      "value": "King's Cross",
+      "text": "Find me a 1-bed flat in Camden under £2,200/month, pets not needed, I work near King's Cross"
+     },
+     "destination": {
+      "source": "user_message",
+      "value": "King's Cross",
+      "text": "Find me a 1-bed flat in Camden under £2,200/month, pets not needed, I work near King's Cross"
+     },
+     "no_commute": {
+      "source": "user_message",
+      "value": false,
+      "text": "Find me a 1-bed flat in Camden under £2,200/month, pets not needed, I work near King's Cross"
+     }
+    }
+   },
+   "candidate_validation": {},
+   "extracted_context": {
+    "search_retrieval": {
+     "retrieval_outcome": "candidates_returned",
+     "partial": false,
+     "incomplete_areas": [],
+     "area_status": {
+      "Camden": "results"
+     },
+     "data_source": "OnTheMarket (cached)"
+    },
+    "view_results": [
+     {
+      "rank": 1,
+      "address": "Gloucester Avenue, London, NW1",
+      "provider_address": "Gloucester Avenue, London, NW1",
+      "price": "£2150/month",
+      "budget_status": "✅ 在预算内",
+      "score": 63.09,
+      "score_breakdown": {
+       "price": 32.32,
+       "semantic": 17.31,
+       "freshness": 13.46
+      },
+      "property_type": "1 bed Flat",
+      "room_type": "whole",
+      "bedrooms": 1,
+      "match_type": "perfect",
+      "source": "OnTheMarket (cached)",
+      "possibly_outdated": false,
+      "url": "https://www.onthemarket.com/details/20259659/",
+      "images": [
+       "https://media.onthemarket.com/properties/20259659/1641647723/image-0-480x320.jpg",
+       "https://media.onthemarket.com/properties/20259659/1641647723/image-1-480x320.jpg",
+       "https://media.onthemarket.com/properties/20259659/1641647723/image-2-480x320.jpg",
+       "https://media.onthemarket.com/properties/20259659/1641647723/image-3-480x320.jpg",
+       "https://media.onthemarket.com/properties/20259659/1641647723/image-4-480x320.jpg"
+      ],
+      "geo_location": "51.537379, -0.148066",
+      "distance_miles": 0.26,
+      "explanation": "1 bedroom flat to rent in Gloucester Avenue, London, NW1 (TfL transit: 24 min to King's Cross)",
+      "area": "Camden",
+      "description": "",
+      "available_from": "",
+      "availability_status": "",
+      "verified_features": [],
+      "unverified_features": [],
+      "absent_features": [],
+      "travel_time": "24 min to King's Cross",
+      "travel_time_source": "routing",
+      "qualification": {
+       "status": "eligible",
+       "reasons": [],
+       "unknown_reasons": [],
+       "constraints": {
+        "max_budget_monthly": 2200.0,
+        "monthly_total_budget": null,
+        "office_days_per_week": null,
+        "max_commute_minutes": null,
+        "commute_destination": "King's Cross",
+        "no_commute": false,
+        "max_changes": null,
+        "bedrooms": 1.0,
+        "bedrooms_minimum": false,
+        "room_type": "whole",
+        "areas": [
+         "camden"
+        ],
+        "move_in_date": null,
+        "property_features": []
+       },
+       "source": "structured_listing",
+       "reason_messages": {
+        "en": [],
+        "zh": []
+       }
+      },
+      "budget_basis": 2200.0,
+      "candidate_status": "eligible",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [],
+      "budget_status_code": "within"
+     },
+     {
+      "rank": 2,
+      "address": "Highgate West Hill, London, N6",
+      "provider_address": "Highgate West Hill, London, N6",
+      "price": "£2000/month",
+      "budget_status": "✅ 在预算内",
+      "score": 62.67,
+      "score_breakdown": {
+       "price": 34.09,
+       "semantic": 15.12,
+       "freshness": 13.46
+      },
+      "property_type": "1 bed Flat",
+      "room_type": "whole",
+      "bedrooms": 1,
+      "match_type": "perfect",
+      "source": "OnTheMarket (cached)",
+      "possibly_outdated": false,
+      "url": "https://www.onthemarket.com/details/20262641/",
+      "images": [
+       "https://media.onthemarket.com/properties/20262641/1641692577/image-0-480x320.jpg",
+       "https://media.onthemarket.com/properties/20262641/1641692577/image-1-480x320.jpg",
+       "https://media.onthemarket.com/properties/20262641/1641692577/image-2-480x320.jpg",
+       "https://media.onthemarket.com/properties/20262641/1641692577/image-3-480x320.jpg",
+       "https://media.onthemarket.com/properties/20262641/1641692577/image-4-480x320.jpg"
+      ],
+      "geo_location": "51.561483, -0.151028",
+      "distance_miles": 1.6,
+      "explanation": "1 bedroom flat to rent in Highgate West Hill, London, N6 (estimated from coordinates: ~28 min to King's Cross, not a verified journey time)",
+      "area": "Camden",
+      "description": "",
+      "available_from": "",
+      "availability_status": "",
+      "verified_features": [],
+      "unverified_features": [],
+      "absent_features": [],
+      "travel_time": "~28 min to King's Cross (estimated, unverified)",
+      "travel_time_source": "estimate",
+      "qualification": {
+       "status": "eligible",
+       "reasons": [],
+       "unknown_reasons": [],
+       "constraints": {
+        "max_budget_monthly": 2200.0,
+        "monthly_total_budget": null,
+        "office_days_per_week": null,
+        "max_commute_minutes": null,
+        "commute_destination": "King's Cross",
+        "no_commute": false,
+        "max_changes": null,
+        "bedrooms": 1.0,
+        "bedrooms_minimum": false,
+        "room_type": "whole",
+        "areas": [
+         "camden"
+        ],
+        "move_in_date": null,
+        "property_features": []
+       },
+       "source": "structured_listing",
+       "reason_messages": {
+        "en": [],
+        "zh": []
+       }
+      },
+      "budget_basis": 2200.0,
+      "candidate_status": "eligible",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [],
+      "budget_status_code": "within"
+     }
+    ],
+    "previous_search_results": "\n1. **Gloucester Avenue**\n   - Full Address: Gloucester Avenue, London, NW1\n   - Price: £2150/month\n   - Commute: 24 min to King's Cross\n   - Bedrooms: 1\n   - Type: 1 bed Flat\n   - Area: Camden\n   - Budget: ✅ 在预算内\n   - URL: https://www.onthemarket.com/details/20259659/\n\n2. **Highgate West Hill**\n   - Full Address: Highgate West Hill, London, N6\n   - Price: £2000/month\n   - Commute: ~28 min to King's Cross (estimated, unverified)\n   - Bedrooms: 1\n   - Type: 1 bed Flat\n   - Area: Camden\n   - Budget: ✅ 在预算内\n   - URL: https://www.onthemarket.com/details/20262641/\n\n",
+    "last_results": [
+     {
+      "name": "Gloucester Avenue",
+      "address": "Gloucester Avenue, London, NW1",
+      "price": "£2150/month",
+      "travel_time": "24 min to King's Cross",
+      "bedrooms": 1,
+      "property_type": "1 bed Flat",
+      "budget_status": "✅ 在预算内",
+      "source": "OnTheMarket (cached)",
+      "url": "https://www.onthemarket.com/details/20259659/",
+      "explanation": "1 bedroom flat to rent in Gloucester Avenue, London, NW1 (TfL transit: 24 min to King's Cross)",
+      "geo_location": "51.537379, -0.148066",
+      "area": "Camden",
+      "description": "",
+      "available_from": "",
+      "availability_status": ""
+     },
+     {
+      "name": "Highgate West Hill",
+      "address": "Highgate West Hill, London, N6",
+      "price": "£2000/month",
+      "travel_time": "~28 min to King's Cross (estimated, unverified)",
+      "bedrooms": 1,
+      "property_type": "1 bed Flat",
+      "budget_status": "✅ 在预算内",
+      "source": "OnTheMarket (cached)",
+      "url": "https://www.onthemarket.com/details/20262641/",
+      "explanation": "1 bedroom flat to rent in Highgate West Hill, London, N6 (estimated from coordinates: ~28 min to King's Cross, not a verified journey time)",
+      "geo_location": "51.561483, -0.151028",
+      "area": "Camden",
+      "description": "",
+      "available_from": "",
+      "availability_status": ""
+     }
+    ],
+    "recommended_registry": [
+     {
+      "index": 1,
+      "address": "Gloucester Avenue, London, NW1",
+      "price": "£2150/month",
+      "area": "Camden",
+      "travel_time": "24 min to King's Cross",
+      "url": "https://www.onthemarket.com/details/20259659/",
+      "available_from": "",
+      "geo_location": "51.537379, -0.148066"
+     },
+     {
+      "index": 2,
+      "address": "Highgate West Hill, London, N6",
+      "price": "£2000/month",
+      "area": "Camden",
+      "travel_time": "~28 min to King's Cross (estimated, unverified)",
+      "url": "https://www.onthemarket.com/details/20262641/",
+      "available_from": "",
+      "geo_location": "51.561483, -0.151028"
+     }
+    ],
+    "current_date": "2026-10-20",
+    "last_results_full": [
+     {
+      "rank": 1,
+      "address": "Gloucester Avenue, London, NW1",
+      "provider_address": "Gloucester Avenue, London, NW1",
+      "price": "£2150/month",
+      "budget_status": "✅ 在预算内",
+      "score": 63.09,
+      "score_breakdown": {
+       "price": 32.32,
+       "semantic": 17.31,
+       "freshness": 13.46
+      },
+      "property_type": "1 bed Flat",
+      "room_type": "whole",
+      "bedrooms": 1,
+      "match_type": "perfect",
+      "source": "OnTheMarket (cached)",
+      "possibly_outdated": false,
+      "url": "https://www.onthemarket.com/details/20259659/",
+      "images": [
+       "https://media.onthemarket.com/properties/20259659/1641647723/image-0-480x320.jpg",
+       "https://media.onthemarket.com/properties/20259659/1641647723/image-1-480x320.jpg",
+       "https://media.onthemarket.com/properties/20259659/1641647723/image-2-480x320.jpg",
+       "https://media.onthemarket.com/properties/20259659/1641647723/image-3-480x320.jpg",
+       "https://media.onthemarket.com/properties/20259659/1641647723/image-4-480x320.jpg"
+      ],
+      "geo_location": "51.537379, -0.148066",
+      "distance_miles": 0.26,
+      "explanation": "1 bedroom flat to rent in Gloucester Avenue, London, NW1 (TfL transit: 24 min to King's Cross)",
+      "area": "Camden",
+      "description": "",
+      "available_from": "",
+      "availability_status": "",
+      "verified_features": [],
+      "unverified_features": [],
+      "absent_features": [],
+      "travel_time": "24 min to King's Cross",
+      "travel_time_source": "routing",
+      "qualification": {
+       "status": "eligible",
+       "reasons": [],
+       "unknown_reasons": [],
+       "constraints": {
+        "max_budget_monthly": 2200.0,
+        "monthly_total_budget": null,
+        "office_days_per_week": null,
+        "max_commute_minutes": null,
+        "commute_destination": "King's Cross",
+        "no_commute": false,
+        "max_changes": null,
+        "bedrooms": 1.0,
+        "bedrooms_minimum": false,
+        "room_type": "whole",
+        "areas": [
+         "camden"
+        ],
+        "move_in_date": null,
+        "property_features": []
+       },
+       "source": "structured_listing",
+       "reason_messages": {
+        "en": [],
+        "zh": []
+       }
+      },
+      "budget_basis": 2200.0,
+      "candidate_status": "eligible",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [],
+      "budget_status_code": "within"
+     },
+     {
+      "rank": 2,
+      "address": "Highgate West Hill, London, N6",
+      "provider_address": "Highgate West Hill, London, N6",
+      "price": "£2000/month",
+      "budget_status": "✅ 在预算内",
+      "score": 62.67,
+      "score_breakdown": {
+       "price": 34.09,
+       "semantic": 15.12,
+       "freshness": 13.46
+      },
+      "property_type": "1 bed Flat",
+      "room_type": "whole",
+      "bedrooms": 1,
+      "match_type": "perfect",
+      "source": "OnTheMarket (cached)",
+      "possibly_outdated": false,
+      "url": "https://www.onthemarket.com/details/20262641/",
+      "images": [
+       "https://media.onthemarket.com/properties/20262641/1641692577/image-0-480x320.jpg",
+       "https://media.onthemarket.com/properties/20262641/1641692577/image-1-480x320.jpg",
+       "https://media.onthemarket.com/properties/20262641/1641692577/image-2-480x320.jpg",
+       "https://media.onthemarket.com/properties/20262641/1641692577/image-3-480x320.jpg",
+       "https://media.onthemarket.com/properties/20262641/1641692577/image-4-480x320.jpg"
+      ],
+      "geo_location": "51.561483, -0.151028",
+      "distance_miles": 1.6,
+      "explanation": "1 bedroom flat to rent in Highgate West Hill, London, N6 (estimated from coordinates: ~28 min to King's Cross, not a verified journey time)",
+      "area": "Camden",
+      "description": "",
+      "available_from": "",
+      "availability_status": "",
+      "verified_features": [],
+      "unverified_features": [],
+      "absent_features": [],
+      "travel_time": "~28 min to King's Cross (estimated, unverified)",
+      "travel_time_source": "estimate",
+      "qualification": {
+       "status": "eligible",
+       "reasons": [],
+       "unknown_reasons": [],
+       "constraints": {
+        "max_budget_monthly": 2200.0,
+        "monthly_total_budget": null,
+        "office_days_per_week": null,
+        "max_commute_minutes": null,
+        "commute_destination": "King's Cross",
+        "no_commute": false,
+        "max_changes": null,
+        "bedrooms": 1.0,
+        "bedrooms_minimum": false,
+        "room_type": "whole",
+        "areas": [
+         "camden"
+        ],
+        "move_in_date": null,
+        "property_features": []
+       },
+       "source": "structured_listing",
+       "reason_messages": {
+        "en": [],
+        "zh": []
+       }
+      },
+      "budget_basis": 2200.0,
+      "candidate_status": "eligible",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [],
+      "budget_status_code": "within"
+     }
+    ],
+    "recommended_index": "=== RECOMMENDED LISTINGS INDEX (every listing shown so far; summaries only) ===\nEach line is a SUMMARY. For a listing's full details (description, amenities, bills, guest/payment policy) call the get_property_details tool with that listing's exact URL below. Never invent details that are not shown here.\nA listing is identified by its [N] and its URL, NOT by its name: two lines may share an address and still be different properties. If the user's reference fits more than one line, ask which [N] they mean (quote the distinguishing price/commute) instead of picking one.\n[1] Gloucester Avenue, London, NW1 | price £2150/month | area Camden | commute 24 min to King's Cross | https://www.onthemarket.com/details/20259659/\n[2] Highgate West Hill, London, N6 | price £2000/month | area Camden | commute ~28 min to King's Cross (estimated, unverified) | https://www.onthemarket.com/details/20262641/\n=== END RECOMMENDED LISTINGS INDEX ===",
+    "current_message": "Show me the cheapest two of those and tell me the exact rent and address of each",
+    "history": [
+     {
+      "user": "Find me a 1-bed flat in Camden under £2,200/month, pets not needed, I work near King's Cross",
+      "assistant": "Meets all declared conditions (verified):\n- Gloucester Avenue, London, NW1 (£2150/month)\n- Highgate West Hill, London, N6 (£2000/month)\nExcluded / does not meet:\n- Little Russell Street, London, WC1A: alternative is outside the declared hard result set; monthly price 2500 exceeds budget 2200\n- Belsize Avenue, Belsize Park, London, NW3: alternative is outside the declared hard result set; monthly price 2491 exceeds budget 2200\nThese listings are cached; prices and availability may have changed. C"
+     }
+    ],
+    "reply_language": "en"
+   },
+   "tool_artifacts": [],
+   "user_query": "Previous conversation:\nUser: Find me a 1-bed flat in Camden under £2,200/month, pets not needed, I work near King's Cross\nAlex: Meets all declared conditions (verified):\n- Gloucester Avenue, London, NW1 (£2150/month)\n- Highgate West Hill, London, N6 (£2000/month)\nExcluded / does not meet:\n- Little Russell Street, London, WC1A: alternative is outside the declared hard result set; monthly price 2500 exceeds budget 2200\n- Belsize Avenue, Belsize Park, London, NW3: alternative is outside the declared hard result set; monthly price 2491 exceeds budget 2200\nThese listings are cached; prices and availability may have changed. C\n\nCurrent user message: Show me the cheapest two of those and tell me the exact rent and address of each"
+  }
+ },
+ "r04_alternative_route": {
+  "source": "r04 conv 686e8522b2104523acf34539b61f41b5 rid bf4c51ef",
+  "draft": "From Powerscroft Road (E5) to Liverpool Street, the fastest option TfL returned is about 37 minutes with one change:\n\n- Bus 158 to Stratford Bus Station (about 5 minutes)\n- Then bus N8 to Liverpool Street Station (about 26 minutes)\n- Fare: £1.75 adult pay-as-you-go single\n\nA slightly slower alternative is about 40 minutes: bus 69 to Drapers Field, then bus N205 to Liverpool Street, also £1.75.\n\nTwo caveats worth knowing:\n- The journey planner anchored the start at Leyton station (E5 postcode district) rather than the exact house number, so add a few minutes for the walk from the door to the stop.\n- The routes returned are bus-only, and the N8/N205 are night-bus numbers, so this looks like an off-peak or night-time plan. At normal daytime hours the Central line from Leyton to Liverpool Street is usually quicker — I can re-run it for a specific date and time if you tell me when you would travel.\n\nSource: TfL Unified API Journey Planner (live).",
+  "state": {
+   "accumulated_search_criteria": {
+    "destination": null,
+    "max_budget": null,
+    "max_travel_time": null,
+    "property_features": [],
+    "soft_preferences": [],
+    "amenities_of_interest": []
+   },
+   "candidate_validation": {},
+   "extracted_context": {
+    "current_date": "2026-10-20",
+    "current_message": "How long is the commute from Powerscroft Road, London E5 to Liverpool Street?",
+    "history": [],
+    "reply_language": "en"
+   },
+   "tool_artifacts": [
+    {
+     "turn": 1,
+     "tool": "calculate_commute",
+     "raw_data": {
+      "success": false,
+      "error": "无法计算通勤时间（地址解析失败）"
+     },
+     "params_digest": "a07b40e9f5c0e8f7",
+     "success": false,
+     "error": "无法计算通勤时间（地址解析失败）",
+     "elapsed_ms": 2355
+    },
+    {
+     "turn": 2,
+     "tool": "get_transport_info",
+     "raw_data": {
+      "success": true,
+      "query_type": "journey",
+      "coverage": "london",
+      "from": {
+       "input": "Powerscroft Road, London E5",
+       "resolved_station": "Leyton Underground Station",
+       "naptan": "940GZZLULYN",
+       "approximate": "postcode district E5"
+      },
+      "to": {
+       "input": "Liverpool Street, London",
+       "resolved_station": "Liverpool Street Underground Station",
+       "naptan": "940GZZLULVT"
+      },
+      "duration_minutes": 37,
+      "changes_count": 1,
+      "route_summary": "Bus 158 to Stratford Bus Station (5 min) -> Bus N8 to Liverpool Street Station (26 min)",
+      "route_legs": [
+       {
+        "mode": "bus",
+        "lines": [
+         "158"
+        ],
+        "duration_minutes": 5,
+        "summary": "158 bus to Stratford Bus Station",
+        "from": "Leyton Station",
+        "to": "Stratford Bus Station"
+       },
+       {
+        "mode": "bus",
+        "lines": [
+         "N8"
+        ],
+        "duration_minutes": 26,
+        "summary": "N8 bus to Liverpool Street Station",
+        "from": "Stratford Bus Station",
+        "to": "Liverpool Street Station"
+       }
+      ],
+      "selected_itinerary_id": "tfl:0a81793082ad9149",
+      "fastest_journey": {
+       "itinerary_id": "tfl:0a81793082ad9149",
+       "duration_minutes": 37,
+       "changes_count": 1,
+       "route_summary": "Bus 158 to Stratford Bus Station (5 min) -> Bus N8 to Liverpool Street Station (26 min)",
+       "route_legs": [
+        {
+         "mode": "bus",
+         "lines": [
+          "158"
+         ],
+         "duration_minutes": 5,
+         "summary": "158 bus to Stratford Bus Station",
+         "from": "Leyton Station",
+         "to": "Stratford Bus Station"
+        },
+        {
+         "mode": "bus",
+         "lines": [
+          "N8"
+         ],
+         "duration_minutes": 26,
+         "summary": "N8 bus to Liverpool Street Station",
+         "from": "Stratford Bus Station",
+         "to": "Liverpool Street Station"
+        }
+       ],
+       "source": "TfL Unified API Journey Planner",
+       "fare_available": true,
+       "fare_basis": "journey_itinerary",
+       "fare_pence": 175,
+       "fare_gbp": 1.75,
+       "fare_display": "£1.75",
+       "fare_itinerary_id": "tfl:0a81793082ad9149"
+      },
+      "cheapest_journey": {
+       "itinerary_id": "tfl:5e2f971d5c684366",
+       "duration_minutes": 40,
+       "changes_count": 1,
+       "route_summary": "Bus 69 to Drapers Field (1 min) -> Bus N205 to Liverpool Street Station (30 min)",
+       "route_legs": [
+        {
+         "mode": "bus",
+         "lines": [
+          "69"
+         ],
+         "duration_minutes": 1,
+         "summary": "69 bus to Drapers Field",
+         "from": "Leyton Station",
+         "to": "Drapers Field"
+        },
+        {
+         "mode": "bus",
+         "lines": [
+          "N205"
+         ],
+         "duration_minutes": 30,
+         "summary": "N205 bus to Liverpool Street Station",
+         "from": "Drapers Field",
+         "to": "Liverpool Street Station"
+        }
+       ],
+       "source": "TfL Unified API Journey Planner",
+       "fare_available": true,
+       "fare_basis": "journey_itinerary",
+       "fare_pence": 175,
+       "fare_gbp": 1.75,
+       "fare_display": "£1.75",
+       "fare_itinerary_id": "tfl:5e2f971d5c684366"
+      },
+      "source": "TfL Unified API Journey Planner",
+      "from_cache": false,
+      "cache_status": "miss",
+      "stations_used": "Leyton Underground Station -> Liverpool Street Underground Station",
+      "fare_available": true,
+      "fare_pence": 175,
+      "fare_gbp": 1.75,
+      "fare_display": "£1.75",
+      "fare_basis": "journey_itinerary",
+      "fare_itinerary_id": "tfl:0a81793082ad9149",
+      "fare_matches_itinerary": true,
+      "fare_note": "Adult pay-as-you-go single (contactless / Oyster). For unlimited travel see a weekly/monthly Travelcard."
+     },
+     "params_digest": "f174c93a12dcf37d",
+     "success": true,
+     "error": null,
+     "elapsed_ms": 9650
+    }
+   ],
+   "user_query": "How long is the commute from Powerscroft Road, London E5 to Liverpool Street?"
+  }
+ }
+}

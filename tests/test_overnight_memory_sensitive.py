@@ -78,10 +78,14 @@ def test_the_a09_message_leaves_no_sensitive_detail_in_any_layer(memory):
 
 
 @pytest.mark.parametrize("text,expected,categories", [
+    # R4-08 (policy change): using a wheelchair is a statement about the person, not a
+    # housing requirement, so automatic memory drops that clause; the step-free requirement
+    # stays a search criterion of the turn.
     ("I want a 1-bed in Hackney under £1,900 a month, I use a wheelchair so I need "
      "step-free access",
-     "I want a 1-bed in Hackney under £1,900 a month, I use a wheelchair so I need "
-     "step-free access", []),
+     "I want a 1-bed in Hackney under £1,900 a month, [personal detail not stored]", ["disability"]),
+    ("I want a 1-bed in Hackney under £1,900 a month, I need step-free access",
+     "I want a 1-bed in Hackney under £1,900 a month, I need step-free access", []),
     ("My budget is £1,800 pcm, call me on +44 7700 900123",
      "My budget is £1,800 pcm, call me on [contact detail not stored]", ["contact"]),
     ("Find a flat near NW1 8NH for £2000", "Find a flat near NW1 8NH for £2000", []),

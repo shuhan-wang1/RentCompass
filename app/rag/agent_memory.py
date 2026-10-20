@@ -449,8 +449,11 @@ def erasure_request_fields(text: str) -> tuple:
 # the reflections over them) never keep these categories. A user's explicit "remember
 # X" goes through the remember tool and its own authorisation, not through here.
 #
-# Accessibility needs (wheelchair, step-free, lift) are deliberately NOT in the health
-# list: they are housing requirements the search uses, stated as property facts.
+# A housing REQUIREMENT (step-free access, a lift, wheelchair-accessible) is not in these
+# lists: the search reads it from the turn's own criteria. A statement ABOUT the person —
+# using a wheelchair, a disability, being on Universal Credit, a child's name or school —
+# is (R4-08): r07 stored 'Uses a wheelchair', 'User is on Universal Credit' and 'Has a son,
+# Tom, who attends Oakfield Primary' with pii_categories none.
 _SENSITIVE_CLAUSE_PATTERNS = (
     # Income words only: "a year" alone also describes a tenancy ("rent for a year in
     # Hackney") and must not cost the user their area.
@@ -466,6 +469,23 @@ _SENSITIVE_CLAUSE_PATTERNS = (
         r"adhd|autis\w*|bipolar|schizo\w*|mental health|medical condition|health condition|"
         r"chronic (?:illness|pain|condition)|diagnos\w*|medication|therapy|chemo\w*|"
         r"illness|allerg\w*)\b|哮喘|糖尿病|癫痫|癌|怀孕|抑郁|焦虑|病情|疾病|过敏", re.I)),
+    ("disability", re.compile(
+        r"\b(?:disab(?:led|ility|ilities)|wheelchair[- ]user|(?:use[sd]?|using|in)\s+a\s+wheelchair|"
+        r"mobility\s+(?:impair\w*|issues?|problems?|aid|scooter)|blind|deaf|visually\s+impaired|"
+        r"hearing\s+impaired|paralys\w*|amputee|medical\s+conditions?)\b|"
+        r"残疾|坐轮椅|用轮椅|视障|听障|失明|耳聋", re.I)),
+    ("benefits", re.compile(
+        r"\b(?:universal\s+credit|housing\s+benefit|personal\s+independence\s+payment|"
+        r"local\s+housing\s+allowance|jobseeker'?s?\s+allowance|"
+        r"employment\s+and\s+support\s+allowance|pension\s+credit|on\s+benefits|"
+        r"council\s+tax\s+(?:support|reduction))\b|\b(?-i:PIP|LHA|JSA|ESA|DSS)\b|"
+        r"统一福利|救济金|福利金|住房补贴|低保", re.I)),
+    # A child's SCHOOL by name or attendance. "near a good primary school" is a housing
+    # preference and stays.
+    ("children", re.compile(
+        r"\b(?:attends?|attending|goes\s+to|is\s+at|enrolled\s+at)\s+(?-i:[A-Z][\w'’-]+)|"
+        r"(?-i:[A-Z][a-z]+)\s+(?-i:Primary|Secondary|Academy|School|Nursery|Infants|Juniors)\b|"
+        r"(?:儿子|女儿|孩子)(?:叫|名叫|名字)|(?:小学|中学|幼儿园)(?:上学|读书|念书)|就读于", re.I)),
     # A self-identifying name (R1-08): "Hi. My name is Priya Raman, ..." stayed in the
     # episodic layer while the assistant told the user "I don't have your name".
     ("identity", re.compile(
@@ -487,6 +507,9 @@ _CLAUSE_BOUNDARY = re.compile(
 # nothing past this bound is needed, and redaction must never be the expensive step.
 _REDACT_MAX_CHARS = 8_000
 _SENSITIVE_MARKER = "[personal detail not stored]"
+_CHILD_NAME_RE = re.compile(
+    r"\b((?i:son|daughter|child|kid|stepson|stepdaughter))\b,?\s+(?:(?i:called|named)\s+)?"
+    r"[A-Z][a-z]{1,20}\b,?")
 
 
 def redact_sensitive(text: str) -> tuple[str, list[str]]:
@@ -504,6 +527,10 @@ def redact_sensitive(text: str) -> tuple[str, list[str]]:
             found.append("contact")
             value = _PHONE_RE.sub("[contact detail not stored]",
                                   _EMAIL_RE.sub("[contact detail not stored]", value))
+        if _CHILD_NAME_RE.search(value):
+            # "Has a son, Tom, who …": the name sits in its own comma clause (R4-08).
+            found.append("children")
+            value = _CHILD_NAME_RE.sub(lambda m: m.group(1) + " " + _SENSITIVE_MARKER, value)
         out: list[str] = []
         start = 0
         bounds = [(m.start(), m.end()) for m in _CLAUSE_BOUNDARY.finditer(value)]
@@ -596,7 +623,10 @@ def sanitize_soft_preferences(values) -> list:
 # health inference (2026-10-19 A-10). Reflections never keep inferences of this kind; the
 # stated requirement itself stays in the semantic layer as a property fact.
 _SENSITIVE_INFERENCE_RE = re.compile(
-    r"\b(?:mobility|disab\w*|impair\w*|medical|illness|elderly|frail|"
+    # "Accessibility is likely a non-negotiable requirement…" (R4-08): an inference about
+    # the person; the stated requirement stays in the turn's criteria.
+    r"\b(?:accessib\w*|wheelchair|benefits?|universal credit|"
+    r"mobility|disab\w*|impair\w*|medical|illness|elderly|frail|"
     r"health (?:condition|issue|problem|need)s?|(?:medical|health|physical) condition)\b|"
     r"行动不便|残疾|身体状况", re.I)
 

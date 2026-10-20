@@ -338,19 +338,49 @@ _SAVED_BUDGET = re.compile(
     re.I | re.M)
 
 
+def searched_without_budget(artifacts) -> bool:
+    """True when this turn ran a listing search whose criteria carried no budget."""
+    for artifact in artifacts or []:
+        if not isinstance(artifact, dict) or artifact.get("tool") != "search_properties":
+            continue
+        raw = artifact.get("raw_data")
+        if not artifact.get("success") or not isinstance(raw, dict) or raw.get("success") is False:
+            continue
+        criteria = raw.get("search_criteria") or raw.get("known_criteria")
+        if isinstance(criteria, dict) and criteria.get("max_budget") in (None, "", 0):
+            return True
+    return False
+
+
 def acknowledge_remembered_budget(text: str, memory_block: str, max_budget=None,
-                                  reply_language: str = "en") -> str:
+                                  reply_language: str = "en", *,
+                                  searched_without_budget: bool = False) -> str:
+    """Name a saved budget the turn did not use, and offer to apply it.
+
+    Two triggers: the answer claims no budget was given (R2-21), or the turn's search ran
+    with no budget while one is saved — "Find me a 1-bed in Camden, I don't want to repeat
+    myself" listed £2,000-£3,900 homes against a remembered £1,800 and said nothing
+    (R3-03). The saved budget is NOT applied automatically: that is an owner decision."""
     body = str(text or "")
-    if max_budget or not _NO_BUDGET_CLAIM.search(body):
+    if max_budget:
+        return body
+    claims_none = bool(_NO_BUDGET_CLAIM.search(body))
+    if not claims_none and not searched_without_budget:
         return body
     match = _SAVED_BUDGET.search(str(memory_block or ""))
     if not match:
         return body
     amount = " ".join((match.group(1) or match.group(2) or "").split())
     zh = str(reply_language or "").lower().startswith("zh")
-    note = (f"补充：你之前保存过预算 {amount}。如需按这个预算重新搜索，请告诉我。" if zh else
-            f"Note: you saved a budget of {amount} earlier. Say if you want me to apply it "
-            "to this search.")
+    if claims_none:
+        note = (f"补充：你之前保存过预算 {amount}。如需按这个预算重新搜索，请告诉我。" if zh else
+                f"Note: you saved a budget of {amount} earlier. Say if you want me to apply it "
+                "to this search.")
+    else:
+        note = (f"补充：你之前保存过预算 {amount}，本次搜索没有使用它，所以部分结果可能超出这个预算。"
+                "如需按这个预算重新筛选，请告诉我。" if zh else
+                f"Note: you saved a budget of {amount} earlier. It was not applied to this search, "
+                "so some results may be above it. Say if you want me to apply it.")
     return body if note in body else f"{body.rstrip()}\n\n{note}"
 
 
@@ -3314,7 +3344,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             or _current_message(state.get("user_query") or ""), reply_language)
         text = acknowledge_remembered_budget(
             text, state.get("memory_context") or "",
-            (state.get("accumulated_search_criteria") or {}).get("max_budget"), reply_language)
+            (state.get("accumulated_search_criteria") or {}).get("max_budget"), reply_language,
+            searched_without_budget=searched_without_budget(state.get("tool_artifacts")))
         memory_contract = state.get("memory_write_contract") or {}
         if memory_contract.get("requested"):
             lang = _reply_language_from_ctx(
@@ -5219,6 +5250,11 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 if evidence:
                     response = response + '\n\n' + evidence
             response_type = "search"
+            # After the critic, whose regeneration drops anything appended before it: a
+            # budgetless search names the saved budget it did not use (R3-03).
+            response = acknowledge_remembered_budget(
+                response, state.get("memory_context") or "", acc.get("max_budget"), language,
+                searched_without_budget=searched_without_budget(artifacts))
             # Structured cards (safety/POI/commute) also present this turn ride along in tool_data.
             _merge_cards(artifacts, tool_data)
             return {"final_response": _sanitize_final_response(
@@ -5248,6 +5284,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
 
         # Plain answer.
         response = _sanitize_final_response(validate_commute_response(final_response, state))
+        response = acknowledge_remembered_budget(
+            response, state.get("memory_context") or "", acc.get("max_budget"), lang,
+            searched_without_budget=searched_without_budget(artifacts))
         return {"final_response": _apply_memory_contract(response),
                 "response_type": response_type, "tool_data": tool_data}
 

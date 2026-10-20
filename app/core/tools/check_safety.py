@@ -83,8 +83,22 @@ def check_safety_impl(
                 per_month = total_crimes / max(1, crime_data.get('months_covered', 1))
 
             safety_score, band = score_from_monthly_count(per_month)
+            # Every queried month FAILED (e.g. HTTP 503): an outage, not "too few records"
+            # (R2-32 — the answer said the police data "returned no records").
+            police_outage = bool(crime_data.get('failed_months')) and not crime_data.get('successful_months')
 
-            if safety_score is None:
+            if police_outage:
+                safety_score, band = None, None
+                scoring_explanation = (
+                    "警方数据服务本次未响应，无法给出评分。" if is_chinese
+                    else "The police data service did not respond, so no score is given.")
+                safety_analysis = (
+                    "data.police.uk 本次对所有查询月份都没有响应（服务故障），因此没有检查犯罪情况；"
+                    "这不能说明该区域安全或不安全。" if is_chinese
+                    else "data.police.uk did not respond for any queried month (a service "
+                         "outage), so crime levels were not checked this time. This is not "
+                         "evidence either way.")
+            elif safety_score is None:
                 # A zero or missing rate is an ABSENT ANSWER, not a quiet neighbourhood.
                 # Presenting it as a score is exactly how "9 crimes, 96/100, very safe" got
                 # in front of a user.
@@ -149,10 +163,15 @@ def check_safety_impl(
             'fetched_at': crime_data.get('fetched_at'),
             'reference_basis': reference_note(),
             'caveat': CAVEAT_ZH if is_chinese else CAVEAT_EN,
+            'service_status': ('unavailable' if (crime_data or {}).get('failed_months')
+                               and not (crime_data or {}).get('successful_months') else 'ok'),
             'recommendation': (
                 f"This area has a safety level of {safety_level} with a safety score of "
                 f"{safety_score}/100 ({reference_note()}). {CAVEAT_EN}"
                 if safety_score is not None else
+                "Safety could not be scored: data.police.uk did not respond (service outage). "
+                "Say the check failed; do not say it returned no records."
+                if (crime_data or {}).get('failed_months') and not (crime_data or {}).get('successful_months') else
                 "Safety could not be scored for this location: data.police.uk returned too "
                 "few records. That is not evidence of low crime."),
             'next_action_hint': 'NOW use Final Answer to summarize this safety information for the user. Do NOT call search_properties again - the user already has property recommendations.'

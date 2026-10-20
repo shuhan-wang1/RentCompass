@@ -498,7 +498,10 @@ def test_both_consumers_read_the_one_cue_table():
     for q in (E1_QUERY, E5_QUERY, E11_QUERY, A1_QUERY, "hi", "帮我查治安"):
         cued = agent_loop._cued_dimensions(q)
         lines = agent_loop._missing_requested_dimension_lines(q, set(), "en")
-        assert len(lines) == len(cued), q
+        # A1 says "No commute to worry about": the cue fires, but no commute apology is
+        # owed for it (R2-24 — "Commute time has not been calculated yet.").
+        owed = [d for d in cued if not (d == "commute" and agent_loop._commute_opted_out(q))]
+        assert len(lines) == len(owed), q
         considered = agent_loop._unserved_cued_dimensions(q, [])
         assert considered == cued, q
 

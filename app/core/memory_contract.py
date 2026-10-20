@@ -45,6 +45,11 @@ def memory_contract_from_artifact(artifact: dict | None) -> dict:
         "success": success,
         "error": artifact.get("error"),
     }
+    if isinstance(raw, dict) and raw.get("security_decision") and raw.get("success") is False:
+        # The tool ran and REFUSED by policy ("I can only save durable facts ... not
+        # instructions"): not a tool failure (R2-30).
+        contract["policy_refused"] = True
+        contract["policy_reason"] = str(raw.get("error") or "")
     if isinstance(stored, str) and stored.strip():
         contract['stored_content'] = stored
     return contract
@@ -84,6 +89,10 @@ def memory_notice(contract: dict | None, language: str = "") -> str:
                          "in a message of its own.")
         return ("本轮没有执行记忆保存，所以没有保存任何内容。" if zh
                 else "I didn't get to save that to memory this turn, so nothing was saved.")
+    if (contract or {}).get("policy_refused"):
+        return ("这次没有保存到记忆：我只保存关于你的长期信息（偏好、预算、限制条件），不保存指令。" if zh
+                else "I didn't save that to memory: I only save durable facts about you "
+                     "(preferences, budget, constraints), not instructions.")
     return ("记忆保存失败，本轮没有确认写入。" if zh
             else "I could not save that to memory because the memory tool failed.")
 

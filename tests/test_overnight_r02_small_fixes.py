@@ -1,0 +1,69 @@
+"""Round-2 cheap fixes: R2-11, R2-24, R2-29, R2-30, R2-32."""
+from __future__ import annotations
+
+import pytest
+
+
+# ── R2-29: "favourite" as an adjective is not saved-listing talk ──────────────────────
+@pytest.mark.parametrize("message,expect_hint", [
+    ("My favourite area is Angel and my favourite fruit is mango.", False),
+    ("Please save the Gloucester Avenue one to my favourites", True),
+    ("Show me my favourites", True),
+    ("帮我收藏这套", True),
+])
+def test_r2_29_save_button_hint_only_for_saved_listing_talk(message, expect_hint):
+    from core.constraint_updates import validate_current_criteria_recap
+    out = validate_current_criteria_recap("Noted.", {}, message=message, language="en")
+    assert ("heart/Save button" in out) is expect_hint
+
+
+# ── R2-11: Chinese answers get Chinese guard footers ──────────────────────────────────
+def test_r2_11_caveat_follows_the_answer_language():
+    from uk_rent_agent.agent.critic import CAVEAT, CAVEAT_ZH, append_caveat
+    zh_answer = "关于您问的第二个房源的通勤时间，需要先说明一点：系统把起点解析成了另一个车站，因此这组数据不能代表真实通勤情况。"
+    out = append_caveat(zh_answer)
+    assert out.endswith(CAVEAT_ZH) and CAVEAT not in out
+    assert append_caveat("The rent is £1,500 a month.").endswith(CAVEAT)
+
+
+# ── R2-30: a policy refusal is not a tool failure ─────────────────────────────────────
+def test_r2_30_policy_refusal_is_worded_as_a_refusal():
+    from core.memory_contract import memory_contract_from_artifact, memory_notice
+    artifact = {"tool": "remember", "success": True, "raw_data": {
+        "success": False, "id": None, "stored": None, "mtype": None,
+        "security_decision": "instruction_not_fact",
+        "error": "I can only save durable facts about you (preferences, budget, constraints) "
+                 "— not instructions, so I did not store that."}}
+    contract = memory_contract_from_artifact(artifact)
+    notice = memory_notice(contract, "en")
+    assert "memory tool failed" not in notice and "not instructions" in notice
+    assert "不保存指令" in memory_notice(contract, "zh")
+
+
+# ── R2-24: "no commute" opts out of the commute dimension ─────────────────────────────
+@pytest.mark.parametrize("message", [
+    "Find a 1-bed in Camden under £2,000, no commute",
+    "Studio in Hackney, I don't need a commute",
+])
+def test_r2_24_no_commute_messages_get_no_commute_apology(message):
+    from core.agent_loop import _missing_requested_dimension_lines
+    lines = _missing_requested_dimension_lines(message, set(), "en")
+    assert not any("Commute time" in line for line in lines)
+    asked = _missing_requested_dimension_lines("Find a 1-bed in Camden, how long is the commute to UCL?",
+                                               set(), "en")
+    assert any("Commute time" in line for line in asked)
+
+
+# ── R2-32: a police API outage is not an empty result ─────────────────────────────────
+def test_r2_32_all_months_failed_is_reported_as_an_outage(monkeypatch):
+    from core.tools import check_safety
+    monkeypatch.setattr(check_safety, "get_crime_data_by_location", lambda *a, **k: {
+        "total_crimes_6m": 0, "months_covered": 0, "crimes_per_month": None,
+        "queried_months": ["2026-07", "2026-08"], "successful_months": [],
+        "failed_months": ["2026-07", "2026-08"], "source": "data.police.uk"})
+    result = check_safety.check_safety_impl(address="Hackney, London E8")
+    assert result["service_status"] == "unavailable"
+    assert result["safety_score"] is None
+    assert "did not respond" in result["safety_analysis"]
+    assert "too few records" not in result["safety_analysis"]
+    assert "did not respond" in result["recommendation"]

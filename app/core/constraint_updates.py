@@ -275,17 +275,29 @@ def validate_current_criteria_recap(response: str, criteria: dict, *, message: s
             if count != days:
                 corrected = True
                 continue
-        if re.search(r'favou?rites?|收藏', message, re.I) and re.search(
+        if _asks_to_save_listing(message) and re.search(
                 r'favou?rite.{0,60}(?:yourself|visit|listing page|onthemarket)|(?:yourself|visit).{0,60}favou?rite', line, re.I) and re.search(r'onthemarket|external|外部', line, re.I):
             continue
         lines.append(line)
     if corrected:
         lines.append(f'当前已保存的到岗频率是每周 {days:g} 天。' if language == 'zh' else
                      f'Your current criteria record {days:g} office days per week.')
-    if re.search(r'favou?rites?|收藏', message, re.I) and not re.search(r'heart|Saved view|Save button|收藏按钮|爱心', '\n'.join(lines), re.I):
+    if _asks_to_save_listing(message) and not re.search(r'heart|Saved view|Save button|收藏按钮|爱心', '\n'.join(lines), re.I):
         lines.append('可点击房源卡片的爱心收藏按钮，再到“收藏夹”查看；聊天助手不能代您点击。' if language == 'zh' else
                      'Use the heart/Save button on the listing card, then open the Saved view. The chat assistant cannot click it for you.')
     return '\n'.join(lines).strip()
+
+
+def _asks_to_save_listing(message: str) -> bool:
+    """Saved-listing (favourites) talk, not the adjective: "my favourite area is Angel" and
+    "my favourite fruit" got "Use the heart/Save button on the listing card" (R2-29)."""
+    text = str(message or '')
+    return bool(re.search(
+        r'\b(?:save|add|put|move)\b[^.!?]{0,40}\b(?:to|in|into)\s+(?:my\s+)?favou?rites\b|'
+        r'\b(?:save|mark|keep)\b[^.!?]{0,40}\bas\s+(?:a\s+|my\s+)?favou?rite\b|'
+        r'\bfavou?rites?\s+(?:list|folder|page|view|tab)\b|\bmy\s+favou?rites\b|'
+        r'\b(?:saved|favourited|favorited)\s+(?:listings?|flats?|homes?|properties)\b|'
+        r'\bfavou?rite\s+(?:it|this|that|them|the\s+\w+\s+one)\b|收藏', text, re.I))
 
 
 def commute_query_forbidden(text: str) -> bool:

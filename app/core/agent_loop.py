@@ -1966,6 +1966,19 @@ def _cued_dimensions(message: str) -> list:
     return [dim for dim in result if dim != 'commute'] if commute_query_forbidden(message) else result
 
 
+def _commute_opted_out(message: str, state: dict | None = None) -> bool:
+    """The user said they have no commute ("no commute", "I don't need a commute"), or the
+    criteria record it. The cue still FIRES on such a message (the deterministic gates stop
+    the fetch); this keeps the apology from listing "Commute time has not been calculated
+    yet." for it (R2-24)."""
+    if ((state or {}).get("accumulated_search_criteria") or {}).get("no_commute"):
+        return True
+    from core.tools.search_properties import _extract_no_commute
+    return bool(_extract_no_commute(message or "") or re.search(
+        r"\b(?:don.t|do not|no)\s+(?:need|want|have)\s+(?:a\s+|any\s+)?commut|"
+        r"\bwithout\s+(?:a\s+)?commute\b|不需要通勤|不用通勤", message or "", re.I))
+
+
 def _dimension_satisfying_tools(dim: str) -> tuple:
     """Every tool whose completed result SATISFIES `dim` (the model may pick any of them)."""
     return dimensions.satisfying_tools(dim)
@@ -1990,6 +2003,8 @@ def _missing_requested_dimension_lines(message: str, executed_tools: set, lang: 
     apology, never to a claim.
     """
     cued = set(_cued_dimensions(message))
+    if "commute" in cued and _commute_opted_out(message):
+        cued.discard("commute")     # "no commute" is not a request for a commute (R2-24)
     lines = []
     for dim, _cues, tools in dimensions.DIMENSION_CUES:
         if dim not in cued or any(t in executed_tools for t in tools):

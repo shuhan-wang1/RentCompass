@@ -1780,6 +1780,24 @@ def _follow_up_switch_area(text: str) -> str | None:
     return best[1] if best else None
 
 
+def canonical_requested_area(value) -> str | None:
+    """A requested area as the search needs it; None when blank.
+
+    "Angel, Islington" / "Hackney, London" is a place qualified by its borough or city.
+    Searched verbatim it matched no covered area and the answer led with a false "listing
+    source is temporarily unavailable" (R2-23). The first covered component wins."""
+    if not (isinstance(value, str) and value.strip()):
+        return None
+    text = value.strip()
+    if ',' in text:
+        for part in (p.strip() for p in text.split(',') if p.strip()):
+            key = re.sub(r"[’']", "", part.lower())
+            canonical = _KNOWN_AREAS.get(key) or _CUE_ONLY_AREAS.get(key)
+            if canonical and canonical != 'London':
+                return canonical
+    return text
+
+
 def names_follow_up_area(text: str, candidate: str) -> bool:
     """True when ``text`` names ``candidate`` (a place the model chose) right after an explicit
     switch cue or a short follow-up ("and Newcastle?" -> "Newcastle upon Tyne")."""
@@ -2959,7 +2977,7 @@ async def search_properties_impl(
         # 步骤 1: 解析搜索区域（唯一必需项）与通勤标注目标
         # ================================================================
         def _clean_area(v):
-            return v.strip() if isinstance(v, str) and v.strip() else None
+            return canonical_requested_area(v)
 
         search_area = _clean_area(area) or _clean_area(location)
         # 🆕 多区域：清洗/去重显式传入的 areas 列表。缺省单区域时以 areas[0] 作主区域，

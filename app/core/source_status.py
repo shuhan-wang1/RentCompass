@@ -20,6 +20,23 @@ def source_failure_summary(results_by_area: dict, *, language: str = 'en') -> di
         failures[area] = {'status': status, **safe}
     if not failures:
         return {}
+    # Other areas returned complete results: the failure is THAT area's, not a source outage.
+    # "The OnTheMarket listing source is temporarily unavailable" led an answer listing four
+    # verified homes from the other areas, because one requested area (Liverpool, from
+    # "Liverpool Street") was not covered (R2-07).
+    served = [area for area, result in (results_by_area or {}).items()
+              if area not in failures
+              and ((result or {}).get('meta') or {}).get('source_status') not in FAILED_SOURCE_STATES
+              and ((result or {}).get('meta') or {}).get('retrieval_complete') is not False]
+    if served:
+        failed_names = ', '.join(str(area) for area in failures)
+        served_names = ', '.join(str(area) for area in served)
+        message = (f'未能获取 {failed_names} 的房源（该区域不在覆盖范围内或来源暂不可用）；'
+                   f'以下结果来自 {served_names}。' if language == 'zh' else
+                   f'Listings for {failed_names} could not be retrieved (the area is not covered '
+                   f'or its source was unavailable); the results below cover {served_names}.')
+        return {'source_status': 'partial', 'source_errors': failures, 'source_message': message,
+                'retrieval_complete': False}
     statuses = {item['status'] for item in failures.values()}
     status = ('blocked' if statuses & {'blocked', 'robots_disallowed', 'cooldown'} else
               'rate_limited' if 'rate_limited' in statuses else

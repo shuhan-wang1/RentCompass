@@ -387,6 +387,16 @@ def _pid_alive(pid: int) -> bool:
         return False
     except Exception:
         return True          # exists but not ours (EPERM), or cannot tell: assume alive
+    # A SIGKILLed process that its parent has not reaped is a zombie: kill(pid, 0) still
+    # succeeds, yet it can never write. Counting it alive kept its lease blocking retries
+    # with 409 "still in progress" until the heartbeat went stale (R3-12).
+    try:
+        with open(f"/proc/{int(pid)}/stat", encoding="ascii", errors="replace") as handle:
+            state = handle.read().rsplit(")", 1)[1].split()[0]
+        if state in ("Z", "X", "x"):
+            return False
+    except (OSError, IndexError, ValueError):
+        pass
     return True
 
 
@@ -526,10 +536,14 @@ class ConversationStore:
         owner = lease["owner_id"] if "owner_id" in lease.keys() else None
         if owner is None or owner == self._owner_id:
             return True
-        row = self._conn.execute("SELECT heartbeat_at FROM store_owners WHERE owner_id=?",
-                                 (owner,)).fetchone()
+        row = self._conn.execute(
+            "SELECT heartbeat_at, host, pid FROM store_owners WHERE owner_id=?",
+            (owner,)).fetchone()
         if row is None:
             return False                        # a previous process: its turn cannot write
+        if (row["host"] == _host_name() and row["pid"] is not None
+                and not _pid_alive(row["pid"])):
+            return False                        # dead on this host: no need to wait it out (R3-12)
         stale = (datetime.datetime.fromisoformat(now)
                  - datetime.timedelta(seconds=LEASE_OWNER_STALE_SECONDS)).isoformat()
         return row["heartbeat_at"] > stale

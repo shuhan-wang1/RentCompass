@@ -2929,6 +2929,15 @@ def _queue_background_job(job: dict) -> bool:
     return True
 
 
+def _memory_criteria_changes(before, after) -> dict:
+    """The turn's criteria slot changes for the memory job; never raises (R3-02)."""
+    try:
+        from rag.agent_memory import criteria_changes
+        return criteria_changes(before, after)
+    except Exception:
+        return {}
+
+
 def _process_background_job(job: dict, worker_id: str) -> None:
     """Prepare and apply one leased outbox job.
 
@@ -3026,6 +3035,8 @@ def _apply_background_job(job: dict, worker_id: str) -> None:
                 turn_id=job["turn_id"],
                 turn_started_at=payload.get("turn_started_at"),
                 context_tainted=bool(payload.get("context_tainted", False)),
+                **({"criteria_changes": payload["criteria_changes"]}
+                   if payload.get("criteria_changes") else {}),
             )
             if ok is False:
                 raise RuntimeError("memory store did not acknowledge the turn")
@@ -3396,6 +3407,10 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     # ── 构建 AgentState 并调用 LangGraph ─────────────────────────
     # session_id passed to the graph/checkpointer IS the conversation_id, so the
     # checkpointer thread_id = f"{user_id}:{conversation_id}".
+    # The criteria as they stood BEFORE this turn: the memory job diffs them against the
+    # turn's final criteria so an elliptical correction supersedes the old fact (R3-02).
+    import copy as _copy
+    _criteria_before_turn = _copy.deepcopy(persistent_snapshot['accumulated_search_criteria'] or {})
     initial_state = create_initial_state(
         user_query=query_with_history,
         extracted_context=extracted_context,
@@ -3687,6 +3702,10 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             # Taint A+ (§2.8c): a tainted turn hardens the auto-memory bypass to
             # user-only fact extraction so untrusted content can't seed durable memory.
             "context_tainted": bool(final_state.get('context_tainted', False)),
+            # Deterministic slot changes of this turn (system criteria state, never
+            # assistant prose): "Make that Poplar" replaces the stored area (R3-02).
+            "criteria_changes": _memory_criteria_changes(
+                _criteria_before_turn, final_state.get('accumulated_search_criteria')),
         },
     })
 

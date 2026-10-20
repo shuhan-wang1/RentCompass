@@ -114,9 +114,143 @@ def _is_trivial_for_extraction(user_msg: str) -> bool:
     # messages (a few Chinese characters can be fully informational, e.g. a place
     # name or budget) unless they matched a pattern above.
     has_cjk = any("一" <= ch <= "鿿" for ch in norm)
-    if not has_cjk and len(norm) < _TRIVIAL_MIN_LEN:
+    if not has_cjk and len(norm) < _TRIVIAL_MIN_LEN and not _FIRST_PERSON_STATEMENT.match(norm):
         return True
     return False
+
+
+# A short first-person statement is durable, not an acknowledgement: "I have a dog" (12
+# characters) and "I am vegan" fell under the length gate and were never extracted (R3-02).
+_FIRST_PERSON_STATEMENT = re.compile(
+    r"^(?:i\s+(?:have|am|own|work|study|live|need|use|can't|cannot|don't|do\s+not|prefer|hate|love|"
+    r"smoke|keep)|i'm|i've|im\s|my\s|we\s+(?:have|are|own)|we're)\b", re.I)
+
+
+# The criteria slots a turn can change, with the keys they live under in
+# ``accumulated_search_criteria``. Deterministic: derived from the system's criteria state,
+# never from assistant prose (R2-06 stands).
+_CRITERIA_SLOTS = (
+    ("area", ("areas", "area")),
+    ("budget", ("max_budget",)),
+    ("bedrooms", ("bedrooms",)),
+    ("room_type", ("room_type",)),
+    ("commute_destination", ("commute_destination", "destination")),
+    ("max_commute_minutes", ("max_commute_time", "max_travel_time")),
+)
+
+
+def _slot_value(criteria: dict, keys: tuple):
+    for key in keys:
+        value = criteria.get(key)
+        if key == "areas" and isinstance(value, (list, tuple)):
+            value = [str(v).strip() for v in value if str(v or "").strip()]
+            if value:
+                return value
+            continue
+        if value not in (None, "", [], {}):
+            if key == "area":
+                return [str(value).strip()]
+            return value
+    return None
+
+
+def criteria_changes(before, after) -> dict:
+    """``{slot: {"from": old, "to": new}}`` for each search criterion this turn changed.
+
+    "Make that Poplar, budget £1,500" after "a studio in Whitechapel under £1,700" gives
+    ``{"area": {"from": ["Whitechapel"], "to": ["Poplar"]}, "budget": {"from": 1700,
+    "to": 1500}}``. Only a slot that HAD a value and now holds a different one is a change;
+    a newly set slot supersedes nothing."""
+    before = before if isinstance(before, dict) else {}
+    after = after if isinstance(after, dict) else {}
+    changes = {}
+    for slot, keys in _CRITERIA_SLOTS:
+        old, new = _slot_value(before, keys), _slot_value(after, keys)
+        if old is None or new is None:
+            continue
+        same = ({str(v).lower() for v in old} == {str(v).lower() for v in new}
+                if isinstance(old, list) and isinstance(new, list) else str(old) == str(new))
+        if not same:
+            changes[slot] = {"from": old, "to": new}
+    return changes
+
+
+def _sanitize_changes(changes) -> dict:
+    """Keep only well-formed slot changes with short scalar/list values."""
+    if not isinstance(changes, dict):
+        return {}
+    clean = {}
+    known = {slot for slot, _ in _CRITERIA_SLOTS}
+    for slot, change in changes.items():
+        if slot not in known or not isinstance(change, dict):
+            continue
+        pair = {}
+        for side in ("from", "to"):
+            value = change.get(side)
+            if isinstance(value, (list, tuple)):
+                value = [str(v)[:60] for v in value if isinstance(v, (str, int, float))][:6]
+            elif isinstance(value, (str, int, float)) and not isinstance(value, bool):
+                value = value if not isinstance(value, str) else value[:60]
+            else:
+                value = None
+            pair[side] = value
+        if pair["from"] not in (None, []) and pair["to"] not in (None, []):
+            clean[slot] = pair
+    return clean
+
+
+def _resolved_criteria_block(changes: dict) -> str:
+    """The extractor's labelled context: what an elliptical user message refers to."""
+    return ("RESOLVED CRITERIA CHANGES THIS TURN (computed by the system from the user's own "
+            "messages, not assistant text; use them only to understand what the user's message "
+            "refers to, e.g. 'make that Poplar' means the area is now Poplar, and state such a "
+            "fact in full; never add a fact the user did not state):\n"
+            + _render_changes(changes) + "\n\n")
+
+
+def _render_changes(changes: dict) -> str:
+    def show(value):
+        return " / ".join(map(str, value)) if isinstance(value, list) else str(value)
+    return "\n".join(f"- {slot}: {show(change['from'])} -> {show(change['to'])}"
+                     for slot, change in changes.items())
+
+
+def _money_pattern(amount) -> re.Pattern | None:
+    try:
+        value = int(round(float(amount)))
+    except (TypeError, ValueError):
+        return None
+    plain, grouped = str(value), f"{value:,}"
+    alternatives = sorted({re.escape(grouped), re.escape(plain)}, key=len, reverse=True)
+    return re.compile(r"(£\s?)?(?<![\d,.])(?:" + "|".join(alternatives) + r")(?![\d,])")
+
+
+def _superseded_text(text: str, changes: dict) -> str | None:
+    """``text`` with each changed slot's OLD value replaced by the new one, or None.
+
+    Only the two slots whose values have one spelling are rewritten deterministically:
+    a single area replaced by a single area, and a budget amount. The rest is left to the
+    consolidator, which sees the same changes as labelled context."""
+    out = str(text or "")
+    area = changes.get("area")
+    if area and isinstance(area.get("from"), list) and isinstance(area.get("to"), list):
+        removed = [a for a in area["from"] if a.lower() not in {b.lower() for b in area["to"]}]
+        added = [b for b in area["to"] if b.lower() not in {a.lower() for a in area["from"]}]
+        if len(removed) == 1 and len(added) == 1:
+            pattern = re.compile(r"(?<![A-Za-z])" + re.escape(removed[0]) + r"(?![A-Za-z])", re.I)
+            if pattern.search(out) and not re.search(
+                    r"(?<![A-Za-z])" + re.escape(added[0]) + r"(?![A-Za-z])", out, re.I):
+                out = pattern.sub(added[0], out)
+    budget = changes.get("budget")
+    if budget:
+        pattern = _money_pattern(budget.get("from"))
+        try:
+            new_value = int(round(float(budget.get("to"))))
+        except (TypeError, ValueError):
+            pattern = None
+        if pattern is not None and pattern.search(out):
+            out = pattern.sub(lambda m: (m.group(1) or "") + f"{new_value:,}", out)
+    return out if out != text else None
 
 
 def _now_iso():
@@ -490,6 +624,9 @@ def _classify_pii(text: str) -> str:
 
 
 class AgentMemory:
+    # The turn a background write belongs to, for UPDATE provenance (per thread).
+    _turn_local = threading.local()
+
     def __init__(self, db_path: str = _DB_PATH):
         self.col = SQLiteMemoryCollection(db_path)
         self._lock = threading.Lock()
@@ -728,7 +865,7 @@ class AgentMemory:
         except Exception:
             return 5
 
-    def _extract_facts(self, user_msg, assistant_msg="") -> list:
+    def _extract_facts(self, user_msg, assistant_msg="", changes=None) -> list:
         """Durable facts the USER stated, from the user's own message only.
 
         ``assistant_msg`` is accepted for call compatibility and never read: an answer to
@@ -745,7 +882,8 @@ class AgentMemory:
             "a reason, priority or rationale the user did not say (no 'to live close to work', "
             "no 'dealbreaker', no 'key requirement'). Do NOT include greetings, questions, or "
             'chit-chat. If the user stated nothing durable, return {"facts": []}.\n\n'
-            f"User: {user_msg}\n\nJSON: "
+            + (_resolved_criteria_block(changes) if changes else "")
+            + f"User: {user_msg}\n\nJSON: "
         )
         try:
             data = _extract_json(call_ollama(prompt, timeout=60) or "")
@@ -763,7 +901,7 @@ class AgentMemory:
         except Exception:
             return []
 
-    def _consolidate(self, facts, session_id, user_id):
+    def _consolidate(self, facts, session_id, user_id, changes=None):
         if not facts:
             return
         existing, seen = [], set()
@@ -785,9 +923,15 @@ class AgentMemory:
             '"id": "<existing id or null>", "text": "<final memory text>"}]}. '
             "ADD a genuinely new fact; UPDATE (keep id) when a fact refines/replaces an existing one; "
             "DELETE (give id) when a new fact contradicts an existing one; NOOP if already known.\n\n"
-            f"EXISTING:\n{json.dumps(existing, ensure_ascii=False)}\n\n"
+            + (("SEARCH CRITERIA CHANGED THIS TURN (computed by the system from the user's "
+                "messages; not a fact by itself):\n" + _render_changes(changes) + "\n"
+                "An existing memory that states the OLD value of a changed criterion is "
+                "superseded: UPDATE it to the new value or DELETE it. Never keep both values.\n\n")
+               if changes else "")
+            + f"EXISTING:\n{json.dumps(existing, ensure_ascii=False)}\n\n"
             f"NEW FACTS:\n{json.dumps(facts, ensure_ascii=False)}\n\nJSON: "
         )
+        turn_ref = getattr(self._turn_local, "turn_id", None)
         try:
             data = _extract_json(call_ollama(prompt, timeout=60) or "") or {}
             for op in data.get("ops", []):
@@ -797,12 +941,7 @@ class AgentMemory:
                 if ev == "ADD" and text:
                     self.add(text, "semantic", session_id, user_id, importance=7)
                 elif ev == "UPDATE" and oid and text:
-                    update_failed = False
-                    with self._lock:
-                        try:
-                            self.col.update(ids=[oid], documents=[text])
-                        except Exception:
-                            update_failed = True
+                    update_failed = not self._update_semantic(oid, text, turn_ref)
                     if update_failed:
                         # add() acquires self._lock itself. Run the fallback only after
                         # releasing the non-reentrant lock above, otherwise an UPDATE
@@ -817,10 +956,58 @@ class AgentMemory:
         except Exception as e:
             print(f"[memory] consolidate error_type={type(e).__name__}")
 
+    def _update_semantic(self, oid, text, turn_ref=None) -> bool:
+        """Rewrite one semantic row in place, recording WHEN and by which turn.
+
+        An UPDATE used to keep only the original ``created_at``, so a turn-2 correction
+        read as turn 1 holding turn 2's values (R3-02)."""
+        with self._lock:
+            try:
+                meta = {}
+                try:
+                    current = self.col.get(ids=[oid])
+                    meta = dict(((current.get("metadatas") or [None])[0]) or {})
+                except Exception:
+                    meta = {}
+                meta["updated_at"] = _now_iso()
+                if turn_ref:
+                    meta["updated_turn_id"] = str(turn_ref)[:80]
+                if meta.get("hash") is not None and meta.get("user_id"):
+                    # The content hash follows the text, as ``add`` computes it, so the
+                    # superseded wording can be added again later if the user says it.
+                    meta["hash"] = hashlib.md5(
+                        f"{meta.get('mtype') or 'semantic'}|{meta['user_id']}|{text}"
+                        .encode("utf-8")).hexdigest()
+                self.col.update(ids=[oid], documents=[text], metadatas=[meta])
+                return True
+            except Exception:
+                return False
+
+    def _supersede_slot_facts(self, changes, user_id, turn_ref=None) -> int:
+        """Rewrite semantic rows that state a criterion this turn replaced (R3-02).
+
+        "Make that Poplar, budget £1,500" after "a studio in Whitechapel under £1,700" left
+        'Find a studio in Whitechapel' standing beside a new 'Poplar', and the next
+        conversation recalled a studio in Whitechapel at £1,500 — a combination the user
+        never asked for. The change itself is deterministic (the criteria state), so the
+        old value is replaced here, before the consolidator runs."""
+        if not changes:
+            return 0
+        try:
+            rows = self.col.get(where={"$and": [{"user_id": user_id}, {"mtype": "semantic"}]})
+        except Exception:
+            return 0
+        rewritten = 0
+        for oid, doc in zip(rows.get("ids") or [], rows.get("documents") or []):
+            new_text = _superseded_text(doc, changes)
+            if new_text and self._update_semantic(oid, new_text, turn_ref):
+                rewritten += 1
+        return rewritten
+
     def remember_turn(self, user_msg, assistant_msg, session_id="default",
                       user_id=None, tool_used=None, idempotency_key=None,
                       conversation_id=None, turn_id=None, turn_started_at=None,
-                      context_tainted=False):
+                      context_tainted=False, criteria_changes=None):
         """After-turn entry point (run this in the background — it makes LLM calls).
 
         Branch scoping: conversation_id / turn_id / turn_started_at are recorded on
@@ -875,12 +1062,26 @@ class AgentMemory:
             self._enforce_episodic_cap(user_id)
             # Triviality gate: skip the LLM extract+consolidate for greetings/acks/
             # bypass commands and very short messages — they carry nothing durable.
-            if not _is_trivial_for_extraction(user_msg):
-                # Semantic facts come from the USER message only, on every turn (R2-06):
-                # the assistant's text — a recall answer, a reflection it quoted, a
-                # suggestion — is never a statement by the user. (Taint A+ asked for this
-                # on tainted turns only; it now holds everywhere.)
-                self._consolidate(self._extract_facts(user_msg, ""), session_id, user_id)
+            # The turn's criteria CHANGES (system state, labelled, never assistant prose)
+            # let an elliptical correction ("Make that Poplar") supersede the old value
+            # instead of being stored beside it (R3-02).
+            changes = _sanitize_changes(criteria_changes)
+            self._turn_local.turn_id = turn_id
+            try:
+                if changes:
+                    self._supersede_slot_facts(changes, user_id, turn_id)
+                if not _is_trivial_for_extraction(user_msg):
+                    # Semantic facts come from the USER message only, on every turn (R2-06):
+                    # the assistant's text — a recall answer, a reflection it quoted, a
+                    # suggestion — is never a statement by the user. (Taint A+ asked for this
+                    # on tainted turns only; it now holds everywhere.)
+                    if changes:
+                        self._consolidate(self._extract_facts(user_msg, "", changes),
+                                          session_id, user_id, changes)
+                    else:
+                        self._consolidate(self._extract_facts(user_msg, ""), session_id, user_id)
+            finally:
+                self._turn_local.turn_id = None
             self.maybe_reflect(session_id, user_id)
             return True
         except Exception as e:

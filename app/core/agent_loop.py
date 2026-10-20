@@ -328,8 +328,11 @@ def disclose_automatic_memory(text: str, message: str, reply_language: str = "en
 # (R2-21). The minimal guarantee: an answer never says no budget was given while a saved
 # budget fact exists; it names the saved one and offers to apply it.
 _NO_BUDGET_CLAIM = re.compile(
-    r"\b(?:haven.t|have\s+not|didn.t|did\s+not|hasn.t|has\s+not)\s+(?:yet\s+)?(?:given|set|mentioned|told\s+me|"
-    r"specified|shared|provided)\s+(?:me\s+)?(?:a\s+|any\s+|your\s+)?(?:\w+\s+)?budget|"
+    # "Because you didn't give a budget, bedroom count or workplace, …" (R4-11): the base
+    # verb after didn't/did not, as well as the participle after haven't.
+    r"\b(?:haven.t|have\s+not|didn.t|did\s+not|hasn.t|has\s+not)\s+(?:yet\s+)?(?:given|give|set|mentioned|"
+    r"mention|told\s+me|tell\s+me|specified|specify|shared|share|provided|provide)\s+(?:me\s+)?"
+    r"(?:a\s+|any\s+|your\s+)?(?:\w+\s+)?budget|"
     r"\bno\s+budget\s+(?:was\s+|has\s+been\s+|is\s+)?(?:given|set|specified|mentioned|provided)|"
     r"\bwithout\s+(?:a|any)\s+budget\b|没有(?:提供|设置|给出|说明)?预算|未(?:提供|设置|给出)预算", re.I)
 _SAVED_BUDGET = re.compile(
@@ -352,6 +355,17 @@ def searched_without_budget(artifacts) -> bool:
     return False
 
 
+def _without_no_budget_claim(text: str) -> str:
+    """``text`` without the sentences that claim no budget was given (R4-11)."""
+    kept = []
+    for line in str(text or "").split("\n"):
+        pieces = re.split(r"(?<=[.!?。！？])\s+", line)
+        survivors = [p for p in pieces if not _NO_BUDGET_CLAIM.search(p)]
+        if survivors or not line.strip():
+            kept.append(" ".join(survivors))
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
+
+
 def acknowledge_remembered_budget(text: str, memory_block: str, max_budget=None,
                                   reply_language: str = "en", *,
                                   searched_without_budget: bool = False) -> str:
@@ -372,6 +386,11 @@ def acknowledge_remembered_budget(text: str, memory_block: str, max_budget=None,
         return body
     amount = " ".join((match.group(1) or match.group(2) or "").split())
     zh = str(reply_language or "").lower().startswith("zh")
+    if claims_none and searched_without_budget:
+        # The search ran without a budget AND the prose says none was given: the claim is
+        # withdrawn and the saved budget named instead, never both side by side (R4-11).
+        body = _without_no_budget_claim(body)
+        claims_none = False
     if claims_none:
         note = (f"补充：你之前保存过预算 {amount}。如需按这个预算重新搜索，请告诉我。" if zh else
                 f"Note: you saved a budget of {amount} earlier. Say if you want me to apply it "

@@ -72,3 +72,14 @@ def test_format_node_adds_the_note_after_the_critic():
     assert "Bayham Street" in out
     assert "You saved a budget".lower() in out.lower() and "£1,800 per month" in out
     assert out.count("£1,800 per month earlier") == 1
+
+
+# ── R4-11: the no-budget claim does not stand beside the saved-budget note ─────────────
+def test_r4_11_no_budget_claim_is_withdrawn_when_the_note_fires():
+    answer = ("Here are 1-beds in Camden. Because you didn't give a budget, bedroom count or "
+              "workplace, the search used Moorgate as the commute destination. Bayham Street, NW1 "
+              "is £2700/month.")
+    out = acknowledge_remembered_budget(answer, MEMORY, None, "en", searched_without_budget=True)
+    assert "didn't give a budget" not in out
+    assert "Bayham Street" in out and "Here are 1-beds in Camden." in out
+    assert "£1,800 per month" in out and "not applied" in out

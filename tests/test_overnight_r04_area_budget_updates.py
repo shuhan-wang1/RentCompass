@@ -49,3 +49,14 @@ def test_listing_prices_and_years_are_not_budgets(message):
     out = _apply_explicit_criteria_updates({"area": "Camden", "areas": ["Camden"], "max_budget": 1500},
                                            message)
     assert out.get("max_budget") == 1500
+
+
+# ── R4-15: the commute destination ends at the sentence ─────────────────────────────
+@pytest.mark.parametrize("message", [
+    "Hi, I'm moving to London for a job at Canary Wharf. Budget £2300 pcm, 1 bed.",
+    "My office is in Canary Wharf. Budget is £1,800, 1-bed please",
+])
+def test_destination_does_not_swallow_the_next_sentence(message):
+    out = _apply_explicit_criteria_updates({}, message)
+    assert "Budget" not in str(out.get("commute_destination"))
+    assert "Canary Wharf" in str(out.get("commute_destination"))

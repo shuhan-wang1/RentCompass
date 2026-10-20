@@ -1091,6 +1091,9 @@ def extract_destination_from_text(text: str) -> dict | None:
             if not match:
                 continue
             cand = " ".join((match.group("place") or "").split())
+            # The place ends at the sentence: "a job at Canary Wharf. Budget £2300" stored
+            # 'Canary Wharf. Budget' as the commute destination (R4-15). "St." is a title.
+            cand = re.split(r"(?<!\bSt)(?<!\bDr)(?<!\bMt)\.(?=\s|$)", cand, maxsplit=1)[0].strip()
             slug, city, matched_key, source = _match_location(cand)
             if not cand or matched_key is None or source not in {"landmark", "city"}:
                 continue

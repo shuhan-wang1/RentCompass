@@ -952,6 +952,34 @@ class ConversationStore:
                         # the user did not ask (R1-15). Same rule as the fork routes (C-07).
                         self._conn.rollback()
                         raise IdempotencyKeyReused(request_id)
+                    if replay["status"] == "running":
+                        # The turn's owner may be gone: after a restart the dead process's turn
+                        # stayed 'running' and every retry got 409 "still in progress" for good
+                        # (R2-22). A turn no live lease protects is marked failed, so the
+                        # replay is terminal.
+                        lease = self._conn.execute(
+                            """SELECT l.turn_id, l.expires_at, l.owner_id, t.status
+                               FROM conversation_turn_leases l
+                               LEFT JOIN turns t ON t.id=l.turn_id
+                               WHERE l.user_id=? AND l.turn_id=?""",
+                            (user_id, replay["id"]),
+                        ).fetchone()
+                        if lease is None or not self._lease_blocks(lease, now):
+                            self._conn.execute(
+                                """UPDATE turns SET status='failed', completed_at=?
+                                   WHERE user_id=? AND id=? AND status='running'""",
+                                (now, user_id, replay["id"]),
+                            )
+                            if lease is not None:
+                                self._conn.execute(
+                                    """DELETE FROM conversation_turn_leases
+                                       WHERE user_id=? AND turn_id=?""",
+                                    (user_id, replay["id"]),
+                                )
+                            replay = self._conn.execute(
+                                "SELECT * FROM turns WHERE user_id=? AND id=?",
+                                (user_id, replay["id"]),
+                            ).fetchone()
                     self._conn.commit()
                     out = self._turn_dict(replay)
                     out["replayed"] = True
@@ -1186,6 +1214,13 @@ class ConversationStore:
                    WHERE t.user_id=? AND t.id=?""",
                 (user_id, turn_id),
             ).fetchone()
+        if row is not None and row["content"] is None and row["status"] == "failed":
+            # Interrupted before any answer was stored (a restart mid-turn): the replay is
+            # still terminal, never a 500 or an endless 409 (R2-22).
+            return {"conversation_id": row["conversation_id"], "turn_id": row["turn_id"],
+                    "response_type": "error", "interrupted": True, "replayed": True,
+                    "message": ("This request was interrupted before it finished (the service "
+                                "restarted), so no answer was saved. Please send it again.")}
         if row is None or row["content"] is None:
             return None
         payload = {

@@ -85,6 +85,7 @@ from core.constraint_updates import commute_query_forbidden
 from core.memory_contract import (
     compose_memory_contract_response,
     memory_contract_from_artifact,
+    memory_contract_from_artifacts,
 )
 from core.prompt_spec import (
     PromptAssemblyError,
@@ -5007,10 +5008,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                               if a.get("tool") == "search_properties"
                               and isinstance(a.get("raw_data"), dict)), None)
         latest_search_data = latest_search.get("raw_data") if latest_search else {}
-        memory_art = next((a for a in reversed(artifacts) if a.get("tool") == "remember"), None)
+        memory_arts = [a for a in artifacts if a.get("tool") == "remember"]
         memory_contract = dict(state.get("memory_write_contract") or {})
-        if memory_art is not None:
-            memory_contract = memory_contract_from_artifact(memory_art)
+        if memory_arts:
+            memory_contract = memory_contract_from_artifacts(memory_arts)
         update = {
             "messages": messages,
             "tool_artifacts": artifacts,
@@ -5045,8 +5046,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
 
         # Explicit memory writes are rendered from the observed tool outcome, but a
         # side effect must not swallow an independent result from the same multi-intent turn.
-        memory_art = next((a for a in reversed(artifacts) if a.get("tool") == "remember"), None)
-        memory_contract = (memory_contract_from_artifact(memory_art) if memory_art is not None
+        memory_arts = [a for a in artifacts if a.get("tool") == "remember"]
+        memory_contract = (memory_contract_from_artifacts(memory_arts) if memory_arts
                            else dict(state.get("memory_write_contract") or {}))
         lang = _reply_language_from_ctx(
             state.get("extracted_context") or {},

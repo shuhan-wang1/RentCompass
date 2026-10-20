@@ -55,14 +55,49 @@ def memory_contract_from_artifact(artifact: dict | None) -> dict:
     return contract
 
 
+def memory_contract_from_artifacts(artifacts: list | None) -> dict:
+    """One contract for EVERY remember call of the turn (R2-31).
+
+    "Remember that I have a cat. 记住我对花粉过敏。" made two successful writes and the reply
+    echoed only the last. Each acknowledged text is listed; a mix of saved and failed writes
+    says so."""
+    contracts = [memory_contract_from_artifact(a) for a in (artifacts or []) if isinstance(a, dict)]
+    contracts = [c for c in contracts if c]
+    if not contracts:
+        return {}
+    if len(contracts) == 1:
+        return contracts[0]
+    saved = [c for c in contracts if c.get('success')]
+    if not saved:
+        return contracts[-1]
+    combined = dict(saved[-1])
+    texts = [c['stored_content'] for c in saved if isinstance(c.get('stored_content'), str)]
+    combined['stored_contents'] = list(dict.fromkeys(texts))
+    combined.pop('stored_content', None)
+    if len(saved) < len(contracts):
+        combined['failed_count'] = len(contracts) - len(saved)
+    return combined
+
+
 def saved_content_quote(contract: dict | None, language: str = '') -> str:
-    """Only text acknowledged by the write result may be presented as saved."""
-    content = (contract or {}).get('stored_content')
-    if not (contract or {}).get('success') or not isinstance(content, str) or not content.strip():
+    """Only text acknowledged by the write result may be presented as saved.
+
+    The model may store a paraphrase: an English paraphrase of a Chinese sentence is not
+    labelled 原文 (the original wording)."""
+    contents = (contract or {}).get('stored_contents')
+    if not contents:
+        content = (contract or {}).get('stored_content')
+        contents = [content] if isinstance(content, str) and content.strip() else []
+    contents = [c for c in contents if isinstance(c, str) and c.strip()]
+    if not (contract or {}).get('success') or not contents:
         return ''
     if str(language).lower().startswith('zh'):
-        return '已保存的原文：\n「' + content + '」'
-    return 'Saved text:\n“' + content + '”'
+        # 原文 only when every saved text is itself Chinese; an English paraphrase of a
+        # Chinese sentence is "saved content", not the original wording (R2-31).
+        label = ('已保存的原文：' if all(re.search(r'[\u4e00-\u9fff]', c) for c in contents)
+                 else '已保存的内容：')
+        return label + '\n' + '\n'.join('「' + c + '」' for c in contents)
+    return 'Saved text:\n' + '\n'.join('“' + c + '”' for c in contents)
 
 
 def strip_saved_content_quote(response: str, contract: dict | None, language: str = '') -> str:
@@ -77,6 +112,9 @@ def memory_notice(contract: dict | None, language: str = "") -> str:
         return ""
     zh = str(language or "").lower().startswith("zh")
     if (contract or {}).get("success"):
+        if (contract or {}).get("failed_count"):
+            return ("部分内容已记住，另有一项没有保存成功。" if zh
+                    else "I saved part of that to memory; one item could not be saved.")
         return "我已经记住了。" if zh else "I've saved that to memory."
     if (contract or {}).get("attempted") is False:
         # A policy refusal, not a failure: the write was never dispatched. Saying "the
@@ -113,8 +151,10 @@ def compose_memory_contract_response(response: str, contract: dict | None, *,
     if not preserve_content:
         return notice
     remainder = strip_saved_content_quote(response, contract, language)
-    content = (contract or {}).get('stored_content')
-    if isinstance(content, str):
+    contents = list((contract or {}).get('stored_contents') or [])
+    if isinstance((contract or {}).get('stored_content'), str):
+        contents.append(contract['stored_content'])
+    for content in contents:
         for left, right in (('「', '」'), ('“', '”'), ('"', '"')):
             remainder = remainder.replace(left + content + right, '')
     for pattern in _MEMORY_CLAIM_PATTERNS:

@@ -67,3 +67,26 @@ def test_r2_32_all_months_failed_is_reported_as_an_outage(monkeypatch):
     assert "did not respond" in result["safety_analysis"]
     assert "too few records" not in result["safety_analysis"]
     assert "did not respond" in result["recommendation"]
+
+
+# ── R2-31: every remember call of the turn is acknowledged ────────────────────────────
+def test_r2_31_two_saves_are_both_quoted():
+    from core.memory_contract import compose_memory_contract_response, memory_contract_from_artifacts
+    arts = [{"tool": "remember", "success": True, "raw_data": {"success": True, "stored": "I have a cat"}},
+            {"tool": "remember", "success": True, "raw_data": {"success": True, "stored": "I am allergic to pollen"}}]
+    contract = memory_contract_from_artifacts(arts)
+    out = compose_memory_contract_response("Done.", contract, language="zh")
+    assert "I have a cat" in out and "I am allergic to pollen" in out
+    assert "已保存的原文" not in out and "已保存的内容" in out
+    zh = compose_memory_contract_response(
+        "好的。", memory_contract_from_artifacts([{"tool": "remember", "success": True,
+                                                  "raw_data": {"success": True, "stored": "我养了一只猫"}}]),
+        language="zh")
+    assert "已保存的原文" in zh
+
+
+def test_r2_31_a_partial_failure_says_so():
+    from core.memory_contract import memory_contract_from_artifacts, memory_notice
+    arts = [{"tool": "remember", "success": True, "raw_data": {"success": True, "stored": "I have a cat"}},
+            {"tool": "remember", "success": False, "raw_data": None, "error": "boom"}]
+    assert "part of that" in memory_notice(memory_contract_from_artifacts(arts), "en")

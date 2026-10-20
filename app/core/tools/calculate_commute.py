@@ -40,7 +40,7 @@ def calculate_commute_impl(
         if not details:
             return {
                 'success': False,
-                'error': '无法计算通勤时间（地址解析失败）'
+                'error': 'Could not calculate the commute time (an address could not be geocoded).'
             }
 
         # calculate_travel_details does not pass its `mode` down to describe_estimate, so a

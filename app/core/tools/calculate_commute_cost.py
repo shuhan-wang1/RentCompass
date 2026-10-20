@@ -336,7 +336,8 @@ def calculate_commute_cost_impl(
         if not details:
             return {
                 'success': False,
-                'error': '无法计算路线（地址解析失败或路线不可达）'
+                'error': ('Could not calculate a route (an address could not be geocoded '
+                          'or no route was found).')
             }
         # Defence in depth. maps_service now threads `mode` into describe_estimate, so this is
         # a no-op on that path; it still catches a payload produced by anything that does not.

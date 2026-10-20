@@ -2929,6 +2929,19 @@ def _queue_background_job(job: dict) -> bool:
     return True
 
 
+def _turn_memory_contract(final_state: dict) -> dict:
+    """The write contract for EVERY remember call of the turn, as agent_loop builds it.
+
+    "Remember that I have a cat. 记住我对花粉过敏。" saved both rows, but a contract built from
+    the LAST remember artifact only acknowledged the second (R3-05)."""
+    from core.memory_contract import memory_contract_from_artifacts
+    artifacts = [artifact for artifact in (final_state.get('tool_artifacts') or [])
+                 if isinstance(artifact, dict) and artifact.get('tool') == 'remember']
+    if artifacts:
+        return memory_contract_from_artifacts(artifacts)
+    return final_state.get('memory_write_contract') or {}
+
+
 def _memory_criteria_changes(before, after) -> dict:
     """The turn's criteria slot changes for the memory job; never raises (R3-02)."""
     try:
@@ -3569,12 +3582,9 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             if evidence:
                 response_text += '\n\n' + evidence
         final_state['tool_data'] = tool_data
-    from core.memory_contract import (memory_contract_from_artifact,
-        strip_saved_content_quote, compose_memory_contract_response)
-    memory_artifact = next((artifact for artifact in reversed(final_state.get('tool_artifacts') or [])
-                            if artifact.get('tool') == 'remember'), None)
-    memory_contract = (memory_contract_from_artifact(memory_artifact) if memory_artifact else
-                       final_state.get('memory_write_contract') or {})
+    from core.memory_contract import (strip_saved_content_quote,
+                                      compose_memory_contract_response)
+    memory_contract = _turn_memory_contract(final_state)
     _memory_language = extracted_context.get('reply_language', 'en')
     # Verify provider claims separately from the exact user text the memory tool saved.
     response_text = strip_saved_content_quote(response_text, memory_contract, _memory_language)

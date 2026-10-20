@@ -463,14 +463,69 @@ def unsupported_reply_prices(response: str, evidence: Any) -> list[float]:
     exempt_bounds_and_intervals = bool(evidence_money)
 
     answer = response or ""
+    arithmetic = _evidenced_arithmetic(answer, evidence_money, supported)
     unsupported: list[float] = []
     for value, _unit in _money_mentions(answer):
-        if _close_to_any(value, supported):
+        if _close_to_any(value, supported) or round(value, 2) in arithmetic:
             continue
         if exempt_bounds_and_intervals and not _asserts_price(answer, value):
             continue
         unsupported.append(value)
     return sorted(set(unsupported))
+
+
+# "£2750 rent + £201.60 = £2951.60 per month" is a sum of two tool figures. Unsupported, it
+# triggered a regeneration told to use only verbatim/derived figures, and the model replaced
+# the total with the rent: "£2750 rent + £201.60 = £2750 per month" (R2-18, 3/5 runs).
+# A sum or difference of two evidence figures is supported EXACTLY (to the penny — no
+# tolerance, so a fabricated rent cannot land on one of thousands of pair sums), and an
+# arithmetic step the answer writes out ("£X + £Y = £Z", "£Z (£X - £Y)") supports its result
+# when it is correct and its operands are supported.
+_ARITH_LIMIT = 120
+_NUM = r"(\d[\d,]*(?:\.\d{1,2})?)"
+_SUM_EXPRESSION = re.compile(
+    r"£\s*" + _NUM + r"[^£=\n]{0,24}?\s*([+\-−–])\s*£\s*" + _NUM + r"[^£=\n]{0,16}?=\s*£\s*" + _NUM)
+_DIFF_ASIDE = re.compile(
+    r"£\s*" + _NUM + r"[^£()\n]{0,40}\(\s*£\s*" + _NUM + r"\s*([+\-−–])\s*£\s*" + _NUM + r"\s*\)")
+
+
+def _evidenced_arithmetic(answer: str, evidence_money, supported: set) -> set:
+    """Exact (2 dp) figures that are a sum/difference of two evidence figures, or the
+    correct result of an arithmetic step the answer shows on supported operands."""
+    base = sorted({round(value, 2) for value, _unit in evidence_money})[:_ARITH_LIMIT]
+    exact: set = set()
+    for index, first in enumerate(base):
+        for second in base[index:]:
+            exact.add(round(first + second, 2))
+            exact.add(round(abs(first - second), 2))
+
+    def number(token: str) -> float | None:
+        try:
+            return float(token.replace(",", ""))
+        except ValueError:
+            return None
+
+    def known(value: float) -> bool:
+        return _close_to_any(value, supported) or round(value, 2) in exact
+
+    steps = []
+    for match in _SUM_EXPRESSION.finditer(answer or ""):
+        steps.append((match.group(1), match.group(2), match.group(3), match.group(4)))
+    for match in _DIFF_ASIDE.finditer(answer or ""):
+        steps.append((match.group(2), match.group(3), match.group(4), match.group(1)))
+    for _round in range(3):
+        grew = False
+        for left, op, right, result in steps:
+            a, b, c = number(left), number(right), number(result)
+            if a is None or b is None or c is None or round(c, 2) in exact:
+                continue
+            value = a + b if op == "+" else a - b
+            if abs(value - c) <= 0.011 and known(a) and known(b):
+                exact.add(round(c, 2))
+                grew = True
+        if not grew:
+            break
+    return exact
 
 
 def _successful_numeric_evidence(evidence: Any) -> str:
@@ -886,10 +941,13 @@ def build_correction_instruction(
         f"{station_rule}"
         "Rewrite the answer so that EVERY monetary figure you mention is either copied "
         "verbatim from the data above or is an explicitly-labelled calculation of those "
-        "figures (a weekly-to-monthly conversion, an annual/N-month total, or a deposit "
-        "of N weeks' rent). Do NOT invent, guess, round, or approximate any price; if a "
-        "figure is not in the data, omit it or say it is unavailable. Keep the rest of "
-        "your answer, its structure, and its language unchanged.\n"
+        "figures (a weekly-to-monthly conversion, an annual/N-month total, a deposit "
+        "of N weeks' rent, or a sum/difference such as rent + monthly travel = total, "
+        "written out with its operands and computed exactly). Do NOT invent, guess, round, "
+        "or approximate any price, and never replace a figure with a different one from "
+        "the data (a total is not the rent); if a figure is not in the data and cannot be "
+        "computed from it, omit it or say it is unavailable. Keep the rest of your answer, "
+        "its structure, and its language unchanged.\n"
         "Corrected response:"
     )
 

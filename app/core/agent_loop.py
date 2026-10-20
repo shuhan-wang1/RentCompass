@@ -5185,9 +5185,24 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                             if requires_status else
                             final_response or search_found.get("summary")
                             or f"I found {len(recs)} properties.")
+            # A composite question ABOUT the listings ("Check safety for the first listing,
+            # weather there on Friday and the TfL fare to Bank") was answered with the listing
+            # ledger alone and the other results as raw evidence footers (R2-26). When the turn
+            # cued other dimensions and the model answered them, its answer leads and the
+            # ledger follows.
+            _cm = str(ec.get('current_message') or '')
+            composite_answer = bool(
+                requires_status and str(final_response or '').strip()
+                and search_found.get('status') != 'no_results'
+                and (_cued_dimensions(_cm) or re.search(
+                    r"\b(?:weather|forecast|fare|fares|tfl)\b|天气|票价", _cm, re.I))
+                and any(a.get("tool") not in ("search_properties", "remember", "ask_user")
+                        and _is_executed(a) for a in artifacts))
+            if composite_answer:
+                response = f"{str(final_response).strip()}\n\n{response}"
             if search_found.get('source_message') and search_found['source_message'] not in response:
                 response = search_found['source_message'] + '\n\n' + response
-            if requires_status or len(artifacts) > 1:
+            if (requires_status or len(artifacts) > 1) and not composite_answer:
                 from core.candidate_validation import render_structured_evidence_fallback
                 evidence = render_structured_evidence_fallback(state, language=language)
                 if evidence:

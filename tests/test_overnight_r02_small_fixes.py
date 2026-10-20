@@ -103,3 +103,33 @@ def test_r2_27_failed_web_search_fallback_names_the_failure():
     out = _artifact_grounded_fallback_answer(state, reason="time_budget")
     assert "web lookup failed" in out
     assert "listing results" not in out
+
+
+# ── R2-26: a composite question about the listings keeps its answer ───────────────────
+def test_r2_26_composite_answer_leads_and_the_ledger_follows():
+    from core import agent_loop
+    from core.agent_loop import build_fc_nodes
+    from core.candidate_validation import validate_candidates
+    from tests.test_agent_contract_guards import Chat, Provider, _state
+
+    rows = [{"address": "Canning Road, Stratford, E15", "price": 1699, "area": "Stratford"},
+            {"address": "Legacy Tower, London, E15", "price": 2395, "area": "Stratford"}]
+    criteria = {"area": "Stratford", "areas": ["Stratford"], "max_budget": 2200}
+    validation = validate_candidates(rows, criteria, [])
+    message = ("Check safety for the first listing, weather there on Friday afternoon at 3pm, "
+               "and the TfL fare to Bank, all at once")
+    answer = ("For Canning Road, Stratford: police data shows 4,211 recorded incidents over three "
+              "months; Friday 15:00 looks dry; the single fare to Bank is £3.10.")
+    nodes = build_fc_nodes(Provider([]), agent_llm=Chat())
+    state = _state(message)
+    state["final_response"] = answer
+    state["tool_artifacts"] = [
+        agent_loop._artifact(1, "search_properties", {
+            "status": "found", "recommendations": rows[:1], "over_budget_alternatives": rows[1:],
+            "candidate_validation": validation, "search_criteria": criteria}, success=True),
+        agent_loop._artifact(1, "check_safety", {"address": "Stratford", "safety_score": None,
+                                                 "source": "data.police.uk"}, success=True)]
+    assert validation.get("excluded")          # the ledger path (requires_status) is taken
+    out = nodes["format_output_fc"](state)["final_response"]
+    assert out.startswith("For Canning Road, Stratford")
+    assert "Legacy Tower" in out

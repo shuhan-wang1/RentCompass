@@ -83,7 +83,11 @@ _AUTHORIZE_ZH = (
 _RECALL_VETO_EN = tuple(
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
-        r"\b(?:do|does|did|can|could|would|will)\s+you\s+(?:remember|recall)\b",
+        r"\b(?:do|does|did|can|could|would|will)\s+you\s+(?:still\s+|really\s+|actually\s+|even\s+)?"
+        r"(?:remember|recall)\b",
+        # "What did you remember about me?", "What have you remembered/saved?" (R4-04).
+        r"\bwhat\s+(?:did|have|has|do)\s+you\s+(?:remember(?:ed)?|recall(?:ed)?|saved?|stored?|kept|keep)\b",
+        r"\bhave\s+you\s+(?:remembered|saved|stored|kept)\b",
         # Bare, auxiliary-less question — "you remember the flat we looked at?" — which
         # the interrogative pattern above MISSES, so this pattern has to stay. Its
         # over-breadth (it also matched the purpose clause of a save request) is fixed
@@ -98,6 +102,14 @@ _RECALL_VETO_EN = tuple(
 _RECALL_VETO_ZH = (
     "记得吗", "记不记得", "还记得", "是否记得", "你记得", "记得我",
     "我之前说过", "之前说过", "我说过", "说过什么", "上次说的", "上次说过",
+)
+# A QUESTION about what was remembered contains the save cue 记住 itself:
+# 「我之前让你记住了什么？」 saved '了什么' and replied "已保存的原文：「了什么」"; 「你记住了我的什么信息？」
+# was saved verbatim (R4-04). "记住…好吗" (a polite save request) is not one of these.
+_RECALL_VETO_ZH_RE = (
+    re.compile(r"记住了?(?:我的)?[^，,。.；;！!]{0,6}?(?:什么|哪些|多少)"),
+    re.compile(r"你(?:都|还|已经|有没有)?记住[^，,。.；;！!]{0,15}?(?:了吗|了没|没有|吗)\s*[？?]?\s*$"),
+    re.compile(r"记住[^，,。.；;！!]{0,15}?了(?:吗|没)"),
 )
 
 # A recall phrase introduced by a PURPOSE / RESULT subordinator is not a question about
@@ -157,6 +169,10 @@ def _has_recall_cue(text: str) -> bool:
             if not _is_purpose_clause(text, start):
                 return True
             start = text.find(phrase, start + 1)
+    for pat in _RECALL_VETO_ZH_RE:
+        for m in pat.finditer(text):
+            if not _is_purpose_clause(text, m.start()):
+                return True
     return False
 
 
@@ -384,6 +400,8 @@ def explicit_remember_clause(current_message: str) -> str:
             # "remember to ..." asks the agent to do something; "remember what/when" recalls.
             if re.match(r"(?:to|what|when|who|where|why|how|if)\b", fact, re.IGNORECASE):
                 continue
+            if content_is_question_fragment(fact):
+                continue          # 「记住了什么」 -> '了什么' is a question, never a fact (R4-04)
             if len(fact) >= 2:
                 return fact
     return ""
@@ -510,6 +528,26 @@ DECISION_REJECTED_INSTRUCTION_SHAPED = "rejected_instruction_shaped"
 DECISION_REJECTED_GUARD_FLAGGED = "rejected_guard_flagged"
 
 
+DECISION_REJECTED_QUESTION = "rejected_question_not_fact"
+_QUESTION_FRAGMENT_ZH = re.compile(r"^(?:了|的|过)?(?:我的)?(?:什么|哪些|多少|吗|没有)")
+_QUESTION_HEAD_EN = re.compile(
+    r"^\s*(?:do|does|did|can|could|would|will|have|has|what|which|who|where|when|why|how|is|are)\s+"
+    r"(?:you|i|we)\b", re.I)
+
+
+def content_is_question_fragment(content) -> bool:
+    """True when a candidate memory is a question or a piece of one, not a fact (R4-04)."""
+    text = str(content or "").strip().strip("\"'“”「」")
+    if not text:
+        return False
+    if text.endswith(("?", "？")) and not re.search(
+            r"(?:好吗|可以吗|行吗|好不好|\bok|\bokay|\bplease|\bright)\s*[?？]$", text, re.I):
+        return True
+    if _QUESTION_FRAGMENT_ZH.match(text) and len(text) <= 12:
+        return True
+    return bool(_QUESTION_HEAD_EN.match(text))
+
+
 def memory_write_rejection(content, *, guard_flagged: bool = False) -> str | None:
     """The reason this candidate must not be written, or ``None`` to proceed.
 
@@ -523,6 +561,8 @@ def memory_write_rejection(content, *, guard_flagged: bool = False) -> str | Non
         return DECISION_REJECTED_GUARD_FLAGGED
     if content_is_instruction_shaped(content):
         return DECISION_REJECTED_INSTRUCTION_SHAPED
+    if content_is_question_fragment(content):
+        return DECISION_REJECTED_QUESTION
     return None
 
 

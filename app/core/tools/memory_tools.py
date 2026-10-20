@@ -101,8 +101,10 @@ def remember_impl(content: str, kind: str = "semantic",
         return {
             "success": False, "id": None, "stored": None, "mtype": None,
             "security_decision": rejection,
-            "error": ("I can only save durable facts about you (preferences, budget, "
-                      "constraints) — not instructions, so I did not store that."),
+            "error": (("That was a question, not a fact to save, so I did not store "
+                       "anything.") if rejection == "rejected_question_not_fact" else
+                      ("I can only save durable facts about you (preferences, budget, "
+                       "constraints) — not instructions, so I did not store that.")),
         }
     mtype = kind if kind in ("episodic", "semantic", "reflection") else "semantic"
     # Marked as the user's explicit save: the background consolidation job never rewrites or

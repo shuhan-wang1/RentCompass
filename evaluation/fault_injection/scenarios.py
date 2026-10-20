@@ -94,7 +94,9 @@ async def scenario_03_http_500(ctx: ScenarioContext) -> ScenarioResult:
     reg = make_registry(tool, idempotency_db=ctx.db("idem"))
     with fast_backoff():
         res = await reg.execute_tool("broken_api", q="x")
-    surfaced = (not res.success) and bool(res.error) and "500" in (res.error or "")
+    # Public errors deliberately omit raw upstream messages. Assert the stable
+    # failure envelope rather than demanding the provider's private text.
+    surfaced = (not res.success) and bool(res.error) and res.outcome == "failed"
     return ScenarioResult(
         "03", "http_500", "HTTP 500 on every attempt",
         retry_recovered=res.success,          # expected False
@@ -162,7 +164,7 @@ async def scenario_06_missing_schema_field(ctx: ScenarioContext) -> ScenarioResu
     reg = make_registry(tool, idempotency_db=ctx.db("idem"))
     with fast_backoff():
         res = await reg.execute_tool("schema_tool", q="x")
-    surfaced = (not res.success) and "validation" in (res.error or "").lower()
+    surfaced = (not res.success) and bool(res.error) and res.outcome == "failed"
     return ScenarioResult(
         "06", "missing_schema_field", "output missing required field",
         retry_recovered=res.success,     # expected False
@@ -322,30 +324,32 @@ async def scenario_12_prompt_injection(ctx: ScenarioContext) -> ScenarioResult:
 # 13. One search_worker fails while others succeed -> partial results preserved
 # --------------------------------------------------------------------------- #
 async def scenario_13_partial_worker_failure(ctx: ScenarioContext) -> ScenarioResult:
-    import core.langgraph_agent as lg
+    from langchain_core.messages import AIMessage
+    from core.agent_loop import build_fc_nodes
+    from uk_rent_agent.agent.state import create_initial_state
 
     ok = make_tool("web_search", lambda **k: {"success": True, "results": "listing OK"})
     boom = make_tool("web_search_boom", persistent_failer(RuntimeError("worker crashed")))
     reg = make_registry(ok, boom, idempotency_db=ctx.db("idem"))
 
-    worker = lg._make_search_worker_node(reg)
-    gather = lg._make_gather_searches_node()
-
-    plans = [
-        {"tool": "web_search", "params": {"q": "a"}},
-        {"tool": "web_search_boom", "params": {"q": "b"}},   # fails
-        {"tool": "web_search", "params": {"q": "c"}},
-    ]
-    merged: List[dict] = []
-    for i, s in enumerate(plans):
-        out = await worker({"search": s, "search_index": i, "run_id": "legacy"})
-        merged.extend(out.get("search_results", []))
-    gathered = gather({"search_results": merged, "run_id": "legacy"})
-    combined = gathered.get("tool_observation", "")
-    n_ok = combined.count("listing OK")
-    failed_surfaced = "Error" in combined
-    # 2 of 3 succeeded; failure surfaced as an Error line, run still produced output.
-    task_ok = bool(combined) and n_ok == 2 and failed_surfaced
+    state = create_initial_state(
+        user_query="Search for local listings", user_id="u-fi", session_id="conv-fi",
+        request_id="req-fi-partial", extracted_context={"current_message": "Search for local listings"},
+    )
+    state["loop_turn"] = 1
+    state["messages"] = [AIMessage(content="", tool_calls=[
+        {"name": name, "args": {"q": query}, "id": f"fi-{i}", "type": "tool_call"}
+        for i, (name, query) in enumerate([
+            ("web_search", "a"), ("web_search_boom", "b"), ("web_search", "c"),
+        ])
+    ])]
+    nodes = build_fc_nodes(reg, agent_llm=object())
+    with fast_backoff():
+        command = await nodes["execute_tools"](state)
+    artifacts = command.update.get("tool_artifacts", [])
+    n_ok = sum(a.get("success") is True for a in artifacts)
+    failed_surfaced = any(a.get("success") is False and a.get("error") for a in artifacts)
+    task_ok = len(artifacts) == 3 and n_ok == 2 and bool(failed_surfaced)
     return ScenarioResult(
         "13", "partial_worker_failure", "1 of 3 fan-out workers crashes",
         task_completed_after_fault=task_ok,
@@ -359,29 +363,31 @@ async def scenario_13_partial_worker_failure(ctx: ScenarioContext) -> ScenarioRe
 # 14. Critic model raises during corrective regeneration -> caveat, no crash
 # --------------------------------------------------------------------------- #
 async def scenario_14_critic_raises(ctx: ScenarioContext) -> ScenarioResult:
-    from uk_rent_agent.agent.critic import enforce_grounding
+    import core.langgraph_agent as lg
 
-    async def _regen_raises(correction: str) -> str:
-        raise RuntimeError("injected critic-model failure")
-
-    ungrounded_answer = "This flat is £9997 per month near UCL, a great deal."
-    evidence = ["Listing near UCL: a spacious flat (no price recorded in evidence)."]
-    outcome = await enforce_grounding(
-        ungrounded_answer, evidence,
-        regenerate=_regen_raises, retrieval_expected=True, tool_errored=False,
+    original = "This flat is £9997 per month near UCL, a great deal."
+    state = lg.create_initial_state(
+        "Find a flat near UCL", user_id="u-fi", session_id="conv-fi",
+        extracted_context={"current_message": "Find a flat near UCL", "reply_language": "en"},
     )
-    caveated = outcome.response != ungrounded_answer  # append_caveat applied
-    completed = bool(outcome.response.strip())
-    ungrounded = answer_is_ungrounded(
-        outcome.response, [{"tool": "search", "data": {"note": "no price"}}])
+    state["final_response"] = original
+    state["tool_artifacts"] = [{
+        "tool": "search_properties", "success": True,
+        "raw_data": {"recommendations": []}, "turn": 1,
+    }]
+    # Exercise the production critic NODE, including its final no-evidence
+    # contract. The lower-level grading helper intentionally only adds a caveat.
+    with patch_router_raises("injected critic-model failure"):
+        update = await lg._make_critic_node()(state)
+    response = update.get("final_response", original)
+    ungrounded = answer_is_ungrounded(response, [])
     return ScenarioResult(
         "14", "critic_model_raises", "critic regeneration model raises",
-        retry_recovered=False,  # regeneration failed
-        task_completed_after_fault=completed,
-        produced_ungrounded_answer_after_fault=ungrounded,  # figure kept, but...
-        fault_surfaced=caveated,   # ...delivered WITH a caveat, not silently
-        detail=f"attempts={outcome.attempts} caveated={caveated} "
-               f"resp_tail={outcome.response[-60:]!r}",
+        retry_recovered=False,
+        task_completed_after_fault=bool(response.strip()),
+        produced_ungrounded_answer_after_fault=ungrounded,
+        fault_surfaced=response != original and not ungrounded,
+        detail=f"attempts={update.get('critic_attempts')} numeric_claim_retained={ungrounded}",
     )
 
 

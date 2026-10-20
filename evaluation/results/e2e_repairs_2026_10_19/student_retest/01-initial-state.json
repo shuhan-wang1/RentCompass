@@ -1,0 +1,160 @@
+{
+  "time": 1792400153.7626998,
+  "label": "initial",
+  "url": "http://127.0.0.1:15008/",
+  "body": "RentCompass\nEN\n中文\nCONVERSATIONS\nNew\nNo conversations yet. Start a new chat.\nG\nGuest\nAI Assistant\n\nLondon Rental Intelligence\n\nALEX\nHello! I'm Alex. I can help you find apartments in London.\n\nTry asking me:\n\"Find a 1-bed near King's Cross under £2000\"\n\"What is the vibe like in Hackney?\"\n\"Show me flats with a 20min commute to UCL\"\nNear UCL\nSafe areas\nRent stats\nListings\nSearch\nSaved\n0\nSearch criteria\nNo properties found\n\nTry adjusting your budget or location.",
+  "local_storage": {
+    "rentcompass.language": "en",
+    "ukra_user_name": "Guest",
+    "ukra_user_id": "15f470821e334cc68b70d7f959b67421"
+  },
+  "buttons": [
+    {
+      "text": "\n                \n            ",
+      "id": "menuToggle",
+      "title": "Menu",
+      "aria": "Conversations menu",
+      "disabled": false
+    },
+    {
+      "text": "EN",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "中文",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "New",
+      "id": "newChatBtn",
+      "title": "New chat",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "G\nGuest",
+      "id": "userMenuBtn",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "\n                        \n                        Log in / Register\n                    ",
+      "id": "loginBtn",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "\n                        \n                        Rename\n                    ",
+      "id": "renameUserBtn",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "\n                        \n                        Switch user\n                    ",
+      "id": "switchUserBtn",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "\n                        \n                        Delete my data\n                    ",
+      "id": "forgetMeBtn",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "\n                        \n                        Log out\n                    ",
+      "id": "logoutBtn",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "Near UCL",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "Safe areas",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "Rent stats",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "",
+      "id": "sendBtn",
+      "title": "Send",
+      "aria": "Send",
+      "disabled": false
+    },
+    {
+      "text": "Search",
+      "id": "btn-results",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "Saved\n0",
+      "id": "btn-favorites",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "Search",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "\n            \n        ",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "\n                    \n                ",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    }
+  ]
+}

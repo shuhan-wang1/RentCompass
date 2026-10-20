@@ -1,0 +1,58 @@
+{
+  "real_turn_count": 10,
+  "all_http_status_200": true,
+  "final_message_count": 8,
+  "final_messages_same_after_refresh": true,
+  "favorites_same_after_refresh": true,
+  "favorites_unchanged_since_pre_restart": true,
+  "final_fields_same_after_refresh": true,
+  "final_refresh_state": "26-final-refresh-current-state.json",
+  "final_criteria": {
+    "max_budget": 2400,
+    "bedrooms": 2,
+    "room_type": "whole",
+    "commute_destination": "University College London, Gower Street, London WC1E 6BT",
+    "max_travel_time": 30
+  },
+  "final_results": [
+    {
+      "address": "Barrowgate Road, London W4",
+      "candidate_status": "excluded"
+    }
+  ],
+  "page_errors": [],
+  "blocked_external_resource_count": 68,
+  "blocked_external_domains": [
+    "fonts.googleapis.com",
+    "media.onthemarket.com"
+  ],
+  "state_files": [
+    "01-initial-state.json",
+    "02-language-zh-state.json",
+    "03-turn01-school-group-budget-state.json",
+    "04-favorite-first-listing-state.json",
+    "05-close-for-capture-improvement-state.json",
+    "06-initial-state.json",
+    "07-turn02-budget-clarification-state.json",
+    "08-turn03-select-per-person-state.json",
+    "09-turn04-correct-and-save-defaults-state.json",
+    "10-turn05-standalone-weather-state.json",
+    "11-refresh-after-weather-state.json",
+    "12-turn06-save-defaults-only-state.json",
+    "13-new-conversation-for-defaults-state.json",
+    "14-turn07-new-chat-restore-defaults-state.json",
+    "15-pre-restart-current-settled-state.json",
+    "16-pre-restart-refresh-new-chat-state.json",
+    "17-pre-restart-favorite-visible-state.json",
+    "18-pre-restart-search-visible-state.json",
+    "19-restart-ready-paused-state.json",
+    "20-initial-state.json",
+    "21-turn08-post-restart-restore-and-unknown-state.json",
+    "22-turn09-budget-clarification-replay-state.json",
+    "23-turn10-select-per-person-replay-state.json",
+    "24-final-switch-to-original-state.json",
+    "25-final-switch-back-current-state.json",
+    "26-final-refresh-current-state.json",
+    "27-finished-ten-turns-state.json"
+  ]
+}

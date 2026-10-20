@@ -25,6 +25,7 @@ import functools
 import json
 import logging
 import os
+import re
 import time
 from dataclasses import dataclass
 from typing import Any, Literal, Optional
@@ -68,7 +69,12 @@ from core.langgraph_agent import (
     _structured_search_tool_data,
     format_refinement_output,
 )
+from core.search_readiness import (
+    detect_relative_budget_delta,
+    resolve_relative_budget,
+)
 from core.candidate_validation import (
+    register_protected_system_text,
     render_candidate_status,
     render_similar_listings,
     validate_commute_response,
@@ -76,9 +82,11 @@ from core.candidate_validation import (
     validate_search_payload_with_provider,
 )
 from core import refine_results
+from core.constraint_updates import commute_query_forbidden
 from core.memory_contract import (
     compose_memory_contract_response,
     memory_contract_from_artifact,
+    memory_contract_from_artifacts,
 )
 from core.prompt_spec import (
     PromptAssemblyError,
@@ -100,6 +108,371 @@ _UNTRUSTED_TOOLS = frozenset({
     "get_property_details", "search_nearby_pois",
 })
 
+# ─── Announced-but-unexecuted tool calls ────────────────────────────
+# A turn that ends on "Let me search for actual one-bedroom listings…" with
+# `tool_batches == 0` promised the user a lookup and then stopped. It carries NO canned or
+# fallback marker, so `deploy/probe_pool_answer.py` and every marker-based monitor score it
+# a PASS — the failure class is invisible. These patterns are the shared definition of that
+# shape: the loop uses them to force one more (bounded) iteration, and the deploy probe
+# mirrors this list so the monitor sees what the loop sees.
+#
+# Each pattern is a search verb the answer commits to in the FUTURE. "Let me know", "I'll
+# be honest" and every other let-me/I'll phrasing without a lookup verb deliberately do not
+# match: the verb is required, not the auxiliary.
+ANNOUNCED_TOOL_PATTERNS: tuple[str, ...] = (
+    # EN
+    r"\blet me\s+(?:just\s+|first\s+|quickly\s+|go\s+(?:ahead\s+)?and\s+)?"
+    r"(?:search|look\s+up|look\s+for|check|find|fetch|pull|run|query|verify|confirm|"
+    r"retrieve|get)\b",
+    r"\bi(?:'|’)?ll\s+(?:just\s+|first\s+|quickly\s+|go\s+(?:ahead\s+)?and\s+|now\s+)?"
+    r"(?:search|look\s+up|look\s+for|check|find|fetch|pull|run|query|verify|confirm|"
+    r"retrieve|get)\b",
+    r"\bi\s+will\s+(?:now\s+)?(?:search|look\s+up|look\s+for|check|find|fetch|pull|run|"
+    r"query|verify|confirm|retrieve)\b",
+    r"\bi(?:'|’)?m\s+going\s+to\s+(?:search|look\s+up|look\s+for|check|find|fetch|pull|"
+    r"run|query|verify)\b",
+    r"\blet me check the context\b",
+    r"\b(?:one\s+moment|give\s+me\s+a\s+(?:moment|second|sec))\s+while\s+i\b",
+    r"\b(?:searching|checking|looking)\s+(?:for\s+\w+|now|that\s+up)\b",
+    r"\bhold\s+on\s+while\s+i\b",
+    # ZH
+    r"(?:让我|我)(?:来|先|现在|这就|马上)?(?:搜索|搜一下|搜下|查询|查一下|查下|查找|"
+    r"检索|核实|确认|看一下|看看)",
+    r"我(?:将|会|要)(?:为(?:您|你)|给(?:您|你))?(?:搜索|查询|查找|检索|核实)",
+    r"(?:稍等|请稍候|请稍等)[，,]?\s*我(?:来|先)?(?:搜索|查询|查找|检索)",
+    r"正在(?:为(?:您|你))?(?:搜索|查询|查找|检索)",
+    r"我需要(?:先)?(?:搜索|查询|查找|检索|核实)",
+)
+
+_ANNOUNCED_TOOL_RE = tuple(re.compile(p, re.IGNORECASE) for p in ANNOUNCED_TOOL_PATTERNS)
+
+# Emitted when the bounded retry ALSO produced no tool call. Explicit, stable, and
+# user-honest, so the probe can detect the class instead of scoring the stub a PASS.
+ANNOUNCED_TOOL_STUB_MARKER_EN = (
+    "I was not able to run that lookup this round, so nothing above is a fresh result.")
+ANNOUNCED_TOOL_STUB_MARKER_ZH = "本轮未能完成上述查询，以上内容并非新的检索结果。"
+
+# One nudge per turn: the marker rides on the corrective message in the transcript, so the
+# bound needs no new state channel.
+_ANNOUNCED_TOOL_NUDGE_MARKER = "fc_announced_tool_nudge"
+
+_ANNOUNCED_TOOL_NUDGE_TEXT = (
+    "COMPLETION CHECK: your last message announced a lookup ('let me search…' / "
+    "'I'll check…' / 「让我查一下…」) but no tool ran this turn, so the user would receive a "
+    "promise instead of an answer. Either CALL the tool you named now, or answer directly "
+    "from what you already have — do not announce a lookup you are not making. Write the "
+    "answer itself: do not mention this check, a 'promise' or a 'lookup', and do not refer "
+    "to your previous message."
+)
+
+
+def announces_unexecuted_tool(text, artifacts=None) -> bool:
+    """True when ``text`` announces a lookup and no tool actually executed this turn.
+
+    Both halves are required. An answer that announces a search AND ran one is narrating
+    work it did; an answer with no tools that never promised any is an ordinary
+    conversational reply. Only the intersection is the broken class.
+    """
+    if any(_is_executed(a) for a in (artifacts or ()) if isinstance(a, dict)):
+        return False
+    body = str(text or "")
+    if not body.strip():
+        return False
+    for pattern in _ANNOUNCED_TOOL_RE:
+        for match in pattern.finditer(body):
+            # An OFFER conditional on the user is not an announcement: "If you'd rather skip
+            # those, say 'go ahead' and I'll search Stratford" promised nothing for this turn,
+            # yet earned the "I was not able to run that lookup" footer on an out-of-scope
+            # refusal (R1-16).
+            start = max(body.rfind(mark, 0, match.start()) for mark in ".!?\n。！？")
+            ends = [i for i in (body.find(mark, match.end()) for mark in ".!?\n。！？") if i >= 0]
+            sentence = body[start + 1:min(ends) + 1 if ends else len(body)]
+            if (_OFFER_SENTENCE.search(sentence) or _IMPERATIVE_OFFER.search(sentence)
+                    or sentence.rstrip().endswith(("?", "？"))):
+                continue
+            if not _announced_by_the_assistant(body[start + 1:match.start()], match.group(0)):
+                continue
+            return True
+    return False
+
+
+# Only the ASSISTANT can announce its own next action. "Right now you are looking for a studio
+# in Hackney with a £1,500 budget." recites the user's search; it matched the gerund pattern,
+# was nudged, and shipped with "I was not able to run that lookup this round" on an answer to
+# "what have you kept about me?" (R2-02). The gerund and 正在 patterns carry no subject of their
+# own, so theirs is read from the words before them: a first-person subject ("I'm checking",
+# "我正在查询") or none at all ("Checking that now.") announces; anyone else's does not.
+_GERUND_ANNOUNCEMENT = re.compile(r"^(?:searching|checking|looking)\b|^正在", re.IGNORECASE)
+_FIRST_PERSON_SUBJECT = re.compile(
+    r"(?:\bi(?:'|’)?m|\bi\s+am)(?:\s+(?:now|just|currently|still|also|quickly|already))*\s*$"
+    r"|我(?:现在|这就|马上|目前|已经)?\s*$", re.IGNORECASE)
+_SENTENCE_OPENER = re.compile(
+    r"^[\s*_#>\-•\d.)]*(?:(?:ok(?:ay)?|sure|right|alright|great|got\s+it|one\s+moment|"
+    r"no\s+problem|好的|好|稍等)[\s,，!！.。:：—–-]*)?$", re.IGNORECASE)
+
+
+def _announced_by_the_assistant(before: str, matched: str) -> bool:
+    """True unless a subject-less pattern (gerund / 正在) belongs to someone else's clause.
+
+    ``before`` is the sentence text preceding the match."""
+    if not _GERUND_ANNOUNCEMENT.match(str(matched or "").strip()):
+        return True       # every other pattern names the assistant itself (let me / I'll / 我来)
+    lead = str(before or "")
+    return bool(_FIRST_PERSON_SUBJECT.search(lead) or _SENTENCE_OPENER.match(lead))
+
+
+# "- Raise the budget a little and I'll search again." — the user's move first, then the
+# lookup: an offer, not an announcement (R2-08).
+_IMPERATIVE_OFFER = re.compile(
+    r"^\s*(?:[-*•]|\d+[.)])?\s*(?:raise|widen|relax|lower|increase|drop|change|add|remove|give|tell|"
+    r"send|share|pick|choose|confirm|say|reply|try|loosen|extend|expand|name)\b[^.!?\n]{0,160}"
+    r"\b(?:and|then)\s+i(?:'|’)?ll\b", re.IGNORECASE)
+_OFFER_SENTENCE = re.compile(
+    r"\b(?:if|once|whenever|when you|say|tell me|let me know|would you like|do you want|"
+    r"want me to|shall i|should i|happy to|i can(?!['’]t|not)|i could(?!n['’]t| not))\b"
+    r"|如果|若是|若你|假如|告诉我|需要的话|要不要|是否需要|你想|想要我|可以帮你|我可以", re.IGNORECASE)
+
+
+# ─── Internal vocabulary must not reach the user ────────────────────
+# The behaviour rule (loop_prompts.OUTPUT_HYGIENE_RULE) asks the model not to print these;
+# this is the deterministic backstop for when it does anyway. Live answers contained "the
+# tool's internal criteria still show `max_budget: 200`" and "I don't have a clear focus
+# stack showing which listings are being discussed" — honest, and implementation vocabulary
+# in the product surface. Only CLOSED-SET internal identifiers are rewritten (snake_case
+# state keys, the two block headings and the phrase "focus stack"); nothing else in the
+# answer is touched, so a legitimate sentence can never be mangled by this.
+_INTERNAL_VOCABULARY_EN = (
+    (re.compile(r"`?\bmax_budget\b`?\s*[:=]\s*`?(\d[\d,]*)`?"), r"a budget cap of £\1"),
+    (re.compile(r"`?\bmax_commute_time\b`?\s*[:=]\s*`?(\d+)`?"), r"a commute limit of \1 min"),
+    (re.compile(r"\b(?:the\s+)?focus[_ ]stack\b", re.IGNORECASE),
+     "the listings we have been discussing"),
+    (re.compile(r"\bEARLIER FOCUSES\b"), "the listings discussed earlier"),
+    (re.compile(r"\bFOCUSED PROPERTY\b"), "the listing you are looking at"),
+    (re.compile(r"`?\b(?:extracted_context|accumulated_search_criteria|"
+                r"accumulated criteria|tool_artifacts|criteria_gate_shown)\b`?"),
+     "the saved search criteria"),
+    (re.compile(r"`?\bmax_budget\b`?"), "the budget"),
+    (re.compile(r"`?\bmax_commute_time\b`?"), "the commute limit"),
+    (re.compile(r"`?\broom_type\b`?"), "the room type"),
+)
+_INTERNAL_VOCABULARY_ZH = (
+    (re.compile(r"`?\bmax_budget\b`?\s*[:=]\s*`?(\d[\d,]*)`?"), r"预算上限 £\1"),
+    (re.compile(r"`?\bmax_commute_time\b`?\s*[:=]\s*`?(\d+)`?"), r"通勤上限 \1 分钟"),
+    (re.compile(r"\b(?:the\s+)?focus[_ ]stack\b", re.IGNORECASE), "我们正在讨论的房源"),
+    (re.compile(r"\bEARLIER FOCUSES\b"), "之前讨论过的房源"),
+    (re.compile(r"\bFOCUSED PROPERTY\b"), "您正在查看的房源"),
+    (re.compile(r"`?\b(?:extracted_context|accumulated_search_criteria|"
+                r"accumulated criteria|tool_artifacts|criteria_gate_shown)\b`?"),
+     "已记录的搜索条件"),
+    (re.compile(r"`?\bmax_budget\b`?"), "预算"),
+    (re.compile(r"`?\bmax_commute_time\b`?"), "通勤上限"),
+    (re.compile(r"`?\broom_type\b`?"), "房型"),
+)
+
+
+def scrub_internal_vocabulary(text: str, reply_language: str = "en") -> str:
+    """Rewrite internal state names in a user-facing answer. Never raises."""
+    body = str(text or "")
+    if not body:
+        return body
+    rules = (_INTERNAL_VOCABULARY_ZH
+             if str(reply_language or "").lower().startswith("zh")
+             else _INTERNAL_VOCABULARY_EN)
+    try:
+        for pattern, replacement in rules:
+            body = pattern.sub(replacement, body)
+    except Exception:  # pragma: no cover - defensive
+        return str(text or "")
+    return body
+
+
+# "Do you store anything about me when I haven't asked you to remember it? Be honest." was
+# answered "No… I won't save anything silently" while automatic memory had already stored an
+# episodic log, semantic facts and reflections (R2-19). For this question class the answer
+# carries a fixed, truthful description of what the system does, whatever the model said.
+_AUTOMATIC_STORAGE_QUESTION = re.compile(
+    r"\b(?:store|stor(?:e|ing)|save|saving|keep|keeping|remember|record|log|track)\w*\b"
+    r"[^.?!]{0,80}(?:haven.t asked|have not asked|didn.t ask|did not ask|without (?:my )?asking|"
+    r"without being asked|unless I ask|automatic\w*|silently|by default|in the background|be honest)"
+    r"|(?:没让你|没有让你|未经|自动|偷偷|默认).{0,20}(?:存|保存|记住|记录)|(?:存|保存|记住|记录).{0,20}(?:自动|偷偷|没让你)",
+    re.IGNORECASE)
+AUTOMATIC_MEMORY_DISCLOSURE_EN = (
+    "How memory works here: besides anything you explicitly ask me to remember, this service "
+    "automatically keeps a short log of your requests, extracts durable facts you state (such "
+    "as budget, areas or commute) and forms its own inferences about your priorities, across "
+    "conversations. You can ask what I have, or ask me to forget it.")
+AUTOMATIC_MEMORY_DISCLOSURE_ZH = (
+    "关于记忆的说明：除了你明确要求我记住的内容外，本服务还会自动保存你的请求摘要、提取你说过的长期信息"
+    "（如预算、区域、通勤），并形成对你偏好的推断，跨对话保留。你可以随时询问我保存了什么，或要求我删除。")
+# Fixed system text: no commute redaction pass may edit it (R3-01).
+register_protected_system_text(AUTOMATIC_MEMORY_DISCLOSURE_EN, AUTOMATIC_MEMORY_DISCLOSURE_ZH)
+
+
+def disclose_automatic_memory(text: str, message: str, reply_language: str = "en") -> str:
+    """Append the truthful automatic-memory description to an answer about silent storage."""
+    body = str(text or "")
+    asked = str(message or "")[:2000]
+    if not _AUTOMATIC_STORAGE_QUESTION.search(asked) or re.match(
+            r"\s*(?:please\s+|pls\s+|can you\s+|could you\s+)?(?:remember|save|note|keep)\b|\s*(?:请)?(?:记住|保存|记下)",
+            asked, re.I):
+        return body      # a request to remember something is not a question about storage
+    zh = str(reply_language or "").lower().startswith("zh")
+    note = AUTOMATIC_MEMORY_DISCLOSURE_ZH if zh else AUTOMATIC_MEMORY_DISCLOSURE_EN
+    if note in body:
+        return body
+    return f"{body.rstrip()}\n\n{note}" if body.strip() else note
+
+
+# A remembered "my max budget is £1,800/month" was in the memory block, yet a new
+# conversation's search answered "You haven't given a budget…" and listed £2,751-£4,400 homes
+# (R2-21). The minimal guarantee: an answer never says no budget was given while a saved
+# budget fact exists; it names the saved one and offers to apply it.
+_NO_BUDGET_CLAIM = re.compile(
+    # "Because you didn't give a budget, bedroom count or workplace, …" (R4-11): the base
+    # verb after didn't/did not, as well as the participle after haven't.
+    r"\b(?:haven.t|have\s+not|didn.t|did\s+not|hasn.t|has\s+not)\s+(?:yet\s+)?(?:given|give|set|mentioned|"
+    r"mention|told\s+me|tell\s+me|specified|specify|shared|share|provided|provide)\s+(?:me\s+)?"
+    r"(?:a\s+|any\s+|your\s+)?(?:\w+\s+)?budget|"
+    r"\bno\s+budget\s+(?:was\s+|has\s+been\s+|is\s+)?(?:given|set|specified|mentioned|provided)|"
+    r"\bwithout\s+(?:a|any)\s+budget\b|没有(?:提供|设置|给出|说明)?预算|未(?:提供|设置|给出)预算", re.I)
+_SAVED_BUDGET = re.compile(
+    r"^\[FACT\][^\n]*?\bbudget\b[^\n]*?(£\s?\d[\d,]*(?:\.\d+)?(?:\s*(?:/\s*month|per\s+month|a\s+month|pcm|/\s*week|per\s+week|pw))?)|"
+    r"^\[FACT\][^\n]*?(£\s?\d[\d,]*(?:\.\d+)?(?:\s*(?:/\s*month|per\s+month|a\s+month|pcm))?)[^\n]*?\bbudget\b",
+    re.I | re.M)
+
+
+def searched_without_budget(artifacts) -> bool:
+    """True when this turn ran a listing search whose criteria carried no budget."""
+    for artifact in artifacts or []:
+        if not isinstance(artifact, dict) or artifact.get("tool") != "search_properties":
+            continue
+        raw = artifact.get("raw_data")
+        if not artifact.get("success") or not isinstance(raw, dict) or raw.get("success") is False:
+            continue
+        criteria = raw.get("search_criteria") or raw.get("known_criteria")
+        if isinstance(criteria, dict) and criteria.get("max_budget") in (None, "", 0):
+            return True
+    return False
+
+
+def _without_no_budget_claim(text: str) -> str:
+    """``text`` without the sentences that claim no budget was given (R4-11)."""
+    kept = []
+    for line in str(text or "").split("\n"):
+        pieces = re.split(r"(?<=[.!?。！？])\s+", line)
+        survivors = [p for p in pieces if not _NO_BUDGET_CLAIM.search(p)]
+        if survivors or not line.strip():
+            kept.append(" ".join(survivors))
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
+
+
+def acknowledge_remembered_budget(text: str, memory_block: str, max_budget=None,
+                                  reply_language: str = "en", *,
+                                  searched_without_budget: bool = False) -> str:
+    """Name a saved budget the turn did not use, and offer to apply it.
+
+    Two triggers: the answer claims no budget was given (R2-21), or the turn's search ran
+    with no budget while one is saved — "Find me a 1-bed in Camden, I don't want to repeat
+    myself" listed £2,000-£3,900 homes against a remembered £1,800 and said nothing
+    (R3-03). The saved budget is NOT applied automatically: that is an owner decision."""
+    body = str(text or "")
+    if max_budget:
+        return body
+    claims_none = bool(_NO_BUDGET_CLAIM.search(body))
+    if not claims_none and not searched_without_budget:
+        return body
+    match = _SAVED_BUDGET.search(str(memory_block or ""))
+    if not match:
+        return body
+    amount = " ".join((match.group(1) or match.group(2) or "").split())
+    zh = str(reply_language or "").lower().startswith("zh")
+    if claims_none and searched_without_budget:
+        # The search ran without a budget AND the prose says none was given: the claim is
+        # withdrawn and the saved budget named instead, never both side by side (R4-11).
+        body = _without_no_budget_claim(body)
+        claims_none = False
+    if claims_none:
+        note = (f"补充：你之前保存过预算 {amount}。如需按这个预算重新搜索，请告诉我。" if zh else
+                f"Note: you saved a budget of {amount} earlier. Say if you want me to apply it "
+                "to this search.")
+    else:
+        note = (f"补充：你之前保存过预算 {amount}，本次搜索没有使用它，所以部分结果可能超出这个预算。"
+                "如需按这个预算重新筛选，请告诉我。" if zh else
+                f"Note: you saved a budget of {amount} earlier. It was not applied to this search, "
+                "so some results may be above it. Say if you want me to apply it.")
+    return body if note in body else f"{body.rstrip()}\n\n{note}"
+
+
+def _mark_announced_stub(text: str, reply_language: str) -> str:
+    """Append the explicit marker once, keeping whatever the model did produce."""
+    marker = (ANNOUNCED_TOOL_STUB_MARKER_ZH
+              if str(reply_language or "").lower().startswith("zh")
+              else ANNOUNCED_TOOL_STUB_MARKER_EN)
+    body = str(text or "").rstrip()
+    if marker in body:
+        return body
+    return f"{body}\n\n{marker}" if body else marker
+
+
+# A tool call whose arguments are not valid JSON arrives in ``invalid_tool_calls``, not in
+# ``tool_calls``. Nothing read that field, so such a reply was handled as a plain-text answer
+# — and its text is usually empty: HTTP 200 with a blank message (2026-10-19 B-05, ~1 in 75
+# tool turns). One bounded corrective iteration, marked like the announced-tool nudge; the
+# malformed calls themselves are never echoed back to the provider.
+_INVALID_TOOL_CALL_NUDGE_MARKER = "fc_invalid_tool_call_nudge"
+_INVALID_TOOL_CALL_NUDGE_TEXT = (
+    "TOOL CALL ERROR: your last tool call ({names}) could not be executed because its "
+    "arguments were not valid JSON. Call the tool again with valid JSON arguments, or answer "
+    "directly from what you already have."
+)
+
+
+_JSON_ERROR_CLASSES = (
+    "Expecting ',' delimiter", "Expecting ':' delimiter", "Expecting property name",
+    "Expecting value", "Unterminated string", "Invalid control character",
+    "Invalid \\escape", "Extra data", "Invalid \\uXXXX escape",
+)
+
+
+def _invalid_call_diagnostics(calls) -> str:
+    """The parse-error CLASS of each malformed tool call, never its content (R3-07).
+
+    ``get_property_details`` came back malformed 3/3 for ordinal follow-ups and the log said
+    only "names=get_property_details". This records, per call: the JSON error class, the
+    argument length, whether the arguments were empty, object-shaped and closed — enough to
+    tell truncation from bad escaping from a non-object payload, with no user text."""
+    out = []
+    for call in calls or []:
+        if not isinstance(call, dict):
+            continue
+        args = call.get("args")
+        text = args if isinstance(args, str) else ("" if args is None else str(args))
+        error = str(call.get("error") or "")
+        kind = next((k for k in _JSON_ERROR_CLASSES if k in error), None)
+        if kind is None:
+            kind = "none_args" if args is None else ("TypeError" if "TypeError" in error else "other")
+        stripped = text.strip()
+        out.append(f"{str(call.get('name') or 'unknown')[:40]}:{kind}:len={len(text)}"
+                   f":obj={int(stripped.startswith('{'))}:closed={int(stripped.endswith('}'))}")
+    return ";".join(out)[:500] or "-"
+
+
+def _has_invalid_call_nudge(messages) -> bool:
+    return any(
+        isinstance(getattr(m, "additional_kwargs", None), dict)
+        and m.additional_kwargs.get(_INVALID_TOOL_CALL_NUDGE_MARKER)
+        for m in (messages or ())
+    )
+
+
+def _has_announce_nudge(messages) -> bool:
+    return any(
+        isinstance(getattr(m, "additional_kwargs", None), dict)
+        and m.additional_kwargs.get(_ANNOUNCED_TOOL_NUDGE_MARKER)
+        for m in (messages or ())
+    )
+
+
 # Per-tool length cap for the model-facing derived view (chars). Raw ToolResult.data is
 # ALWAYS preserved untouched in tool_artifacts; only the model channel is capped.
 _TOOLMSG_CAPS = {
@@ -108,6 +481,128 @@ _TOOLMSG_CAPS = {
     "get_property_details": 4000,
 }
 _TOOLMSG_CAP_DEFAULT = 4000
+
+# search_properties' model-facing view is a deterministic PROJECTION, not a hard cut: the raw
+# payload ran 17k-43k chars, "[:6000]" showed the model ~4 of 12 listings, and it then said
+# two areas "come out level" or that it lacked a commute time the cards showed (R4-06).
+# Every listing keeps its identity and decision fields; optional fields go first.
+_SEARCH_LEAD_KEYS = ("status", "message", "summary", "suggestion", "partial", "partial_note",
+                     "incomplete_areas", "total_found", "total_matches", "search_criteria",
+                     "known_criteria")
+_SEARCH_LIST_KEYS = ("recommendations", "over_budget_alternatives", "similar_properties",
+                     "unverified_candidates", "excluded_candidates", "candidate_states")
+_LISTING_CORE = ("rank", "address", "area", "price", "bedrooms", "property_type", "room_type",
+                 "match_type", "budget_status", "travel_time", "travel_time_minutes",
+                 "travel_time_source", "distance_miles")
+# Dropped in this order while the projection is still over the cap.
+_LISTING_OPTIONAL_STAGES = (
+    ("explanation",),
+    ("url", "source", "possibly_outdated"),
+    ("available_from", "availability_status"),
+    ("verified_features", "unverified_features", "absent_features"),
+)
+_SEARCH_DROP_KEYS = {"images", "description", "score", "score_breakdown", "provider_address",
+                     "geo_location", "commute_evidence"}
+
+
+def _project_listing(row: dict, stage: int) -> dict:
+    out = {k: row[k] for k in _LISTING_CORE if k in row and row[k] not in (None, "", [])}
+    for index, keys in enumerate(_LISTING_OPTIONAL_STAGES):
+        if index < stage:
+            continue
+        for key in keys:
+            value = row.get(key)
+            if value in (None, "", []):
+                continue
+            if key == "explanation":
+                value = " ".join(str(value).split())[:160]
+            out[key] = value
+    return out
+
+
+def _validation_row(row) -> dict:
+    """One ledger row as {address, status, reasons}. The ledger keeps the listing under
+    ``candidate``; reading ``address`` off the row itself gave "address": null for every
+    row, so the model could not tell which listing a reason belonged to (R4-06 NEW-C)."""
+    if not isinstance(row, dict):
+        return {"address": None}
+    candidate = row.get("candidate") if isinstance(row.get("candidate"), dict) else {}
+    address = (row.get("address") or candidate.get("address") or candidate.get("title")
+               or row.get("candidate_key"))
+    reasons = list(row.get("reasons") or []) + list(row.get("unknown_reasons") or [])
+    out = {"address": address}
+    if row.get("status"):
+        out["status"] = row["status"]
+    if reasons:
+        out["reasons"] = [str(x)[:80] for x in reasons][:3]
+    return out
+
+
+def _project_validation(validation: dict) -> dict:
+    """One short line per listing status; the full ledger stays in the artifact."""
+    if not isinstance(validation, dict):
+        return validation
+    out = {k: validation[k] for k in ("eligible_count", "excluded_count", "unknown_count")
+           if k in validation}
+    if isinstance(validation.get("statuses"), list):
+        out["statuses"] = [_validation_row(r) for r in validation["statuses"]]
+        return out
+    for bucket in ("eligible", "excluded", "unknown"):
+        rows = validation.get(bucket)
+        if isinstance(rows, list):
+            out[bucket] = [_validation_row(r) for r in rows]
+    return out
+
+
+def project_search_payload(raw: dict, cap: int) -> dict:
+    """The compact model-facing view of a search_properties payload, within ``cap`` chars."""
+    lead = {k: raw[k] for k in _SEARCH_LEAD_KEYS if k in raw}
+    rest = {k: v for k, v in raw.items()
+            if k not in lead and k not in _SEARCH_LIST_KEYS and k not in _SEARCH_DROP_KEYS
+            and k != "candidate_validation"}
+    lists = {k: raw[k] for k in _SEARCH_LIST_KEYS if isinstance(raw.get(k), list) and raw[k]}
+    projected: dict = {}
+    for stage in range(len(_LISTING_OPTIONAL_STAGES) + 1):
+        projected = dict(lead)
+        for key, rows in lists.items():
+            projected[key] = [_project_listing(r, stage) if isinstance(r, dict) else r for r in rows]
+        if "candidate_validation" in raw:
+            projected["candidate_validation"] = _project_validation(raw["candidate_validation"])
+        projected.update(rest)
+        if len(json.dumps(projected, ensure_ascii=False, default=str)) <= cap - 400:
+            return projected
+    # Still over: one compact line per listing (every listing, its decision fields), the
+    # validation ledger as one line per status, and the auxiliary keys last (r08 NEW-A).
+    compact = {k: v for k, v in lead.items() if k != "known_criteria"}
+    compact["listing_fields"] = ("rank | address | area | price | bedrooms | property type | "
+                                 "room type | match | budget | travel time | distance (mi)")
+    for key, rows in lists.items():
+        compact[key] = [_compact_listing(r) if isinstance(r, dict) else r for r in rows]
+    validation = raw.get("candidate_validation")
+    if isinstance(validation, dict):
+        compact["candidate_validation"] = [
+            " | ".join(str(x) for x in (row.get("address"), row.get("status"),
+                                         "; ".join(row.get("reasons") or [])) if x)
+            for row in (_project_validation(validation).get("statuses") or [])]
+    for key, value in rest.items():
+        compact[key] = value
+    for key in list(rest) + ["candidate_validation"]:
+        if len(json.dumps(compact, ensure_ascii=False, default=str)) <= cap - 400:
+            break
+        compact.pop(key, None)
+    return compact
+
+
+def _compact_listing(row: dict) -> str:
+    """One line with a listing's identity and decision fields, in ``listing_fields`` order."""
+    travel = row.get("travel_time")
+    if travel and row.get("travel_time_source"):
+        travel = f"{travel} ({row['travel_time_source']})"
+    budget = re.sub(r"[^\w\s£/.-]", "", str(row.get("budget_status") or "")).strip()
+    values = (row.get("rank"), row.get("address"), row.get("area"), row.get("price"),
+              row.get("bedrooms"), row.get("property_type"), row.get("room_type"),
+              row.get("match_type"), budget, travel, row.get("distance_miles"))
+    return " | ".join("" if v in (None, "") else str(v) for v in values)
 
 # Kinds whose latest artifact drives a structured card in format_output_fc.
 _CARD_FORMATTERS = {
@@ -119,7 +614,16 @@ _CARD_FORMATTERS = {
 # search_properties statuses that carry an actual result set. `found` is the exact-match
 # pool; `no_exact_match_but_similar` is the closest-recall fallback. Both must repaint the
 # listing panel — neither is a plain chat answer.
-_SEARCH_RESULT_STATUSES = frozenset({"found", "no_exact_match_but_similar"})
+_SEARCH_RESULT_STATUSES = frozenset({"found", "no_exact_match_but_similar", "no_results"})
+
+
+def _asks_for_listings(message: str) -> bool:
+    """True when the user's own message is about finding homes or changing search criteria."""
+    return bool(re.search(
+        r"\b(?:find|search|show|look(?:ing)?\s+for|listings?|flats?|homes?|houses?|apartments?|"
+        r"properties|property|rent|budget|bed(?:room)?s?|studio|area|commute|move[- ]in|"
+        r"cheaper|cheapest|again|results?)\b|\d[\s-]*bed|£\s*\d|"
+        r"找|搜|房源|房子|公寓|预算|租|居室|通勤|区域|结果", str(message or ""), re.I))
 
 
 # ─── ToolSpec (contract D fallback) ─────────────────────────────────
@@ -462,6 +966,7 @@ def _inject_poi_coords(params: dict, state: AgentState) -> dict:
     coords = _listing_coords_for(p.get("address"), state.get("extracted_context") or {})
     if coords:
         p["latitude"], p["longitude"] = coords[0], coords[1]
+        p["_coordinate_source"] = "listing"
     return p
 
 
@@ -476,11 +981,17 @@ def _canonical_poi_args(batch: list) -> dict:
     union of types (comma-separated), widest radius. Every merged call gets the SAME digest,
     so the existing no-progress guard runs the first and answers the rest with its result
     instead of paying for them again."""
+    from core.strict_schema import strip_null_args
     groups: dict = {}
     for tc in batch:
         if (tc.get("name") or "") != "search_nearby_pois":
             continue
-        args = tc.get("args") or {}
+        # The merged call REPLACES the per-call args the dispatch loop has already
+        # null-stripped, so it must be built from null-stripped args too: a strict-mode
+        # call carries "latitude": null / "longitude": null, and copying the raw args back
+        # failed every merged POI call with "ValidationError: invalid parameters" (B-06).
+        args = strip_null_args({k: v for k, v in (tc.get("args") or {}).items()
+                                if not str(k).startswith("_")})
         address = str(args.get("address") or "").strip()
         if not address:
             continue
@@ -595,6 +1106,7 @@ def _build_messages(state: AgentState) -> list:
     focus_records = _focus_records(ec)
     context_block = {
         "accumulated_criteria": state.get("accumulated_search_criteria") or {},
+        "current_date": (state.get('extracted_context') or {}).get('current_date'),
         "focused_property": ec.get("focused_property") or (
             focus_records[-1] if focus_records else None),
         "focus_stack": focus_records,
@@ -1267,6 +1779,31 @@ def _turn_tool_budget_s() -> float:
         return 40.0
 
 
+# ─── Per-turn repeat-call caps (fan-out backstop) ───────────────────
+# A single Chinese-language turn ran `search_properties` THREE times (12.9 s p50, 28.4 s
+# max) plus `get_property_details` four times and `web_search` once across 6 batches and 7
+# model calls — 76.3 s and 101 K input tokens for the same answer the English turn produced
+# in 29.7 s with ONE search. The no-progress guard only suppresses a byte-identical repeat
+# (same tool + same params digest), so a re-search with slightly different criteria costs a
+# full tool run every time. These caps bound the repeat count per USER TURN regardless of
+# how the arguments differ; the model is told it has already run the tool and must answer
+# from what it has. They are a backstop, not the fix for whatever made the model re-plan.
+_TURN_TOOL_CALL_CAPS_DEFAULT = {"search_properties": 2, "web_search": 3}
+_TURN_TOOL_CALL_CAP_DEFAULT = 6
+
+
+def _turn_tool_call_cap(tool: str) -> int:
+    """Max EXECUTED calls of `tool` in one user turn (FC_TURN_CALL_CAP_<TOOL> overrides)."""
+    env_name = "FC_TURN_CALL_CAP_" + str(tool or "").upper()
+    raw = os.getenv(env_name)
+    if raw is not None:
+        try:
+            return max(1, int(raw))
+        except (TypeError, ValueError):
+            pass
+    return _TURN_TOOL_CALL_CAPS_DEFAULT.get(tool, _TURN_TOOL_CALL_CAP_DEFAULT)
+
+
 def _loop_soft_cap() -> int:
     """Soft loop_turn threshold above which a single inflation warning is logged
     (FC_LOOP_SOFT_CAP). Observability only — no behavioural change."""
@@ -1274,6 +1811,36 @@ def _loop_soft_cap() -> int:
         return int(os.getenv("FC_LOOP_SOFT_CAP", "6"))
     except (TypeError, ValueError):
         return 6
+
+
+# The commute validator runs on every final answer. In the async agent node it used to run
+# ON the event loop, so one pathological answer (8 192 tokens of digits, then two
+# superlinear regex passes) froze every request in the process for ~100 s — /health timed
+# out and another user's 1.3 s tool turn took 83 s (2026-10-19 B-01).
+#
+# THE REAL PROTECTION is upstream: linear regexes and a bounded input
+# (candidate_validation.bound_validator_input). This wrapper is the second line. It keeps
+# the validator's many short Python steps off the loop, and its bounded wait turns a slow
+# path made of such steps into ONE fail-closed answer. It cannot pre-empt a single
+# long-running C-level regex call: CPython's `re` holds the GIL for the whole call, so the
+# loop (and the timeout) only run again when that call returns, and an abandoned worker
+# keeps its executor thread until it finishes.
+_COMMUTE_VALIDATION_TIMEOUT_S = float(os.getenv("COMMUTE_VALIDATION_TIMEOUT_S", "5"))
+
+
+async def _validate_commute_off_loop(text: str, state: dict) -> str:
+    """``validate_commute_response`` in a worker thread, bounded in time."""
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(validate_commute_response, text, state),
+            timeout=_COMMUTE_VALIDATION_TIMEOUT_S)
+    except asyncio.TimeoutError:
+        logger.error("fc_loop.commute_validation_timeout chars=%d", len(str(text or "")))
+        zh = str((state.get("extracted_context") or {}).get("reply_language") or "") \
+            .lower().startswith("zh")
+        # Fail closed: nothing unvalidated ships.
+        return ("本轮无法核实该房源的通勤条件。" if zh
+                else "The commute condition could not be verified for the listing this round.")
 
 
 def _turn_ceiling_s() -> float:
@@ -1602,7 +2169,22 @@ def _cued_dimensions(message: str) -> list:
     fetch a dimension it then apologises for, or apologise for one it fetched. Since
     2026-07-27 that agreement extends across ARCHES too.
     """
-    return dimensions.cued_dimensions(message)
+    from core.constraint_updates import commute_query_forbidden
+    result = dimensions.cued_dimensions(message)
+    return [dim for dim in result if dim != 'commute'] if commute_query_forbidden(message) else result
+
+
+def _commute_opted_out(message: str, state: dict | None = None) -> bool:
+    """The user said they have no commute ("no commute", "I don't need a commute"), or the
+    criteria record it. The cue still FIRES on such a message (the deterministic gates stop
+    the fetch); this keeps the apology from listing "Commute time has not been calculated
+    yet." for it (R2-24)."""
+    if ((state or {}).get("accumulated_search_criteria") or {}).get("no_commute"):
+        return True
+    from core.tools.search_properties import _extract_no_commute
+    return bool(_extract_no_commute(message or "") or re.search(
+        r"\b(?:don.t|do not|no)\s+(?:need|want|have)\s+(?:a\s+|any\s+)?commut|"
+        r"\bwithout\s+(?:a\s+)?commute\b|不需要通勤|不用通勤", message or "", re.I))
 
 
 def _dimension_satisfying_tools(dim: str) -> tuple:
@@ -1629,6 +2211,8 @@ def _missing_requested_dimension_lines(message: str, executed_tools: set, lang: 
     apology, never to a claim.
     """
     cued = set(_cued_dimensions(message))
+    if "commute" in cued and _commute_opted_out(message):
+        cued.discard("commute")     # "no commute" is not a request for a commute (R2-24)
     lines = []
     for dim, _cues, tools in dimensions.DIMENSION_CUES:
         if dim not in cued or any(t in executed_tools for t in tools):
@@ -1829,6 +2413,111 @@ def _dimension_fanout_calls(state: AgentState, batch_calls: list, cur_msg: str, 
     return added
 
 
+def _explicit_transport_reads(state: dict, batch_calls: list, message: str) -> list:
+    """Complete explicit fare/card/status lookups even when the model emits prose.
+
+    Unlike broad dimension cues, these are concrete requests for live tool data.
+    Every query type is attempted once; unknown endpoints/zones stay unknown.
+    """
+    import re
+    text = message or ''
+    if re.search(r'(?:don.t|do not) (?:query|check|look up)|不要(?:查询|查票价|查线路)', text, re.I):
+        return []
+    requested = []
+    if re.search(r'travelcard|(?:周|月)票|交通卡价格', text, re.I):
+        requested.append('travelcard')
+    if re.search(r'line status|service status|线路状态|运行状态', text, re.I):
+        requested.append('line_status')
+    if re.search(r'(?:single|peak|off.peak) fares?|单程票价|高峰.*票价', text, re.I):
+        requested.append('fare')
+    if re.search(r'\b(?:journey|route)\b|到达|抵达', text, re.I) and re.search(r'arriv|depart|\b(?:am|pm|tomorrow)\b|\d{1,2}:\d{2}|明天|明早', text, re.I):
+        # A fare lookup already returns the selected itinerary and its time evidence.
+        if 'fare' not in requested:
+            requested.append('journey')
+    if not requested:
+        return []
+    attempted = {tc.get('args', {}).get('query_type', 'auto') for tc in batch_calls or []
+                 if tc.get('name') == 'get_transport_info'}
+    for artifact in state.get('tool_artifacts') or []:
+        if artifact.get('tool') == 'get_transport_info':
+            attempted.add((artifact.get('raw_data') or {}).get('query_type', 'auto'))
+            # A failed/denied query may have no raw_data. Do not retry it blindly.
+            if not artifact.get('raw_data'):
+                attempted.update(requested)
+    if 'auto' in attempted:
+        return []
+    ctx = _dimension_location_context(state, batch_calls)
+    # Resolve only explicit current endpoints; no new place is inferred.
+    endpoint = re.search(r'\bfrom\s+(.{2,65}?)\s+to\s+(.{2,65}?)(?=[.,;!?]|\s+(?:on|for|at|including|arriving|arrive|departing|leaving|by)\b|$)', text, re.I)
+    origin = endpoint.group(1).strip() if endpoint else ctx.get('area')
+    destination = endpoint.group(2).strip() if endpoint else ctx.get('commute_destination')
+    calls = []
+    for query in requested:
+        if query in attempted:
+            continue
+        args = {'query_type': query, 'user_query': text}
+        if query in ('fare', 'journey', 'travelcard'):
+            if origin:
+                args['from_location'] = origin
+            if destination:
+                args['to_location'] = destination
+            if query in ('fare', 'journey') and not (origin and destination):
+                continue
+        if query == 'travelcard':
+            zone = re.search(r'\bzones?\s*1\s*[-–to]+\s*([2-6])\b', text, re.I)
+            if zone:
+                args['end_zone'] = int(zone.group(1))
+        if query in ('fare', 'journey'):
+            try:
+                from core.tools.get_transport_info import _requested_journey_time
+                requested_time = _requested_journey_time(user_query=text)
+                if requested_time:
+                    args.update({key: value for key, value in requested_time[1].items()
+                                 if key in ('date', 'time', 'time_is')})
+            except ValueError:
+                # Keep the original query: the tool returns its typed validation error.
+                pass
+        calls.append(('get_transport_info', args))
+    return calls
+
+
+def _explicit_weather_reads(state: dict, batch_calls: list, message: str) -> list:
+    """An explicitly requested weather read may run independently of housing clarification."""
+    import re
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    text = message or ''
+    if not re.search(r'\bweather\b|天气', text, re.I):
+        return []
+    if re.search(r'(?:do not|don.t).{0,15}(?:weather|forecast)|不要.{0,8}天气', text, re.I):
+        return []
+    if any(call.get('name') == 'get_weather' for call in batch_calls or []):
+        return []
+    if any(item.get('tool') == 'get_weather' for item in state.get('tool_artifacts') or []):
+        return []
+    location = _dimension_location_context(state, batch_calls).get('area')
+    explicit = re.search(r'\bweather\s+(?:in|for)\s+([A-Z][a-z]+(?:[ -][A-Z][a-z]+){0,3})', text)
+    if explicit:
+        location = explicit.group(1)
+    if not location:
+        return []
+    args = {'location': location}
+    # Scope calendar extraction to the weather sentence so a housing move-in date
+    # cannot silently become the requested forecast date.
+    sentence = next((part for part in re.split(r'[.!?。！？]', text)
+                     if re.search(r'\bweather\b|天气', part, re.I)), text)
+    today = datetime.now(ZoneInfo('Europe/London')).date()
+    day = re.search(r'(?<!\d)(\d{4}-\d{2}-\d{2})(?!\d)', sentence)
+    if re.search(r'\btomorrow\b|明天|明早', sentence, re.I):
+        args['target_date'] = (today + timedelta(days=1)).isoformat()
+    elif day:
+        args['target_date'] = day.group(1)
+    clock = re.search(r'(?<!\d)([01]?\d|2[0-3]):([0-5]\d)(?!\d)', sentence)
+    if args.get('target_date') and clock:
+        args['target_time'] = f'{int(clock.group(1)):02d}:{clock.group(2)}'
+    return [('get_weather', args)]
+
+
 def _criteria_room_type_label(criteria: dict) -> Optional[str]:
     """From a search_properties criteria echo (its `search_criteria` / `known_criteria`), return a
     room-type label in a form graders._room_type_in_text will match — i.e. a string CONTAINING
@@ -1917,7 +2606,8 @@ def _completed_empty_search_raw(artifacts: list) -> Optional[dict]:
 _MAX_FALLBACK_RECS = 5
 
 
-def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_budget") -> str:
+def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_budget",
+                                      failed_tools=None) -> str:
     """Build a compact, honest final answer directly from the gathered tool_artifacts. Shared
     by two callers that differ ONLY in framing (opener + closer), never in the body:
 
@@ -1974,6 +2664,21 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
     # completed, nothing matched" while NAMING the requested room type/area from the criteria the
     # payload echoes, so the complete-empty grading branch (room_type_match_if_evidence) passes.
     empty_raw = None if (recs or search_incomplete) else _completed_empty_search_raw(artifacts)
+    # "I do not yet have listing results ready to show" belongs to a listing turn; a failed
+    # web lookup on a non-listing question says the lookup failed (R2-27).
+    searched = any(a.get("tool") == "search_properties" for a in artifacts)
+    web_failed = (any(a.get("tool") == "web_search" for a in artifacts)
+                  and not any(a.get("tool") == "web_search" and _is_executed(a) and a.get("success")
+                              for a in artifacts))
+    # The conversation already SHOWED listings (an ordinal follow-up such as "Does the first
+    # one allow pets?"). A failed details lookup is that lookup failing, never "I do not yet
+    # have listing results" about listings the user is looking at (R3-07).
+    prior_listings = bool(ec.get("recommended_registry") or ec.get("last_results")
+                          or ec.get("recommended_index"))
+    failed_names = {str(name) for name in (failed_tools or [])}
+    details_failed = (not searched and (
+        "get_property_details" in failed_names
+        or (reason == "tool_call_error" and prior_listings)))
     empty_criteria = {}
     if isinstance(empty_raw, dict):
         empty_criteria = (empty_raw.get("search_criteria")
@@ -1994,7 +2699,13 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             safety_lines.append((str(place), raw.get("safety_score"), str(level)))
 
     if lang == "zh":
-        if reason == "no_reliable_numbers":
+        if reason == 'provider_error':
+            opener = '模型服务暂时不可用。以下仅列出本轮已经取得的结果：'
+            closer = '未完成的部分可以稍后重试。'
+        elif reason == 'tool_call_error':
+            opener = '本轮有一项查询未能执行（查询参数无效）。以下仅列出本轮已经取得的结果：'
+            closer = '可以让我再试一次。'
+        elif reason == "no_reliable_numbers":
             # 「未能获取」是诚实的 partial-disclosure 标记（graders._honest_partial_disclosed），
             # 满足 must_mention_source_if_evidence 的无证据分支；不含任何「超时/时间限制」措辞。
             opener = "抱歉，我未能获取到可靠的具体数字，先按已核实的信息回答："
@@ -2023,6 +2734,13 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             _cond = f"按 {empty_rt} 的条件" if empty_rt else "按当前条件"
             lines.append(f"房源搜索已完成：{_area}{_cond}没有找到匹配的房源"
                          "（数据来源 OnTheMarket）。")
+        elif web_failed and not searched:
+            lines.append("本轮的网页查询失败，所以没能核实你问的内容。")
+        elif details_failed:
+            lines.append("这次没能查到你问的那套房源的详情（查询未能执行），所以还无法回答；"
+                         "之前列出的房源仍然有效。")
+        elif reason == "tool_call_error" and not searched:
+            lines.append("这次的查询未能执行，所以还没能核实你问的内容。")
         else:
             lines.append("目前还没有可以直接展示的房源结果。")
         for place, score, level in safety_lines[:4]:
@@ -2033,7 +2751,14 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             lines.extend("- " + m for m in missing_lines)
         lines.append(closer)
     else:
-        if reason == "no_reliable_numbers":
+        if reason == 'provider_error':
+            opener = 'The model service is temporarily unavailable. These are the results already obtained this turn:'
+            closer = 'You can retry the unfinished parts later.'
+        elif reason == 'tool_call_error':
+            opener = ("I couldn't run one of the lookups this turn (its request was malformed). "
+                      "These are the results already obtained this turn:")
+            closer = 'You can ask me to try again.'
+        elif reason == "no_reliable_numbers":
             # "couldn't retrieve" is an honest partial-disclosure marker
             # (graders._honest_partial_disclosed), satisfying the no-evidence branch of
             # must_mention_source_if_evidence — with NO "ran long / cut short / time budget"
@@ -2067,6 +2792,13 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             _in = f" in {empty_area}" if empty_area else ""
             lines.append(f"The property search completed: no {_rt}listings{_in} matched your "
                          "criteria (data from OnTheMarket).")
+        elif web_failed and not searched:
+            lines.append("The web lookup failed this turn, so I could not check what you asked.")
+        elif details_failed:
+            lines.append("The details lookup for that listing failed this turn, so I can't answer "
+                         "that yet; the listings shown earlier are still available.")
+        elif reason == "tool_call_error" and not searched:
+            lines.append("The lookup failed this turn, so I could not check what you asked.")
         else:
             lines.append("I do not yet have listing results ready to show.")
         for place, score, level in safety_lines[:4]:
@@ -2076,7 +2808,9 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             lines.append("Still outstanding from what you asked for this turn:")
             lines.extend("- " + m for m in missing_lines)
         lines.append(closer)
-    return "\n".join(lines)
+    from core.candidate_validation import render_structured_evidence_fallback
+    evidence = render_structured_evidence_fallback(state, language=lang)
+    return '\n\n'.join(part for part in ('\n'.join(lines), evidence) if part)
 
 
 def _deterministic_wrap_answer(state: AgentState) -> str:
@@ -2179,6 +2913,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         #    run a real search.
         _refine_pool = apply_preference_filter(
             _refinable_previous_results(ec), state.get("user_preferences") or {})
+        memory_gate = _load_memory_gate()
+        if memory_gate is not None and memory_gate.user_authorizes_memory(cm):
+            _refine_pool = []
         if _refine_pool:
             _refine_plan = refine_results.plan_refinement(cm, _refine_pool)
             if _refine_plan is not None:
@@ -2450,6 +3187,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         """
         added = _dimension_fanout_calls(state, batch_calls, cur_msg,
                                         specs=_spec_map(), read_policy=_load_tool_policy())
+        if 'get_transport_info' in _spec_map():
+            added.extend(_explicit_transport_reads(state, batch_calls, cur_msg))
+        if 'get_weather' in _spec_map():
+            added.extend(_explicit_weather_reads(state, batch_calls, cur_msg))
         if not added:
             return []
         try:
@@ -2507,7 +3248,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         names it honestly. Abandonment degrades to the apology, never to a claim.
         """
         if _executed_read_count(state) <= 0:
-            return []
+            cur_msg = ((state.get('extracted_context') or {}).get('current_message') or '')
+            if not (_explicit_transport_reads(state, [], cur_msg) or
+                    _explicit_weather_reads(state, [], cur_msg)):
+                return []
         elapsed_now = (time.monotonic() - turn_start) if turn_start else 0.0
         if turn_start and elapsed_now > (_turn_soft_wrap_s() - _min_batch_s()):
             return []
@@ -2522,12 +3266,32 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                         "loop_turn=%d", added, elapsed_now, loop_turn)
         return added
 
-    async def agent_node(state: AgentState) -> Command[Literal["execute_tools", "critic", "format_output_fc"]]:
+    async def agent_node(
+            state: AgentState) -> Command[
+                Literal["agent", "execute_tools", "critic", "format_output_fc"]]:
         messages = list(state.get("messages") or [])
         explicit_memory_required = False
         ec = state.get("extracted_context") or {}
+        # Bound on EVERY entry: the terminal ask_user branch reads it after a tool round too
+        # (search -> remember -> ask_user crashed with UnboundLocalError, R4-01).
+        current_message = (ec.get("current_message")
+                           or _current_message(state.get("user_query") or ""))
         reply_language = _reply_language_from_ctx(
             ec, ec.get("current_message") or _current_message(state.get("user_query") or ""))
+        from core.constraint_updates import independent_memory_task
+        current_memory_message = ec.get('current_message') or _current_message(state.get('user_query') or '')
+        saved_artifact = next((item for item in reversed(state.get('tool_artifacts') or [])
+                               if item.get('tool') == 'remember' and _is_executed(item)), None)
+        if (saved_artifact is not None and memory_contract_from_artifact(saved_artifact).get('success')
+                and not independent_memory_task(current_memory_message)
+                and not any(item.get('tool') not in ('remember','recall_memory',None)
+                            for item in state.get('tool_artifacts') or [])):
+            # The observed write completes a memory-only request. A second model hop
+            # must not invent a new budget conflict or alter the acknowledged text.
+            return Command(update={'response_type':'answer'}, goto='format_output_fc')
+        if any(item.get('tool') == 'ask_user' for item in state.get('tool_artifacts') or []):
+            # Independent reads requested alongside clarification have now been attempted.
+            return Command(update={}, goto='format_output_fc')
         first_entry = not messages
         try:
             _register_base_prompt_variants()
@@ -2633,8 +3397,34 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         except Exception as exc:
             logger.warning("fc_loop.plan_llm_failed type=%s", type(exc).__name__)
             elapsed = (time.monotonic() - turn_start) if turn_start else 0.0
-            return await _wrap_up(state, messages, specs, loop_turn, elapsed, turn_start)
+            if isinstance(exc, TimeoutError) and elapsed >= wrap_edge:
+                return await _wrap_up(state, messages, specs, loop_turn, elapsed, turn_start)
+            text = _artifact_grounded_fallback_answer(state, reason='provider_error')
+            return Command(update={
+                'final_response': text, 'response_type': 'error',
+                'tool_data': {'error_code': 'model_provider_unavailable', 'retryable': True},
+                'loop_turn': loop_turn,
+            }, goto='format_output_fc')
         tool_calls = list(getattr(resp, "tool_calls", None) or [])
+        invalid_calls = list(getattr(resp, "invalid_tool_calls", None) or [])
+        if invalid_calls and not tool_calls:
+            names = ", ".join(sorted({str(c.get("name") or "unknown") for c in invalid_calls
+                                      if isinstance(c, dict)})) or "unknown"
+            logger.warning("fc_loop.invalid_tool_calls count=%d names=%s loop_turn=%d diag=%s",
+                           len(invalid_calls), names, loop_turn,
+                           _invalid_call_diagnostics(invalid_calls))
+            content = getattr(resp, "content", "") or ""
+            if not _has_invalid_call_nudge(messages):
+                nudge = HumanMessage(
+                    content=_INVALID_TOOL_CALL_NUDGE_TEXT.format(names=names),
+                    additional_kwargs={_INVALID_TOOL_CALL_NUDGE_MARKER: True})
+                prior = [AIMessage(content=content)] if str(content).strip() else []
+                return Command(update={
+                    "messages": messages + prior + [nudge], "loop_turn": loop_turn,
+                }, goto="agent")
+            # Second malformed reply in one turn: continue as plain text, without the
+            # malformed calls (an empty text is replaced by the grounded fallback below).
+            resp = AIMessage(content=content)
         if (explicit_memory_required
                 and not any(tc.get("name") == "remember" for tc in tool_calls)):
             forced_call = {
@@ -2654,15 +3444,32 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 # ask_user (contract A): terminal. Record its model-provided fields as an
                 # artifact; format_output_fc derives known_criteria deterministically.
                 args = ask.get("args") or {}
+                from core.tools.ask_user import normalize_options
                 payload = {
                     "status": "ask_user",
                     "question": args.get("question", ""),
                     "clarification_kind": args.get("clarification_kind", "other"),
                     "missing_fields": args.get("missing_fields", []) or [],
                     "missing_optional_fields": args.get("missing_optional_fields", []) or [],
+                    "options": normalize_options(args.get('options')),
                 }
                 artifacts = list(state.get("tool_artifacts") or [])
                 artifacts.append(_artifact(loop_turn - 1, "ask_user", payload))
+                independent = (_explicit_transport_reads(state, [], current_message) +
+                               _explicit_weather_reads(state, [], current_message))
+                available = {spec.name: spec for spec in specs}
+                independent = [(name, params) for name, params in independent
+                    if name in available and getattr(available[name], 'side_effect', 'none') != 'write'
+                    and not getattr(available[name], 'terminal', False)
+                    and _read_tool_denial(_load_tool_policy(), name, params, current_message) is None]
+                if independent:
+                    read_message = AIMessage(content='', tool_calls=[
+                        {'name': name, 'args': params, 'id': f'clarify_read_{loop_turn}_{index}', 'type': 'tool_call'}
+                        for index, (name, params) in enumerate(independent)])
+                    return Command(update={
+                        'messages': messages + [read_message], 'loop_turn': loop_turn,
+                        'tool_artifacts': artifacts,
+                    }, goto='execute_tools')
                 return Command(update={
                     "messages": messages + [resp], "loop_turn": loop_turn,
                     "tool_artifacts": artifacts,
@@ -2697,7 +3504,46 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
 
         # Plain text -> final answer through the legacy critic.
         text = clean_response(resp.content if hasattr(resp, "content") else str(resp))
-        text = validate_commute_response(text, state)
+        if not str(text or "").strip() and invalid_calls:
+            # Never ship a blank answer for a turn whose tool call could not be parsed.
+            text = _artifact_grounded_fallback_answer(
+                state, reason="tool_call_error",
+                failed_tools=[c.get("name") for c in invalid_calls if isinstance(c, dict)])
+
+        # Never terminate a turn on an answer that ANNOUNCES a tool call it did not make.
+        # Live, a follow-up turn shipped a 105-char "Let me search for actual one-bedroom
+        # listings in Shoreditch…" with `tool_batches: 0` and no canned marker, so every
+        # marker-based monitor scored it a PASS. One bounded corrective iteration (the
+        # nudge marker below makes it once-per-turn, and the wrap edge above still binds
+        # the wall clock); if the retry ALSO produces no tool call, the answer ships with
+        # an explicit marker rather than as a silent promise.
+        if announces_unexecuted_tool(text, state.get("tool_artifacts")):
+            if not _has_announce_nudge(messages):
+                logger.info("fc_loop.announced_tool_without_execution loop_turn=%d", loop_turn)
+                nudge = HumanMessage(
+                    content=_ANNOUNCED_TOOL_NUDGE_TEXT,
+                    additional_kwargs={_ANNOUNCED_TOOL_NUDGE_MARKER: True})
+                # A FRESH AIMessage carrying only the text, not `resp` itself. This is the
+                # one place the loop sends a plain-text assistant turn back to the model,
+                # and echoing the provider's own object did exactly that: the tool-bound
+                # response carries `tool_calls: []` plus provider metadata, and the strict
+                # /beta endpoint answered 400 to all three follow-up calls (observed on
+                # `fixtest-f3-poi-t2`), burning the turn into the wrap-up path.
+                return Command(update={
+                    "messages": messages + [AIMessage(content=text), nudge],
+                    "loop_turn": loop_turn,
+                }, goto="agent")
+            logger.warning("fc_loop.announced_tool_stub_shipped loop_turn=%d", loop_turn)
+            text = _mark_announced_stub(text, reply_language)
+
+        text = await _validate_commute_off_loop(text, state)
+        text = disclose_automatic_memory(
+            text, (state.get("extracted_context") or {}).get("current_message")
+            or _current_message(state.get("user_query") or ""), reply_language)
+        text = acknowledge_remembered_budget(
+            text, state.get("memory_context") or "",
+            (state.get("accumulated_search_criteria") or {}).get("max_budget"), reply_language,
+            searched_without_budget=searched_without_budget(state.get("tool_artifacts")))
         memory_contract = state.get("memory_write_contract") or {}
         if memory_contract.get("requested"):
             lang = _reply_language_from_ctx(
@@ -2707,6 +3553,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             has_other_result = any(
                 artifact.get("tool") != "remember" and _is_executed(artifact)
                 for artifact in (state.get("tool_artifacts") or []))
+            from core.constraint_updates import independent_memory_task
+            has_other_result = has_other_result or independent_memory_task(
+                (state.get('extracted_context') or {}).get('current_message') or state.get('user_query') or '')
             text = compose_memory_contract_response(
                 text, memory_contract, language=lang, preserve_content=has_other_result)
         return Command(update={
@@ -2724,8 +3573,12 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         p = dict(params or {})
         ec = state.get("extracted_context") or {}
         acc = state.get("accumulated_search_criteria") or {}
-        if not p.get("current_message"):
-            p["current_message"] = ec.get("current_message", "")
+        from core.langgraph_agent import _apply_explicit_criteria_updates
+        # Relative budget edits were resolved by the state node against the pre-turn
+        # ceiling; re-applying one here would add the delta a second time.
+        acc = _apply_explicit_criteria_updates(acc, ec.get('current_message') or '',
+                                               apply_relative_budget=False)
+        p["current_message"] = ec.get("current_message", "")
         # A hard filter the model invented (a plausible budget, a bedroom count, "shared")
         # narrows the search to nothing while staying invisible to the user. Drop anything
         # not traceable to the accumulated criteria or to this turn's own words, BEFORE the
@@ -2740,12 +3593,26 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         except Exception as exc:
             logger.error("fc_loop.ground_hard_constraints_failed type=%s", type(exc).__name__)
         try:
-            from core.tools.search_properties import _extract_area
-            switched = _extract_area(p.get("current_message") or "")
+            from core.tools.search_properties import _extract_area, area_list_edit, bare_city_downgrades
+            # An add/remove edit is already folded into `acc` above; reading "Also search in
+            # Islington." as a switch here would replace the list (R1-02).
+            switched = (None if area_list_edit(p.get("current_message") or "", acc.get("areas")) is not None
+                        else _extract_area(p.get("current_message") or ""))
+            # "伦敦UCL附近" names only the city in words this parser knows; a model that
+            # read a neighbourhood into it (or one from a table we lack) must not be
+            # widened back to all of London (R1-01).
+            kept_city = (switched if switched and bare_city_downgrades(switched, p.get("area"))
+                         else None)
         except Exception:
+            switched = kept_city = None
+        if kept_city:
+            logger.info("fc_loop.kept_specific_area city=%s", kept_city)
             switched = None
+            if not p.get("areas") or [str(a).strip().lower() for a in p["areas"]] == ["london"]:
+                p["areas"] = [p["area"]]
         if switched:
             p["area"] = switched
+            p["areas"] = [switched]
         if not p.get("area") and acc.get("area"):
             p["area"] = acc["area"]
         if not switched and not p.get("areas") and acc.get("areas"):
@@ -2755,12 +3622,35 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             p["commute_destination"] = cd
         if not p.get("max_budget") and acc.get("max_budget"):
             p["max_budget"] = acc["max_budget"]
+        # Relative budget edit ("raise the budget by £200" / 「预算提高200镑」): the model
+        # itself emits the DELTA as `max_budget`, which live produced a search at £200 and
+        # 0 results. The accumulated ceiling has already been resolved for this turn (see
+        # `_relative_budget_repair`), so a model value that is exactly the delta is the
+        # delta — never a ceiling.
+        _delta = detect_relative_budget_delta(p.get("current_message") or "")
+        if _delta is not None:
+            _acc_budget = acc.get("max_budget")
+            try:
+                _model_is_delta = (p.get("max_budget") is not None
+                                   and abs(float(p["max_budget"]) - abs(_delta)) < 1e-6)
+            except (TypeError, ValueError):
+                _model_is_delta = False
+            if _model_is_delta and _acc_budget:
+                p["max_budget"] = _acc_budget
+                logger.info("fc_loop.relative_budget_delta_as_ceiling delta=%s resolved=%s",
+                            _delta, _acc_budget)
+            elif _model_is_delta:
+                # A delta with no prior ceiling is not a ceiling either. Searching AT the
+                # delta guarantees zero results; drop the filter and say so in the log.
+                p.pop("max_budget", None)
+                logger.info("fc_loop.relative_budget_unresolved delta=%s", _delta)
         if not p.get("max_commute_time") and acc.get("max_travel_time") and not acc.get("no_commute"):
             p["max_commute_time"] = acc["max_travel_time"]
         if acc.get("no_commute"):
             p["no_commute"] = True
         if acc.get("bedrooms") is not None and not p.get("bedrooms"):
             p["bedrooms"] = acc["bedrooms"]
+        p['bedrooms_minimum'] = bool(p.get('bedrooms_minimum', acc.get('bedrooms_minimum')))
         if acc.get("room_type") and not p.get("room_type"):
             p["room_type"] = acc["room_type"]
         if acc.get("move_in_date") and not p.get("move_in_date"):
@@ -2776,12 +3666,99 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         rl = ec.get("reply_language")
         if rl and not p.get("reply_language"):
             p["reply_language"] = rl
-        return p
+        # A place the user's own follow-up names ("and Newcastle?", "how about Kew?") that the
+        # model put in the area slot is the user's choice, even when the parser does not know
+        # the name: the accumulated area used to overwrite it and the OLD area was searched
+        # again under a "verified" header (R2-14).
+        keep_model_area = False
+        try:
+            from core.tools.search_properties import names_follow_up_area
+            _model_area = p.get("area")
+            keep_model_area = bool(
+                isinstance(_model_area, str) and _model_area.strip() and acc.get("area")
+                and _model_area.strip().lower() != str(acc.get("area")).strip().lower()
+                and names_follow_up_area(p.get("current_message") or "", _model_area))
+        except Exception:
+            keep_model_area = False
+        if keep_model_area:
+            logger.info("fc_loop.kept_user_named_area")
+            if not any(str(a).strip().lower() == p["area"].strip().lower()
+                       for a in p.get("areas") or []):
+                p["areas"] = [p["area"]]
+        # Known user constraints are authoritative, including explicit clearing (None)
+        # and zero-bedroom studios. The model may supply only genuinely unknown slots.
+        for stored, argument in (
+            ('area', 'area'), ('areas', 'areas'), ('max_budget', 'max_budget'),
+            ('bedrooms', 'bedrooms'), ('bedrooms_minimum', 'bedrooms_minimum'),
+            ('room_type', 'room_type'), ('move_in_date', 'move_in_date'),
+            ('property_features', 'property_features'), ('budget_period', 'budget_period'),
+            ('max_travel_time', 'max_commute_time'), ('no_commute', 'no_commute'),
+        ):
+            if stored in acc:
+                if kept_city and stored in ('area', 'areas') and acc.get('area') == kept_city:
+                    continue    # the bare city this turn named; the model's area is finer
+                if keep_model_area and stored in ('area', 'areas'):
+                    continue    # the place the user's follow-up named (R2-14)
+                if acc[stored] is None:
+                    p.pop(argument, None)
+                else:
+                    p[argument] = acc[stored]
+        if (acc.get('area') and not acc.get('areas') and not keep_model_area
+                and not (kept_city and acc.get('area') == kept_city)):
+            p['areas'] = [acc['area']]
+        if cd and not acc.get('no_commute'):
+            p['commute_destination'] = cd
+        if acc.get('no_commute'):
+            # REMOVE the commute filters; never set them to None. SearchPropertiesInput is
+            # strict and validates against the authored schema, where max_commute_time is
+            # an integer and commute_destination a string, so an explicit null failed
+            # every no-commute search with "ValidationError: invalid parameters" (A-02).
+            p.pop('max_commute_time', None)
+            p.pop('commute_destination', None)
+        total_budget = acc.get('monthly_total_budget')
+        if isinstance(total_budget, (int, float)) and total_budget > 0:
+            # Rent alone cannot exceed the entire rent+transport allowance. This
+            # necessary bound does not establish that the combined cost fits.
+            rent_ceiling = p.get('max_budget')
+            p['max_budget'] = min(rent_ceiling, total_budget) if rent_ceiling else total_budget
+        from core.constraint_updates import commute_query_forbidden
+        if commute_query_forbidden(p['current_message']):
+            p['no_commute'] = True
+            p.pop('max_commute_time', None)
+        # Harness-supplied params cross the same strict input contract as the model's: an
+        # explicit None is a validation failure there, not "unset". strip_null_args already
+        # ran on the MODEL's arguments; this covers every value injected after it.
+        from core.strict_schema import strip_null_args
+        return strip_null_args(p)
 
     def _derived_toolmsg(tool: str, result) -> tuple[str, bool]:
         """Dual-channel model-facing view (design §2.3): {"success","data","error"} JSON,
         untrusted data sanitized, length-capped. Returns (content, tainted)."""
         raw = getattr(result, "data", None)
+        tainted = False
+        cap = _TOOLMSG_CAPS.get(tool, _TOOLMSG_CAP_DEFAULT)
+        if tool == "search_properties" and isinstance(raw, dict):
+            # The raw artifact stays untouched; only the model channel is projected (R4-06).
+            # The budget is measured on the FINAL string, after the untrusted wrapper has
+            # JSON-escaped the projection a second time (+12-25%): sized on raw JSON, a
+            # 15-listing search still overshot and lost its last 3 listings (r08 NEW-A).
+            source, budget = raw, cap - 200
+            for _attempt in range(6):
+                view = project_search_payload(source, budget)
+                content, tainted = _render_toolmsg(tool, view, result)
+                if len(content) <= cap:
+                    return content, tainted
+                budget -= (len(content) - cap) + 150
+            logger.info("fc_loop.toolmsg_truncated tool=%s len=%d cap=%d", tool, len(content), cap)
+            return content[:cap] + "\n...[truncated]", tainted
+        content, tainted = _render_toolmsg(tool, raw, result)
+        if len(content) > cap:
+            logger.info("fc_loop.toolmsg_truncated tool=%s len=%d cap=%d", tool, len(content), cap)
+            content = content[:cap] + "\n...[truncated]"
+        return content, tainted
+
+    def _render_toolmsg(tool: str, raw, result) -> tuple[str, bool]:
+        """The model-facing JSON for ``raw`` (sanitized when untrusted), uncapped."""
         tainted = False
         if tool in _UNTRUSTED_TOOLS and raw is not None:
             data_view = sanitize_untrusted(
@@ -2804,12 +3781,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         payload["error"] = getattr(result, "error", None)
         if getattr(result, "outcome", None):
             payload["outcome"] = result.outcome
-        content = json.dumps(payload, ensure_ascii=False, default=str)
-        cap = _TOOLMSG_CAPS.get(tool, _TOOLMSG_CAP_DEFAULT)
-        if len(content) > cap:
-            logger.info("fc_loop.toolmsg_truncated tool=%s len=%d cap=%d", tool, len(content), cap)
-            content = content[:cap] + "\n...[truncated]"
-        return content, tainted
+        return json.dumps(payload, ensure_ascii=False, default=str), tainted
 
     async def execute_tools_node(state: AgentState) -> Command[Literal["agent"]]:
         messages = list(state.get("messages") or [])
@@ -2842,9 +3814,29 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         # sibling call's types; applied inside it so the merged calls share one digest and
         # the no-progress guard answers the duplicates from the first result.
         poi_canon = _canonical_poi_args(batch)
+        # ── Batch-level taint, evaluated BEFORE any write is admitted (P0-5) ──────────
+        # Reads and writes of one batch are dispatched CONCURRENTLY (the two ensure_future
+        # loops below), so a `remember` emitted in the SAME batch as an untrusted read could
+        # commit while that read was still in flight and the gate would see the PRE-batch
+        # `context_tainted: False` (observed live: `remember` 8 ms, `search_nearby_pois`
+        # 1387 ms, one batch, gate saw false — on both fc_loop and manager_v1). Taint is
+        # therefore a property of the batch AS PLANNED, not of what has already returned:
+        # any `_UNTRUSTED_TOOLS` read requested in this batch taints this batch's writes.
+        #
+        # Conservative by construction and cheap: `memory_write_allowed` denies only a
+        # write that is tainted AND not user-authorized, so an explicit 「记住…」 save whose
+        # content is the user's own words is still allowed (and audited as `confirmed`).
+        # Only the model-initiated write — exactly the injection vehicle — is closed off.
+        batch_tainted = bool(state.get("context_tainted", False)) or any(
+            tc.get("name") in _UNTRUSTED_TOOLS for tc in batch)
         for tc in batch:
             name = tc.get("name")
-            args = dict(tc.get("args") or {})
+            # Underscore keys are HARNESS-only (injected after this point and re-attached by
+            # tool_system to funcs that declare them). A model — or injected text it obeyed —
+            # must not supply one: non-strict mode has no additionalProperties guard, and
+            # "_coordinate_source": "listing" would relabel the model's own coordinates.
+            args = {k: v for k, v in (tc.get("args") or {}).items()
+                    if not str(k).startswith("_")}
             if _strict_on():
                 # Strict schemas force every param present (null = omitted); drop nulls
                 # BEFORE injection/gating/digest so tool defaults apply and the
@@ -2864,13 +3856,58 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 merged = poi_canon.get(" ".join(str(args.get("address") or "").split()).lower())
                 if merged is not None:
                     args = dict(merged)
-                args = _inject_poi_coords(args, state)
+                from core.property_scope import has_property_reference
+                if not has_property_reference(cur_msg, ec):
+                    args = _inject_poi_coords(args, state)
+                cm = (state.get('extracted_context') or {}).get('current_message') or ''
+                poi_properties = (specs.get(name).input_schema.get('properties') or {}) if specs.get(name) else {}
+                if cm and {'user_query', 'poi_type', 'radius'}.issubset(poi_properties):
+                    from core.tools.search_nearby_pois import _infer_poi_types_from_query, _user_radius_m
+                    args['user_query'] = cm
+                    inferred = _infer_poi_types_from_query(cm)
+                    supplied = str(args.get('poi_type') or 'all')
+                    if supplied != 'all' and inferred:
+                        args['poi_type'] = ','.join(dict.fromkeys(
+                            [p.strip() for p in supplied.split(',') if p.strip()] + inferred))
+                    requested_radius = _user_radius_m(cm)
+                    if requested_radius is not None:
+                        args['radius'] = requested_radius
             elif name in ("recall_memory", "remember"):
                 # PRIVACY (mirror legacy execute_tool_node): namespace from state, and
                 # fail closed on a missing user_id rather than falling into the shared
                 # 'default' memory bucket.
                 args["user_id"] = state.get("user_id") or ""
                 args["session_id"] = state.get("session_id", "default")
+                clause_fn = getattr(mem_gate, "explicit_remember_clause", None) if mem_gate else None
+                stated_fn = getattr(mem_gate, "content_is_user_stated", None) if mem_gate else None
+                clause = clause_fn(cur_msg) if (name == "remember" and clause_fn) else ""
+                proposed = str(args.get("content") or args.get("fact") or "")
+                if (clause and stated_fn is not None and not stated_fn(proposed, clause)
+                        and stated_fn(clause, proposed)):
+                    # "… Please remember that I have a cat." with a search in the same batch:
+                    # the model's paraphrase ("pet owner, needs a pet-friendly property") or
+                    # the whole request is not the user's own statement, so the tainted-turn
+                    # gate refused it and the answer blamed a tool failure (R1-07). When the
+                    # proposal RESTATES the user's clause (plus additions), save the fact
+                    # exactly as the user worded it instead. Unrelated content (H13: a
+                    # tool-derived "flat viewing at 1400 Camden Road") is not substituted and
+                    # meets the gate as before.
+                    logger.info("fc_loop.remember_content_from_user_clause")
+                    args["content"] = clause
+                    args.pop("fact", None)
+            if name in ('calculate_commute_cost', 'check_transport_cost'):
+                office_days = (state.get('accumulated_search_criteria') or {}).get('office_days_per_week')
+                spec = specs.get(name)
+                if office_days is not None and spec and 'office_days_per_week' in (spec.input_schema.get('properties') or {}):
+                    args['office_days_per_week'] = office_days
+            if name in ('check_safety', 'search_nearby_pois', 'get_transport_info'):
+                from core.property_scope import grounded_property_read_args
+                args = grounded_property_read_args(name, args, cur_msg, ec)
+            # Every tool input model is strict and validates the authored schema, where an
+            # optional parameter is absent, never null. Whatever the injections above wrote
+            # (a cleared criterion, a merged POI call), null means "not supplied".
+            from core.strict_schema import strip_null_args
+            args = strip_null_args(args)
             digest = _params_digest(name, args)
             if (name, digest) in seen:
                 plan.append((tc, digest, "skip_dup", args))
@@ -2878,12 +3915,28 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             seen.add((name, digest))
             spec = specs.get(name)
             side_effect = getattr(spec, "side_effect", "none") if spec else "none"
+            if side_effect != "write":
+                # Per-turn repeat cap (fan-out backstop): count what has ALREADY executed
+                # this user turn plus what this batch has already admitted, so a batch
+                # cannot smuggle the (N+1)th call past a check that only read history.
+                cap = _turn_tool_call_cap(name)
+                already = sum(
+                    1 for a in artifacts
+                    if a.get("tool") == name and _is_executed(a))
+                already += sum(1 for entry in plan
+                               if entry[0].get("name") == name and entry[2] == "run")
+                if already >= cap:
+                    logger.info("fc_loop.turn_call_cap tool=%s cap=%d already=%d",
+                                name, cap, already)
+                    plan.append((tc, digest, ("deny_cap", cap), args))
+                    continue
             if side_effect == "write":
                 # Canary write audit: the key is the idempotency digest, which both
                 # this planning pass and the dispatch loop below compute identically,
                 # so a call classified here is the same record marked dispatched there.
                 _akey = f"{name}:{digest}"
-                _tainted = bool(state.get("context_tainted", False))
+                # Batch-level, not state-level: see `batch_tainted` above (P0-5).
+                _tainted = batch_tainted
                 # Candidate content is computed up-front: authorization now depends on it
                 # (A+ rule-2 refinement / H13) — a 「记住」 cue only authorizes saving what
                 # the user actually stated, not tool-derived content pulled into context.
@@ -2915,7 +3968,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                             plan.append((tc, digest, ("deny_recall", ""), args))
                             continue
                     allowed = bool(mem_gate.memory_write_allowed(
-                        context_tainted=state.get("context_tainted", False),
+                        context_tainted=batch_tainted,
                         user_authorized=user_authorized))
                     if not allowed:
                         kind = str(args.get("kind") or name)
@@ -3273,8 +4326,12 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             if prepared_specialists.call(i) is None:
                 if specialist_eligible_role(name, plan[i][3]) is not None:
                     # Eligible but unplanned: fail closed rather than fall back to
-                    # unrestricted manager dispatch.
+                    # unrestricted manager dispatch. Counted like every other per-call
+                    # denial (TD-2): this branch used to return denied WITHOUT touching
+                    # `denied_calls`, so a whole denial class was invisible to telemetry
+                    # and could never be measured in a canary.
                     specialist_error_code_by_idx[i] = "specialist_call_not_planned"
+                    _note_specialist_call_denied(name, "specialist_call_not_planned")
                     return _denied()
                 # Manager-owned tool (memory / ask_user) or an unmapped tool: unchanged.
                 return await _run(
@@ -3786,6 +4843,28 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     content=json.dumps(payload, ensure_ascii=False, default=str),
                     tool_call_id=tcid, name=name))
                 continue
+            if isinstance(mode, tuple) and mode[0] == "deny_cap":
+                # Per-turn repeat cap. Recorded exactly like the other pre-dispatch
+                # refusals (denied=True, raw_data None → REQUESTED, not EXECUTED) so the
+                # tool ledger, the eval trace and the security audit all agree, and the
+                # digest still suppresses an identical retry.
+                cap = mode[1]
+                artifacts.append(_artifact(
+                    turn, name, None, digest, success=False,
+                    error=f"denied: {name} already ran {cap} times this turn",
+                    denied=True, elapsed_ms=0))
+                messages.append(ToolMessage(
+                    content=json.dumps({
+                        "success": False, "data": None,
+                        "error": (
+                            f"not run: {name} has already run {cap} time(s) this turn, which "
+                            "is the per-turn limit. Do NOT call it again — answer the user "
+                            "from the results already gathered above, and say plainly what "
+                            "you could not confirm."
+                        ),
+                    }, ensure_ascii=False),
+                    tool_call_id=tcid, name=name))
+                continue
             if isinstance(mode, tuple) and mode[0] == "deny_recall":
                 # H12: model-initiated write on a pure recall-question turn. Denied like the
                 # tainted-write refusal (denied=True → security audit + not executed), but with
@@ -3937,7 +5016,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 continue
             result = result_by_idx[i]
             if (name == "search_properties" and getattr(result, "success", False)
-                    and isinstance(getattr(result, "data", None), dict)):
+                    and isinstance(getattr(result, "data", None), dict)
+                    and not commute_query_forbidden(
+                        (state.get('extracted_context') or {}).get('current_message') or '')):
                 # Candidate-level commute checks are real tool work, not a free post-process.
                 # They share the turn's absolute soft deadline, remaining cumulative tool
                 # budget, fan-out cap and semaphore; their elapsed time is charged below.
@@ -4191,10 +5272,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                               if a.get("tool") == "search_properties"
                               and isinstance(a.get("raw_data"), dict)), None)
         latest_search_data = latest_search.get("raw_data") if latest_search else {}
-        memory_art = next((a for a in reversed(artifacts) if a.get("tool") == "remember"), None)
+        memory_arts = [a for a in artifacts if a.get("tool") == "remember"]
         memory_contract = dict(state.get("memory_write_contract") or {})
-        if memory_art is not None:
-            memory_contract = memory_contract_from_artifact(memory_art)
+        if memory_arts:
+            memory_contract = memory_contract_from_artifacts(memory_arts)
         update = {
             "messages": messages,
             "tool_artifacts": artifacts,
@@ -4214,7 +5295,12 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         artifacts = list(state.get("tool_artifacts") or [])
         prefs = state.get("user_preferences") or {}
         acc = state.get("accumulated_search_criteria") or {}
-        final_response = state.get("final_response", "") or ""
+        final_response = scrub_internal_vocabulary(
+            state.get("final_response", "") or "",
+            _reply_language_from_ctx(
+                state.get("extracted_context") or {},
+                (state.get("extracted_context") or {}).get("current_message")
+                or _current_message(state.get("user_query") or "")))
         response_type = state.get("response_type", "answer") or "answer"
         # Prompt assembly failures carry a deterministic machine-readable error code.
         # Preserve it through the final formatter; normal answer/search paths still start
@@ -4224,8 +5310,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
 
         # Explicit memory writes are rendered from the observed tool outcome, but a
         # side effect must not swallow an independent result from the same multi-intent turn.
-        memory_art = next((a for a in reversed(artifacts) if a.get("tool") == "remember"), None)
-        memory_contract = (memory_contract_from_artifact(memory_art) if memory_art is not None
+        memory_arts = [a for a in artifacts if a.get("tool") == "remember"]
+        memory_contract = (memory_contract_from_artifacts(memory_arts) if memory_arts
                            else dict(state.get("memory_write_contract") or {}))
         lang = _reply_language_from_ctx(
             state.get("extracted_context") or {},
@@ -4234,6 +5320,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         has_other_result = any(
             artifact.get("tool") != "remember" and _is_executed(artifact)
             for artifact in artifacts)
+        from core.constraint_updates import independent_memory_task
+        has_other_result = has_other_result or independent_memory_task(
+            (state.get('extracted_context') or {}).get('current_message') or state.get('user_query') or '')
 
         def _apply_memory_contract(response: str) -> str:
             return compose_memory_contract_response(
@@ -4273,8 +5362,13 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 "missing_optional_fields": data.get("missing_optional_fields", []),
                 "clarification_kind": data.get("clarification_kind", "other"),
                 "known_criteria": _derive_known_criteria(acc),
+                "options": data.get('options') or [],
             }
             response = _sanitize_final_response(data.get("question", "") or final_response)
+            from core.candidate_validation import render_structured_evidence_fallback
+            evidence = render_structured_evidence_fallback(state, language=lang)
+            if evidence:
+                response += '\n\n' + evidence
             return {"final_response": _apply_memory_contract(response),
                     "response_type": "clarification", "tool_data": tool_data}
 
@@ -4298,8 +5392,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             # reported them under `similar_properties`. Matching only "found" dropped the
             # whole artifact, so the panel stayed empty and a real search result shipped as a
             # plain chat reply — the same failure ISSUE #78 fixed for over-budget-only rows.
-            if (raw.get("status") in _SEARCH_RESULT_STATUSES and search_found is None
-                    and _search_payload_has_candidates(raw)):
+            if raw.get("status") in _SEARCH_RESULT_STATUSES and search_found is None:
                 search_found = raw
             if raw.get("status") == "need_clarification" and search_clarify is None:
                 search_clarify = raw
@@ -4321,7 +5414,18 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             validation = search_found.get("candidate_validation") or {}
             requires_status = bool(validation.get("excluded") or validation.get("unknown")
                                     or (validation.get("constraints") or {}).get("max_commute_minutes"))
-            if similar_only and search_found.get("status") == "no_exact_match_but_similar":
+            if search_found.get('status') == 'no_results':
+                response = search_found.get('message') or search_found.get('summary') or (
+                    '当前检索数据中没有匹配项。' if language == 'zh' else 'No matches in the retrieved data.')
+                # A turn that asked something else ("What exactly have you kept about me…")
+                # keeps its own answer; the empty search is reported after it instead of
+                # replacing it (R1-13).
+                _asked = str(ec.get('current_message') or '').strip()
+                if (str(final_response or '').strip() and _asked
+                        and not _asks_for_listings(_asked)):
+                    response = (final_response if response in final_response
+                                else f"{final_response}\n\n{response}")
+            elif similar_only and search_found.get("status") == "no_exact_match_but_similar":
                 # A similar-recall result failed no stated constraint — the exact-match pool
                 # was simply empty. render_candidate_status would file every row under
                 # "excluded / does not meet" and drop its price, so this path renders its own
@@ -4335,7 +5439,39 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                             if requires_status else
                             final_response or search_found.get("summary")
                             or f"I found {len(recs)} properties.")
+            # A composite question ABOUT the listings ("Check safety for the first listing,
+            # weather there on Friday and the TfL fare to Bank") was answered with the listing
+            # ledger alone and the other results as raw evidence footers (R2-26). When the turn
+            # cued other dimensions and the model answered them, its answer leads and the
+            # ledger follows.
+            _cm = str(ec.get('current_message') or '')
+            composite_answer = bool(
+                requires_status and str(final_response or '').strip()
+                and search_found.get('status') != 'no_results'
+                and (_cued_dimensions(_cm) or re.search(
+                    r"\b(?:weather|forecast|fare|fares|tfl)\b|天气|票价", _cm, re.I)
+                     # An area recommendation ("Recommend 3 areas under £1600") answered from
+                     # compare_or_rank_areas was replaced by the incidental search ledger
+                     # (R2-28).
+                     or any(a.get("tool") == "compare_or_rank_areas" and _is_executed(a)
+                            for a in artifacts))
+                and any(a.get("tool") not in ("search_properties", "remember", "ask_user")
+                        and _is_executed(a) for a in artifacts))
+            if composite_answer:
+                response = f"{str(final_response).strip()}\n\n{response}"
+            if search_found.get('source_message') and search_found['source_message'] not in response:
+                response = search_found['source_message'] + '\n\n' + response
+            if (requires_status or len(artifacts) > 1) and not composite_answer:
+                from core.candidate_validation import render_structured_evidence_fallback
+                evidence = render_structured_evidence_fallback(state, language=language)
+                if evidence:
+                    response = response + '\n\n' + evidence
             response_type = "search"
+            # After the critic, whose regeneration drops anything appended before it: a
+            # budgetless search names the saved budget it did not use (R3-03).
+            response = acknowledge_remembered_budget(
+                response, state.get("memory_context") or "", acc.get("max_budget"), language,
+                searched_without_budget=searched_without_budget(artifacts))
             # Structured cards (safety/POI/commute) also present this turn ride along in tool_data.
             _merge_cards(artifacts, tool_data)
             return {"final_response": _sanitize_final_response(
@@ -4365,6 +5501,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
 
         # Plain answer.
         response = _sanitize_final_response(validate_commute_response(final_response, state))
+        response = acknowledge_remembered_budget(
+            response, state.get("memory_context") or "", acc.get("max_budget"), lang,
+            searched_without_budget=searched_without_budget(artifacts))
         return {"final_response": _apply_memory_contract(response),
                 "response_type": response_type, "tool_data": tool_data}
 
@@ -4474,6 +5613,9 @@ def _derive_known_criteria(acc: dict) -> dict:
         "budget_period": acc.get("budget_period"),
         "room_type": acc.get("room_type"),
         "move_in_date": acc.get("move_in_date"),
+        "max_changes": acc.get("max_changes"),
+        "monthly_total_budget": acc.get("monthly_total_budget"),
+        "office_days_per_week": acc.get("office_days_per_week"),
         "property_features": acc.get("property_features") or [],
         "soft_preferences": acc.get("soft_preferences") or [],
     }
@@ -4482,6 +5624,53 @@ def _derive_known_criteria(acc: dict) -> dict:
 # ═══════════════════════════════════════════════════════════════════
 # GRAPH WIRING (consumed lazily by langgraph_agent.build_agent_graph)
 # ═══════════════════════════════════════════════════════════════════
+
+def _relative_budget_repair(extract_preferences_node):
+    """Resolve a RELATIVE budget edit against the PRE-turn ceiling.
+
+    The shared ``extract_preferences`` node folds a budget stated this turn into the
+    accumulated criteria using the deterministic currency extractor, which cannot tell
+    "raise the budget BY £200" from a £200 ceiling. Live, that overwrote a £2,200 ceiling
+    with £200 and the follow-up search returned nothing while the model told the user its
+    "internal criteria still show max_budget: 200".
+
+    This wrapper is the last place that still holds the pre-turn value — the node's own
+    update replaces it — so the repair happens here, around the node, rather than by
+    editing the shared node itself. It is a no-op for every message that states no
+    relative edit (``detect_relative_budget_delta`` returns None), which is almost all of
+    them.
+
+    A relative edit with NO prior ceiling clears ``max_budget`` instead: the delta is not
+    a ceiling, and searching at the delta is the failure this exists to prevent.
+    """
+    import inspect
+
+    def _repair(state, update):
+        prior = (state.get("accumulated_search_criteria") or {}).get("max_budget")
+        message = ((state.get("extracted_context") or {}).get("current_message")
+                   or _current_message(state.get("user_query") or ""))
+        if detect_relative_budget_delta(message) is None:
+            return update
+        resolved = resolve_relative_budget(message, prior)
+        result = dict(update or {})
+        acc = result.get("accumulated_search_criteria")
+        acc = dict(acc) if isinstance(acc, dict) else dict(
+            state.get("accumulated_search_criteria") or {})
+        acc["max_budget"] = resolved  # None when there was no prior ceiling
+        result["accumulated_search_criteria"] = acc
+        logger.info("fc_loop.relative_budget_resolved prior=%s resolved=%s", prior, resolved)
+        return result
+
+    if inspect.iscoroutinefunction(extract_preferences_node):
+        async def node(state):
+            return _repair(state, await extract_preferences_node(state))
+    else:
+        def node(state):
+            return _repair(state, extract_preferences_node(state))
+
+    node.__name__ = getattr(extract_preferences_node, "__name__", "extract_preferences")
+    return node
+
 
 def build_fc_graph(tool_registry, *, extract_preferences_node, critic_node,
                    checkpointer=None, store=None, enable_hitl=False,
@@ -4500,11 +5689,19 @@ def build_fc_graph(tool_registry, *, extract_preferences_node, critic_node,
         agent_llm=agent_llm,
         specialist_dispatch=specialist_dispatch,
     )
-    ident = instrument or (lambda name, fn: fn)
+    from uk_rent_agent.agent.progress import with_progress
+
+    instrument_node = instrument or (lambda name, fn: fn)
+
+    def ident(name, fn):
+        stage = {"extract_preferences": "understanding", "execute_tools": "searching",
+                 "critic": "checking", "agent": "writing"}.get(name)
+        return with_progress(stage, instrument_node(name, fn))
     use_store = store is not None
 
     graph = StateGraph(AgentState)
-    graph.add_node("extract_preferences", ident("extract_preferences", extract_preferences_node))
+    graph.add_node("extract_preferences", ident(
+        "extract_preferences", _relative_budget_repair(extract_preferences_node)))
     graph.add_node("guard", ident("guard", nodes["guard"]))
     graph.add_node("agent", ident("agent", nodes["agent"]))
     graph.add_node("execute_tools", ident("execute_tools", nodes["execute_tools"]))

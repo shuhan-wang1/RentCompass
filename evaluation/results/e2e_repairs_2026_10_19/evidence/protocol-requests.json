@@ -1,0 +1,803 @@
+[
+  {
+    "case": "protocol-account-A-login",
+    "path": "/api/auth/login",
+    "method": "POST",
+    "status": 200,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.352,
+    "request_id": "protocol-1ad58b51c7ef4981829e1813a144d07a",
+    "body": {
+      "authenticated": true,
+      "display_name": "authz_a_704ddcb4",
+      "user_id": "7036891c56ce4c3cbf7534d5f2930f17",
+      "username": "authz_a_704ddcb4"
+    }
+  },
+  {
+    "case": "empty-object",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 400,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.007,
+    "request_id": "protocol-4e6f3182ab9a4919904679f723177bc0",
+    "body": {
+      "error": "message must be a string"
+    }
+  },
+  {
+    "case": "null-json",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 400,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.006,
+    "request_id": "protocol-f78d0a9a483e415389cdb5dcfe83dd3e",
+    "body": {
+      "error": "request body must be JSON"
+    }
+  },
+  {
+    "case": "array-json",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 400,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.006,
+    "request_id": "protocol-e190e15d0bf149e69a919b457fd95cfd",
+    "body": {
+      "error": "request body must be a JSON object"
+    }
+  },
+  {
+    "case": "scalar-json",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 400,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.007,
+    "request_id": "protocol-d154a3ac6c3344ceaa35c07dd14da0f6",
+    "body": {
+      "error": "request body must be a JSON object"
+    }
+  },
+  {
+    "case": "nonstring-message",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 400,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.011,
+    "request_id": "protocol-2304abd5021148148aba44e81d58f480",
+    "body": {
+      "error": "message must be a string"
+    }
+  },
+  {
+    "case": "empty-message",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 400,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.009,
+    "request_id": "protocol-b5fc0302fdc349078a3786b63c9a2d8e",
+    "body": {
+      "error": "message is required"
+    }
+  },
+  {
+    "case": "wrong-context",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 200,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.055,
+    "request_id": "protocol-dfee2527a4604a3288cdc0a3090c5145",
+    "body": {
+      "conversation_id": "8e4c1809473a4ed0b364ae88156edbde",
+      "message": "Hi! I'm Alex, your UK student-housing assistant. Tell me your budget, the area you'd like to live in, or where you commute to and we'll start.",
+      "response_type": "chat",
+      "turn_id": "ee1f913ddcb94212a23790b8023c5445",
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "destination": null,
+          "max_budget": null,
+          "max_travel_time": null,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 1
+      }
+    }
+  },
+  {
+    "case": "malformed-json",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 400,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.008,
+    "request_id": "protocol-80fe723c7e1b4ebcb86698e1aa0e6263",
+    "body": {
+      "error": "malformed JSON body"
+    }
+  },
+  {
+    "case": "oversized-body",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 413,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.005,
+    "request_id": "protocol-522c8d8474cf4a6b8be9a9fb3859cf01",
+    "body": {
+      "error": "request body too large"
+    }
+  },
+  {
+    "case": "wrong-content-type",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 415,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.012,
+    "request_id": "protocol-2eda5f514e264295b50e08237caa1307",
+    "body": {
+      "error": "Content-Type must be application/json"
+    }
+  },
+  {
+    "case": "map-no-address",
+    "path": "/api/generate_map",
+    "method": "POST",
+    "status": 400,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.01,
+    "request_id": "protocol-1b0c7dbbebd64cf79b88283aff06250f",
+    "body": {
+      "error": "Property address is required"
+    }
+  },
+  {
+    "case": "map-bad-coordinates",
+    "path": "/api/generate_map",
+    "method": "POST",
+    "status": 400,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.45,
+    "request_id": "protocol-cf9a5c129c2348e49c79ed211016dd79",
+    "body": {
+      "error": "Invalid coordinates"
+    }
+  },
+  {
+    "case": "map-synthetic-positive",
+    "path": "/api/generate_map",
+    "method": "POST",
+    "status": 200,
+    "content_type": "text/html; charset=utf-8",
+    "retry_after": null,
+    "seconds": 0.035,
+    "request_id": "protocol-fb9be7558d8c46658a5cd3cf9a61694b",
+    "body": "<div style=\"width:100%;\"><div style=\"position:relative;width:100%;height:0;padding-bottom:60%;\"><span style=\"color:#565656\">Make this Notebook Trusted to load map: File -> Trust Notebook</span><iframe srcdoc=\"&lt;!DOCTYPE html&gt;\n&lt;html&gt;\n&lt;head&gt;\n    \n    &lt;meta http-equiv=&quot;content-type&quot; content=&quot;text/html; charset=UTF-8&quot; /&gt;\n    &lt;script src=&quot;https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js&quot;&gt;&lt;/script&gt;\n    &lt;script src=&quot;https://code.jquery.com/jquery-3.7.1.min.js&quot;&gt;&lt;/script&gt;\n    &lt;script src=&quot;https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js&quot;&gt;&lt;/script&gt;\n    &lt;script src=&quot;https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js&quot;&gt;&lt;/script&gt;\n    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css&quot;/&gt;\n    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css&quot;/&gt;\n    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css&quot;/&gt;\n    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css&quot;/&gt;\n    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css&quot;/&gt;\n    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css&quot;/&gt;\n    \n            &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,\n                initial-scale=1.0, maximum-scale=1.0, user-scalable=no&quot; /&gt;\n            &lt;style&gt;\n                #map_6d9ed4f8ef8f9f0398e1e8cfcead5de6 {\n                    position: relative;\n                    width: 100.0%;\n                    height: 100.0%;\n                    left: 0.0%;\n                    top: 0.0%;\n                }\n                .leaflet-container { font-size: 1rem; }\n            &lt;/style&gt;\n\n            &lt;style&gt;html, body {\n                width: 100%;\n                height: 100%;\n                margin: 0;\n                padding: 0;\n            }\n            &lt;/style&gt;\n\n            &lt;style&gt;#map {\n                position:absolute;\n                top:0;\n                bottom:0;\n                right:0;\n                left:0;\n                }\n            &lt;/style&gt;\n\n            &lt;script&gt;\n                L_NO_TOUCH = false;\n                L_DISABLE_3D = false;\n            &lt;/script&gt;\n\n        \n    &lt;script src=&quot;https://cdn.jsdelivr.net/npm/leaflet.fullscreen@3.0.0/Control.FullScreen.min.js&quot;&gt;&lt;/script&gt;\n    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://cdn.jsdelivr.net/npm/leaflet.fullscreen@3.0.0/Control.FullScreen.css&quot;/&gt;\n&lt;/head&gt;\n&lt;body&gt;\n    \n    \n        &lt;div style=&quot;position: fixed; bottom: 10px; right: 10px; background: white; \n                    border: 2px solid #3498db; padding: 10px 15px; border-radius: 5px; \n                    z-index: 999; box-shadow: 0 2px 4px rgba(0,0,0,0.2);&quot;&gt;\n            &lt;button id=&quot;hideAllBtn&quot; style=&quot;padding: 8px 12px; background: #e74c3c; \n                    color: white; border: none; border-radius: 3px; cursor: pointer; \n                    font-weight: bold;&quot;&gt;\n                Hide All\n            &lt;/button&gt;\n            &lt;button id=&quot;showAllBtn&quot; style=&quot;padding: 8px 12px; background: #27ae60; \n                    color: white; border: none; border-radius: 3px; cursor: pointer; \n                    font-weight: bold; margin-left: 5px;&quot;&gt;\n                Show All\n            &lt;/button&gt;\n        &lt;/div&gt;\n        \n    \n        &lt;script&gt;\n            document.getElementById(&#x27;hideAllBtn&#x27;).addEventListener(&#x27;click&#x27;, function() {\n                var layers = document.querySelectorAll(&#x27;input[type=&quot;checkbox&quot;]&#x27;);\n                layers.forEach(function(checkbox) {\n                    if (checkbox.checked) checkbox.click();\n                });\n            });\n            document.getElementById(&#x27;showAllBtn&#x27;).addEventListener(&#x27;click&#x27;, function() {\n                var layers = document.querySelectorAll(&#x27;input[type=&quot;checkbox&quot;]&#x27;);\n                layers.forEach(function(checkbox) {\n                    if (!checkbox.checked) checkbox.click();\n                });\n            });\n        &lt;/script&gt;\n        \n    \n            &lt;div class=&quot;folium-map&quot; id=&quot;map_6d9ed4f8ef8f9f0398e1e8cfcead5de6&quot; &gt;&lt;/div&gt;\n        \n&lt;/body&gt;\n&lt;script&gt;\n    \n    \n            var map_6d9ed4f8ef8f9f0398e1e8cfcead5de6 = L.map(\n                &quot;map_6d9ed4f8ef8f9f0398e1e8cfcead5de6&quot;,\n                {\n                    center: [51.523, -0.127],\n                    crs: L.CRS.EPSG3857,\n                    ...{\n  &quot;zoom&quot;: 15,\n  &quot;zoomControl&quot;: true,\n  &quot;preferCanvas&quot;: false,\n}\n\n                }\n            );\n\n            \n\n        \n    \n            var tile_layer_f5ea313cd6232f7e76b9df7932a22f4c = L.tileLayer(\n                &quot;https://tile.openstreetmap.org/{z}/{x}/{y}.png&quot;,\n                {\n  &quot;minZoom&quot;: 0,\n  &quot;maxZoom&quot;: 19,\n  &quot;maxNativeZoom&quot;: 19,\n  &quot;noWrap&quot;: false,\n  &quot;attribution&quot;: &quot;\\u0026copy; \\u003ca href=\\&quot;https://www.openstreetmap.org/copyright\\&quot;\\u003eOpenStreetMap\\u003c/a\\u003e contributors&quot;,\n  &quot;subdomains&quot;: &quot;abc&quot;,\n  &quot;detectRetina&quot;: false,\n  &quot;tms&quot;: false,\n  &quot;opacity&quot;: 1,\n}\n\n            );\n        \n    \n            tile_layer_f5ea313cd6232f7e76b9df7932a22f4c.addTo(map_6d9ed4f8ef8f9f0398e1e8cfcead5de6);\n        \n    \n            var marker_5fa8f73a14098c1c16e5f449b9714a88 = L.marker(\n                [51.523, -0.127],\n                {\n}\n            ).addTo(map_6d9ed4f8ef8f9f0398e1e8cfcead5de6);\n        \n    \n            var icon_fa8206e778c025b9e81b2ccaeed20610 = L.AwesomeMarkers.icon(\n                {\n  &quot;markerColor&quot;: &quot;red&quot;,\n  &quot;iconColor&quot;: &quot;white&quot;,\n  &quot;icon&quot;: &quot;home&quot;,\n  &quot;prefix&quot;: &quot;fa&quot;,\n  &quot;extraClasses&quot;: &quot;fa-rotate-0&quot;,\n}\n            );\n        \n    \n        var popup_116176bb17024b6e40e11510d7fdc31f = L.popup({\n  &quot;maxWidth&quot;: 300,\n});\n\n        \n            \n                var html_5d69afad0bebbe22297c3c3f78db12b2 = $(`&lt;div id=&quot;html_5d69afad0bebbe22297c3c3f78db12b2&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;         &lt;div style=&quot;font-family: Arial; min-width: 200px;&quot;&gt;             &lt;h4 style=&quot;margin-bottom: 10px; color: #2c3e50;&quot;&gt;🏠 Property&lt;/h4&gt;             &lt;b&gt;Price:&lt;/b&gt; £1800/month&lt;br&gt;             &lt;b&gt;Address:&lt;/b&gt; Bloomsbury London&lt;br&gt;             &lt;b&gt;Travel Time:&lt;/b&gt; N/A min&lt;br&gt;         &lt;/div&gt;         &lt;/div&gt;`)[0];\n                popup_116176bb17024b6e40e11510d7fdc31f.setContent(html_5d69afad0bebbe22297c3c3f78db12b2);\n            \n        \n\n        marker_5fa8f73a14098c1c16e5f449b9714a88.bindPopup(popup_116176bb17024b6e40e11510d7fdc31f)\n        ;\n\n        \n    \n    \n            marker_5fa8f73a14098c1c16e5f449b9714a88.bindTooltip(\n                `&lt;div&gt;\n                     Property\n                 &lt;/div&gt;`,\n                {\n  &quot;sticky&quot;: true,\n}\n            );\n        \n    \n                marker_5fa8f73a14098c1c16e5f449b9714a88.setIcon(icon_fa8206e778c025b9e81b2ccaeed20610);\n            \n    \n            var circle_50497180f911f46bc343cea0bcf9bf9a = L.circle(\n                [51.523, -0.127],\n                {&quot;bubblingMouseEvents&quot;: true, &quot;color&quot;: &quot;red&quot;, &quot;dashArray&quot;: null, &quot;dashOffset&quot;: null, &quot;fill&quot;: false, &quot;fillColor&quot;: &quot;red&quot;, &quot;fillOpacity&quot;: 0.2, &quot;fillRule&quot;: &quot;evenodd&quot;, &quot;lineCap&quot;: &quot;round&quot;, &quot;lineJoin&quot;: &quot;round&quot;, &quot;opacity&quot;: 0.3, &quot;radius&quot;: 1500.0, &quot;stroke&quot;: true, &quot;weight&quot;: 2}\n            ).addTo(map_6d9ed4f8ef8f9f0398e1e8cfcead5de6);\n        \n    \n            circle_50497180f911f46bc343cea0bcf9bf9a.bindTooltip(\n                `&lt;div&gt;\n                     1.5km search radius\n                 &lt;/div&gt;`,\n                {\n  &quot;sticky&quot;: true,\n}\n            );\n        \n    \n            var feature_group_7c2e6a92d61e8a3527a704dd40653437 = L.featureGroup(\n                {\n}\n            );\n        \n    \n            var marker_6ee6cf2075a4d34c1f31056f98ea97be = L.marker(\n                [51.524, -0.126],\n                {\n}\n            ).addTo(feature_group_7c2e6a92d61e8a3527a704dd40653437);\n        \n    \n            var icon_19eaca1991a1aa1c00f0284beba2b57c = L.AwesomeMarkers.icon(\n                {\n  &quot;markerColor&quot;: &quot;blue&quot;,\n  &quot;iconColor&quot;: &quot;white&quot;,\n  &quot;icon&quot;: &quot;shopping-cart&quot;,\n  &quot;prefix&quot;: &quot;fa&quot;,\n  &quot;extraClasses&quot;: &quot;fa-rotate-0&quot;,\n}\n            );\n        \n    \n        var popup_8a48ef52238c0187685c676e37c18d41 = L.popup({\n  &quot;maxWidth&quot;: 250,\n});\n\n        \n            \n                var html_8ad9a0b85d71deaff379b39102f5df33 = $(`&lt;div id=&quot;html_8ad9a0b85d71deaff379b39102f5df33&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;                     &lt;div style=&quot;font-family: Arial; min-width: 150px;&quot;&gt;                         &lt;h4 style=&quot;margin-bottom: 10px; color: blue;&quot;&gt;                             Tesco Express [audit fixture]                         &lt;/h4&gt;                         &lt;b&gt;Distance:&lt;/b&gt; 130m&lt;br&gt;                     &lt;/div&gt;&lt;/div&gt;`)[0];\n                popup_8a48ef52238c0187685c676e37c18d41.setContent(html_8ad9a0b85d71deaff379b39102f5df33);\n            \n        \n\n        marker_6ee6cf2075a4d34c1f31056f98ea97be.bindPopup(popup_8a48ef52238c0187685c676e37c18d41)\n        ;\n\n        \n    \n    \n            marker_6ee6cf2075a4d34c1f31056f98ea97be.bindTooltip(\n                `&lt;div&gt;\n                     Tesco Express [audit fixture]\n                 &lt;/div&gt;`,\n                {\n  &quot;sticky&quot;: true,\n}\n            );\n        \n    \n                marker_6ee6cf2075a4d34c1f31056f98ea97be.setIcon(icon_19eaca1991a1aa1c00f0284beba2b57c);\n            \n    \n            feature_group_7c2e6a92d61e8a3527a704dd40653437.addTo(map_6d9ed4f8ef8f9f0398e1e8cfcead5de6);\n        \n    \n            var layer_control_31cefa92eed477990984395c3a2c018b_layers = {\n                base_layers : {\n                    &quot;openstreetmap&quot; : tile_layer_f5ea313cd6232f7e76b9df7932a22f4c,\n                },\n                overlays :  {\n                    &quot;Supermarkets&quot; : feature_group_7c2e6a92d61e8a3527a704dd40653437,\n                },\n            };\n            let layer_control_31cefa92eed477990984395c3a2c018b = L.control.layers(\n                layer_control_31cefa92eed477990984395c3a2c018b_layers.base_layers,\n                layer_control_31cefa92eed477990984395c3a2c018b_layers.overlays,\n                {\n  &quot;position&quot;: &quot;topright&quot;,\n  &quot;collapsed&quot;: false,\n  &quot;autoZIndex&quot;: true,\n}\n            ).addTo(map_6d9ed4f8ef8f9f0398e1e8cfcead5de6);\n\n        \n    \n            L.control.fullscreen(\n                {\n  &quot;position&quot;: &quot;topleft&quot;,\n  &quot;title&quot;: &quot;Fullscreen&quot;,\n  &quot;titleCancel&quot;: &quot;Exit&quot;,\n  &quot;forceSeparateButton&quot;: true,\n}\n            ).addTo(map_6d9ed4f8ef8f9f0398e1e8cfcead5de6);\n        \n&lt;/script&gt;\n&lt;/html&gt;\" style=\"position:absolute;width:100%;height:100%;left:0;top:0;border:none !important;\" allowfullscreen webkitallowfullscreen mozallowfullscreen></iframe></div></div>"
+  },
+  {
+    "case": "map-address-escape",
+    "path": "/api/generate_map",
+    "method": "POST",
+    "status": 200,
+    "content_type": "text/html; charset=utf-8",
+    "retry_after": null,
+    "seconds": 0.038,
+    "request_id": "protocol-56c13185aff347b19c193c12b1be9429",
+    "body": "<div style=\"width:100%;\"><div style=\"position:relative;width:100%;height:0;padding-bottom:60%;\"><span style=\"color:#565656\">Make this Notebook Trusted to load map: File -> Trust Notebook</span><iframe srcdoc=\"&lt;!DOCTYPE html&gt;\n&lt;html&gt;\n&lt;head&gt;\n    \n    &lt;meta http-equiv=&quot;content-type&quot; content=&quot;text/html; charset=UTF-8&quot; /&gt;\n    &lt;script src=&quot;https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js&quot;&gt;&lt;/script&gt;\n    &lt;script src=&quot;https://code.jquery.com/jquery-3.7.1.min.js&quot;&gt;&lt;/script&gt;\n    &lt;script src=&quot;https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js&quot;&gt;&lt;/script&gt;\n    &lt;script src=&quot;https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js&quot;&gt;&lt;/script&gt;\n    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css&quot;/&gt;\n    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css&quot;/&gt;\n    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css&quot;/&gt;\n    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css&quot;/&gt;\n    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css&quot;/&gt;\n    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css&quot;/&gt;\n    \n            &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,\n                initial-scale=1.0, maximum-scale=1.0, user-scalable=no&quot; /&gt;\n            &lt;style&gt;\n                #map_1e86fc32d2b14c7d846d3cbf2609ae09 {\n                    position: relative;\n                    width: 100.0%;\n                    height: 100.0%;\n                    left: 0.0%;\n                    top: 0.0%;\n                }\n                .leaflet-container { font-size: 1rem; }\n            &lt;/style&gt;\n\n            &lt;style&gt;html, body {\n                width: 100%;\n                height: 100%;\n                margin: 0;\n                padding: 0;\n            }\n            &lt;/style&gt;\n\n            &lt;style&gt;#map {\n                position:absolute;\n                top:0;\n                bottom:0;\n                right:0;\n                left:0;\n                }\n            &lt;/style&gt;\n\n            &lt;script&gt;\n                L_NO_TOUCH = false;\n                L_DISABLE_3D = false;\n            &lt;/script&gt;\n\n        \n    &lt;script src=&quot;https://cdn.jsdelivr.net/npm/leaflet.fullscreen@3.0.0/Control.FullScreen.min.js&quot;&gt;&lt;/script&gt;\n    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://cdn.jsdelivr.net/npm/leaflet.fullscreen@3.0.0/Control.FullScreen.css&quot;/&gt;\n&lt;/head&gt;\n&lt;body&gt;\n    \n    \n        &lt;div style=&quot;position: fixed; bottom: 10px; right: 10px; background: white; \n                    border: 2px solid #3498db; padding: 10px 15px; border-radius: 5px; \n                    z-index: 999; box-shadow: 0 2px 4px rgba(0,0,0,0.2);&quot;&gt;\n            &lt;button id=&quot;hideAllBtn&quot; style=&quot;padding: 8px 12px; background: #e74c3c; \n                    color: white; border: none; border-radius: 3px; cursor: pointer; \n                    font-weight: bold;&quot;&gt;\n                Hide All\n            &lt;/button&gt;\n            &lt;button id=&quot;showAllBtn&quot; style=&quot;padding: 8px 12px; background: #27ae60; \n                    color: white; border: none; border-radius: 3px; cursor: pointer; \n                    font-weight: bold; margin-left: 5px;&quot;&gt;\n                Show All\n            &lt;/button&gt;\n        &lt;/div&gt;\n        \n    \n        &lt;script&gt;\n            document.getElementById(&#x27;hideAllBtn&#x27;).addEventListener(&#x27;click&#x27;, function() {\n                var layers = document.querySelectorAll(&#x27;input[type=&quot;checkbox&quot;]&#x27;);\n                layers.forEach(function(checkbox) {\n                    if (checkbox.checked) checkbox.click();\n                });\n            });\n            document.getElementById(&#x27;showAllBtn&#x27;).addEventListener(&#x27;click&#x27;, function() {\n                var layers = document.querySelectorAll(&#x27;input[type=&quot;checkbox&quot;]&#x27;);\n                layers.forEach(function(checkbox) {\n                    if (!checkbox.checked) checkbox.click();\n                });\n            });\n        &lt;/script&gt;\n        \n    \n            &lt;div class=&quot;folium-map&quot; id=&quot;map_1e86fc32d2b14c7d846d3cbf2609ae09&quot; &gt;&lt;/div&gt;\n        \n&lt;/body&gt;\n&lt;script&gt;\n    \n    \n            var map_1e86fc32d2b14c7d846d3cbf2609ae09 = L.map(\n                &quot;map_1e86fc32d2b14c7d846d3cbf2609ae09&quot;,\n                {\n                    center: [51.523, -0.127],\n                    crs: L.CRS.EPSG3857,\n                    ...{\n  &quot;zoom&quot;: 15,\n  &quot;zoomControl&quot;: true,\n  &quot;preferCanvas&quot;: false,\n}\n\n                }\n            );\n\n            \n\n        \n    \n            var tile_layer_094a3c48253ed298648dfaf1a6687f9f = L.tileLayer(\n                &quot;https://tile.openstreetmap.org/{z}/{x}/{y}.png&quot;,\n                {\n  &quot;minZoom&quot;: 0,\n  &quot;maxZoom&quot;: 19,\n  &quot;maxNativeZoom&quot;: 19,\n  &quot;noWrap&quot;: false,\n  &quot;attribution&quot;: &quot;\\u0026copy; \\u003ca href=\\&quot;https://www.openstreetmap.org/copyright\\&quot;\\u003eOpenStreetMap\\u003c/a\\u003e contributors&quot;,\n  &quot;subdomains&quot;: &quot;abc&quot;,\n  &quot;detectRetina&quot;: false,\n  &quot;tms&quot;: false,\n  &quot;opacity&quot;: 1,\n}\n\n            );\n        \n    \n            tile_layer_094a3c48253ed298648dfaf1a6687f9f.addTo(map_1e86fc32d2b14c7d846d3cbf2609ae09);\n        \n    \n            var marker_ed73fb257b00e9180bad294ebbf507b4 = L.marker(\n                [51.523, -0.127],\n                {\n}\n            ).addTo(map_1e86fc32d2b14c7d846d3cbf2609ae09);\n        \n    \n            var icon_77f1032bae8c76902aedf5053c6fe6db = L.AwesomeMarkers.icon(\n                {\n  &quot;markerColor&quot;: &quot;red&quot;,\n  &quot;iconColor&quot;: &quot;white&quot;,\n  &quot;icon&quot;: &quot;home&quot;,\n  &quot;prefix&quot;: &quot;fa&quot;,\n  &quot;extraClasses&quot;: &quot;fa-rotate-0&quot;,\n}\n            );\n        \n    \n        var popup_709a41e1dbc2cfe38f3e02d5729cda4b = L.popup({\n  &quot;maxWidth&quot;: 300,\n});\n\n        \n            \n                var html_4a48b4a7aba010eaa66e4cb093249a16 = $(`&lt;div id=&quot;html_4a48b4a7aba010eaa66e4cb093249a16&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;         &lt;div style=&quot;font-family: Arial; min-width: 200px;&quot;&gt;             &lt;h4 style=&quot;margin-bottom: 10px; color: #2c3e50;&quot;&gt;🏠 Property&lt;/h4&gt;             &lt;b&gt;Price:&lt;/b&gt; &amp;lt;img src=x onerror=&amp;#34;window.__auditXSS=1&amp;#34;&amp;gt;&lt;br&gt;             &lt;b&gt;Address:&lt;/b&gt; &amp;lt;img src=x onerror=&amp;#34;window.__auditXSS=1&amp;#34;&amp;gt;&lt;br&gt;             &lt;b&gt;Travel Time:&lt;/b&gt; N/A min&lt;br&gt;         &lt;/div&gt;         &lt;/div&gt;`)[0];\n                popup_709a41e1dbc2cfe38f3e02d5729cda4b.setContent(html_4a48b4a7aba010eaa66e4cb093249a16);\n            \n        \n\n        marker_ed73fb257b00e9180bad294ebbf507b4.bindPopup(popup_709a41e1dbc2cfe38f3e02d5729cda4b)\n        ;\n\n        \n    \n    \n            marker_ed73fb257b00e9180bad294ebbf507b4.bindTooltip(\n                `&lt;div&gt;\n                     Property\n                 &lt;/div&gt;`,\n                {\n  &quot;sticky&quot;: true,\n}\n            );\n        \n    \n                marker_ed73fb257b00e9180bad294ebbf507b4.setIcon(icon_77f1032bae8c76902aedf5053c6fe6db);\n            \n    \n            var circle_7c28a0e749c1f28ea99a0ef1e9dc9175 = L.circle(\n                [51.523, -0.127],\n                {&quot;bubblingMouseEvents&quot;: true, &quot;color&quot;: &quot;red&quot;, &quot;dashArray&quot;: null, &quot;dashOffset&quot;: null, &quot;fill&quot;: false, &quot;fillColor&quot;: &quot;red&quot;, &quot;fillOpacity&quot;: 0.2, &quot;fillRule&quot;: &quot;evenodd&quot;, &quot;lineCap&quot;: &quot;round&quot;, &quot;lineJoin&quot;: &quot;round&quot;, &quot;opacity&quot;: 0.3, &quot;radius&quot;: 1500.0, &quot;stroke&quot;: true, &quot;weight&quot;: 2}\n            ).addTo(map_1e86fc32d2b14c7d846d3cbf2609ae09);\n        \n    \n            circle_7c28a0e749c1f28ea99a0ef1e9dc9175.bindTooltip(\n                `&lt;div&gt;\n                     1.5km search radius\n                 &lt;/div&gt;`,\n                {\n  &quot;sticky&quot;: true,\n}\n            );\n        \n    \n            var feature_group_3cc1dbcaf7633bef979a55524a845e58 = L.featureGroup(\n                {\n}\n            );\n        \n    \n            var marker_ff6fa1ac4534ac3fcfbe4818d322c1ba = L.marker(\n                [51.524, -0.126],\n                {\n}\n            ).addTo(feature_group_3cc1dbcaf7633bef979a55524a845e58);\n        \n    \n            var icon_fc099e351e3437313905b175683eb8be = L.AwesomeMarkers.icon(\n                {\n  &quot;markerColor&quot;: &quot;blue&quot;,\n  &quot;iconColor&quot;: &quot;white&quot;,\n  &quot;icon&quot;: &quot;shopping-cart&quot;,\n  &quot;prefix&quot;: &quot;fa&quot;,\n  &quot;extraClasses&quot;: &quot;fa-rotate-0&quot;,\n}\n            );\n        \n    \n        var popup_59398f5c6d50804e8899b8f1d158f473 = L.popup({\n  &quot;maxWidth&quot;: 250,\n});\n\n        \n            \n                var html_2e623621ebb76c21aca662f0d7eb8d8f = $(`&lt;div id=&quot;html_2e623621ebb76c21aca662f0d7eb8d8f&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;                     &lt;div style=&quot;font-family: Arial; min-width: 150px;&quot;&gt;                         &lt;h4 style=&quot;margin-bottom: 10px; color: blue;&quot;&gt;                             Tesco Express [audit fixture]                         &lt;/h4&gt;                         &lt;b&gt;Distance:&lt;/b&gt; 130m&lt;br&gt;                     &lt;/div&gt;&lt;/div&gt;`)[0];\n                popup_59398f5c6d50804e8899b8f1d158f473.setContent(html_2e623621ebb76c21aca662f0d7eb8d8f);\n            \n        \n\n        marker_ff6fa1ac4534ac3fcfbe4818d322c1ba.bindPopup(popup_59398f5c6d50804e8899b8f1d158f473)\n        ;\n\n        \n    \n    \n            marker_ff6fa1ac4534ac3fcfbe4818d322c1ba.bindTooltip(\n                `&lt;div&gt;\n                     Tesco Express [audit fixture]\n                 &lt;/div&gt;`,\n                {\n  &quot;sticky&quot;: true,\n}\n            );\n        \n    \n                marker_ff6fa1ac4534ac3fcfbe4818d322c1ba.setIcon(icon_fc099e351e3437313905b175683eb8be);\n            \n    \n            feature_group_3cc1dbcaf7633bef979a55524a845e58.addTo(map_1e86fc32d2b14c7d846d3cbf2609ae09);\n        \n    \n            var layer_control_56fefd0b01414845c2894da87bf615d8_layers = {\n                base_layers : {\n                    &quot;openstreetmap&quot; : tile_layer_094a3c48253ed298648dfaf1a6687f9f,\n                },\n                overlays :  {\n                    &quot;Supermarkets&quot; : feature_group_3cc1dbcaf7633bef979a55524a845e58,\n                },\n            };\n            let layer_control_56fefd0b01414845c2894da87bf615d8 = L.control.layers(\n                layer_control_56fefd0b01414845c2894da87bf615d8_layers.base_layers,\n                layer_control_56fefd0b01414845c2894da87bf615d8_layers.overlays,\n                {\n  &quot;position&quot;: &quot;topright&quot;,\n  &quot;collapsed&quot;: false,\n  &quot;autoZIndex&quot;: true,\n}\n            ).addTo(map_1e86fc32d2b14c7d846d3cbf2609ae09);\n\n        \n    \n            L.control.fullscreen(\n                {\n  &quot;position&quot;: &quot;topleft&quot;,\n  &quot;title&quot;: &quot;Fullscreen&quot;,\n  &quot;titleCancel&quot;: &quot;Exit&quot;,\n  &quot;forceSeparateButton&quot;: true,\n}\n            ).addTo(map_1e86fc32d2b14c7d846d3cbf2609ae09);\n        \n&lt;/script&gt;\n&lt;/html&gt;\" style=\"position:absolute;width:100%;height:100%;left:0;top:0;border:none !important;\" allowfullscreen webkitallowfullscreen mozallowfullscreen></iframe></div></div>"
+  },
+  {
+    "case": "protocol-account-B-login",
+    "path": "/api/auth/login",
+    "method": "POST",
+    "status": 200,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.403,
+    "request_id": "protocol-9fcb8454716b4c3b8d9b8a9b4f126aa4",
+    "body": {
+      "authenticated": true,
+      "display_name": "authz_b_e1cc9ed8",
+      "user_id": "7e04c890b9cd481a94688a04f0dd100d",
+      "username": "authz_b_e1cc9ed8"
+    }
+  },
+  {
+    "case": "json-hello",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 200,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.051,
+    "request_id": "protocol-replay-e8e51a3d60124b8994b4547f096e7a7c",
+    "body": {
+      "conversation_id": "584957b8cd994b769f5be20dbea545ba",
+      "message": "Hi! I'm Alex, your UK student-housing assistant. Tell me your budget, the area you'd like to live in, or where you commute to and we'll start.",
+      "response_type": "chat",
+      "turn_id": "16483d1dc03a4ffba8835a3fc221a1c6",
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "destination": null,
+          "max_budget": null,
+          "max_travel_time": null,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 1
+      }
+    }
+  },
+  {
+    "case": "json-idempotent-replay",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 200,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.008,
+    "request_id": "protocol-replay-e8e51a3d60124b8994b4547f096e7a7c",
+    "body": {
+      "conversation_id": "584957b8cd994b769f5be20dbea545ba",
+      "message": "Hi! I'm Alex, your UK student-housing assistant. Tell me your budget, the area you'd like to live in, or where you commute to and we'll start.",
+      "replayed": true,
+      "response_type": "chat",
+      "turn_id": "16483d1dc03a4ffba8835a3fc221a1c6",
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "destination": null,
+          "max_budget": null,
+          "max_travel_time": null,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 1
+      }
+    }
+  },
+  {
+    "case": "sse-idempotent-replay",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 200,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.01,
+    "request_id": "protocol-replay-e8e51a3d60124b8994b4547f096e7a7c",
+    "body": {
+      "conversation_id": "584957b8cd994b769f5be20dbea545ba",
+      "message": "Hi! I'm Alex, your UK student-housing assistant. Tell me your budget, the area you'd like to live in, or where you commute to and we'll start.",
+      "replayed": true,
+      "response_type": "chat",
+      "turn_id": "16483d1dc03a4ffba8835a3fc221a1c6",
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "destination": null,
+          "max_budget": null,
+          "max_travel_time": null,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 1
+      }
+    }
+  },
+  {
+    "case": "sse-fresh-hello",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 200,
+    "content_type": "text/event-stream; charset=utf-8",
+    "retry_after": null,
+    "seconds": 1.566,
+    "request_id": "protocol-29634151e28e4418a015165db06c96fc",
+    "body": "event: step\ndata: {\"stage\":\"understanding\"}\n\nevent: step\ndata: {\"stage\":\"understanding\"}\n\nevent: step\ndata: {\"stage\":\"writing\"}\n\nevent: step\ndata: {\"stage\":\"checking\"}\n\nevent: step\ndata: {\"stage\":\"saving\"}\n\nevent: final\ndata: {\"status\":200,\"payload\":{\"conversation_id\":\"584957b8cd994b769f5be20dbea545ba\",\"message\":\"Hi again! Happy to help you find a place.\\n\\nTo get started, it helps to know\\n- Where you want to live (a neighbourhood, or a university/campus you need to get to)\\n- Your monthly budget\\n- Room type (studio, en-suite, or shared)\\n- Any commute limit, if you have one\\n\\nJust tell me whatever you already know and I'll take it from there.\\n\\nNote: some commute claims could not be verified and have been removed from this answer.\",\"response_type\":\"chat\",\"turn_id\":\"7a5bffe721a44f40836d560aa810a0ed\",\"view_state\":{\"criteria\":{\"amenities_of_interest\":[],\"destination\":null,\"max_budget\":null,\"max_travel_time\":null,\"property_features\":[],\"soft_preferences\":[]},\"operation\":\"replace\",\"results\":[],\"revision\":2}}}\n\n"
+  },
+  {
+    "case": "messages-durable-once",
+    "path": "/api/conversations/584957b8cd994b769f5be20dbea545ba/messages",
+    "method": "GET",
+    "status": 200,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.011,
+    "request_id": "protocol-55e7a8a444334a8a9f839ba5415e0f8c",
+    "body": {
+      "messages": [
+        {
+          "content": "Hello",
+          "id": 107,
+          "role": "user",
+          "timestamp": "2026-10-19T09:38:43.788392+00:00",
+          "turn_id": "16483d1dc03a4ffba8835a3fc221a1c6"
+        },
+        {
+          "content": "Hi! I'm Alex, your UK student-housing assistant. Tell me your budget, the area you'd like to live in, or where you commute to and we'll start.",
+          "id": 108,
+          "response_type": "chat",
+          "role": "assistant",
+          "timestamp": "2026-10-19T09:38:43.819702+00:00",
+          "turn_id": "16483d1dc03a4ffba8835a3fc221a1c6"
+        },
+        {
+          "content": "Hi",
+          "id": 109,
+          "role": "user",
+          "timestamp": "2026-10-19T09:38:43.848030+00:00",
+          "turn_id": "7a5bffe721a44f40836d560aa810a0ed"
+        },
+        {
+          "content": "Hi again! Happy to help you find a place.\n\nTo get started, it helps to know\n- Where you want to live (a neighbourhood, or a university/campus you need to get to)\n- Your monthly budget\n- Room type (studio, en-suite, or shared)\n- Any commute limit, if you have one\n\nJust tell me whatever you already know and I'll take it from there.\n\nNote: some commute claims could not be verified and have been removed from this answer.",
+          "id": 110,
+          "response_type": "chat",
+          "role": "assistant",
+          "timestamp": "2026-10-19T09:38:45.400911+00:00",
+          "turn_id": "7a5bffe721a44f40836d560aa810a0ed"
+        }
+      ],
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "destination": null,
+          "max_budget": null,
+          "max_travel_time": null,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 2
+      }
+    }
+  },
+  {
+    "case": "refresh-load-0",
+    "path": "/api/conversations/584957b8cd994b769f5be20dbea545ba/messages",
+    "method": "GET",
+    "status": 200,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.008,
+    "request_id": "protocol-528c003d9e2242cda545d656b13d4de5",
+    "body": {
+      "messages": [
+        {
+          "content": "Hello",
+          "id": 107,
+          "role": "user",
+          "timestamp": "2026-10-19T09:38:43.788392+00:00",
+          "turn_id": "16483d1dc03a4ffba8835a3fc221a1c6"
+        },
+        {
+          "content": "Hi! I'm Alex, your UK student-housing assistant. Tell me your budget, the area you'd like to live in, or where you commute to and we'll start.",
+          "id": 108,
+          "response_type": "chat",
+          "role": "assistant",
+          "timestamp": "2026-10-19T09:38:43.819702+00:00",
+          "turn_id": "16483d1dc03a4ffba8835a3fc221a1c6"
+        },
+        {
+          "content": "Hi",
+          "id": 109,
+          "role": "user",
+          "timestamp": "2026-10-19T09:38:43.848030+00:00",
+          "turn_id": "7a5bffe721a44f40836d560aa810a0ed"
+        },
+        {
+          "content": "Hi again! Happy to help you find a place.\n\nTo get started, it helps to know\n- Where you want to live (a neighbourhood, or a university/campus you need to get to)\n- Your monthly budget\n- Room type (studio, en-suite, or shared)\n- Any commute limit, if you have one\n\nJust tell me whatever you already know and I'll take it from there.\n\nNote: some commute claims could not be verified and have been removed from this answer.",
+          "id": 110,
+          "response_type": "chat",
+          "role": "assistant",
+          "timestamp": "2026-10-19T09:38:45.400911+00:00",
+          "turn_id": "7a5bffe721a44f40836d560aa810a0ed"
+        }
+      ],
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "destination": null,
+          "max_budget": null,
+          "max_travel_time": null,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 2
+      }
+    }
+  },
+  {
+    "case": "refresh-load-1",
+    "path": "/api/conversations/584957b8cd994b769f5be20dbea545ba/messages",
+    "method": "GET",
+    "status": 200,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.008,
+    "request_id": "protocol-77a26f3ef5274e99a31efe9947cda414",
+    "body": {
+      "messages": [
+        {
+          "content": "Hello",
+          "id": 107,
+          "role": "user",
+          "timestamp": "2026-10-19T09:38:43.788392+00:00",
+          "turn_id": "16483d1dc03a4ffba8835a3fc221a1c6"
+        },
+        {
+          "content": "Hi! I'm Alex, your UK student-housing assistant. Tell me your budget, the area you'd like to live in, or where you commute to and we'll start.",
+          "id": 108,
+          "response_type": "chat",
+          "role": "assistant",
+          "timestamp": "2026-10-19T09:38:43.819702+00:00",
+          "turn_id": "16483d1dc03a4ffba8835a3fc221a1c6"
+        },
+        {
+          "content": "Hi",
+          "id": 109,
+          "role": "user",
+          "timestamp": "2026-10-19T09:38:43.848030+00:00",
+          "turn_id": "7a5bffe721a44f40836d560aa810a0ed"
+        },
+        {
+          "content": "Hi again! Happy to help you find a place.\n\nTo get started, it helps to know\n- Where you want to live (a neighbourhood, or a university/campus you need to get to)\n- Your monthly budget\n- Room type (studio, en-suite, or shared)\n- Any commute limit, if you have one\n\nJust tell me whatever you already know and I'll take it from there.\n\nNote: some commute claims could not be verified and have been removed from this answer.",
+          "id": 110,
+          "response_type": "chat",
+          "role": "assistant",
+          "timestamp": "2026-10-19T09:38:45.400911+00:00",
+          "turn_id": "7a5bffe721a44f40836d560aa810a0ed"
+        }
+      ],
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "destination": null,
+          "max_budget": null,
+          "max_travel_time": null,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 2
+      }
+    }
+  },
+  {
+    "case": "refresh-load-2",
+    "path": "/api/conversations/584957b8cd994b769f5be20dbea545ba/messages",
+    "method": "GET",
+    "status": 200,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.008,
+    "request_id": "protocol-9eb9f79ac8f1459ebc9222912ad335d6",
+    "body": {
+      "messages": [
+        {
+          "content": "Hello",
+          "id": 107,
+          "role": "user",
+          "timestamp": "2026-10-19T09:38:43.788392+00:00",
+          "turn_id": "16483d1dc03a4ffba8835a3fc221a1c6"
+        },
+        {
+          "content": "Hi! I'm Alex, your UK student-housing assistant. Tell me your budget, the area you'd like to live in, or where you commute to and we'll start.",
+          "id": 108,
+          "response_type": "chat",
+          "role": "assistant",
+          "timestamp": "2026-10-19T09:38:43.819702+00:00",
+          "turn_id": "16483d1dc03a4ffba8835a3fc221a1c6"
+        },
+        {
+          "content": "Hi",
+          "id": 109,
+          "role": "user",
+          "timestamp": "2026-10-19T09:38:43.848030+00:00",
+          "turn_id": "7a5bffe721a44f40836d560aa810a0ed"
+        },
+        {
+          "content": "Hi again! Happy to help you find a place.\n\nTo get started, it helps to know\n- Where you want to live (a neighbourhood, or a university/campus you need to get to)\n- Your monthly budget\n- Room type (studio, en-suite, or shared)\n- Any commute limit, if you have one\n\nJust tell me whatever you already know and I'll take it from there.\n\nNote: some commute claims could not be verified and have been removed from this answer.",
+          "id": 110,
+          "response_type": "chat",
+          "role": "assistant",
+          "timestamp": "2026-10-19T09:38:45.400911+00:00",
+          "turn_id": "7a5bffe721a44f40836d560aa810a0ed"
+        }
+      ],
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "destination": null,
+          "max_budget": null,
+          "max_travel_time": null,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 2
+      }
+    }
+  },
+  {
+    "case": "bounded-rate-limit-0",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 200,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.061,
+    "request_id": "protocol-e156ce104a314bdd83d9f0c9eb45ddc9",
+    "body": {
+      "conversation_id": "36d774fd6c24462b91ddbae023bccf54",
+      "message": "Hi! I'm Alex, your UK student-housing assistant. Tell me your budget, the area you'd like to live in, or where you commute to and we'll start.",
+      "response_type": "chat",
+      "turn_id": "db968605f1294f8aa1cebeb230a292d8",
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "destination": null,
+          "max_budget": null,
+          "max_travel_time": null,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 1
+      }
+    }
+  },
+  {
+    "case": "bounded-rate-limit-1",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 200,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.045,
+    "request_id": "protocol-e964c69fd504467b9fa1154779437201",
+    "body": {
+      "conversation_id": "f85aed9bcfa144eb9680b0d9fba8a7f4",
+      "message": "Hi! I'm Alex, your UK student-housing assistant. Tell me your budget, the area you'd like to live in, or where you commute to and we'll start.",
+      "response_type": "chat",
+      "turn_id": "b3a9232012194e1380c2b01bdd8caad6",
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "destination": null,
+          "max_budget": null,
+          "max_travel_time": null,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 1
+      }
+    }
+  },
+  {
+    "case": "bounded-rate-limit-2",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 200,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.066,
+    "request_id": "protocol-0cde00fa079643bea85a7eb1b56817d6",
+    "body": {
+      "conversation_id": "9172119a4ea34ab5a0c8d8365b42e7ea",
+      "message": "Hi! I'm Alex, your UK student-housing assistant. Tell me your budget, the area you'd like to live in, or where you commute to and we'll start.",
+      "response_type": "chat",
+      "turn_id": "e32574e5c2c443a481eca3e0ee80bd5c",
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "destination": null,
+          "max_budget": null,
+          "max_travel_time": null,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 1
+      }
+    }
+  },
+  {
+    "case": "bounded-rate-limit-3",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 200,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.055,
+    "request_id": "protocol-10cb841f43a84a288905b9269efc8703",
+    "body": {
+      "conversation_id": "48a9d4844542428695b245828d43d6e4",
+      "message": "Hi! I'm Alex, your UK student-housing assistant. Tell me your budget, the area you'd like to live in, or where you commute to and we'll start.",
+      "response_type": "chat",
+      "turn_id": "e5d8db42348f42179dbf7cf10d73348e",
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "destination": null,
+          "max_budget": null,
+          "max_travel_time": null,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 1
+      }
+    }
+  },
+  {
+    "case": "bounded-rate-limit-4",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 200,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.044,
+    "request_id": "protocol-f328260224524fe28bc3a917e9f006c9",
+    "body": {
+      "conversation_id": "7886ed31b74b41a7a097a025ea18f0ab",
+      "message": "Hi! I'm Alex, your UK student-housing assistant. Tell me your budget, the area you'd like to live in, or where you commute to and we'll start.",
+      "response_type": "chat",
+      "turn_id": "a2f9df6168694fcd8eefde211de607a1",
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "destination": null,
+          "max_budget": null,
+          "max_travel_time": null,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 1
+      }
+    }
+  },
+  {
+    "case": "bounded-rate-limit-5",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 200,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.067,
+    "request_id": "protocol-8c1b2ae72cb8455f8286bbe68830e911",
+    "body": {
+      "conversation_id": "e325d21d713a44ea85d035087b16a6e5",
+      "message": "Hi! I'm Alex, your UK student-housing assistant. Tell me your budget, the area you'd like to live in, or where you commute to and we'll start.",
+      "response_type": "chat",
+      "turn_id": "c934e77b50c4417c9b22331beced065a",
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "destination": null,
+          "max_budget": null,
+          "max_travel_time": null,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 1
+      }
+    }
+  },
+  {
+    "case": "bounded-rate-limit-6",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 200,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.04,
+    "request_id": "protocol-ad057112a4e34ef5af1c641b2063d982",
+    "body": {
+      "conversation_id": "3620f9c4ab184e529077423deb23355c",
+      "message": "Hi! I'm Alex, your UK student-housing assistant. Tell me your budget, the area you'd like to live in, or where you commute to and we'll start.",
+      "response_type": "chat",
+      "turn_id": "6539c870dd7b46798c282e70e87f12be",
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "destination": null,
+          "max_budget": null,
+          "max_travel_time": null,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 1
+      }
+    }
+  },
+  {
+    "case": "bounded-rate-limit-7",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 200,
+    "content_type": "application/json",
+    "retry_after": null,
+    "seconds": 0.061,
+    "request_id": "protocol-f830ff1e5ff7422bbe9ac2a998fbe604",
+    "body": {
+      "conversation_id": "a4e0efd9822948d4ad39ca30dfe4cb2a",
+      "message": "Hi! I'm Alex, your UK student-housing assistant. Tell me your budget, the area you'd like to live in, or where you commute to and we'll start.",
+      "response_type": "chat",
+      "turn_id": "1666a9998c2340d79b595aca2f31aee4",
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "destination": null,
+          "max_budget": null,
+          "max_travel_time": null,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 1
+      }
+    }
+  },
+  {
+    "case": "bounded-rate-limit-8",
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 429,
+    "content_type": "application/json",
+    "retry_after": "58",
+    "seconds": 0.012,
+    "request_id": "protocol-e7e595999bed481e8a7bf45e3465392e",
+    "body": {
+      "error": "too many requests; please try again shortly",
+      "error_code": "rate_limited",
+      "retry_after": 58
+    }
+  }
+]

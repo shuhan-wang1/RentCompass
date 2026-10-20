@@ -545,6 +545,7 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
 
         results_parts = []
         all_data = {}
+        search_health = {}
         prepared: List[Tuple[str, Dict[str, Any]]] = []
         refusals: List[Dict[str, Any]] = []
 
@@ -573,6 +574,9 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
                     web_result = await asyncio.to_thread(
                         get_search_snippets, search_query, 5
                     )
+                    health = getattr(web_result, 'service_health', None)
+                    if isinstance(health, dict):
+                        search_health[f'web_search_{index}'] = health
                     results_parts.append(
                         f"### Web Search (query length: {len(search_query)})"
                     )
@@ -632,6 +636,9 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
             # inside whatever grant dispatched this call.
             logger.info("Executing plain web search query_chars=%d", query_meta["length"])
             web_result = await asyncio.to_thread(get_search_snippets, query, 5)
+            health = getattr(web_result, 'service_health', None)
+            if isinstance(health, dict):
+                search_health['web_search'] = health
 
             if not _evidence_usable(web_result):
                 logger.warning(
@@ -640,7 +647,14 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
                 )
                 return _with_refusals({
                     "success": False,
-                    "error": "No search results found",
+                    "error": ("SearXNG search service is unavailable; no web evidence was verified"
+                              if isinstance(health, dict) and health.get('service_status') == 'unavailable'
+                              else "No search results found"),
+                    "error_code": ('search_service_unavailable'
+                                   if isinstance(health, dict) and health.get('service_status') == 'unavailable'
+                                   else 'no_usable_results'),
+                    "service_status": health.get('service_status', 'unknown') if isinstance(health, dict) else 'unknown',
+                    "search_health": search_health,
                     "query_metadata": query_meta,
                     "results": "",
                     "detailed_data": {},
@@ -666,6 +680,7 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
                 "query_metadata": query_meta,
                 "results": combined_results,
                 "detailed_data": all_data,
+                "search_health": search_health,
             }, refusals)
 
         logger.info("Web-search request completed result_parts=%d", len(results_parts))
@@ -674,6 +689,7 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
             "query_metadata": query_meta,
             "results": combined_results,
             "detailed_data": all_data,
+            "search_health": search_health,
         }, refusals)
     except Exception as exc:
         # HTTP exception strings often contain URLs and raw query parameters.

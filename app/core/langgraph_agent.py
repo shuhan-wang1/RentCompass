@@ -298,13 +298,13 @@ POI_TYPES = {
 # ═══════════════════════════════════════════════════════════════════
 
 _ACCESSIBILITY_HARD_CUE_RE = re.compile(
-    r"\b(?:must(?: have| be)?|need(?:s|ed)?|require(?:s|d|ment)?|essential|"
+    r"\b(?:must(?: have| be)?|need(?:s|ed)?|require(?:s|d|ments?)?|essential|"
     r"non[- ]negotiable|depend(?:s|ent)? on)\b|必须|需要|必需|刚需|不可缺少|离不开|行动不便",
     re.IGNORECASE,
 )
 _ACCESSIBILITY_SOFT_CUE_RE = re.compile(
-    r"\b(?:would like|prefer(?:red)?|ideally|nice to have|if possible|"
-    r"not essential|optional)\b|希望|最好|偏好|优先|可以的话|可有可无",
+    r"\b(?:would like|prefer(?:red|ence|ences)?|ideally|nice to have|if possible|"
+    r"not essential|not (?:a )?requirement|not required|isn.t (?:essential|required)|would be (?:lovely|nice)|optional)\b|希望|最好|偏好|优先|可以的话|可有可无",
     re.IGNORECASE,
 )
 _ACCESSIBILITY_NEGATED_NEED_RE = re.compile(
@@ -312,9 +312,44 @@ _ACCESSIBILITY_NEGATED_NEED_RE = re.compile(
     r"\b(?:not required|no need for)\b|不需要|不必|无需|不要",
     re.IGNORECASE,
 )
+
+# A retraction bound to THE FEATURE ITSELF (2026-10-19 A-05): "I changed my mind about the
+# lift, not needed anymore" kept property_features=["lift"] as a hard filter. Tied to the
+# mention, never to the clause, so "I need a lift and it's not necessary to have a balcony"
+# still requires the lift.
+#   after:  "lift not needed", "the lift is no longer necessary", "lift requirement isn't needed"
+#   tail:   "about the lift, not needed anymore."  (the retraction ENDS the sentence)
+#   before: "forget the lift", "drop the lift requirement"
+_RETRACTION_AFTER_RE = re.compile(
+    r"\s*(?:(?:access|requirements?|filter)\s+)?"
+    # "is not required" is NOT here: "a lift is not required but would be nice" is a soft
+    # preference, handled by the hard/soft classifier; only "no longer required" retracts.
+    r"(?:(?:(?:is|are)\s+(?:not|no longer)|isn.t|aren.t|not|no longer)\s+(?:needed|necessary)"
+    r"|(?:(?:is|are)\s+)?no longer\s+required)\b",
+    re.I)
+_RETRACTION_TAIL_RE = re.compile(
+    r"[^.!?;。！？,，]{0,40}?[,，]\s*(?:(?:it|that)(?:'s|\s+is)\s+)?"
+    r"(?:(?:not|no longer)\s+(?:needed|necessary)|no longer\s+required)"
+    r"(?:\s+any\s?more)?\s*(?:[.!?;。！？]|$)", re.I)
+_RETRACTION_BEFORE_RE = re.compile(
+    r"\b(?:forget|scrap|drop|remove|ditch)\s+(?:about\s+)?(?:the|that|my)\s+(?:\w+\s+){0,1}$",
+    re.I)
+
+
+def _feature_retracted_here(text: str, start: int, end: int) -> bool:
+    text = str(text or "")
+    return bool(_RETRACTION_AFTER_RE.match(text[end:end + 60])
+                or _RETRACTION_TAIL_RE.match(text[end:end + 90])
+                or _RETRACTION_BEFORE_RE.search(text[max(0, start - 40):start]))
+
+
+# The clause-level retraction vocabulary, for removing an ACCUMULATED feature (unchanged).
+_FEATURE_RETRACTION_RE = re.compile(
+    r'取消|删除|移除|去掉|不需要|不用|可选|非必须|remove|drop|no longer|don.t need|optional|'
+    r'not required|not (?:a )?requirement|(?:is|would be) (?:a )?preference', re.I)
 _ACCESSIBILITY_PROPERTY_CONTEXT_RE = re.compile(
     r"\b(?:flat|apartment|property|home|house|room|accommodation|listing|building|"
-    r"entrance|bathroom)\b|房源|房子|住房|住宅|公寓|房间|楼房|大楼|入口|卫生间|浴室",
+    r"entrance|entry|front door|doors?|doorways?|corridors?|bathroom)\b|\broute in\s*$|房源|房子|住房|住宅|公寓|房间|楼房|大楼|入口|卫生间|浴室",
     re.IGNORECASE,
 )
 _ACCESSIBILITY_TRANSIT_CONTEXT_RE = re.compile(
@@ -346,6 +381,15 @@ def _extract_accessibility_requirements(message: str) -> dict[str, list[str]]:
     source = str(message or "")
     if not source:
         return {"required": [], "soft": []}
+    from core.constraint_updates import is_criteria_consultation
+    if is_criteria_consultation(source):
+        from core.constraint_updates import explicit_feature_requirement_text
+        source = explicit_feature_requirement_text(source)
+        if not source:
+            return {"required": [], "soft": []}
+    from core.constraint_updates import is_hypothetical
+    if is_hypothetical(source) and not re.search(r'\b(?:must|need|require)\b|必须|需要|要求', source, re.I):
+        return {"required": [], "soft": []}
     from core.tools.search_properties import _accessibility_feature_mentions
 
     mentions = _accessibility_feature_mentions(source)
@@ -360,6 +404,9 @@ def _extract_accessibility_requirements(message: str) -> dict[str, list[str]]:
     soft: list[str] = []
 
     for feature, start, end in mentions:
+        from core.constraint_updates import mention_is_requirement
+        if not mention_is_requirement(source, start, end) or _feature_retracted_here(source, start, end):
+            continue
         left = max(source.rfind(mark, 0, start) for mark in (";", "；", ",", "，", ".", "。", "!", "！", "?", "？"))
         right_candidates = [source.find(mark, end) for mark in
                             (";", "；", ",", "，", ".", "。", "!", "！", "?", "？")]
@@ -373,7 +420,8 @@ def _extract_accessibility_requirements(message: str) -> dict[str, list[str]]:
         if (_ACCESSIBILITY_TRANSIT_CONTEXT_RE.search(clause)
                 and not _ACCESSIBILITY_PROPERTY_CONTEXT_RE.search(clause)):
             continue
-        if fact_question and not search_action:
+        if _ACCESSIBILITY_FACT_QUESTION_RE.search(clause) and not re.search(
+                r"\b(?:find|search|show|want|looking for)\b|找房|找一|搜索|筛选|想要", clause, re.I):
             continue
 
         # "I don't need a lift" is neither hard nor soft. "Not essential; would
@@ -382,7 +430,7 @@ def _extract_accessibility_requirements(message: str) -> dict[str, list[str]]:
                 and not _ACCESSIBILITY_SOFT_CUE_RE.search(clause)):
             continue
         hard_clause = re.sub(
-            r"\b(?:not essential|not required|no need for)\b|不需要|不必|无需|可有可无",
+            r"\b(?:not essential|not required|isn.t essential|isn.t required|not (?:a )?requirement|no need for)\b|不需要|不必|无需|可有可无",
             "", clause, flags=re.IGNORECASE)
         has_hard = bool(_ACCESSIBILITY_HARD_CUE_RE.search(hard_clause))
         has_soft = bool(_ACCESSIBILITY_SOFT_CUE_RE.search(clause))
@@ -397,6 +445,13 @@ def extract_preferences_from_message(user_message: str, current_prefs: dict) -> 
     """Extract user preferences from a message. Returns updated prefs dict."""
     prefs = {k: list(v) for k, v in current_prefs.items()}
     user_lower = user_message.lower()
+    from core.tools.search_properties import _accessibility_feature_mentions
+    from core.constraint_updates import clause_at
+    for feature, start, end in _accessibility_feature_mentions(user_message):
+        if _FEATURE_RETRACTION_RE.search(clause_at(user_message, start, end)):
+            for key in ('hard_preferences', 'required_amenities', 'soft_preferences'):
+                if key in prefs:
+                    prefs[key] = [value for value in prefs[key] if feature not in str(value).lower()]
 
     def _add(ptype, val):
         if val and val not in prefs.get(ptype, []):
@@ -417,13 +472,21 @@ def extract_preferences_from_message(user_message: str, current_prefs: dict) -> 
         'balcony': ['balcony', 'terrace'], 'concierge': ['concierge', '24/7', 'reception'],
     }
     for amenity, keywords in amenity_patterns.items():
-        if any(kw in user_lower for kw in keywords):
-            strong = any(w in user_lower for w in ['must', 'need', 'require', 'essential'])
-            if strong:
-                _add('required_amenities', amenity)
-                _add('hard_preferences', f"Must have {amenity}")
-            else:
-                _add('soft_preferences', f"Would like {amenity}")
+        for keyword in keywords:
+            # Whole words only: 'pool' inside "Liverpool Street" became "Would like pool" and
+            # the answer told the user "You mentioned liking a pool" (R2-17).
+            for match in re.finditer(r"(?<![A-Za-z])" + re.escape(keyword) + r"(?![A-Za-z])",
+                                     user_message, re.I):
+                from core.constraint_updates import mention_is_requirement
+                if not mention_is_requirement(user_message, match.start(), match.end()):
+                    continue
+                clause = clause_at(user_message, match.start(), match.end())
+                hard_clause = re.sub(r"not essential|isn.t essential|not required|isn.t required|不必|可有可无", '', clause, flags=re.I)
+                if _ACCESSIBILITY_HARD_CUE_RE.search(hard_clause):
+                    _add('required_amenities', amenity)
+                    _add('hard_preferences', f"Must have {amenity}")
+                else:
+                    _add('soft_preferences', f"Would like {amenity}")
 
     # Accessibility gets feature-specific strength handling rather than the global
     # substring test above. A required accessible feature is recorded both as an
@@ -497,6 +560,8 @@ def update_search_criteria(accumulated: dict, new_criteria: dict) -> dict:
     # None (the tool sends it under no_commute, where destination merely mirrors the
     # search area) must NOT be overridden by the legacy fallback below.
     cd = new_criteria.get('commute_destination')
+    if 'commute_destination' in new_criteria and cd is None and new_criteria.get('no_commute'):
+        result['commute_destination'] = None
     if cd:
         result['commute_destination'] = cd
         result['destination'] = cd
@@ -518,6 +583,8 @@ def update_search_criteria(accumulated: dict, new_criteria: dict) -> dict:
         result['bedrooms'] = bd
     elif isinstance(bd, str) and bd.isdigit():
         result['bedrooms'] = int(bd)
+    if 'bedrooms_minimum' in new_criteria:
+        result['bedrooms_minimum'] = bool(new_criteria['bedrooms_minimum'])
 
     # room_type: canonical single value ('studio'|'ensuite'|'shared'); a None/blank
     # never clobbers a previously-recorded choice.
@@ -544,10 +611,13 @@ def update_search_criteria(accumulated: dict, new_criteria: dict) -> dict:
         if tag and tag not in result.get('property_features', []):
             result.setdefault('property_features', []).append(tag)
 
-    return result
+    from core.constraint_updates import protect_confirmed_criteria
+    return protect_confirmed_criteria(result, accumulated)
 
 
-def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) -> dict:
+def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
+                                     apply_relative_budget: bool = True,
+                                     _reaffirmed: bool = False) -> dict:
     """D2: fold an explicit budget/commute change stated in THIS turn's raw message
     into the accumulated criteria (raise OR lower), so the update survives even when
     the turn produces no search. Returns the SAME object when nothing changed so the
@@ -557,8 +627,43 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     a single source of truth for phrasings ("budget is now X", "actually X max",
     "£1000", "40 minute commute", "half an hour", week↔month). A weekly budget is
     normalised to monthly because accumulated.max_budget is monthly.
+
+    ``apply_relative_budget=False`` is for the executor-side boundaries that RE-apply this
+    turn's text to criteria the state node has already updated (``agent_loop.
+    _inject_search_params``, ``search_properties.ground_hard_constraints``). An absolute
+    change is idempotent there; a relative one ("raise the budget by £200") is not — each
+    re-application added the delta again (2200 -> 2400 -> 2600 -> 2800 in one turn). The
+    state node is the only place that still holds the pre-turn ceiling, so it alone
+    resolves a delta; the boundaries leave the budget exactly as they received it.
     """
     if not current_message:
+        return accumulated
+    from core.constraint_updates import housing_update_text
+    # ``_reaffirmed``: the text is already the explicit feature requirement extracted below.
+    # Gating it through housing_update_text AGAIN can return '' again and recurse forever:
+    # "My favourite area is Angel and I need a lift." crashed every turn with a RecursionError
+    # (502, 0 LLM calls, 12/12 — R2-12).
+    housing_message = current_message if _reaffirmed else housing_update_text(current_message)
+    if not housing_message:
+        from core.constraint_updates import explicit_feature_requirement_text
+        reaffirmed = explicit_feature_requirement_text(current_message)
+        if not reaffirmed:
+            return accumulated
+        amended = _apply_explicit_criteria_updates(
+            accumulated, reaffirmed, apply_relative_budget=apply_relative_budget,
+            _reaffirmed=True)
+        result = dict(accumulated)
+        sources = dict(accumulated.get('constraint_sources') or {})
+        changed = False
+        for field in ('property_features', 'soft_preferences'):
+            if amended.get(field) != accumulated.get(field):
+                result[field] = amended.get(field)
+                if field in (amended.get('constraint_sources') or {}):
+                    sources[field] = amended['constraint_sources'][field]
+                changed = True
+        if changed:
+            result['constraint_sources'] = sources
+            return result
         return accumulated
     from core.tools.search_properties import (
         _extract_budget, _extract_commute_minutes, _extract_no_commute,
@@ -567,12 +672,57 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     from core.scraping.on_demand import extract_destination_from_text
     from core.tenancy_reference import monthly_from_weekly
 
-    result = dict(accumulated)
+    from core.constraint_updates import scoped_update_text, date_is_cleared, mention_is_requirement
+    original_message = current_message
+    current_message = housing_message
+    result = {k: (list(v) if isinstance(v, list) else v) for k, v in accumulated.items()}
     changed = False
+    plans = accumulated.get('plans') or {}
+    if re.search(r'回到|切回|return to|switch back|back to', current_message, re.I):
+        for name, plan in plans.items():
+            if name.lower() in current_message.lower() and isinstance(plan, dict):
+                result.update({k: v for k, v in plan.items() if k != 'plans'})
+                changed = True
+                break
 
     amount, period = _extract_budget(current_message)
-    if amount:
-        monthly = int(round(monthly_from_weekly(amount))) if period == 'week' else int(amount)
+    from core.tools.search_properties import _extract_total_budget
+    total_budget = _extract_total_budget(current_message)
+    if total_budget is not None and total_budget != result.get('monthly_total_budget'):
+        result['monthly_total_budget'] = total_budget
+        changed = True
+    from core.constraint_updates import extract_office_days, extract_max_changes
+    days = extract_office_days(current_message)
+    if days is not None and result.get('office_days_per_week') != days:
+        result['office_days_per_week'] = days
+        changed = True
+    max_changes = extract_max_changes(current_message)
+    if max_changes is not None and result.get('max_changes') != max_changes:
+        result['max_changes'] = max_changes
+        changed = True
+    # P1-1 (legacy arch): "raise the budget by £200" states a DELTA, not a ceiling. The
+    # deterministic currency extractor cannot tell the two apart, so £2,200 became £200 and
+    # the search could never match (agenttest-t1-f4b-legacy). detect_relative_budget_delta
+    # is the single place that distinguishes them (it returns None for "raise the budget TO
+    # £2400", which stays a ceiling); resolve_relative_budget applies the delta to the
+    # ceiling standing BEFORE this turn. A relative edit with no prior ceiling CLEARS
+    # max_budget — a delta is not a ceiling, and searching at the delta is exactly the bug.
+    # _states_relative_budget_edit is detect_relative_budget_delta plus the one guard it is
+    # missing (a CEILING marker introducing the same amount — 「预算每月最多2200英镑」 reads as a
+    # +2200 delta because the loose ZH pattern matches 多 inside 最多). Both budget-override
+    # sites in search_properties.py ask through the same predicate, so the three places that
+    # can move a ceiling on the legacy path agree.
+    from core.search_readiness import resolve_relative_budget
+    from core.tools.search_properties import _states_relative_budget_edit
+    if _states_relative_budget_edit(current_message):
+        if apply_relative_budget:
+            resolved = resolve_relative_budget(current_message, result.get('max_budget'))
+            if result.get('max_budget') != resolved:
+                result['max_budget'] = resolved      # None when there was no prior ceiling
+                changed = True
+    elif amount:
+        monthly = monthly_from_weekly(amount) if period == 'week' else amount
+        result['budget_period'] = 'month'
         if result.get('max_budget') != monthly:
             result['max_budget'] = monthly
             changed = True
@@ -582,7 +732,7 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
         # None sticks for the rest of the turn because both update_search_criteria and the
         # param-injection only ever OVERRIDE max_budget on a *truthy* value, so a cleared
         # None can never be re-populated from a stale accumulated/extracted value.
-        if result.get('max_budget') is not None:
+        if 'max_budget' not in result or result.get('max_budget') is not None:
             result['max_budget'] = None
             changed = True
 
@@ -590,10 +740,76 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     # Persist that distinction before the LLM plans tools so all calls see the
     # same destination (not only search_properties, which also scans raw text).
     message_destination = extract_destination_from_text(current_message)
-    known_destination = _known_destination_address(current_message)
+    if isinstance(message_destination, dict) and re.fullmatch(
+            r'(?:my|the|our|an?)\s+(?:office|workplace|job|work)',
+            str(message_destination.get('name') or message_destination.get('address') or '').strip(),
+            re.I):
+        message_destination = None       # "My office" is a label, never an address
+    # A labelled workplace is followed by the destination. "My office" itself
+    # is never an address, even if a generic place classifier accepts it.
+    # "my workplace is King's Cross station" names the place without a preposition; a
+    # correction phrased that way used to change nothing (A-03). "St." is not a sentence end.
+    _dest_source = re.sub(r"\b(St|Dr|Mt)\.\s", r"\1 ", current_message)
+    # The preposition-free form is only for "my office/workplace is <Place>", and the place
+    # must be capitalised: "my job is remote", "my work is hybrid", "my job is stressful"
+    # name no place (review of the A-03 fix).
+    labelled_destination = re.search(
+        r'\b(?:(?i:my (?:office|workplace)\s+is)\s+(?=[A-Z])'
+        r'(?!(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Weekdays?|Weekends?|'
+        r'January|February|March|April|May|June|July|August|September|October|November|'
+        r'December|Hybrid|Remote|Closed|Open)\b)|'
+        r'(?i:(?:my (?:office|workplace)|i work|commute|(?:a\s+)?(?:public[- ]transport\s+)?journey)'
+        r'\s+(?:is\s+)?(?:next to|near|at|to|in)\s+))([^.!?;\n]{2,90})',
+        _dest_source)
+    if labelled_destination and re.search(
+            r"\b(?:don.t|do not|doesn.t|never|no longer|not)\s+(?:\w+\s+){0,2}commut\w*|\bno commute\b",
+            labelled_destination.string[:labelled_destination.end()], re.I):
+        # "I work from home so I don't commute at all" names no destination ("all").
+        labelled_destination = None
+    # "Forget that I work at Canary Wharf" asks to DROP the destination; it used to SET it
+    # (2026-10-19 A-11). The cue must sit in the same sentence, before the destination.
+    forget_destination = bool(labelled_destination and re.search(
+        r"\b(?:forget|disregard|never mind)\b[^.!?;\n]*$",
+        _dest_source[:labelled_destination.start()], re.I))
+    if forget_destination:
+        def _key(value):
+            return ' '.join(re.sub(r"[^a-z0-9]+", ' ', str(value or '').lower()).split())
+        forgotten = _key(re.split(r'[,;]', labelled_destination.group(1))[0])
+        current = _key(result.get('commute_destination') or result.get('destination'))
+        labelled_destination = None
+        message_destination = None
+        # Only the destination the user named is forgotten; another one stays.
+        if forgotten and current and (forgotten in current or current in forgotten):
+            result['commute_destination'] = None
+            result['destination'] = None
+            changed = True
+    if labelled_destination:
+        # The place ends where the clause about it ends: "King's Cross, so I'd like a
+        # commute of under 30 minutes" stored the whole fragment as the destination, and
+        # every later commute lookup failed address resolution (A-03).
+        named = re.split(r'\s+and\s+|,\s*(?:and|where|so|but|which|because|as|i\b|i.[dm]\b|my\b|'
+                         r'find|looking|search|show|please)'
+                         r'|\s+(?:so|but|because|since|which|where|while)\s+'
+                         r'|\s+for\s+|\s+(?:arriving|leaving|departing)\b'
+                         r'|\s+(?:of\s+(?:about\s+)?|within\s+|under\s+|at most\s+)(?=\d)'
+                         # "King's Cross, max 30 minutes" / "Soho, no more than 35 minutes" /
+                         # "Shoreditch - 30 min max" / "King's Cross (max 30 minutes)": the time
+                         # limit is not part of the place (R1-04, variant of A-03).
+                         r'|\s*,\s*(?=(?:max(?:imum)?|at\s+most|no\s+more\s+than|up\s+to|under|within|'
+                         r'less\s+than|about|around|roughly|ideally|preferably|door)\b|\d)'
+                         r'|\s*[(\[]|\s+[-–—]\s+',
+                         labelled_destination.group(1), maxsplit=1, flags=re.I)[0].strip(" ,")
+        if named and not re.fullmatch(r'(?:my|the|an?)\s+(?:office|workplace)', named, re.I) \
+                and not re.fullmatch(r'(?:all|home|work|the moment|present|least|most|times?)',
+                                     named, re.I):
+            message_destination = {'address': named, 'name': named}
+    known_destination = (None if forget_destination else
+                         _known_destination_address(named if labelled_destination else current_message))
     if message_destination or known_destination:
         destination = (
-            (message_destination or {}).get('address')
+            (known_destination if (labelled_destination or (known_destination and re.search(
+                r'\b(?:university|college|school)\b', known_destination, re.I))) else None)
+            or (message_destination or {}).get('address')
             or (message_destination or {}).get('name')
             or known_destination
         )
@@ -609,9 +825,22 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     # "switch to Bristol", "actually London", a bare/Chinese city name) overrides the
     # frozen accumulated area even with no search verb. _extract_area returns None for
     # nonsense areas (Mars/火星/Wakanda), so those never clobber the current area.
-    new_area = _extract_area(current_message)
-    # Do not also save the contextual workplace as a chosen home area. A distinct
-    # explicit residence ("work near Canary Wharf, live in Camden") is preserved.
+    from core.tools.search_properties import _extract_areas, area_list_edit
+    standing_areas = list(result.get('areas') or ([result['area']] if result.get('area') else []))
+    edited_areas = area_list_edit(current_message, standing_areas)
+    if edited_areas is not None:
+        # "Add Islington as well." / "Drop Hackney, just Islington." / "Remove Stratford."
+        # edit the standing list instead of replacing it (R1-02). Removing the last area
+        # leaves none: the next search asks where, rather than silently keeping it.
+        new_areas, new_area = [], None
+        if edited_areas != standing_areas:
+            result['area'] = edited_areas[0] if edited_areas else None
+            result['areas'] = edited_areas
+            changed = True
+    else:
+        new_areas = _extract_areas(current_message)
+        new_area = new_areas[0] if new_areas else _extract_area(current_message)
+    # A curated contextual workplace does not also become a home area.
     def _place_key(value):
         return re.sub(r'[^a-z0-9]+', ' ', str(value or '').lower()).strip()
 
@@ -621,15 +850,23 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     } if message_destination else set()
     destination_context.discard('')
     contextual_work_area = _place_key(new_area) in destination_context
-    if new_area and not contextual_work_area and result.get('area') != new_area:
-        result['area'] = new_area
-        changed = True
+    if new_area and not contextual_work_area:
+        new_areas = new_areas or [new_area]
+        if result.get('area') != new_area or result.get('areas') != new_areas:
+            result['area'], result['areas'] = new_area, new_areas
+            changed = True
 
     # Room type stated this turn (e.g. answering the soft gate "我要ensuite") folds into
     # the accumulated criteria even without any find/search verb.
     room_type = _extract_room_type(current_message)
     if room_type and result.get('room_type') != room_type:
         result['room_type'] = room_type
+        changed = True
+
+    from core.tools.search_properties import _extract_bedrooms, _accessibility_feature_mentions
+    beds = _extract_bedrooms(current_message)
+    if beds:
+        result['bedrooms'], result['bedrooms_minimum'] = beds[0], beds[0] != beds[1]
         changed = True
 
     minutes = _extract_commute_minutes(current_message)
@@ -644,9 +881,10 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     # the next search never re-applies a filter the user has disowned.
     ml = current_message.lower()
     names_destination = _known_destination_address(ml) is not None
-    commute_intent = bool(minutes) or names_destination or bool(message_destination)
+    commute_intent = (bool(minutes) or names_destination or bool(message_destination)
+                      or bool(days) or bool(re.search(r'\bi do commute\b|我(?:确实|需要)?通勤', current_message, re.I)))
     if commute_intent:
-        if result.get('no_commute'):
+        if result.get('no_commute') is not False:
             result['no_commute'] = False
             changed = True
     elif _extract_no_commute(current_message):
@@ -665,6 +903,9 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     try:
         from core.tools.search_properties import _extract_move_in_date
         move_in = _extract_move_in_date(current_message)
+        if date_is_cleared(current_message):
+            result['move_in_date'] = None
+            changed = True
         if move_in and result.get('move_in_date') != move_in:
             result['move_in_date'] = move_in
             changed = True
@@ -675,19 +916,129 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     # user's wording makes them hard. Explicitly soft wording stays in
     # soft_preferences and therefore cannot exclude an otherwise suitable listing.
     accessibility = _extract_accessibility_requirements(current_message)
+    from core.constraint_updates import cat_permission_update
+    pet_requirement = cat_permission_update(current_message)
+    if pet_requirement is True:
+        existing = result.setdefault('property_features', [])
+        if 'cats allowed' not in existing:
+            existing.append('cats allowed')
+            changed = True
+    elif pet_requirement is False:
+        existing = result.get('property_features') or []
+        filtered = [feature for feature in existing
+                    if feature not in ('cats allowed', 'pets allowed', 'pet-friendly')]
+        if filtered != existing:
+            result['property_features'] = filtered
+            changed = True
+    from core.constraint_updates import pet_requirement_update
+    pet_need = pet_requirement_update(original_message)
+    _pet_soft = re.compile(r'\b(?:pets?|cats?|dogs?)\b|pet[- ]friendly|宠物|猫|狗', re.I)
+    if pet_need is False:
+        # "Actually forget the pets thing, I no longer have a cat." withdrew the hard filter
+        # AND the soft copy the search had stored (R1-05: the soft one survived A-07).
+        existing = result.get('property_features') or []
+        kept = [f for f in existing
+                if f not in ('cats allowed', 'pets allowed', 'pet-friendly', 'cat_written_consent')]
+        if kept != existing:
+            result['property_features'] = kept
+            changed = True
+    elif pet_need is True and pet_requirement is not True:
+        existing = result.setdefault('property_features', [])
+        if 'pets allowed' not in existing and 'cats allowed' not in existing:
+            existing.append('pets allowed')
+            changed = True
+    if pet_need is not None or pet_requirement is not None:
+        # A requirement replaces its soft copy; a withdrawal removes it.
+        previous_soft = result.get('soft_preferences') or []
+        soft = [v for v in previous_soft if not _pet_soft.search(str(v))]
+        if soft != previous_soft:
+            result['soft_preferences'] = soft
+            changed = True
+    from core.constraint_updates import furnished_requirement_update
+    furnished_need = furnished_requirement_update(original_message)
+    if furnished_need is not None:
+        existing = list(result.get('property_features') or [])
+        if furnished_need and 'furnished' not in existing:
+            result['property_features'] = existing + ['furnished']
+            changed = True
+        elif not furnished_need and 'furnished' in existing:
+            result['property_features'] = [f for f in existing if f != 'furnished']
+            changed = True
+        # A requirement replaces its soft copy ("furnished only"); a withdrawal removes it.
+        previous_soft = result.get('soft_preferences') or []
+        soft = [v for v in previous_soft if not re.search(r'furnish|家具', str(v), re.I)]
+        if soft != previous_soft:
+            result['soft_preferences'] = soft
+            changed = True
+    from core.constraint_updates import precise_property_requirements
+    precise_required = list(accessibility['required'])
+    if pet_requirement is True:
+        precise_required.append('cats allowed')
+    for feature in precise_property_requirements(current_message, precise_required):
+        existing = result.setdefault('property_features', [])
+        if feature not in existing:
+            existing.append(feature)
+            changed = True
+    retracted: set = set()
+    for feature, start, end in _accessibility_feature_mentions(current_message):
+        from core.constraint_updates import clause_at
+        clause = clause_at(current_message, start, end)
+        if _FEATURE_RETRACTION_RE.search(clause) or _feature_retracted_here(current_message, start, end):
+            retracted.add(feature)
+            for key in ('property_features', 'soft_preferences'):
+                previous = result.get(key) or []
+                result[key] = [v for v in previous if feature not in str(v)]
+                changed = changed or previous != result[key]
     for feature in accessibility["required"]:
+        if feature in retracted:
+            continue     # retracted in this very message; never re-added from it (A-05)
+        # Promotion to hard removes the same feature's historical soft copy.
+        previous_soft = result.get('soft_preferences') or []
+        result['soft_preferences'] = [v for v in previous_soft if feature not in str(v).lower()]
+        changed = changed or previous_soft != result['soft_preferences']
         existing = result.setdefault('property_features', [])
         if feature not in existing:
             existing.append(feature)
             changed = True
     for feature in accessibility["soft"]:
+        if feature in result.get("property_features", []):
+            continue
         text = f"Would like {feature}"
         existing = result.setdefault('soft_preferences', [])
         if text not in existing:
             existing.append(text)
             changed = True
 
-    return result if changed else accumulated
+    from core.constraint_updates import cleared_fields
+    for field in cleared_fields(current_message):
+        result[field] = [] if field == 'property_features' else None
+        if field == 'area':
+            result['areas'] = []
+        if field == 'commute_destination':
+            result['destination'] = None
+        if field == 'bedrooms':
+            result['bedrooms_minimum'] = False
+        changed = True
+
+    if changed:
+        sources = dict(result.get('constraint_sources') or {})
+        for key in ('area', 'areas', 'max_budget', 'budget_period', 'monthly_total_budget', 'office_days_per_week',
+                    'bedrooms', 'bedrooms_minimum', 'room_type', 'commute_destination', 'destination',
+                    'move_in_date', 'max_travel_time', 'max_changes', 'no_commute', 'property_features',
+                    'soft_preferences'):
+            if key in result and (key not in accumulated or result.get(key) != accumulated.get(key)):
+                sources[key] = {'source': 'user_message', 'value': result.get(key), 'text': current_message[:800]}
+        result['constraint_sources'] = sources
+        if current_message != original_message and accumulated.get('area'):
+            plans = dict(result.get('plans') or {})
+            plans[accumulated['area']] = {k: v for k, v in accumulated.items() if k != 'plans'}
+            if result.get('area'):
+                plans[result['area']] = {k: v for k, v in result.items() if k != 'plans'}
+            result['plans'] = plans
+    if changed:
+        from core.criteria_contract import synchronize_monthly_budget_alias
+        return synchronize_monthly_budget_alias(result)
+    return accumulated
 
 
 def get_preferences_context(prefs: dict) -> str:
@@ -713,6 +1064,8 @@ def build_context_info(extracted_context: dict, tool_name: str, prefs: dict) -> 
                 "Do NOT reference specific property listings from previous searches.")
 
     info = []
+    if extracted_context.get('current_date'):
+        info.append(f"Current date in Europe/London: {extracted_context['current_date']}")
     prefs_ctx = get_preferences_context(prefs)
     if prefs_ctx:
         info.append("=== USER PREFERENCES ===")
@@ -741,16 +1094,24 @@ def build_context_info(extracted_context: dict, tool_name: str, prefs: dict) -> 
         info.append(extracted_context['recommended_index'])
         info.append("")
 
-    # Focus stack (multi-focus): the listings the user has focused, oldest -> newest, with the
-    # LAST marked as CURRENT FOCUS. A singular near reference (this one / 这个房源 / 这套) means
-    # the CURRENT FOCUS; 'the previous focus / 上一个聚焦的' means the one before it.
+    # The listings the user is discussing (internal key: focus_stack), oldest -> newest, the
+    # LAST marked as the one being discussed now. A singular near reference (this one /
+    # 这个房源 / 这套) means that one; "the one before" / 上一个看的 means its predecessor.
+    #
+    # USER-FACING WORDING (P1-9): the model quotes this block's vocabulary back at the reader
+    # — live, an answer said "I don't have a clear **focus stack** showing which listings are
+    # being discussed" (agenttest-t1-f3-fc). So the headings and the instruction below are
+    # written in the words a tenant would use. The dict key, the local variable and every
+    # resolver name stay `focus_stack`; only the prompt TEXT changed, and the two reference
+    # phrasings it now advertises ("the one before", 上一个看的) are both already recognised
+    # by _PREVIOUS_FOCUS_PHRASES / _PREV_FOCUS_RE, so resolution is unchanged.
     focus_stack = extracted_context.get('focus_stack') or []
     if isinstance(focus_stack, list) and focus_stack:
-        info.append("=== FOCUS STACK (listings the user focused, oldest -> newest) ===")
+        info.append("=== LISTINGS THE USER IS DISCUSSING (oldest -> newest) ===")
         for _i, _rec in enumerate(focus_stack, 1):
             if not isinstance(_rec, dict):
                 continue
-            _marker = " [CURRENT FOCUS]" if _i == len(focus_stack) else ""
+            _marker = " [DISCUSSING NOW]" if _i == len(focus_stack) else ""
             info.append(f"{_i}. {_rec.get('address') or _rec.get('name') or 'Listing'}{_marker}")
             if _rec.get('price') not in (None, '', 'N/A'):
                 info.append(f"   Price: {_rec['price']}")
@@ -759,9 +1120,11 @@ def build_context_info(extracted_context: dict, tool_name: str, prefs: dict) -> 
             if _rec.get('url'):
                 info.append(f"   Listing URL: {_rec['url']}")
         info.append("A singular near reference (this one / this listing / 这个房源 / 这套) means "
-                    "the CURRENT FOCUS (the last one above). 'the previous focus / 上一个聚焦的' "
-                    "means the one before it.")
-        info.append("=== END FOCUS STACK ===\n")
+                    "the listing marked DISCUSSING NOW (the last one above); "
+                    "'the one before' / 上一个看的 means the one listed above it. "
+                    "When you refer to this list in your reply, call it "
+                    "'the listing we were discussing' or 'the properties I showed you'.")
+        info.append("=== END LISTINGS THE USER IS DISCUSSING ===\n")
 
     if extracted_context.get('property_address'):
         info.append("=== Current Property Context ===")
@@ -1113,8 +1476,10 @@ SECURITY_DIRECTIVE = """=== SECURITY & SCOPE — non-negotiable; this OVERRIDES 
 def _make_extract_preferences_node():
     """Create the extract_preferences node."""
     def extract_preferences_node(state: AgentState) -> dict:
+        from core.constraint_updates import housing_update_text
+        current_msg = (state.get("extracted_context") or {}).get("current_message") or ""
         prefs = extract_preferences_from_message(
-            state["user_query"],
+            housing_update_text(current_msg),
             state["user_preferences"]
         )
         update = {"user_preferences": prefs}
@@ -1122,7 +1487,6 @@ def _make_extract_preferences_node():
         # criteria every turn — even when this turn does not trigger a re-search — so
         # a standalone "my budget is now £1000" overrides the old max and propagates
         # to the next search and to budget_status labelling.
-        current_msg = (state.get("extracted_context") or {}).get("current_message") or ""
         accumulated = state.get("accumulated_search_criteria") or {}
         new_accumulated = _apply_explicit_criteria_updates(accumulated, current_msg)
         if new_accumulated is not accumulated:
@@ -2776,6 +3140,7 @@ def _build_refinement_decision(previous, spec, refined) -> dict:
 # Common student/work destinations -> geocodable full addresses. Short tokens like
 # "UCL" alone often fail geocoding, so we expand them to full addresses.
 _KNOWN_DESTINATIONS = {
+    'bank station': 'Bank station, London',
     'university college london': 'University College London, Gower Street, London WC1E 6BT',
     'ucl': 'University College London, Gower Street, London WC1E 6BT',
     'london school of economics': 'London School of Economics, Houghton Street, London WC2A 2AE',
@@ -2802,7 +3167,7 @@ def _known_destination_address(text: str) -> str | None:
     query = str(text or '').lower()
     for keyword, address in _KNOWN_DESTINATIONS.items():
         if keyword.isascii():
-            if re.search(rf'(?<!\w){re.escape(keyword)}(?!\w)', query):
+            if re.search(rf'(?<![a-z0-9_]){re.escape(keyword)}(?![a-z0-9_])', query):
                 return address
         elif keyword in query:
             return address
@@ -2966,6 +3331,28 @@ def _heuristic_fallback(user_query, extracted_context, tool_registry, accumulate
     return {"tool": "web_search", "params": {"query": user_query}, "reason": "Heuristic: default web search"}
 
 
+def _area_named_in_turn(user_query, extracted_context) -> Optional[str]:
+    """The most specific curated UK place named in THIS turn (message first, then the
+    accumulated search area), else None.
+
+    Reads the raw current message rather than ``user_query``: the latter is prefixed with
+    injected memory and prior turns, whose place names must not hijack this turn. Returns
+    a canonical English name ("Shoreditch"), which the geocode ladder resolves as
+    "Shoreditch, London, UK". Never raises — a resolver failure must degrade to the
+    caller's own fallback, not kill the turn."""
+    try:
+        from core.tools.search_properties import most_specific_known_area
+    except Exception:
+        return None
+    ctx = extracted_context if isinstance(extracted_context, dict) else {}
+    msg = _current_msg_for_reference(user_query, ctx)
+    for text in (msg, ctx.get('area'), ctx.get('destination')):
+        area = most_specific_known_area(text) if text else None
+        if area:
+            return area
+    return None
+
+
 def _build_tool_params(tool_name, user_query, extracted_context, tool_registry, accumulated=None):
     """Build appropriate params for the selected tool."""
     if tool_name == 'reasoning_property':
@@ -2980,7 +3367,15 @@ def _build_tool_params(tool_name, user_query, extracted_context, tool_registry, 
             params['reply_language'] = rl
         return {"tool": "search_properties", "params": params, "reason": f"Voted: {tool_name}"}
     elif tool_name == 'search_nearby_pois':
-        addr = _resolve_target_address(user_query, extracted_context) or 'London'
+        # A POI lookup needs a point, and the bare string 'London' is not one: the geocode
+        # ladder rejects it as too generic (search_nearby_pois._is_too_generic), so the old
+        # `or 'London'` fallback turned "What's near Shoreditch in London?" into
+        # "Could not find coordinates for address: London" and zero POIs, on a message that
+        # named the area outright. Resolve the most SPECIFIC place the user actually named
+        # before falling back, and only fall back to the city when nothing was named at all.
+        addr = _resolve_target_address(user_query, extracted_context)
+        if not addr:
+            addr = _area_named_in_turn(user_query, extracted_context) or 'London'
         return {"tool": "search_nearby_pois",
                 "params": {"address": addr, "user_query": user_query, "radius": 1000},
                 "reason": f"Voted: {tool_name}"}
@@ -3585,6 +3980,12 @@ def _make_execute_tool_node(tool_registry):
         raw_data = None
         tool_success = False
         update = {}
+        # Per-tool timing for the artifact ledger (P2-4). Measured around the DISPATCH, not
+        # around the node, so post-call payload validation is not billed to the tool. A
+        # branch that dispatches nothing (reasoning_property) falls back to node time.
+        _node_started = time.monotonic()
+        _dispatch_started = None
+        _dispatch_ended = None
 
         try:
             if tool_name == 'reasoning_property':
@@ -3631,10 +4032,20 @@ def _make_execute_tool_node(tool_registry):
                     raw_data = {'property_info': observation}
 
             elif tool_name == 'search_properties':
+                # The deterministic user update already ran for this turn. Preserve its
+                # confirmed slots even if a model issues several narrower tool calls.
+                from core.constraint_updates import protect_confirmed_criteria
+                protected = protect_confirmed_criteria({}, accumulated)
+                parameter_names = {'max_travel_time': 'max_commute_time',
+                                   'soft_preferences': 'accumulated_preferences'}
+                for key, value in protected.items():
+                    if key in (accumulated.get('constraint_sources') or {}) or key in ('area', 'areas', 'commute_destination', 'destination'):
+                        parameter = parameter_names.get(key, key)
+                        if parameter != 'destination' and parameter not in ('constraint_sources', 'plans'):
+                            params[parameter] = value
                 # Raw current message so the tool can let an explicit budget/commute in
                 # THIS message override the accumulated values injected just below.
-                if not params.get('current_message'):
-                    params['current_message'] = extracted_context.get('current_message', '')
+                params['current_message'] = extracted_context.get('current_message', '')
                 # A hard filter the model invented (a plausible budget, a bedroom count,
                 # "shared") narrows the search to nothing while staying invisible to the
                 # user. Drop anything not traceable to the accumulated criteria or to this
@@ -3657,7 +4068,13 @@ def _make_execute_tool_node(tool_registry):
                 # node; re-extract here as defence-in-depth so a freshly-stated area can
                 # never be overridden by a stale injected one.
                 from core.tools.search_properties import _extract_area
-                _switched_area = _extract_area(params.get('current_message') or '')
+                from core.tools.search_properties import _extract_areas
+                _switched_areas = _extract_areas(params.get('current_message') or '')
+                _switched_area = (_switched_areas[0] if len(_switched_areas) == 1 else
+                                  None if len(_switched_areas) > 1 else
+                                  _extract_area(params.get('current_message') or ''))
+                if _switched_areas:
+                    params['area'], params['areas'] = _switched_areas[0], _switched_areas
                 if _switched_area:
                     params['area'] = _switched_area
                 # Inject accumulated criteria under the new area/commute keys.
@@ -3680,6 +4097,7 @@ def _make_execute_tool_node(tool_registry):
                     params['no_commute'] = True
                 if accumulated.get('bedrooms') is not None and not params.get('bedrooms'):
                     params['bedrooms'] = accumulated['bedrooms']
+                params['bedrooms_minimum'] = bool(params.get('bedrooms_minimum', accumulated.get('bedrooms_minimum')))
                 if accumulated.get('room_type') and not params.get('room_type'):
                     params['room_type'] = accumulated['room_type']
                 # Desired move-in date persists across turns like room_type; a date
@@ -3709,6 +4127,10 @@ def _make_execute_tool_node(tool_registry):
                 _rl = extracted_context.get('reply_language')
                 if _rl and not params.get('reply_language'):
                     params['reply_language'] = _rl
+                # A protected-but-cleared criterion arrives here as None; the strict input
+                # contract rejects an explicit null, so a cleared value is sent as absent.
+                from core.strict_schema import strip_null_args
+                params = strip_null_args(params)
 
                 invocation = ToolInvocation.create(
                     run_id=state.get("run_id", "legacy"), node_id="execute_tool",
@@ -3717,8 +4139,10 @@ def _make_execute_tool_node(tool_registry):
                 )
                 params["idempotency_key"] = invocation.idempotency_key
                 from core.agent_loop import _OffloadedValidationProvider, _offload_tool_call
+                _dispatch_started = time.monotonic()
                 result = await _offload_tool_call(
                     lambda: tool_registry.execute_tool(tool_name, **dict(params)))
+                _dispatch_ended = time.monotonic()
                 tool_success = bool(result.success)
                 # Domain-level outcomes such as ``need_clarification`` deliberately
                 # use success=False but still carry authoritative structured data.
@@ -3784,6 +4208,10 @@ def _make_execute_tool_node(tool_registry):
                     _inv_key = None
                 if not _policy_allowed:
                     raise PermissionError("memory write denied by authorization policy")
+                # Strict input models: an unset optional parameter is absent, never null
+                # (same rule as the fc dispatch; A-02 / B-06 class).
+                from core.strict_schema import strip_null_args
+                params = strip_null_args(params)
                 invocation = ToolInvocation.create(
                     run_id=state.get("run_id", "legacy"), node_id="execute_tool",
                     tool=tool_name, params=params, version=getattr(tool, "version", "1"),
@@ -3794,8 +4222,10 @@ def _make_execute_tool_node(tool_registry):
                     # whether the write lands.
                     _note_legacy_write_dispatch(_inv_key)
                 from core.agent_loop import _offload_tool_call
+                _dispatch_started = time.monotonic()
                 result = await _offload_tool_call(
                     lambda: tool_registry.execute_tool(tool_name, **dict(params)))
+                _dispatch_ended = time.monotonic()
                 tool_success = bool(result.success)
                 raw_data = result.data if result.success else {"success": False, "error": result.error}
 
@@ -3821,10 +4251,13 @@ def _make_execute_tool_node(tool_registry):
         # the answer was correctly forced to say it could not verify a commute. Keep the
         # same raw per-turn ledger used by fc_loop so the formatter can render the search
         # result regardless of which auxiliary tool ran last.
+        _art_started = _dispatch_started if _dispatch_started is not None else _node_started
+        _art_ended = _dispatch_ended if _dispatch_ended is not None else time.monotonic()
         artifacts = list(state.get("tool_artifacts") or [])
         artifacts.append(_legacy_tool_artifact(
             int(state.get("loop_turn", 0)), tool_name, raw_data,
             _params_digest(tool_name, params), success=tool_success,
+            started_at=_art_started, ended_at=_art_ended,
         ))
         update["tool_artifacts"] = artifacts
 
@@ -4063,7 +4496,10 @@ def _params_digest(tool_name: str, params: dict) -> str:
 
 def _legacy_tool_artifact(turn: int, tool: str, raw_data: Any,
                           params_digest: str = "", success: bool = True,
-                          error: Optional[str] = None) -> dict:
+                          error: Optional[str] = None, *,
+                          started_at: Optional[float] = None,
+                          ended_at: Optional[float] = None,
+                          elapsed_ms: Optional[float] = None) -> dict:
     """Create the shared artifact shape without importing the fc-loop module.
 
     ``langgraph_agent`` is also imported by the fc-loop implementation, so importing
@@ -4071,7 +4507,7 @@ def _legacy_tool_artifact(turn: int, tool: str, raw_data: Any,
     The legacy executor needs only the stable base fields; optional budget markers are
     added by the fc-loop executor itself.
     """
-    return {
+    out = {
         "turn": int(turn),
         "tool": tool,
         "raw_data": raw_data,
@@ -4079,6 +4515,23 @@ def _legacy_tool_artifact(turn: int, tool: str, raw_data: Any,
         "success": bool(success),
         "error": error,
     }
+    # Timings, in the SAME field the fc-loop's _artifact writes, so app.py's
+    # _tool_latency_from_artifacts folds both arches with no arch-specific branch. Legacy
+    # used to omit them entirely: every legacy canary record shipped
+    # tool_latency {p50_ms: null, max_ms: null} while tool_ledger_status said "complete",
+    # so the v3 tool-overhead instrument produced nothing at all on the control arm.
+    # started_at/ended_at are time.monotonic() instants (never wall clock: a clock step
+    # must not be able to make a duration negative), kept alongside elapsed_ms because a
+    # duration alone cannot be checked for overlap between two artifacts.
+    if started_at is not None:
+        out["started_at"] = float(started_at)
+    if ended_at is not None:
+        out["ended_at"] = float(ended_at)
+    if elapsed_ms is None and started_at is not None and ended_at is not None:
+        elapsed_ms = (float(ended_at) - float(started_at)) * 1000.0
+    if elapsed_ms is not None:
+        out["elapsed_ms"] = max(0, int(round(float(elapsed_ms))))
+    return out
 
 
 # Which loopable INTENT group is the router's view of a user-visible DIMENSION. Three of the
@@ -4652,6 +5105,81 @@ def _make_critic_node():
                 reply_language=reply_language,
             )
 
+        # ── An EMPTY answer is a hard stop, never a shippable turn (P1-7) ──────────
+        # Live, `agenttest-t2-a5-fc` returned HTTP 200 with a ZERO-character message after
+        # the critic had itself recorded `issues=['empty_answer']`, and it shipped because
+        # a turn where retrieval was not expected is graded `grounded=True` regardless of
+        # whether the model said anything at all — `grounded` answers a different question
+        # from `answered`. Reproduced on a second turn with the same query, on the arch
+        # holding the public edge. One bounded regeneration, then an explicit grounded
+        # fallback; a zero-length 200 is the one outcome that is always wrong.
+        _empty_lang = None
+        if not str(final or "").strip():
+            _ec = state.get("extracted_context") or {}
+            _empty_lang = _reply_language_from_ctx(
+                _ec, _ec.get("current_message") or _current_message(
+                    state.get("user_query") or ""))
+            logger.warning(
+                "critic.empty_answer issues=%s attempts=%s regen=%s",
+                getattr(outcome.verdict, "issues", None),
+                attempts_before + outcome.attempts, _regen is not None,
+                extra={"node": "critic", "tool": tool_name},
+            )
+            retried = ""
+            if _regen is not None:
+                try:
+                    retried = await _regenerate(
+                        "Your previous reply was EMPTY. The user received nothing. Answer "
+                        "their question now in their own language, using only the data "
+                        "above; if the data does not support an answer, say so plainly and "
+                        "state what you would need. Never return an empty reply."
+                    )
+                except Exception:
+                    retried = ""
+                update["critic_attempts"] = attempts_before + outcome.attempts + 1
+            if retried and retried.strip():
+                final = retried
+                logger.info("critic.empty_answer_recovered chars=%d", len(final),
+                            extra={"node": "critic", "tool": tool_name})
+            else:
+                if state.get("tool_artifacts"):
+                    from core.agent_loop import _artifact_grounded_fallback_answer
+                    final = _artifact_grounded_fallback_answer(
+                        state, reason="no_reliable_numbers")
+                else:
+                    final = no_reliable_data_message(_empty_lang)
+                if not str(final or "").strip():
+                    final = no_reliable_data_message(_empty_lang)
+                logger.info("critic.empty_answer_fallback chars=%d", len(final or ""),
+                            extra={"node": "critic", "tool": tool_name})
+
+        # ── A still-ungrounded regeneration ships MARKED, not silently (P1-8) ──────
+        # `stage=regenerated grounded=False issues=['unsupported_external_numbers']` shipped
+        # as-is on both architectures, carrying only the generic double-check caveat. The
+        # figures the critic could not tie to this turn's evidence are the whole finding, so
+        # they are labelled as unverified in the answer the user actually reads.
+        if (retrieval_expected
+                and str(final or "").strip()
+                and not getattr(outcome.verdict, "grounded", False)
+                and "unsupported_external_numbers" in list(
+                    getattr(outcome.verdict, "issues", None) or [])):
+            _ec = state.get("extracted_context") or {}
+            _lang = _empty_lang or _reply_language_from_ctx(
+                _ec, _ec.get("current_message") or _current_message(
+                    state.get("user_query") or ""))
+            _note = (
+                "未核实：以上数字中，凡未来自本轮工具结果的部分均为未经确认的估算，请自行核实后再使用。"
+                if str(_lang or "").lower().startswith("zh") else
+                "Unverified: any figure above that does not come from this turn's tool "
+                "results is an unconfirmed estimate — please check it before relying on it."
+            )
+            if _note not in final:
+                final = f"{final.rstrip()}\n\n{_note}"
+                logger.info(
+                    "critic.unsupported_numbers_marked_unverified",
+                    extra={"node": "critic", "tool": tool_name},
+                )
+
         if retrieval_expected:
             retrieved_evidence = []
             if state.get("tool_raw_data") is not None:
@@ -4672,8 +5200,18 @@ def _make_critic_node():
                         and artifact.get("success", True) is not False):
                     retrieved_evidence.append(artifact.get("raw_data"))
             ec = state.get("extracted_context") or {}
+            # The retrieval that FAILED this turn is named in the answer (R3-04).
+            _lookup_names = {"web_search": "web search", "search_properties": "listing search",
+                             "get_transport_info": "TfL journey", "check_safety": "safety data"}
+            failed_lookups = [
+                _lookup_names.get(str(a.get("tool")), str(a.get("tool") or "").replace("_", " "))
+                for a in artifacts
+                if _is_retrieval_tool(a.get("tool")) and (
+                    a.get("success") is False
+                    or (isinstance(a.get("raw_data"), dict) and a["raw_data"].get("success") is False))]
             final = enforce_no_evidence_numeric_contract(
                 final,
+                failed_lookups=failed_lookups,
                 retrieved_evidence=retrieved_evidence,
                 user_message=ec.get("current_message") or _current_message(
                     state.get("user_query") or ""),
@@ -4693,8 +5231,9 @@ def _make_critic_node():
 # (normalizeCriteria in unified-ui.html reads exactly these, canonical + legacy names).
 # Internal bookkeeping such as criteria_gate_shown stays server-side.
 _FRONTEND_CRITERIA_KEYS = (
-    'area', 'areas', 'commute_destination', 'no_commute', 'bedrooms',
+    'area', 'areas', 'commute_destination', 'no_commute', 'bedrooms', 'bedrooms_minimum',
     'budget_period', 'room_type', 'move_in_date', 'max_budget', 'max_travel_time',
+    'destination', 'monthly_total_budget', 'office_days_per_week', 'max_changes',
 )
 
 
@@ -4792,28 +5331,49 @@ def _structured_search_tool_data(search_payload, prefs, commute_evidence=None):
                      for state in validation.get("excluded") or []])
     panel_recs = recs
     if not panel_recs:
+        # In-budget listings whose commute (or another condition) could not be verified
+        # come FIRST. They used to be shown only when there was no over-budget alternative,
+        # so "1-bed in Islington under £2,600" lost King Square at £1,800 and St Clements
+        # Street at £2,500 — both unverified, both in budget — and the panel, and the ledger
+        # app.py rebuilds from it, showed only a £2,701 alternative under "no listing
+        # satisfies" (2026-10-19 B-04).
+        unverified_rows = apply_preference_filter([dict(row) for row in unverified], prefs)
+        for row in unverified_rows:
+            row.setdefault("candidate_status", "unknown")
+            row.setdefault("status_reason", "required conditions are not fully verified")
         # Near-misses stay visible as explicitly excluded alternatives; they never join
         # the deterministic eligible collection. `similar_properties` is the same class of
         # row from the closest-recall fallback (status `no_exact_match_but_similar`).
-        panel_recs = apply_preference_filter(
+        alternatives = apply_preference_filter(
             search_payload.get("over_budget_alternatives")
             or search_payload.get("similar_properties") or [], prefs)
-        for row in panel_recs:
+        for row in alternatives:
             row.setdefault("candidate_status", "excluded")
             row.setdefault("status_reason",
                            "similar_suggestion"
                            if row.get("match_type") == "similar_suggestion"
                            else "over_budget")
-    if not panel_recs and unverified:
-        panel_recs = apply_preference_filter([dict(row) for row in unverified], prefs)
-        for row in panel_recs:
-            row.setdefault("candidate_status", "unknown")
-            row.setdefault("status_reason", "required conditions are not fully verified")
+        from core.candidate_validation import candidate_key as _key
+        seen_keys = {_key(row) for row in unverified_rows}
+        panel_recs = unverified_rows + [row for row in alternatives
+                                        if _key(row) not in seen_keys]
     if not panel_recs and excluded:
         panel_recs = apply_preference_filter([dict(row) for row in excluded], prefs)
         for row in panel_recs:
             row.setdefault("candidate_status", "excluded")
             row.setdefault("status_reason", "does not meet a declared hard condition")
+    from core.candidate_validation import candidate_key
+    states_by_key = {s['candidate_key']: s for s in validation.get('statuses') or [] if s.get('candidate_key')}
+    panel_recs = [dict(row) for row in panel_recs]
+    for row in panel_recs:
+        status = states_by_key.get(candidate_key(row))
+        if status:
+            row['qualification'] = {
+                'status': status['status'], 'reasons': status.get('reasons') or [],
+                'unknown_reasons': status.get('unknown_reasons') or [],
+                'constraints': validation.get('constraints') or {}, 'source': 'structured_listing',
+            }
+        row['budget_basis'] = (validation.get('constraints') or {}).get('max_budget_monthly')
     tool_data = {
         "recommendations": panel_recs,
         "eligible_recommendations": recs,
@@ -4825,6 +5385,12 @@ def _structured_search_tool_data(search_payload, prefs, commute_evidence=None):
         "unverified_candidates": unverified,
         "commute_evidence": search_payload.get("commute_evidence", []),
     }
+    # Keep source health distinct from candidate eligibility through every output path.
+    for key in ('source_status', 'source_errors', 'source_message', 'retrieval_complete',
+                'retrieval_outcome', 'data_source', 'partial', 'area_status', 'searched_areas',
+                'incomplete_areas', 'unsearched_areas'):
+        if key in search_payload:
+            tool_data[key] = search_payload[key]
     return search_payload, tool_data
 
 
@@ -4873,6 +5439,8 @@ def _make_format_output_node():
         memory_language = _reply_language_from_ctx(
             ec, ec.get("current_message") or _current_message(state.get("user_query") or ""))
         has_other_result = tool_name != "remember" or is_loop_synthesis
+        from core.constraint_updates import independent_memory_task
+        has_other_result = has_other_result or independent_memory_task(ec.get('current_message') or state.get('user_query') or '')
 
         def _apply_memory_contract(text: str) -> str:
             return compose_memory_contract_response(
@@ -4880,7 +5448,7 @@ def _make_format_output_node():
                 preserve_content=has_other_result)
 
         if tool_name == "remember" and not is_loop_synthesis:
-            response = _apply_memory_contract("")
+            response = _apply_memory_contract(response if has_other_result else "")
             return {"final_response": _sanitize_final_response(response),
                     "response_type": "answer", "tool_data": {}}
 
@@ -4942,8 +5510,7 @@ def _make_format_output_node():
                 # ('missing_area') from the soft recommended-criteria gate ('soft_criteria').
                 if raw_data.get('clarification_kind') is not None:
                     tool_data['clarification_kind'] = raw_data.get('clarification_kind')
-            elif (raw_data.get('status') in _SEARCH_RESULT_STATUSES
-                    and _search_payload_has_candidates(raw_data)):
+            elif raw_data.get('status') in (_SEARCH_RESULT_STATUSES | {'no_results'}):
                 raw_data, tool_data = _structured_search_tool_data(
                     raw_data, prefs, commute_evidence=state.get('commute_evidence') or [])
                 recs = tool_data['eligible_recommendations']
@@ -4956,7 +5523,10 @@ def _make_format_output_node():
                 validation = raw_data.get('candidate_validation') or {}
                 requires_status = bool(validation.get('excluded') or validation.get('unknown')
                                         or (validation.get('constraints') or {}).get('max_commute_minutes'))
-                if (raw_data.get('status') == 'no_exact_match_but_similar'
+                response_type = 'search'
+                if raw_data.get('status') == 'no_results':
+                    response = raw_data.get('message') or 'No matches in the retrieved data.'
+                elif (raw_data.get('status') == 'no_exact_match_but_similar'
                         and not raw_data.get('over_budget_alternatives')):
                     # A similar-recall row failed no stated constraint (the exact-match pool
                     # was empty), so render its own honest lead and keep its price rather
@@ -5178,12 +5748,17 @@ def _make_task_worker_node(tool_registry):
                 _note_legacy_write_dispatch(f"wave:{run_id}:{tid}:{idx}")
         except Exception:
             pass
+        _started = time.monotonic()
+        _ended = None
+        from core.strict_schema import strip_null_args
+        params = strip_null_args(params)   # absent, never null (A-02 / B-06 class)
         try:
             from core.agent_loop import _offload_tool_call
             result = await asyncio.wait_for(
                 _offload_tool_call(
                     lambda: tool_registry.execute_tool(tool_name, **dict(params))),
                 timeout)
+            _ended = time.monotonic()
             if result.success:
                 obs = (result.data.get('results', json.dumps(result.data, ensure_ascii=False))
                        if isinstance(result.data, dict) else str(result.data))
@@ -5194,9 +5769,18 @@ def _make_task_worker_node(tool_registry):
             obs, raw = f"Error: {tool_name} timed out after {timeout}s", None
         except Exception:
             obs, raw = f"Error executing {tool_name}", None
+        if _ended is None:
+            _ended = time.monotonic()
+        # Same monotonic timing fields the execute_tool artifact carries. The wave writes
+        # task_results, NOT tool_artifacts (tool_artifacts has no reducer, so parallel Send
+        # workers cannot append to it), which is why a turn could report tool_batches=1 with
+        # no tool_latency at all. Recording them here lets the turn summariser fold a wave
+        # without changing what the critic/grounding readers see in the artifact ledger.
         return {"task_results": [{
             "id": tid, "index": idx, "tool": tool_name, "params": params,
             "obs": obs if isinstance(obs, str) else str(obs), "raw": raw, "run_id": run_id,
+            "started_at": _started, "ended_at": _ended,
+            "elapsed_ms": max(0, int(round((_ended - _started) * 1000))),
         }]}
     return task_worker_node
 

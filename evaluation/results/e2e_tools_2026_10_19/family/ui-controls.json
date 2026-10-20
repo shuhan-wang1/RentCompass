@@ -1,0 +1,617 @@
+{
+  "menuEnter": {
+    "active": {
+      "tag": "BUTTON",
+      "id": "menuToggle",
+      "text": ""
+    },
+    "menu": "<button class=\"menu-toggle\" id=\"menuToggle\" aria-label=\"Menu\" title=\"Menu\">\n                <svg class=\"icon\" viewBox=\"0 0 24 24\"><line x1=\"3\" y1=\"12\" x2=\"21\" y2=\"12\"></line><line x1=\"3\" y1=\"6\" x2=\"21\" y2=\"6\"></line><line x1=\"3\" y1=\"18\" x2=\"21\" y2=\"18\"></line></svg>\n            </button>",
+    "criteria": "<div class=\"criteria-header\" id=\"criteriaHeader\" role=\"button\" tabindex=\"0\" aria-expanded=\"false\">\n                        <span class=\"criteria-title\">\n                            <svg class=\"icon icon-sm\" viewBox=\"0 0 24 24\"><circle cx=\"11\" cy=\"11\" r=\"8\"></circle><line x1=\"21\" y1=\"21\" x2=\"16.65\" y2=\"16.65\"></line></svg>\n                            <span data-i18n=\"criteria_title\">Search criteria</span>\n                        </span>\n                        <svg class=\"icon icon-sm criteria-chevron\" viewBox=\"0 0 24 24\"><polyline points=\"6 9 12 15 18 9\"></polyline></svg>\n                    </div>",
+    "dialog": [],
+    "width": 390,
+    "scrollWidth": 390,
+    "body": "RentCompass\nEN\n中文\nCONVERSATIONS\nNew\nNo conversations yet. Start a new chat.\nG\nGuest\nAI Assistant\n\nLondon Rental Intelligence\n\nALEX\nHello! I'm Alex. I can help you find apartments in London.\n\nTry asking me:\n\"Find a 1-bed near King's Cross under £2000\"\n\"What is the vibe like in Hackney?\"\n\"Show me flats with a 20min commute to UCL\"\nNear UCL\nSafe areas\nRent stats\nListings\nSearch\nSaved\n0\nSearch criteria\nNo properties found\n\nTry adjusting your budget or location."
+  },
+  "menuEscape": {
+    "active": {
+      "tag": "BUTTON",
+      "id": "menuToggle",
+      "text": ""
+    },
+    "menu": "<button class=\"menu-toggle\" id=\"menuToggle\" aria-label=\"Menu\" title=\"Menu\">\n                <svg class=\"icon\" viewBox=\"0 0 24 24\"><line x1=\"3\" y1=\"12\" x2=\"21\" y2=\"12\"></line><line x1=\"3\" y1=\"6\" x2=\"21\" y2=\"6\"></line><line x1=\"3\" y1=\"18\" x2=\"21\" y2=\"18\"></line></svg>\n            </button>",
+    "criteria": "<div class=\"criteria-header\" id=\"criteriaHeader\" role=\"button\" tabindex=\"0\" aria-expanded=\"false\">\n                        <span class=\"criteria-title\">\n                            <svg class=\"icon icon-sm\" viewBox=\"0 0 24 24\"><circle cx=\"11\" cy=\"11\" r=\"8\"></circle><line x1=\"21\" y1=\"21\" x2=\"16.65\" y2=\"16.65\"></line></svg>\n                            <span data-i18n=\"criteria_title\">Search criteria</span>\n                        </span>\n                        <svg class=\"icon icon-sm criteria-chevron\" viewBox=\"0 0 24 24\"><polyline points=\"6 9 12 15 18 9\"></polyline></svg>\n                    </div>",
+    "dialog": [],
+    "width": 390,
+    "scrollWidth": 390,
+    "body": "RentCompass\nEN\n中文\nCONVERSATIONS\nNew\nNo conversations yet. Start a new chat.\nG\nGuest\nAI Assistant\n\nLondon Rental Intelligence\n\nALEX\nHello! I'm Alex. I can help you find apartments in London.\n\nTry asking me:\n\"Find a 1-bed near King's Cross under £2000\"\n\"What is the vibe like in Hackney?\"\n\"Show me flats with a 20min commute to UCL\"\nNear UCL\nSafe areas\nRent stats\nListings\nSearch\nSaved\n0\nSearch criteria\nNo properties found\n\nTry adjusting your budget or location."
+  },
+  "criteriaEnter": {
+    "active": {
+      "tag": "DIV",
+      "id": "criteriaHeader",
+      "text": "Search criteria"
+    },
+    "menu": "<button class=\"menu-toggle\" id=\"menuToggle\" aria-label=\"Menu\" title=\"Menu\">\n                <svg class=\"icon\" viewBox=\"0 0 24 24\"><line x1=\"3\" y1=\"12\" x2=\"21\" y2=\"12\"></line><line x1=\"3\" y1=\"6\" x2=\"21\" y2=\"6\"></line><line x1=\"3\" y1=\"18\" x2=\"21\" y2=\"18\"></line></svg>\n            </button>",
+    "criteria": "<div class=\"criteria-header\" id=\"criteriaHeader\" role=\"button\" tabindex=\"0\" aria-expanded=\"true\">\n                        <span class=\"criteria-title\">\n                            <svg class=\"icon icon-sm\" viewBox=\"0 0 24 24\"><circle cx=\"11\" cy=\"11\" r=\"8\"></circle><line x1=\"21\" y1=\"21\" x2=\"16.65\" y2=\"16.65\"></line></svg>\n                            <span data-i18n=\"criteria_title\">Search criteria</span>\n                        </span>\n                        <svg class=\"icon icon-sm criteria-chevron\" viewBox=\"0 0 24 24\"><polyline points=\"6 9 12 15 18 9\"></polyline></svg>\n                    </div>",
+    "dialog": [],
+    "width": 390,
+    "scrollWidth": 390,
+    "body": "RentCompass\nEN\n中文\nCONVERSATIONS\nNew\nNo conversations yet. Start a new chat.\nG\nGuest\nAI Assistant\n\nLondon Rental Intelligence\n\nALEX\nHello! I'm Alex. I can help you find apartments in London.\n\nTry asking me:\n\"Find a 1-bed near King's Cross under £2000\"\n\"What is the vibe like in Hackney?\"\n\"Show me flats with a 20min commute to UCL\"\nNear UCL\nSafe areas\nRent stats\nListings\nSearch\nSaved\n0\nSearch criteria\nArea\n*\nBudget\nper month\nper week\nBedrooms\nAny\nStudio\n1\n2\n3\n4\n5\n6\nAt least this many bedrooms\nRoom type\nAny\nWhole property\nStudio\nEn-suite room\nShared room\nCommute to\nMax commute (min)\nI don't commute\nMove-in date\nYYYY-MM-DD\nSearch\nNo properties found\n\nTry adjusting your budget or location."
+  },
+  "criteria_controls": [
+    {
+      "tag": "BUTTON",
+      "id": "menuToggle",
+      "type": "submit",
+      "text": "",
+      "placeholder": null,
+      "aria": "Menu",
+      "label": [],
+      "box": {
+        "x": 16,
+        "y": 10.5,
+        "width": 38,
+        "height": 38
+      }
+    },
+    {
+      "tag": "A",
+      "id": "",
+      "type": "",
+      "text": "RentCompass",
+      "placeholder": null,
+      "aria": "RentCompass",
+      "label": [],
+      "box": {
+        "x": 66,
+        "y": 14.5,
+        "width": 175.328125,
+        "height": 30
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "type": "submit",
+      "text": "EN",
+      "placeholder": null,
+      "aria": null,
+      "label": [],
+      "box": {
+        "x": 297.34375,
+        "y": 18.5,
+        "width": 38.25,
+        "height": 22
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "type": "submit",
+      "text": "中文",
+      "placeholder": null,
+      "aria": null,
+      "label": [],
+      "box": {
+        "x": 335.59375,
+        "y": 18.5,
+        "width": 34.40625,
+        "height": 22
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "newChatBtn",
+      "type": "submit",
+      "text": "New",
+      "placeholder": null,
+      "aria": null,
+      "label": [],
+      "box": {
+        "x": -88.28125,
+        "y": 76,
+        "width": 71.28125,
+        "height": 28
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "userMenuBtn",
+      "type": "submit",
+      "text": "G\nGuest",
+      "placeholder": null,
+      "aria": null,
+      "label": [],
+      "box": {
+        "x": -270,
+        "y": 786,
+        "width": 259,
+        "height": 48
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "type": "submit",
+      "text": "Near UCL",
+      "placeholder": null,
+      "aria": null,
+      "label": [],
+      "box": {
+        "x": 24,
+        "y": 441.203125,
+        "width": 82.3125,
+        "height": 28
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "type": "submit",
+      "text": "Safe areas",
+      "placeholder": null,
+      "aria": null,
+      "label": [],
+      "box": {
+        "x": 114.3125,
+        "y": 441.203125,
+        "width": 89.40625,
+        "height": 28
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "type": "submit",
+      "text": "Rent stats",
+      "placeholder": null,
+      "aria": null,
+      "label": [],
+      "box": {
+        "x": 211.71875,
+        "y": 441.203125,
+        "width": 86.578125,
+        "height": 28
+      }
+    },
+    {
+      "tag": "TEXTAREA",
+      "id": "chatInput",
+      "type": "textarea",
+      "text": "",
+      "placeholder": "Message Alex...",
+      "aria": null,
+      "label": [],
+      "box": {
+        "x": 37,
+        "y": 494.203125,
+        "width": 270,
+        "height": 38.1875
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "sendBtn",
+      "type": "submit",
+      "text": "",
+      "placeholder": null,
+      "aria": "Send",
+      "label": [],
+      "box": {
+        "x": 317,
+        "y": 494.390625,
+        "width": 36,
+        "height": 36
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "btn-results",
+      "type": "submit",
+      "text": "Search",
+      "placeholder": null,
+      "aria": null,
+      "label": [],
+      "box": {
+        "x": 146.078125,
+        "y": 585.390625,
+        "width": 104.625,
+        "height": 28
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "btn-favorites",
+      "type": "submit",
+      "text": "Saved\n0",
+      "placeholder": null,
+      "aria": null,
+      "label": [],
+      "box": {
+        "x": 252.703125,
+        "y": 585.390625,
+        "width": 117.296875,
+        "height": 28
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "type": "text",
+      "text": "",
+      "placeholder": "e.g. Camden — Enter to add",
+      "aria": null,
+      "label": [],
+      "box": {
+        "x": 33,
+        "y": 716.5,
+        "width": 324,
+        "height": 34
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "type": "number",
+      "text": "",
+      "placeholder": "e.g. 1500",
+      "aria": null,
+      "label": [
+        "Budget\nper month\nper week"
+      ],
+      "box": {
+        "x": 33,
+        "y": 784,
+        "width": 210,
+        "height": 36
+      }
+    },
+    {
+      "tag": "SELECT",
+      "id": "",
+      "type": "select-one",
+      "text": "per month\nper week",
+      "placeholder": null,
+      "aria": null,
+      "label": [],
+      "box": {
+        "x": 249,
+        "y": 784,
+        "width": 108,
+        "height": 36
+      }
+    },
+    {
+      "tag": "SELECT",
+      "id": "",
+      "type": "select-one",
+      "text": "Any\nStudio\n1\n2\n3\n4\n5\n6",
+      "placeholder": null,
+      "aria": null,
+      "label": [
+        "Bedrooms\nAny\nStudio\n1\n2\n3\n4\n5\n6\nAt least this many bedrooms"
+      ],
+      "box": {
+        "x": 33,
+        "y": 853.5,
+        "width": 324,
+        "height": 36
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "type": "checkbox",
+      "text": "",
+      "placeholder": "",
+      "aria": null,
+      "label": [
+        "At least this many bedrooms"
+      ],
+      "box": {
+        "x": 33,
+        "y": 896.5,
+        "width": 13,
+        "height": 13
+      }
+    },
+    {
+      "tag": "SELECT",
+      "id": "",
+      "type": "select-one",
+      "text": "Any\nWhole property\nStudio\nEn-suite room\nShared room",
+      "placeholder": null,
+      "aria": null,
+      "label": [
+        "Room type\nAny\nWhole property\nStudio\nEn-suite room\nShared room"
+      ],
+      "box": {
+        "x": 33,
+        "y": 949,
+        "width": 324,
+        "height": 36
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "type": "text",
+      "text": "",
+      "placeholder": "e.g. UCL — optional",
+      "aria": null,
+      "label": [
+        "Commute to"
+      ],
+      "box": {
+        "x": 33,
+        "y": 1018.5,
+        "width": 324,
+        "height": 34
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "type": "number",
+      "text": "",
+      "placeholder": "e.g. 40",
+      "aria": null,
+      "label": [
+        "Max commute (min)"
+      ],
+      "box": {
+        "x": 33,
+        "y": 1086,
+        "width": 324,
+        "height": 34
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "type": "checkbox",
+      "text": "",
+      "placeholder": "",
+      "aria": null,
+      "label": [
+        "I don't commute"
+      ],
+      "box": {
+        "x": 33,
+        "y": 1134.1875,
+        "width": 16,
+        "height": 16
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "type": "date",
+      "text": "",
+      "placeholder": "",
+      "aria": null,
+      "label": [
+        "Move-in date\nYYYY-MM-DD"
+      ],
+      "box": {
+        "x": 33,
+        "y": 1185.890625,
+        "width": 324,
+        "height": 36
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "type": "submit",
+      "text": "Search",
+      "placeholder": null,
+      "aria": null,
+      "label": [],
+      "box": {
+        "x": 33,
+        "y": 1235.890625,
+        "width": 324,
+        "height": 37
+      }
+    }
+  ],
+  "keyboard_form": [
+    {
+      "tag": "INPUT",
+      "id": "",
+      "text": "",
+      "placeholder": "e.g. Camden — Enter to add",
+      "aria": null,
+      "box": {
+        "x": 33,
+        "y": 716.5,
+        "width": 324,
+        "height": 34
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "text": "",
+      "placeholder": "e.g. 1500",
+      "aria": null,
+      "box": {
+        "x": 33,
+        "y": 784,
+        "width": 210,
+        "height": 36
+      }
+    },
+    {
+      "tag": "SELECT",
+      "id": "",
+      "text": "per month\nper week",
+      "placeholder": null,
+      "aria": null,
+      "box": {
+        "x": 249,
+        "y": 784,
+        "width": 108,
+        "height": 36
+      }
+    },
+    {
+      "tag": "SELECT",
+      "id": "",
+      "text": "Any\nStudio\n1\n2\n3\n4\n5\n6",
+      "placeholder": null,
+      "aria": null,
+      "box": {
+        "x": 33,
+        "y": 403.5,
+        "width": 324,
+        "height": 36
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "text": "",
+      "placeholder": "",
+      "aria": null,
+      "box": {
+        "x": 33,
+        "y": 446.5,
+        "width": 13,
+        "height": 13
+      }
+    },
+    {
+      "tag": "SELECT",
+      "id": "",
+      "text": "Any\nWhole property\nStudio\nEn-suite room\nShared room",
+      "placeholder": null,
+      "aria": null,
+      "box": {
+        "x": 33,
+        "y": 499,
+        "width": 324,
+        "height": 36
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "text": "",
+      "placeholder": "e.g. UCL — optional",
+      "aria": null,
+      "box": {
+        "x": 33,
+        "y": 568.5,
+        "width": 324,
+        "height": 34
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "text": "",
+      "placeholder": "e.g. 40",
+      "aria": null,
+      "box": {
+        "x": 33,
+        "y": 636,
+        "width": 324,
+        "height": 34
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "text": "",
+      "placeholder": "",
+      "aria": null,
+      "box": {
+        "x": 33,
+        "y": 684.1875,
+        "width": 16,
+        "height": 16
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "text": "",
+      "placeholder": "",
+      "aria": null,
+      "box": {
+        "x": 33,
+        "y": 735.890625,
+        "width": 324,
+        "height": 36
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "text": "",
+      "placeholder": "",
+      "aria": null,
+      "box": {
+        "x": 33,
+        "y": 735.890625,
+        "width": 324,
+        "height": 36
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "text": "",
+      "placeholder": "",
+      "aria": null,
+      "box": {
+        "x": 33,
+        "y": 735.890625,
+        "width": 324,
+        "height": 36
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "text": "",
+      "placeholder": "",
+      "aria": null,
+      "box": {
+        "x": 33,
+        "y": 735.890625,
+        "width": 324,
+        "height": 36
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "text": "Search",
+      "placeholder": null,
+      "aria": null,
+      "box": {
+        "x": 33,
+        "y": 785.890625,
+        "width": 324,
+        "height": 37
+      }
+    },
+    {
+      "tag": "BODY",
+      "id": "",
+      "text": "RentCompass\nEN\n中文\nCONVERSATIONS\nNew\nNo conversations yet. Start a new chat.\nG\nGuest\nAI Assistant\n\nLondon Rental Intelligence\n\nALEX\nHello! I'm Alex. I can help you find apartments in London.\n\nTry asking me:\n\"Find a 1-bed near King's Cross under £2000\"\n\"What is the vibe like in Hackney?\"\n\"Show me flats with a 20min commute to UCL\"\nNear UCL\nSafe areas\nRent stats\nListings\nSearch\nSaved\n0\nSearch criteria\nArea\n*\nBudget\nper month\nper week\nBedrooms\nAny\nStudio\n1\n2\n3\n4\n5\n6\nAt least this many bedrooms\nRoom type\nAny\nWhole property\nStudio\nEn-suite room\nShared room\nCommute to\nMax commute (min)\nI don't commute\nMove-in date\nYYYY-MM-DD\nSearch\nNo properties found\n\nTry adjusting your budget or location.",
+      "placeholder": null,
+      "aria": null,
+      "box": {
+        "x": 0,
+        "y": -450,
+        "width": 390,
+        "height": 844
+      }
+    }
+  ],
+  "chat_requests": []
+}

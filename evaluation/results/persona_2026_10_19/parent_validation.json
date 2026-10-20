@@ -1,0 +1,177 @@
+{
+  "review": "parent verified from browser-captured public responses; no additional model calls",
+  "checks": [
+    {
+      "issue": "STU-04",
+      "turn": 4,
+      "check": "explicit commute cancellation leaves 45-minute limit",
+      "observed": {
+        "area": "Stratford",
+        "areas": [
+          "Stratford",
+          "Islington"
+        ],
+        "bedrooms": null,
+        "budget_period": "month",
+        "commute_destination": "Gower Street, London WC1E 6BT",
+        "destination": "Gower Street, London WC1E 6BT",
+        "max_budget": 1000,
+        "max_travel_time": 45,
+        "move_in_date": "2026-10-25",
+        "no_commute": false,
+        "property_features": [],
+        "room_type": "shared",
+        "soft_preferences": []
+      },
+      "confirmed": true
+    },
+    {
+      "issue": "STU-04",
+      "turn": 15,
+      "check": "no move-in-date request receives today as move_in_date",
+      "observed": {
+        "area": "Fallowfield",
+        "areas": [
+          "Fallowfield"
+        ],
+        "bedrooms": null,
+        "budget_period": "month",
+        "commute_destination": null,
+        "destination": "Fallowfield",
+        "max_budget": 780,
+        "max_travel_time": null,
+        "move_in_date": "2026-10-19",
+        "no_commute": true,
+        "property_features": [],
+        "room_type": "shared",
+        "soft_preferences": []
+      },
+      "confirmed": true
+    },
+    {
+      "issue": "STU-05",
+      "turn": 16,
+      "check": "comparison response clears visible structured criteria",
+      "observed": {},
+      "confirmed": true
+    },
+    {
+      "issue": "STU-03",
+      "turn": 18,
+      "check": "Beverly body URL differs from same-response recommendation URL",
+      "body_contains_wrong_id": true,
+      "recommendation_url": [
+        "https://www.onthemarket.com/details/19909957/"
+      ],
+      "confirmed": true
+    },
+    {
+      "issue": "STU-06",
+      "turn": 1,
+      "check": "first UI request does not contain the unexplained 2027 date",
+      "confirmed": true,
+      "limitation": "Does not identify origin or establish any cross-user leakage."
+    },
+    {
+      "issue": "PRO-01",
+      "turn": 1,
+      "check": "whole one-bedroom, not a room or studio receives 0/studio",
+      "observed": {
+        "area": "Stratford",
+        "areas": [
+          "Stratford",
+          "Whitechapel",
+          "Canary Wharf"
+        ],
+        "bedrooms": 0,
+        "budget_period": "month",
+        "commute_destination": "Liverpool Street",
+        "destination": "Liverpool Street",
+        "max_budget": 2000,
+        "max_travel_time": 35,
+        "move_in_date": null,
+        "no_commute": false,
+        "property_features": [],
+        "room_type": "studio",
+        "soft_preferences": []
+      },
+      "confirmed": true
+    },
+    {
+      "issue": "PRO-06",
+      "turn": 17,
+      "check": "do-not-change-search comparison returns empty criteria",
+      "observed": {},
+      "confirmed": true
+    },
+    {
+      "issue": "PRO-03",
+      "turn": 19,
+      "check": "explicit keep £1800 is overwritten with a quoted £1495 property price",
+      "observed": {
+        "area": "Watford",
+        "areas": [
+          "Watford"
+        ],
+        "max_budget": 1495,
+        "max_travel_time": null,
+        "no_commute": true,
+        "room_type": "shared"
+      },
+      "confirmed": true
+    },
+    {
+      "issue": "PRO-02",
+      "turn": 25,
+      "check": "self-contained search labels house shares fully verified",
+      "observed_share_addresses": [
+        "Cassio Road, Watford, WD18",
+        "Harwoods Road, Watford WD18",
+        "Princess Avenue, Watford WD18",
+        "Princes  Avenue, Watford WD18"
+      ],
+      "confirmed": true,
+      "limitation": "Does not establish the exact internal root cause; the user-facing eligibility is directly contradicted by the same response."
+    },
+    {
+      "issue": "FAM-01",
+      "turn": 1,
+      "check": "at least three bedrooms yields null and a one-bed share",
+      "confirmed": true
+    },
+    {
+      "issue": "FAM-02",
+      "turn": 16,
+      "check": "remove-lift instruction still retains lift",
+      "confirmed": true
+    },
+    {
+      "issue": "FAM-04",
+      "turn": 19,
+      "check": "explicit new 2026-12-01 date becomes 2026-11-01",
+      "confirmed": true
+    },
+    {
+      "issue": "FAM-05",
+      "turn": 10,
+      "check": "consultation returns empty structured criteria",
+      "confirmed": true
+    },
+    {
+      "issue": "FAM-03",
+      "turn": 24,
+      "check": "no-results answer supplies no replacement recommendations while UI retains £2000 and £1820 Within Budget",
+      "observed_ui": {
+        "budgetInputs": [
+          "2000",
+          ""
+        ],
+        "saved": "Saved\n1",
+        "results": "Listings\nSearch\nSaved\n1\nSearch criteria\nArea\n*\nManchester\n×\nBudget\nper month\nper week\nBedrooms\nAny\nStudio\n1\n2\n3+\nRoom type\nAny\nStudio\nEn-suite room\nShared room\nCommute to\nMax commute (min)\nI don't commute\nMove-in date\nSearch\n5\n#1\nManchester\nGranby Row, Manchester M1\n£1820/month\nWithin Budget\nMove-in date: contact agent\n3 bedroom apartment to rent in Granby Row, Manchester M1\nView Deal\nMap\nAsk AI"
+      },
+      "recommendations_field_present": false,
+      "confirmed": true,
+      "limitation": "Confirms delivered answer/UI inconsistency; does not establish that the tool actually reran a search."
+    }
+  ]
+}

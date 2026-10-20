@@ -1,0 +1,167 @@
+........................................................................ [  1%]
+........................................................................ [  2%]
+........................................................................ [  4%]
+........................................................................ [  5%]
+........................................................................ [  7%]
+........................................................................ [  8%]
+........................................................................ [ 10%]
+........................................................................ [ 11%]
+........................................................................ [ 13%]
+........................................................................ [ 14%]
+........................................................................ [ 16%]
+..................................................ss.Fs..s.............. [ 17%]
+........................................................................ [ 19%]
+........................................................................ [ 20%]
+........................................................................ [ 22%]
+........................................................................ [ 23%]
+........................................................................ [ 24%]
+....................................s..................F....F...F....... [ 26%]
+........................................................................ [ 27%]
+........................................................................ [ 29%]
+........................................................................ [ 30%]
+........................................................................ [ 32%]
+........................................................................ [ 33%]
+........................................................................ [ 35%]
+........................................................................ [ 36%]
+........................................................................ [ 38%]
+........................................................................ [ 39%]
+........................................................................ [ 41%]
+........................................................................ [ 42%]
+........................................................................ [ 44%]
+........................................................................ [ 45%]
+........................................................................ [ 47%]
+........................................................................ [ 48%]
+........................................................................ [ 49%]
+........................................................................ [ 51%]
+........................................................................ [ 52%]
+........................................................................ [ 54%]
+........................................................................ [ 55%]
+........................................................................ [ 57%]
+........................................................................ [ 58%]
+........................................................................ [ 60%]
+........................................................................ [ 61%]
+........................................................................ [ 63%]
+........................................................................ [ 64%]
+........................................................................ [ 66%]
+........................................................................ [ 67%]
+........................................................................ [ 69%]
+........................................................................ [ 70%]
+.................................s.........s............................ [ 72%]
+........................................................................ [ 73%]
+........................................................................ [ 74%]
+........................................................................ [ 76%]
+........................................................................ [ 77%]
+.........................................................s.............. [ 79%]
+........................................................................ [ 80%]
+........................................................................ [ 82%]
+........................................................................ [ 83%]
+........................................................................ [ 85%]
+........................................................................ [ 86%]
+........................................................................ [ 88%]
+........................................................................ [ 89%]
+........................................................................ [ 91%]
+........................................................................ [ 92%]
+........................................................................ [ 94%]
+........................................................................ [ 95%]
+........................................................................ [ 97%]
+........................................................................ [ 98%]
+........................................................................ [ 99%]
+.                                                                        [100%]
+=================================== FAILURES ===================================
+_____________________ test_archive_is_the_legacy_arch_run ______________________
+
+    def test_archive_is_the_legacy_arch_run():
+        # format_output_node in langgraph_agent.py is the LEGACY formatter. If the archive were
+        # an fc_loop run, this whole file would be pointed at the wrong module.
+>       assert json.loads(_MANIFEST.read_text())["arch"] == "legacy"
+                          ^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_holdout_v6_dimension_contract_mount.py:72: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib/python3.12/pathlib.py:1029: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/tmp/rentcompass-live-20261019/source/evaluation/results/holdout_v6_live/manifest.json')
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/tmp/rentcompass-live-20261019/source/evaluation/results/holdout_v6_live/manifest.json'
+
+/usr/lib/python3.12/pathlib.py:1015: FileNotFoundError
+__ test_committed_provenance_stays_tracked[evaluation/results/live_routed_98] __
+
+path = 'evaluation/results/live_routed_98'
+
+    @pytest.mark.parametrize("path", _COMMITTED_PROVENANCE)
+    def test_committed_provenance_stays_tracked(path):
+        """The evidence rule must stay scoped to `.runtime*` and not swallow committed packages."""
+        assert not _ignored(path), (
+            f"{path!r} became ignored. These are committed provenance — the evidence rule was "
+            "broadened too far. Keep it scoped to `.runtime*`."
+        )
+>       assert (REPO / path).exists(), f"{path} is declared committed provenance but is absent"
+E       AssertionError: evaluation/results/live_routed_98 is declared committed provenance but is absent
+E       assert False
+E        +  where False = exists()
+E        +    where exists = (PosixPath('/tmp/rentcompass-live-20261019/source') / 'evaluation/results/live_routed_98').exists
+
+tests/test_env_files_cannot_be_committed.py:234: AssertionError
+____ test_committed_provenance_stays_tracked[evaluation/results/REPORT.md] _____
+
+path = 'evaluation/results/REPORT.md'
+
+    @pytest.mark.parametrize("path", _COMMITTED_PROVENANCE)
+    def test_committed_provenance_stays_tracked(path):
+        """The evidence rule must stay scoped to `.runtime*` and not swallow committed packages."""
+        assert not _ignored(path), (
+            f"{path!r} became ignored. These are committed provenance — the evidence rule was "
+            "broadened too far. Keep it scoped to `.runtime*`."
+        )
+>       assert (REPO / path).exists(), f"{path} is declared committed provenance but is absent"
+E       AssertionError: evaluation/results/REPORT.md is declared committed provenance but is absent
+E       assert False
+E        +  where False = exists()
+E        +    where exists = (PosixPath('/tmp/rentcompass-live-20261019/source') / 'evaluation/results/REPORT.md').exists
+
+tests/test_env_files_cannot_be_committed.py:234: AssertionError
+_ test_committed_provenance_stays_tracked[evaluation/results/phase2_ab_2026-07-19] _
+
+path = 'evaluation/results/phase2_ab_2026-07-19'
+
+    @pytest.mark.parametrize("path", _COMMITTED_PROVENANCE)
+    def test_committed_provenance_stays_tracked(path):
+        """The evidence rule must stay scoped to `.runtime*` and not swallow committed packages."""
+        assert not _ignored(path), (
+            f"{path!r} became ignored. These are committed provenance — the evidence rule was "
+            "broadened too far. Keep it scoped to `.runtime*`."
+        )
+>       assert (REPO / path).exists(), f"{path} is declared committed provenance but is absent"
+E       AssertionError: evaluation/results/phase2_ab_2026-07-19 is declared committed provenance but is absent
+E       assert False
+E        +  where False = exists()
+E        +    where exists = (PosixPath('/tmp/rentcompass-live-20261019/source') / 'evaluation/results/phase2_ab_2026-07-19').exists
+
+tests/test_env_files_cannot_be_committed.py:234: AssertionError
+=============================== warnings summary ===============================
+src/uk_rent_agent/web/asgi.py:14
+  /tmp/rentcompass-live-20261019/source/src/uk_rent_agent/web/asgi.py:14: StarletteDeprecationWarning: starlette.middleware.wsgi is deprecated and will be removed in a future release. Please refer to https://github.com/abersheeran/a2wsgi as a replacement.
+    from starlette.middleware.wsgi import WSGIMiddleware
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_holdout_v6_dimension_contract_mount.py::test_archive_is_the_legacy_arch_run
+FAILED tests/test_env_files_cannot_be_committed.py::test_committed_provenance_stays_tracked[evaluation/results/live_routed_98]
+FAILED tests/test_env_files_cannot_be_committed.py::test_committed_provenance_stays_tracked[evaluation/results/REPORT.md]
+FAILED tests/test_env_files_cannot_be_committed.py::test_committed_provenance_stays_tracked[evaluation/results/phase2_ab_2026-07-19]
+4 failed, 4885 passed, 8 skipped, 1 warning in 187.03s (0:03:07)

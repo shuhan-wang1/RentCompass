@@ -1,0 +1,10 @@
+[
+  {
+    "case": "saved-semantic-memory-survives-independent-process-reopen",
+    "passed": true
+  },
+  {
+    "case": "independent-user-cannot-read-that-semantic-default",
+    "passed": true
+  }
+]

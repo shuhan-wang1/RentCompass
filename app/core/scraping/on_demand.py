@@ -10,7 +10,7 @@ that with real, city-correct OnTheMarket listings fetched on demand and cached:
         -> on hit & fresh:  filter the cached CANONICAL row-set down to the caller's
                             bed/price band and serve it                 (warm, ~ms)
         -> on miss/stale:   scrape OnTheMarket live with a WIDE canonical query
-                            (all beds, full price sweep), persist the whole set,
+                            (a bounded unfiltered area sample), persist the set,
                             then serve the requested band out of it     (cold, a few s)
         -> stale-if-error:  if a live scrape fails but an older canonical set exists
                             for the slug, band-filter + serve it flagged possibly-outdated
@@ -22,7 +22,7 @@ that with real, city-correct OnTheMarket listings fetched on demand and cached:
     -> different beds), so a band-keyed cache cold-scraped the same area for every
     variation. Scraping one broad set per area and post-filtering locally makes warm
     hits deterministic per AREA and collapses redundant scrapes. An empty band-filter
-    off a FRESH canonical entry is a real complete-empty for that band, not a miss.
+    means no match in that sample; it never proves the whole area is empty.
 
 City-correctness is structural: the location resolves to a specific OnTheMarket
 area/city slug, so a Manchester query hits the Manchester area page. A light
@@ -36,6 +36,9 @@ The bundled fake CSV is only reachable behind SEARCH_ALLOW_DEMO_FALLBACK
 from __future__ import annotations
 
 import json
+import hashlib
+import fcntl
+import inspect
 import os
 import re
 import sqlite3
@@ -71,8 +74,8 @@ CACHE_PATH = Path(
 # --------------------------------------------------------------------------
 # Canonical broad-scrape / slug-keyed cache (see the module header)
 # --------------------------------------------------------------------------
-# Every scrape runs ONE deliberately WIDE query per slug (all bed counts, a full
-# price sweep) and caches the result under a slug-only key. The caller's requested
+# Every scrape fetches plain, robots-compatible pages and caches a bounded,
+# unfiltered area sample under a slug-only key. The caller's requested
 # bed/price band is then applied as a LOCAL post-filter on that canonical row set.
 # This makes warm hits deterministic PER AREA — a repeat search of the same area
 # with a drifted band (budget present vs absent, "2 bed" vs unspecified) reuses the
@@ -81,13 +84,13 @@ CACHE_PATH = Path(
 # Version marker: bumping CANONICAL_KEY_VERSION (or the scrape band) instantly
 # orphans every previously-written row (the key no longer matches), so a format
 # change ages out cleanly via TTL with zero migration.
-CANONICAL_KEY_VERSION = "canonical1"
+CANONICAL_KEY_VERSION = "canonical2"
 CANONICAL_MIN_BEDS = 0
-# OnTheMarket's widest sensible bedroom bound; a real 5-bed request still filters
-# defensively (a parsed 5-bed row is simply excluded when the band caps at 4).
-CANONICAL_MAX_BEDS = int(os.getenv("SEARCH_CANONICAL_MAX_BEDS", "4"))
-CANONICAL_MIN_PRICE = 100
-CANONICAL_MAX_PRICE = 5000
+# Numeric compatibility bounds for the unfiltered canonical scrape. They are
+# never sent to OnTheMarket and must not exclude five-bedroom/high-price stock.
+CANONICAL_MAX_BEDS = 100
+CANONICAL_MIN_PRICE = 0
+CANONICAL_MAX_PRICE = 100_000_000
 # Scrape row cap for the broad query. Higher than a single band's need so the
 # post-filter yield stays healthy across price/bed variations. Each OTM page holds
 # ~30 listings behind a ~1.2-1.8s crawl-delay, so 40 costs TWO page GETs (~1.5s
@@ -106,21 +109,11 @@ _SCRAPE_EXECUTOR = ThreadPoolExecutor(
 _SCRAPE_SLOTS = threading.BoundedSemaphore(MAX_IN_FLIGHT_SCRAPES)
 
 # --------------------------------------------------------------------------
-# Band rescue (see _band_rescue)
+# Legacy band-rescue compatibility (no upstream filtered requests)
 # --------------------------------------------------------------------------
-# The canonical harvest is a CAPPED top-slice of the area page — CANONICAL_SCRAPE_LIMIT
-# rows out of however many the area really holds — and OnTheMarket does not order that
-# page by price. For a large area an entire price segment can therefore be missing from
-# the canonical pool, which makes "the band filter came back empty" a claim the pool is
-# not entitled to make. Observed 2026-07-28: slug 'london' scraped at £100-5000 yields
-# ~30 rows whose CHEAPEST is £1,800, so a £1,742 cap filtered to ZERO and the user was
-# told there were no London listings in budget — while the SAME slug scraped at
-# max-price=1742 returns 30 listings from £1,250 up.
-#
-# So: when a narrower-than-canonical band filters to (near) nothing, re-scrape the slug
-# with the CALLER'S band and let OnTheMarket do the selection, before reporting empty.
-# The harvest is cached band-scoped so the repeat — including a genuinely empty one — is
-# warm. Only the would-otherwise-be-empty path ever pays for the extra scrape.
+# An area sample cannot prove a price segment empty. The former rescue sent
+# robots-disallowed facets and cannot be used. Keep the private hook/keys for
+# compatibility while returning explicit sample coverage and reusing fresh rows.
 BAND_KEY_VERSION = "band1"
 # Rescue when the canonical band-filter yields FEWER than this many rows. 1 = only a
 # hard zero (the answer that is actively wrong). Raise to also rescue thin results.
@@ -1098,6 +1091,9 @@ def extract_destination_from_text(text: str) -> dict | None:
             if not match:
                 continue
             cand = " ".join((match.group("place") or "").split())
+            # The place ends at the sentence: "a job at Canary Wharf. Budget £2300" stored
+            # 'Canary Wharf. Budget' as the commute destination (R4-15). "St." is a title.
+            cand = re.split(r"(?<!\bSt)(?<!\bDr)(?<!\bMt)\.(?=\s|$)", cand, maxsplit=1)[0].strip()
             slug, city, matched_key, source = _match_location(cand)
             if not cand or matched_key is None or source not in {"landmark", "city"}:
                 continue
@@ -1175,6 +1171,8 @@ class ListingCache:
                 "CREATE TABLE IF NOT EXISTS listings ("
                 "key TEXT PRIMARY KEY, rows TEXT NOT NULL, fetched REAL NOT NULL)"
             )
+            if "metadata" not in {r[1] for r in db.execute("PRAGMA table_info(listings)")}:
+                db.execute("ALTER TABLE listings ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}'")
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.path, timeout=10)
@@ -1192,13 +1190,22 @@ class ListingCache:
         except (json.JSONDecodeError, TypeError, ValueError):
             return None
 
-    def set(self, key: str, rows: list[dict]) -> None:
+    def metadata(self, key: str) -> dict:
+        with self._lock, self._connect() as db:
+            row = db.execute("SELECT metadata FROM listings WHERE key=?", (key,)).fetchone()
+        try:
+            value = json.loads(row[0]) if row else {}
+            return value if isinstance(value, dict) else {}
+        except (TypeError, ValueError):
+            return {}
+
+    def set(self, key: str, rows: list[dict], *, metadata: dict | None = None) -> None:
         payload = json.dumps(rows, ensure_ascii=False)
         with self._lock, self._connect() as db:
             db.execute(
-                "INSERT INTO listings(key, rows, fetched) VALUES (?, ?, ?) "
-                "ON CONFLICT(key) DO UPDATE SET rows=excluded.rows, fetched=excluded.fetched",
-                (key, payload, time.time()),
+                "INSERT INTO listings(key, rows, fetched, metadata) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET rows=excluded.rows, fetched=excluded.fetched, metadata=excluded.metadata",
+                (key, payload, time.time(), json.dumps(metadata or {})),
             )
 
 
@@ -1433,6 +1440,17 @@ def _filter_band(rows: list[dict], min_beds: int, max_beds: int,
     return out
 
 
+class _ScrapeOutcome(tuple):
+    """Keep the historical two-value unpacking contract and attach safe evidence."""
+
+    def __new__(cls, rows, timed_out, *, error=None):
+        obj = super().__new__(cls, (rows, timed_out))
+        obj.error = error
+        obj.coverage = getattr(rows, "coverage", None)
+        obj.partial_rows = getattr(error, "partial_rows", [])
+        return obj
+
+
 def _scrape_live(slug, min_beds, max_beds, min_price, max_price, limit, budget_s):
     """Run the OnTheMarket scrape under a wall-clock budget.
 
@@ -1444,14 +1462,28 @@ def _scrape_live(slug, min_beds, max_beds, min_price, max_price, limit, budget_s
     On timeout the bounded worker may finish in the background, but no more than
     ``MAX_IN_FLIGHT_SCRAPES`` calls can run or queue process-wide. Its result is
     discarded and never cached, so an abandoned area cannot pollute the store."""
+    if budget_s is not None and float(budget_s) <= 0:
+        return _ScrapeOutcome(None, True)
     if not _SCRAPE_SLOTS.acquire(blocking=False):
         print(f"  [on_demand] scrape capacity exhausted; slug_chars={len(str(slug))}")
-        return None, True
+        return _ScrapeOutcome(None, True)
     try:
-        fut = _SCRAPE_EXECUTOR.submit(
+        # Older third-party adapters/test doubles keep the positional contract;
+        # the native scraper additionally observes the whole acquisition budget.
+        kwargs = ({"budget_s": budget_s} if "budget_s" in inspect.signature(
+            onthemarket.find_rich_onthemarket).parameters else {})
+        # `Executor.submit` starts the callable in a fresh, empty context, so an
+        # on-demand scrape logged `request_id: "-"` and could not be attributed to the
+        # turn that triggered it. `submit_with_context` is `submit` plus the caller's
+        # observability context; the future/semaphore handling below is unchanged.
+        from uk_rent_agent.observability import submit_with_context
+
+        fut = submit_with_context(
+            _SCRAPE_EXECUTOR,
             onthemarket.find_rich_onthemarket,
             slug, 1.0, int(min_price), int(max_price),
             limit, int(min_beds), int(max_beds),
+            **kwargs,
         )
     except Exception:
         _SCRAPE_SLOTS.release()
@@ -1459,51 +1491,25 @@ def _scrape_live(slug, min_beds, max_beds, min_price, max_price, limit, budget_s
     fut.add_done_callback(lambda _future: _SCRAPE_SLOTS.release())
     try:
         rows = fut.result(timeout=budget_s)
-        return rows, False
+        return _ScrapeOutcome(rows, False)
     except FuturesTimeout:
         print(f"  [on_demand] scrape budget exceeded; slug_chars={len(str(slug))}")
-        return None, True
+        return _ScrapeOutcome(None, True)
     except Exception as e:  # network/parse failure -> stale-if-error
         print(f"  [on_demand] scrape error; slug_chars={len(str(slug))} error_type={type(e).__name__}")
-        return None, False
+        error = (e if isinstance(e, onthemarket.otm_access.OTMSourceError)
+                 else onthemarket.otm_access.OTMSourceError("unavailable", "source_execution_error"))
+        return _ScrapeOutcome(None, False, error=error)
 
 
 def _band_rescue(slug, city, min_beds, max_beds, min_price, max_price, limit, budget_s):
-    """Second-chance harvest for a band that filtered to nothing off the CAPPED
-    canonical pool (see the "Band rescue" note at the top of this module).
+    """Compatibility hook. Robots disallows upstream price/bed facets.
 
-    Scrapes the slug with the CALLER'S band so OnTheMarket itself performs the
-    price/bed selection, instead of asking a 40-row unsorted top-slice a question it
-    cannot answer. The harvest — INCLUDING an empty one — is cached band-scoped, so a
-    genuinely empty band costs exactly one scrape per TTL rather than one per request.
-
-    Returns ``(rows, source)`` where ``source`` is ``'hit'`` (warm band entry) or
-    ``'scraped'``; ``(None, None)`` when a rescue does not apply, the scrape failed or
-    timed out, or the band really is empty. On ``(None, None)`` the caller keeps
-    whatever the canonical pool said — a rescue never downgrades an existing answer."""
-    if not _band_narrower_than_canonical(min_beds, max_beds, min_price, max_price):
-        return None, None       # canonical already covers this band on its own terms
-
-    key = _band_key(slug, min_beds, max_beds, min_price, max_price)
-    cached = _cache().get(key)
-    if _is_fresh_entry(cached):
-        rows = _filter_band(cached[0], min_beds, max_beds, min_price, max_price, limit)
-        return (rows, "hit") if rows else (None, None)
-
-    print(f"  [on_demand] canonical pool has nothing in requested band; "
-          f"slug_chars={len(str(slug))}; re-scraping")
-    scraped, _timed_out = _scrape_live(slug, min_beds, max_beds, min_price, max_price,
-                                       BAND_RESCUE_SCRAPE_LIMIT, budget_s)
-    if scraped is None:
-        return None, None       # timeout / network error -> keep the canonical answer
-    rows = _clean(scraped, city)
-    try:
-        _cache().set(key, rows)
-    except (OSError, sqlite3.Error) as exc:
-        _fallback_cache(exc).set(key, rows)
-    rows = _filter_band(rows, min_beds, max_beds, min_price, max_price, limit)
-    print(f"  [on_demand] band rescue complete; slug_chars={len(str(slug))} row_count={len(rows)}")
-    return (rows, "scraped") if rows else (None, None)
+    A new budget cannot produce another request for the same fresh sample. Empty
+    local bands remain explicitly non-exhaustive instead of fetching forbidden
+    filtered URLs or repeatedly retrieving the identical bare page.
+    """
+    return None, None
 
 
 def _clean(rows: list[dict], requested_city: str | None) -> list[dict]:
@@ -1518,7 +1524,7 @@ def _clean(rows: list[dict], requested_city: str | None) -> list[dict]:
     return out
 
 
-def get_listings(
+def _get_listings_unlocked(
     location: str,
     min_bedrooms: int = 0,
     max_bedrooms: int = 2,
@@ -1529,6 +1535,7 @@ def get_listings(
     force_refresh: bool = False,
     budget_s: float | None = None,
     cache_only: bool = False,
+    _cache_instance=None,
 ) -> dict:
     """Resolve a query to real, city-correct OnTheMarket listings via the
     scrape-on-demand + persistent-cache pipeline.
@@ -1548,6 +1555,7 @@ def get_listings(
         }
     """
     t0 = time.time()
+    cache = _cache_instance or _cache()
     slug, city = resolve_location(location)
     meta = {
         "slug": slug,
@@ -1565,6 +1573,10 @@ def get_listings(
         # pool (see _band_rescue). `source` keeps the canonical hit/scraped vocabulary so
         # existing consumers are unaffected.
         "band_rescue": False,
+        "source_status": "unavailable",
+        "retrieval_complete": False,
+        "coverage": {"scope": "bounded_area_sample", "exhaustive": False,
+                     "filtering": "local_price_and_bedrooms"},
     }
     if not slug:
         meta["message"] = "No search location was provided."
@@ -1574,41 +1586,24 @@ def get_listings(
     # Slug-only canonical key: the cache holds ONE broad row-set per area; the
     # requested bed/price band is applied as a local post-filter below.
     key = _query_key(slug)
-    cached = _cache().get(key)
+    cached = cache.get(key)
     budget_s = SCRAPE_BUDGET_S if budget_s is None else budget_s
 
     _is_fresh = _is_fresh_entry
 
-    def _rescue_if_thin(filtered, canonical_source):
-        """Band-rescue hook shared by the warm-hit and fresh-scrape paths.
-
-        Returns the result dict to serve, or None to keep the canonical answer. An
-        empty band-filter off the canonical pool is NOT evidence the band is empty:
-        the pool is a capped, price-unsorted top-slice (see _band_rescue). `cache_only`
-        callers are never rescued — that path must not scrape."""
-        if cache_only or len(filtered) >= BAND_RESCUE_MIN_ROWS:
-            return None
-        rescued, rescue_source = _band_rescue(
-            slug, city, min_bedrooms, max_bedrooms, min_price, max_price, limit, budget_s)
-        if not rescued:
-            return None
-        meta.update(source=rescue_source or canonical_source, count=len(rescued),
-                    band_rescue=True, elapsed_s=round(time.time() - t0, 2))
-        return {"rows": rescued, "meta": meta}
-
-    # 1) Fresh canonical hit -> filter the broad row-set DOWN to the requested band.
-    #    An empty filtered result is served as a complete-empty hit ONLY after a band
-    #    rescue has confirmed it (the canonical pool is capped, so on its own it cannot
-    #    prove a band is empty). cache_only callers skip the rescue and never scrape.
+    # Fresh canonical hits serve only a locally filtered view of a bounded sample.
     if _is_fresh(cached) and not force_refresh:
         rows, _fetched = cached
         filtered = _filter_band(rows, min_bedrooms, max_bedrooms,
                                 min_price, max_price, limit)
-        rescued = _rescue_if_thin(filtered, "hit")
-        if rescued is not None:
-            return rescued
-        meta.update(source="hit", count=len(filtered),
+        saved_evidence = cache.metadata(key)
+        meta.update(source="hit", source_status="cached", retrieval_complete=True,
+                    coverage=saved_evidence.get("coverage") or meta["coverage"],
+                    fetched_at=_fetched, cache_age_seconds=max(0, round(time.time() - _fetched, 2)),
+                    count=len(filtered),
                     elapsed_s=round(time.time() - t0, 2))
+        if not filtered:
+            meta["message"] = "No matching listings were found in the cached area sample; this does not establish that the area has no matches."
         return {"rows": filtered, "meta": meta}
 
     # 1b) Cache-only lookup (no scrape): the caller (deadline-aware multi-area search) uses
@@ -1624,31 +1619,39 @@ def get_listings(
     # 2) Cache miss / stale -> scrape the CANONICAL broad query (all beds, full price
     #    sweep) so one cached row-set serves every band; store it slug-keyed; then
     #    return the requested band filtered out of it.
-    scraped, scrape_timed_out = _scrape_live(
+    outcome = _scrape_live(
         slug, CANONICAL_MIN_BEDS, CANONICAL_MAX_BEDS,
         CANONICAL_MIN_PRICE, CANONICAL_MAX_PRICE, CANONICAL_SCRAPE_LIMIT, budget_s)
+    scraped, scrape_timed_out = outcome
     meta["timed_out"] = bool(scrape_timed_out)
     if scraped is not None:
         canonical_rows = _clean(scraped, city)
-        if canonical_rows:
+        if canonical_rows or not scraped:
             # Persist the WHOLE canonical set (not the band-filtered view) so the
-            # next request for any other band reuses it. A budget-abandoned partial
-            # is never reached here (_scrape_live returns None on timeout), so a
-            # stored canonical entry is always a complete harvest for its band.
+            # next band reuses it. A budget-abandoned/error partial is never
+            # reached here; this is a completed sample, with separate coverage.
             try:
-                _cache().set(key, canonical_rows)
+                cache.set(key, canonical_rows, metadata={"coverage": getattr(outcome, "coverage", None) or meta["coverage"]})
             except (OSError, sqlite3.Error) as exc:
-                _fallback_cache(exc).set(key, canonical_rows)
+                _fallback_cache(exc).set(key, canonical_rows, metadata={"coverage": getattr(outcome, "coverage", None) or meta["coverage"]})
             filtered = _filter_band(canonical_rows, min_bedrooms, max_bedrooms,
                                     min_price, max_price, limit)
-            # filtered may be empty — but only a band rescue can establish that the band
-            # is REALLY empty rather than absent from the canonical top-slice.
-            rescued = _rescue_if_thin(filtered, "scraped")
-            if rescued is not None:
-                return rescued
-            meta.update(source="scraped", count=len(filtered),
+            meta.update(source="scraped", source_status="ok", retrieval_complete=True,
+                        coverage=getattr(outcome, "coverage", None) or meta["coverage"],
+                        fetched_at=time.time(), cache_age_seconds=0,
+                        count=len(filtered),
                         elapsed_s=round(time.time() - t0, 2))
+            if not filtered:
+                meta["message"] = "No matching listings were found in the retrieved area sample; this does not establish that the area has no matches."
             return {"rows": filtered, "meta": meta}
+
+    error = getattr(outcome, "error", None)
+    if error is not None:
+        meta.update(source_status=error.source_status, source_error=error.as_dict())
+    elif scrape_timed_out:
+        meta.update(source_status="unavailable", source_error={"reason": "scrape_budget_exhausted"})
+    elif scraped:
+        meta.update(source_status="schema_error", source_error={"reason": "no_usable_listing_rows"})
 
     # 3) Stale-if-error: a live scrape failed (never on a mere band-empty) but we hold
     #    an older canonical set -> serve it band-filtered, flagged possibly-outdated.
@@ -1658,10 +1661,20 @@ def get_listings(
                             min_price, max_price, limit)
         if rows:
             meta.update(source="stale-cache", stale=True, count=len(rows),
+                        fetched_at=_fetched, cache_age_seconds=max(0, round(time.time() - _fetched, 2)),
                         elapsed_s=round(time.time() - t0, 2),
                         message="Showing the most recent cached listings; a fresh "
                                 "search could not be completed just now.")
             return {"rows": rows, "meta": meta}
+
+    # A later page may fail after useful rows arrived. Serve those as an explicit
+    # incomplete sample, never persist them as a successful canonical harvest.
+    partial = _filter_band(_clean(getattr(outcome, "partial_rows", []), city),
+                           min_bedrooms, max_bedrooms, min_price, max_price, limit)
+    if partial:
+        meta.update(source="partial", count=len(partial), elapsed_s=round(time.time() - t0, 2),
+                    message="Showing an incomplete live sample; the remaining search could not be completed.")
+        return {"rows": partial, "meta": meta}
 
     # 4) Offline-dev only: bundled fake CSV (default OFF).
     if ALLOW_DEMO_FALLBACK:
@@ -1676,6 +1689,52 @@ def get_listings(
     meta.update(source="none", elapsed_s=round(time.time() - t0, 2),
                 message=f"No live listings could be retrieved for '{location}' right now.")
     return {"rows": [], "meta": meta}
+
+
+def get_listings(
+    location: str, min_bedrooms: int = 0, max_bedrooms: int = 2,
+    min_price: int = 100, max_price: int = 5000, limit: int = 15, *,
+    force_refresh: bool = False, budget_s: float | None = None, cache_only: bool = False,
+) -> dict:
+    """Serialize a slug's cache-miss fetch across threads and worker processes.
+
+    The second reader reuses the completed canonical sample rather than issuing
+    another bare-area GET. A lock timeout is an incomplete retrieval, not empty
+    stock. Each operation retains its original cache namespace during a swap.
+    """
+    cache = _cache()
+    slug, _city = resolve_location(location)
+    kwargs = dict(force_refresh=force_refresh, budget_s=budget_s, cache_only=cache_only,
+                  _cache_instance=cache)
+    if cache_only or not slug:
+        return _get_listings_unlocked(location, min_bedrooms, max_bedrooms, min_price,
+                                      max_price, limit, **kwargs)
+    start = time.monotonic()
+    total_budget = max(0, float(SCRAPE_BUDGET_S if budget_s is None else budget_s))
+    digest = hashlib.sha256(str(slug).encode()).hexdigest()[:24]
+    lock_path = cache.path.parent / f".{cache.path.name}.{digest}.fetch.lock"
+    with lock_path.open("a") as lock_file:
+        while True:
+            try:
+                fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() - start >= total_budget:
+                    return {"rows": [], "meta": {
+                        "slug": slug, "requested_location": location, "requested_city": _city,
+                        "source": "none", "source_status": "unavailable", "stale": False,
+                        "count": 0, "timed_out": True, "retrieval_complete": False,
+                        "band_rescue": False, "elapsed_s": round(time.monotonic() - start, 2),
+                        "source_error": {"reason": "cache_fetch_in_progress"},
+                        "coverage": {"scope": "bounded_area_sample", "exhaustive": False},
+                        "message": "This area's shared listing fetch is still in progress."}}
+                time.sleep(min(0.05, total_budget))
+        try:
+            kwargs["budget_s"] = max(0, total_budget - (time.monotonic() - start))
+            return _get_listings_unlocked(location, min_bedrooms, max_bedrooms, min_price,
+                                          max_price, limit, **kwargs)
+        finally:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
 
 
 def _demo_rows(requested_city: str | None) -> list[dict]:

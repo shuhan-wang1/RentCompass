@@ -28,6 +28,7 @@ _WANTED = {
     "ApiError",
     "_validate_conversation_id",
     "_coerce_optional_int",
+    "_coerce_optional_money",
     "_derive_title",
     "_search_result_failed",
 }
@@ -191,3 +192,12 @@ def test_structured_search_failure_is_not_an_empty_result():
     assert _search_result_failed({"status": "error"})
     assert not _search_result_failed({"success": True, "status": "no_results"})
     assert not _search_result_failed({"success": True, "recommendations": []})
+
+
+def test_rent_ceiling_accepts_pennies_without_rounding_up():
+    coerce = _H['_coerce_optional_money']
+    assert coerce('2166.67', 'max_budget', min_value=1, max_value=100000) == 2166.67
+    assert coerce('2166.675', 'max_budget', min_value=1, max_value=100000) == 2166.675
+    for value in [True, 'NaN', 'Infinity', 0]:
+        with pytest.raises(ApiError):
+            coerce(value, 'max_budget', min_value=1, max_value=100000)

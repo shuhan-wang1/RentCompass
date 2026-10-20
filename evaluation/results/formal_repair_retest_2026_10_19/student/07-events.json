@@ -1,0 +1,247 @@
+[
+  {
+    "event": "step",
+    "data": {
+      "stage": "understanding"
+    }
+  },
+  {
+    "event": "step",
+    "data": {
+      "stage": "understanding"
+    }
+  },
+  {
+    "event": "step",
+    "data": {
+      "stage": "writing"
+    }
+  },
+  {
+    "event": "step",
+    "data": {
+      "stage": "searching"
+    }
+  },
+  {
+    "event": "step",
+    "data": {
+      "stage": "writing"
+    }
+  },
+  {
+    "event": "step",
+    "data": {
+      "stage": "checking"
+    }
+  },
+  {
+    "event": "step",
+    "data": {
+      "stage": "saving"
+    }
+  },
+  {
+    "event": "final",
+    "data": {
+      "status": 200,
+      "payload": {
+        "area_recommendations": [],
+        "area_status": {
+          "Camden": "results"
+        },
+        "conversation_id": "7fc8c690d7bf4e54ab7cf39d8967764a",
+        "data_source": "OnTheMarket (cached)",
+        "incomplete_areas": [],
+        "message": "本次检索数据中，在 Camden 附近没有找到符合条件的房源。请检查区域拼写，或调整预算/区域后重试（可使用右侧搜索表单）。 本次候选中没有满足当前筛选的房源；这不代表市场上没有房源。",
+        "partial": false,
+        "recommendations": [],
+        "response_type": "search",
+        "retrieval_outcome": "no_matching_candidates",
+        "search_criteria": {
+          "amenities_of_interest": [],
+          "area": "Camden",
+          "areas": [
+            "Camden"
+          ],
+          "bedrooms": 2,
+          "bedrooms_minimum": false,
+          "budget_period": "month",
+          "commute_destination": "University College London, Gower Street, London WC1E 6BT",
+          "constraint_sources": {
+            "area": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": "Camden"
+            },
+            "areas": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": [
+                "Camden"
+              ]
+            },
+            "bedrooms": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": 2
+            },
+            "bedrooms_minimum": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": false
+            },
+            "budget_period": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": "month"
+            },
+            "commute_destination": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": "University College London, Gower Street, London WC1E 6BT"
+            },
+            "destination": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": "University College London, Gower Street, London WC1E 6BT"
+            },
+            "max_budget": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": 2400
+            },
+            "max_travel_time": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": 30
+            },
+            "move_in_date": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": null
+            },
+            "no_commute": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": false
+            },
+            "room_type": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": "whole"
+            }
+          },
+          "destination": "University College London, Gower Street, London WC1E 6BT",
+          "max_budget": 2400,
+          "max_budget_monthly": 2400,
+          "max_travel_time": 30,
+          "move_in_date": null,
+          "no_commute": false,
+          "property_features": [],
+          "rent_filter_ceiling_monthly": null,
+          "room_type": "whole",
+          "soft_preferences": []
+        },
+        "turn_id": "c346e478a8744485ba2f2a553d00be5f",
+        "view_state": {
+          "criteria": {
+            "amenities_of_interest": [],
+            "area": "Camden",
+            "areas": [
+              "Camden"
+            ],
+            "bedrooms": 2,
+            "bedrooms_minimum": false,
+            "budget_period": "month",
+            "commute_destination": "University College London, Gower Street, London WC1E 6BT",
+            "constraint_sources": {
+              "area": {
+                "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+                "source": "saved_preference",
+                "value": "Camden"
+              },
+              "areas": {
+                "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+                "source": "saved_preference",
+                "value": [
+                  "Camden"
+                ]
+              },
+              "bedrooms": {
+                "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+                "source": "saved_preference",
+                "value": 2
+              },
+              "bedrooms_minimum": {
+                "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+                "source": "saved_preference",
+                "value": false
+              },
+              "budget_period": {
+                "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+                "source": "saved_preference",
+                "value": "month"
+              },
+              "commute_destination": {
+                "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+                "source": "saved_preference",
+                "value": "University College London, Gower Street, London WC1E 6BT"
+              },
+              "destination": {
+                "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+                "source": "saved_preference",
+                "value": "University College London, Gower Street, London WC1E 6BT"
+              },
+              "max_budget": {
+                "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+                "source": "saved_preference",
+                "value": 2400
+              },
+              "max_travel_time": {
+                "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+                "source": "saved_preference",
+                "value": 30
+              },
+              "move_in_date": {
+                "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+                "source": "saved_preference",
+                "value": null
+              },
+              "no_commute": {
+                "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+                "source": "saved_preference",
+                "value": false
+              },
+              "room_type": {
+                "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+                "source": "saved_preference",
+                "value": "whole"
+              }
+            },
+            "destination": "University College London, Gower Street, London WC1E 6BT",
+            "max_budget": 2400,
+            "max_travel_time": 30,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole",
+            "soft_preferences": []
+          },
+          "operation": "replace",
+          "results": [],
+          "retrieval": {
+            "area_status": {
+              "Camden": "results"
+            },
+            "data_source": "OnTheMarket (cached)",
+            "incomplete_areas": [],
+            "partial": false,
+            "retrieval_outcome": "no_matching_candidates"
+          },
+          "revision": 1
+        }
+      }
+    }
+  }
+]

@@ -1,0 +1,17 @@
+{
+  "tag": "BUTTON",
+  "id": "userMenuBtn",
+  "text": "G\nGuest",
+  "outline": "rgb(0, 0, 0) solid 3px",
+  "boxShadow": "none",
+  "rect": {
+    "x": -78.91580200195312,
+    "y": 786,
+    "width": 259,
+    "height": 48,
+    "top": 786,
+    "right": 180.08419799804688,
+    "bottom": 834,
+    "left": -78.91580200195312
+  }
+}

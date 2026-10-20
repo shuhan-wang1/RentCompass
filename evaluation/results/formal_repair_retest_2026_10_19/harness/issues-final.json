@@ -1,0 +1,340 @@
+[
+  {
+    "id": "F01",
+    "priority": "P1",
+    "title": "房源数据源失败被归为已搜索但为空，界面引导用户改条件",
+    "baseline_observation": "捕获403回放时area_status=empty/partial=false，source无候选；正文与面板建议调整预算或区域。附加的市场非空提示未解释来源失败。",
+    "baseline_report": "../formal_live_2026_10_19/ISSUES.json",
+    "status": "fixed_in_tested_cases",
+    "verification_evidence": [
+      "artifacts/full-regression-final-contract.xml",
+      "VERIFICATION.json",
+      "TOOL_COVERAGE.json"
+    ],
+    "verification_limit": "See REPORT.txt and persona reports for exact UI/registry/offline boundaries; successful source samples do not establish exhaustive coverage."
+  },
+  {
+    "id": "F02",
+    "priority": "P1",
+    "title": "租金上限与租金加交通总预算被误判冲突，确认后租金仍为空",
+    "baseline_observation": "英文上班族分别给出£1900租金与£2100总预算，系统重复澄清；接受第1选项后租金字段仍null。",
+    "baseline_report": "../formal_live_2026_10_19/ISSUES.json",
+    "status": "fixed_in_tested_cases",
+    "verification_evidence": [
+      "artifacts/full-regression-final-contract.xml",
+      "VERIFICATION.json",
+      "TOOL_COVERAGE.json"
+    ],
+    "verification_limit": "See REPORT.txt and persona reports for exact UI/registry/offline boundaries; successful source samples do not establish exhaustive coverage."
+  },
+  {
+    "id": "F03",
+    "priority": "P1",
+    "title": "混合办公被设成无需通勤，已确认目的地未贯穿持久化视图",
+    "baseline_observation": "Bank、Tue–Thu、35分钟、至多一次换乘的输入出现no_commute=true及空目的地；后续raw commute_destination有Bank但view_state.destination空。",
+    "baseline_report": "../formal_live_2026_10_19/ISSUES.json",
+    "status": "fixed_in_tested_cases",
+    "verification_evidence": [
+      "artifacts/full-regression-final-contract.xml",
+      "VERIFICATION.json",
+      "TOOL_COVERAGE.json"
+    ],
+    "verification_limit": "See REPORT.txt and persona reports for exact UI/registry/offline boundaries; successful source samples do not establish exhaustive coverage."
+  },
+  {
+    "id": "F04",
+    "priority": "P1",
+    "title": "通勤日期污染入住日期，指定到达时间未发送给TfL",
+    "baseline_observation": "用户要求20 October 08:45到达Bank，move_in_date变为2026-10-20；实际JourneyResults请求没有date/time/timeIs查询参数。另一次派生fare查询把目的地截为Bank arriving后失败。",
+    "baseline_report": "../formal_live_2026_10_19/ISSUES.json",
+    "status": "fixed_in_tested_cases",
+    "verification_evidence": [
+      "artifacts/full-regression-final-contract.xml",
+      "VERIFICATION.json",
+      "TOOL_COVERAGE.json"
+    ],
+    "verification_limit": "See REPORT.txt and persona reports for exact UI/registry/offline boundaries; successful source samples do not establish exhaustive coverage."
+  },
+  {
+    "id": "F05",
+    "priority": "P1",
+    "title": "双区域意图在同轮执行和持久化视图中不稳定",
+    "baseline_observation": "家庭首轮先调用Stratford+Leyton又调用Leyton，最终只回显Leyton；第三轮工具回显双区域，但view_state仍无area/areas，刷新Area为空。",
+    "baseline_report": "../formal_live_2026_10_19/ISSUES.json",
+    "status": "fixed_in_tested_cases",
+    "verification_evidence": [
+      "artifacts/full-regression-final-contract.xml",
+      "VERIFICATION.json",
+      "TOOL_COVERAGE.json"
+    ],
+    "verification_limit": "See REPORT.txt and persona reports for exact UI/registry/offline boundaries; successful source samples do not establish exhaustive coverage."
+  },
+  {
+    "id": "F06",
+    "priority": "P1",
+    "title": "自然表达的猫许可和轮椅内部空间未进入可审核硬约束",
+    "baseline_observation": "明确中文“允许这只猫也是必需条件”和英语written permission/internal doorway/turning space后，实际hard features仅step-free；未包含cats allowed或wheelchair-accessible，step-free还重复进入soft。",
+    "baseline_report": "../formal_live_2026_10_19/ISSUES.json",
+    "status": "fixed_in_tested_cases",
+    "verification_evidence": [
+      "artifacts/full-regression-final-contract.xml",
+      "VERIFICATION.json",
+      "TOOL_COVERAGE.json"
+    ],
+    "verification_limit": "See REPORT.txt and persona reports for exact UI/registry/offline boundaries; successful source samples do not establish exhaustive coverage."
+  },
+  {
+    "id": "F07",
+    "priority": "P2",
+    "title": "组合任务缺项和内部指令直接进入用户回复",
+    "baseline_observation": "预算澄清阻断可独立查询的路线/天气；最后未算用户要求的26个单程/月；家庭第三轮直接显示Do not conclude/State only等指令句。",
+    "baseline_report": "../formal_live_2026_10_19/ISSUES.json",
+    "status": "fixed_in_tested_cases",
+    "verification_evidence": [
+      "artifacts/full-regression-final-contract.xml",
+      "VERIFICATION.json",
+      "TOOL_COVERAGE.json"
+    ],
+    "verification_limit": "See REPORT.txt and persona reports for exact UI/registry/offline boundaries; successful source samples do not establish exhaustive coverage."
+  },
+  {
+    "id": "F08",
+    "priority": "P2",
+    "title": "真实附近设施与网页检索能力退化",
+    "baseline_observation": "学校/GP附近设施探针30秒超时，多个Overpass镜像出现502/500/连接错误；SearXNG两次真实查询无可用结果并有4个未响应引擎。",
+    "baseline_report": "../formal_live_2026_10_19/ISSUES.json",
+    "status": "degradation_handling_fixed_external_service_unavailable",
+    "verification_evidence": [
+      "artifacts/full-regression-final-contract.xml",
+      "VERIFICATION.json",
+      "TOOL_COVERAGE.json"
+    ],
+    "verification_limit": "See REPORT.txt and persona reports for exact UI/registry/offline boundaries; successful source samples do not establish exhaustive coverage."
+  },
+  {
+    "id": "F09",
+    "priority": "P2",
+    "title": "窄屏长会话标题裁剪会话操作按钮",
+    "baseline_observation": "390px视口内，长中文标题把4个操作初始位置挤出侧栏；键盘Tab会滚至操作，基础焦点环绕/Escape正常。",
+    "baseline_report": "../formal_live_2026_10_19/ISSUES.json",
+    "status": "fixed_in_tested_cases",
+    "verification_evidence": [
+      "artifacts/full-regression-final-contract.xml",
+      "VERIFICATION.json",
+      "TOOL_COVERAGE.json"
+    ],
+    "verification_limit": "See REPORT.txt and persona reports for exact UI/registry/offline boundaries; successful source samples do not establish exhaustive coverage."
+  },
+  {
+    "id": "F10",
+    "priority": "P3",
+    "title": "硬租金上限被向上取整",
+    "baseline_observation": "学生给定整套月上限£2166.67，实际保存2167，放宽£0.33；未获得房源，未证明实际发生超限推荐。",
+    "baseline_report": "../formal_live_2026_10_19/ISSUES.json",
+    "status": "fixed_in_tested_cases",
+    "verification_evidence": [
+      "artifacts/full-regression-final-contract.xml",
+      "VERIFICATION.json",
+      "TOOL_COVERAGE.json"
+    ],
+    "verification_limit": "See REPORT.txt and persona reports for exact UI/registry/offline boundaries; successful source samples do not establish exhaustive coverage."
+  },
+  {
+    "id": "R11",
+    "priority": "P1",
+    "title": "学生条件丢失和快照误绿",
+    "status": "fixed_in_tested_cases",
+    "evidence": [
+      "student/REPORT.txt"
+    ],
+    "verification_limit": "Retained initial failures are not marked as passes; full same-model replay was bounded to seven UI turns per persona. Offline regression and live retest are distinguished in REPORT.txt."
+  },
+  {
+    "id": "R12",
+    "priority": "P1",
+    "title": "记忆默认替换、两卧及保存原文显示",
+    "status": "fixed_in_tested_cases",
+    "evidence": [
+      "student/tool-coverage-checks.json"
+    ],
+    "verification_limit": "Retained initial failures are not marked as passes; full same-model replay was bounded to seven UI turns per persona. Offline regression and live retest are distinguished in REPORT.txt."
+  },
+  {
+    "id": "R13",
+    "priority": "P1",
+    "title": "真实工具schema拒绝注入的额外条件",
+    "status": "fixed_in_tested_cases",
+    "evidence": [
+      "professional/own-tool-ledger.json"
+    ],
+    "verification_limit": "Retained initial failures are not marked as passes; full same-model replay was bounded to seven UI turns per persona. Offline regression and live retest are distinguished in REPORT.txt."
+  },
+  {
+    "id": "R14",
+    "priority": "P1",
+    "title": "精确轮椅空间/书面猫许可硬需及旧lift恢复",
+    "status": "fixed_in_tested_cases",
+    "evidence": [
+      "family/REPORT.txt"
+    ],
+    "verification_limit": "Retained initial failures are not marked as passes; full same-model replay was bounded to seven UI turns per persona. Offline regression and live retest are distinguished in REPORT.txt."
+  },
+  {
+    "id": "R15",
+    "priority": "P1",
+    "title": "房源比较被列表缩小快捷路径吞掉",
+    "status": "fixed_in_tested_cases",
+    "evidence": [
+      "family/round05-response.json"
+    ],
+    "verification_limit": "Retained initial failures are not marked as passes; full same-model replay was bounded to seven UI turns per persona. Offline regression and live retest are distinguished in REPORT.txt."
+  },
+  {
+    "id": "R16",
+    "priority": "P1",
+    "title": "Stratford安全查询定位Avon及房源身份绑定",
+    "status": "fixed_in_tested_cases",
+    "evidence": [
+      "family/own-tool-ledger.json"
+    ],
+    "verification_limit": "Retained initial failures are not marked as passes; full same-model replay was bounded to seven UI turns per persona. Offline regression and live retest are distinguished in REPORT.txt."
+  },
+  {
+    "id": "R17",
+    "priority": "P1",
+    "title": "混合周边/天气/安全/路线任务被refinement吞掉",
+    "status": "fixed_in_tested_cases",
+    "evidence": [
+      "family/round07-response.json"
+    ],
+    "verification_limit": "Retained initial failures are not marked as passes; full same-model replay was bounded to seven UI turns per persona. Offline regression and live retest are distinguished in REPORT.txt."
+  },
+  {
+    "id": "R18",
+    "priority": "P2",
+    "title": "收藏资格文案未说明历史条件且重复编号",
+    "status": "fixed_in_tested_cases",
+    "evidence": [
+      "artifacts/ui-offline-accepted/verification.json"
+    ],
+    "verification_limit": "Retained initial failures are not marked as passes; full same-model replay was bounded to seven UI turns per persona. Offline regression and live retest are distinguished in REPORT.txt."
+  },
+  {
+    "id": "R19",
+    "priority": "P1",
+    "title": "separate中的pa被误当年租缩写",
+    "status": "fixed_in_tested_cases",
+    "evidence": [
+      "professional/R03-response.txt"
+    ],
+    "verification_limit": "Retained initial failures are not marked as passes; full same-model replay was bounded to seven UI turns per persona. Offline regression and live retest are distinguished in REPORT.txt."
+  },
+  {
+    "id": "R20",
+    "priority": "P2",
+    "title": "天气部分失败说明否定London成功预报",
+    "status": "fixed_in_tested_cases",
+    "evidence": [
+      "artifacts/weather-partial.xml"
+    ],
+    "verification_limit": "Retained initial failures are not marked as passes; full same-model replay was bounded to seven UI turns per persona. Offline regression and live retest are distinguished in REPORT.txt."
+  },
+  {
+    "id": "R21",
+    "priority": "P2",
+    "title": "明确月单程次数缺少确定性费用计算",
+    "status": "fixed_in_tested_cases",
+    "evidence": [
+      "evidence/monthly-26-real-fare.json"
+    ],
+    "verification_limit": "Retained initial failures are not marked as passes; full same-model replay was bounded to seven UI turns per persona. Offline regression and live retest are distinguished in REPORT.txt."
+  },
+  {
+    "id": "R22",
+    "priority": "P2",
+    "title": "精确需求机器键、空通勤表行和残留满足结论",
+    "status": "fixed_in_tested_cases",
+    "evidence": [
+      "artifacts/family-mixed-boundaries.xml"
+    ],
+    "verification_limit": "Retained initial failures are not marked as passes; full same-model replay was bounded to seven UI turns per persona. Offline regression and live retest are distinguished in REPORT.txt."
+  },
+  {
+    "id": "FOLLOWUP01",
+    "priority": "P2",
+    "title": "Overpass/SearXNG真实可用性仍需恢复",
+    "status": "open_external_dependency",
+    "evidence": [
+      "evidence/live-tool-integration.json"
+    ]
+  },
+  {
+    "id": "FOLLOWUP02",
+    "priority": "P3",
+    "title": "空样本回复应复述已采用默认条件",
+    "status": "open_usability_recommendation",
+    "evidence": [
+      "student/07-response.json"
+    ]
+  },
+  {
+    "id": "FOLLOWUP03",
+    "priority": "P2",
+    "title": "数周浸泡、容量、账号登录迁移与市场完整覆盖尚未证明",
+    "status": "not_covered",
+    "evidence": [
+      "REPORT.txt"
+    ]
+  },
+  {
+    "id": "R23",
+    "priority": "P1",
+    "title": "bare Stratford天气误选美国同名城镇",
+    "status": "fixed_live_registry_and_offline_no_additional_persona_turn",
+    "evidence": [
+      "family/own-tool-ledger.json",
+      "evidence/final-location-scope-probes.json",
+      "artifacts/weather-stratford-regression.xml"
+    ]
+  },
+  {
+    "id": "R24",
+    "priority": "P2",
+    "title": "旧快照GET绕过新验证保留已失效通勤标签",
+    "status": "fixed_actual_authenticated_get_and_final_browser_restore",
+    "evidence": [
+      "artifacts/read-recovery-api-pass.xml",
+      "family/restart-recovery-check.json"
+    ]
+  },
+  {
+    "id": "R25",
+    "priority": "P1",
+    "title": "rent-plus-commute连字符口径在R6写错租金且旧alias遮蔽",
+    "status": "fixed_original_sentence_and_actual_authenticated_get_and_final_browser_restore",
+    "evidence": [
+      "professional/final-restore-20261019T130921Z-assertions.json",
+      "professional/final-restore-20261019T131557Z-assertions.json",
+      "artifacts/read-recovery-api-pass.xml"
+    ]
+  },
+  {
+    "id": "R26",
+    "priority": "P2",
+    "title": "学校GP故障/冷却及1000m请求被800m上限截短未明确披露",
+    "status": "fixed_deterministic_failure_notice_offline_verified",
+    "evidence": [
+      "artifacts/final-restoration-scope.xml"
+    ]
+  },
+  {
+    "id": "R27",
+    "priority": "P2",
+    "title": "房源旅程起点literal this home无法定位",
+    "status": "fixed_exact_identity_dispatch_and_live_address_probe",
+    "evidence": [
+      "artifacts/last-dispatch-scope.xml",
+      "evidence/final-location-scope-probes.json"
+    ]
+  }
+]

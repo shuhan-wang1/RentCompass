@@ -1,0 +1,40 @@
+.......................................F.......................F........ [ 52%]
+................................................................         [100%]
+=================================== FAILURES ===================================
+________ test_source_panel_state_survives_snapshot_and_session_restore _________
+
+    def test_source_panel_state_survives_snapshot_and_session_restore():
+        retrieval = {'source_status':'blocked','source_message':'Source access restricted.',
+                     'retrieval_complete':False, 'partial':True}
+        snapshot = build_turn_snapshot(turn_id='formal-source', persistent_state={
+            'accumulated_search_criteria':{'area':'Camden','max_budget':1900},
+            'extracted_context':{'view_results':[], 'search_retrieval':retrieval}}, context_revision=2)
+        patch = snapshot_to_session_patch(snapshot)
+>       assert patch['extracted_context']['search_retrieval'] == retrieval
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'extracted_context'
+
+tests/test_formal_source_and_composition.py:54: KeyError
+_____________ test_a_weekly_budget_reaches_the_tool_in_either_unit _____________
+
+    def test_a_weekly_budget_reaches_the_tool_in_either_unit():
+        """"£350 per week" legitimately arrives as 350 or as its monthly conversion."""
+        message = "my budget is £350 per week"
+        weekly, dropped_w = ground_hard_constraints({"max_budget": 350}, {}, message)
+        from core.tenancy_reference import monthly_from_weekly
+        assert weekly["max_budget"] == monthly_from_weekly(350) and dropped_w == []
+        assert weekly["budget_period"] == "month"
+    
+        monthly, dropped_m = ground_hard_constraints({"max_budget": 1517}, {}, message)
+>       assert monthly["max_budget"] == monthly_from_weekly(350) and dropped_m == []
+E       AssertionError: assert (1516.6666666666667 == 1516.6666666666667 and ['max_budget'] == []
+E        +  where 1516.6666666666667 = <function monthly_from_weekly at 0x7614e6616ca0>(350)
+E         
+E         Left contains one more item: 'max_budget'
+E         Use -v to get more diff)
+
+tests/test_unverified_commute_and_similar_fallback.py:101: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_formal_source_and_composition.py::test_source_panel_state_survives_snapshot_and_session_restore
+FAILED tests/test_unverified_commute_and_similar_fallback.py::test_a_weekly_budget_reaches_the_tool_in_either_unit
+2 failed, 134 passed in 22.19s

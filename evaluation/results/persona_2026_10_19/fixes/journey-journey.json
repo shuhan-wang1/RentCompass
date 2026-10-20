@@ -1,0 +1,61 @@
+{
+  "checks": [
+    {
+      "case": "Real SSE greeting creates a durable conversation",
+      "passed": true
+    },
+    {
+      "case": "Reload restores greeting snapshot and chosen locale",
+      "passed": true
+    },
+    {
+      "case": "Actual cached whole-home search returns cards",
+      "passed": true
+    },
+    {
+      "case": "Real result snapshot matches form",
+      "passed": true
+    },
+    {
+      "case": "Stale source is visible on actual result cards",
+      "passed": true
+    },
+    {
+      "case": "Favorite is persisted through the public API",
+      "passed": true
+    },
+    {
+      "case": "Reload restores full result count and criteria",
+      "passed": true
+    },
+    {
+      "case": "Real empty search clears old cards",
+      "passed": true
+    },
+    {
+      "case": "Reload cannot resurrect the old result set",
+      "passed": true
+    },
+    {
+      "case": "Saved favorite retains its original budget basis",
+      "passed": true
+    },
+    {
+      "case": "A second conversation starts with independent criteria",
+      "passed": true
+    },
+    {
+      "case": "Switching back restores the correct empty plan",
+      "passed": true
+    },
+    {
+      "case": "Guest export contains both conversations and saved homes",
+      "passed": true
+    },
+    {
+      "case": "No browser runtime exception",
+      "passed": true
+    }
+  ],
+  "errors": []
+}

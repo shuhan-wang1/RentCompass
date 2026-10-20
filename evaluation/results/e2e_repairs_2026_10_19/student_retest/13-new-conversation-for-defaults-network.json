@@ -1,0 +1,32 @@
+[
+  {
+    "url": "http://127.0.0.1:15008/api/conversations",
+    "status": 201,
+    "method": "POST",
+    "request_headers": {
+      "accept": "*/*",
+      "content-type": "application/json",
+      "cookie": "[REDACTED]",
+      "origin": "http://127.0.0.1:15008",
+      "referer": "http://127.0.0.1:15008/",
+      "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Linux\""
+    },
+    "request_body": "{\"user_id\": \"15f470821e334cc68b70d7f959b67421\", \"title\": \"新会话\"}",
+    "response_headers": {
+      "x-agent-version": "e2e-repair-frozen-working-tree",
+      "access-control-allow-credentials": "true",
+      "access-control-allow-origin": "http://127.0.0.1:15008",
+      "content-length": "467",
+      "date": "Mon, 19 Oct 2026 09:00:32 GMT",
+      "x-agent-arch": "fc_loop",
+      "content-type": "application/json",
+      "x-agent-specialists": "0",
+      "server": "uvicorn",
+      "vary": "Cookie"
+    },
+    "response_body": "{\"conversation\": {\"agent_arch\": \"fc_loop\", \"agent_version\": \"e2e-repair-frozen-working-tree\", \"branch_depth\": 0, \"created_at\": \"2026-10-19T09:00:33.528659+00:00\", \"edited_slot_turn_id\": null, \"fork_reason\": null, \"forked_from_turn_id\": null, \"id\": \"51817b80f9ea41649667074bee9a3b7f\", \"message_count\": 0, \"parent_conversation_id\": null, \"root_conversation_id\": \"51817b80f9ea41649667074bee9a3b7f\", \"strict\": false, \"title\": \"新会话\", \"updated_at\": \"2026-10-19T09:00:33.528659+00:00\"}}"
+  }
+]

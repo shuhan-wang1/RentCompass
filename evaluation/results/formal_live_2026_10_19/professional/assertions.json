@@ -1,0 +1,144 @@
+[
+  {
+    "id": "P01",
+    "status": "PASS",
+    "assertion": "No fabricated available properties or full affordability claim in captured replies",
+    "observed": true
+  },
+  {
+    "id": "P02",
+    "status": "PASS",
+    "assertion": "Empty retrieval is explicitly distinguished from empty housing market",
+    "observed": true
+  },
+  {
+    "id": "P03",
+    "status": "PASS",
+    "assertion": "Current weather is not presented as verified tomorrow forecast",
+    "observed": true
+  },
+  {
+    "id": "P04",
+    "status": "PASS",
+    "assertion": "Station itinerary and one-way fare are not promoted to property commute or monthly total",
+    "observed": true
+  },
+  {
+    "id": "P05",
+    "status": "PASS",
+    "assertion": "All six chat messages persist after browser reopen/reload",
+    "observed": true
+  },
+  {
+    "id": "F01",
+    "status": "FAIL",
+    "severity": "high",
+    "assertion": "Hybrid worker must retain Bank commute and 35min ceiling",
+    "observed": {
+      "amenities_of_interest": [],
+      "area": "London",
+      "areas": [
+        "London"
+      ],
+      "bedrooms": 1,
+      "bedrooms_minimum": false,
+      "budget_period": "month",
+      "commute_destination": null,
+      "destination": null,
+      "max_budget": null,
+      "max_budget_monthly": null,
+      "max_travel_time": null,
+      "move_in_date": null,
+      "no_commute": true,
+      "property_features": [],
+      "rent_filter_ceiling_monthly": null,
+      "room_type": "whole",
+      "soft_preferences": []
+    },
+    "reason": "First turn has no_commute=true and null commute destination/travel limit despite explicit Tue-Thu Bank commute."
+  },
+  {
+    "id": "F02",
+    "status": "FAIL",
+    "severity": "high",
+    "assertion": "Explicitly confirmed rent ceiling must be present in final search criteria and saved UI",
+    "observed": {
+      "max_budget": null,
+      "max_budget_monthly": null,
+      "rent_filter_ceiling_monthly": null
+    },
+    "reason": "All rent ceiling fields remain null after selecting the first clarification option; final UI Budget empty."
+  },
+  {
+    "id": "F03",
+    "status": "FAIL",
+    "severity": "high",
+    "assertion": "Bank commute destination must survive in view_state and refreshed form",
+    "observed": {
+      "commute_destination": "Bank station, London",
+      "view_state_destination": null,
+      "form_destination": ""
+    },
+    "reason": "Raw criteria commute_destination is Bank station, London, but view_state destination and UI are empty."
+  },
+  {
+    "id": "F04",
+    "status": "FAIL",
+    "severity": "medium",
+    "assertion": "A requested travel date must not become a move-in date",
+    "observed": "2026-10-20",
+    "reason": "Only commute arrival date 20 October was supplied; response search criteria records move_in_date=2026-10-20."
+  },
+  {
+    "id": "F05",
+    "status": "FAIL",
+    "severity": "medium",
+    "assertion": "Distinct rent and overall budget constraints should not block unrelated TfL and weather questions",
+    "observed": {
+      "response_type": "clarification",
+      "known_criteria": {
+        "area": null,
+        "areas": [],
+        "bedrooms": null,
+        "budget_period": null,
+        "commute_destination": null,
+        "max_budget": null,
+        "max_travel_time": null,
+        "move_in_date": null,
+        "no_commute": null,
+        "property_features": [],
+        "room_type": null,
+        "soft_preferences": []
+      }
+    },
+    "reason": "Second turn only asked which figure to use, discarded known criteria, and did not answer the independent transport/weather requests."
+  },
+  {
+    "id": "F06",
+    "status": "FAIL",
+    "severity": "medium",
+    "assertion": "Actual commute plan must show usable route, requested arrival check, peak status and requested monthly estimate",
+    "observed": "I couldn't find listings matching your criteria near Lewisham in the retrieved data. Please check the area spelling, or adjust the budget/area and try again (you can also use the search form on the right). No usable source candidates were retrieved; this does not establish that the market is empty.\n\nReturned journey: Lewisham station, London → Bank station, London, 27 minutes (the planner's fastest returned itinerary).\nThis origin-specific itinerary does not verify another property's travel time, arrival reliability, or step-free access.\nReturned one-way fare (Lewisham station, London → Bank station, London): £3.20; this is not a return fare or a monthly total.\nCurrent weather returned for Lewisham station, London: 12.1°C, Overcast.\nOnly current conditions were returned; no multi-day forecast is verified.\nA numerical rain probability was not returned.",
+    "reason": "Only 27-minute fastest itinerary summary and £3.20 one-way fare shown; no lines/legs/change count, 08:45 arrival validation, peak qualification or monthly estimate."
+  },
+  {
+    "id": "F07",
+    "status": "FAIL",
+    "severity": "medium",
+    "assertion": "Tomorrow morning weather request must be answered or specifically identified as unavailable",
+    "observed": "I couldn't find listings matching your criteria near Lewisham in the retrieved data. Please check the area spelling, or adjust the budget/area and try again (you can also use the search form on the right). No usable source candidates were retrieved; this does not establish that the market is empty.\n\nReturned journey: Lewisham station, London → Bank station, London, 27 minutes (the planner's fastest returned itinerary).\nThis origin-specific itinerary does not verify another property's travel time, arrival reliability, or step-free access.\nReturned one-way fare (Lewisham station, London → Bank station, London): £3.20; this is not a return fare or a monthly total.\nCurrent weather returned for Lewisham station, London: 12.1°C, Overcast.\nOnly current conditions were returned; no multi-day forecast is verified.\nA numerical rain probability was not returned.",
+    "reason": "Only current 12.1 C Overcast returned; current-only limit is honest, but tomorrow-morning forecast and walking decision remain unmet."
+  },
+  {
+    "id": "B01",
+    "status": "BLOCKED_EXTERNAL_403",
+    "assertion": "Successfully retrieve and certify real available housing",
+    "reason": "Authorized brief reports real OnTheMarket robots preflight CloudFront 403 and paused traffic with captured rejection replay; no successful housing evidence in these three turns."
+  },
+  {
+    "id": "N01",
+    "status": "NOT_VERIFIED",
+    "assertion": "Returned 27min/£3.20/12.1C correspond exactly to live source outputs and requested peak/time conditions",
+    "reason": "Browser payload does not expose transport/weather source data, source request IDs, departure/arrival request parameters or fare type. Parent should correlate by turn_id; do not count absent evidence as a pass."
+  }
+]

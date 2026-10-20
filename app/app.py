@@ -14,6 +14,7 @@ except Exception:
 import asyncio
 import uuid
 import copy
+import math
 import threading
 import os
 import time
@@ -23,7 +24,9 @@ import subprocess
 import contextvars
 from flask import Flask, request, jsonify, render_template, session, g, has_request_context
 from flask_cors import CORS
-from werkzeug.exceptions import HTTPException, BadRequest, UnsupportedMediaType
+from werkzeug.exceptions import (
+    HTTPException, BadRequest, RequestEntityTooLarge, UnsupportedMediaType,
+)
 import json
 import re
 from datetime import datetime
@@ -32,15 +35,17 @@ from uk_rent_agent.web.background_jobs import OutboxWorker
 from uk_rent_agent.web.conversation_store import (
     ConversationStore, ConversationNotFound, NoCompletedTurn, TurnNotFound,
     TurnNotInConversation, TurnNotCompleted, ConversationBusy,
-    PrivacyErasureInProgress,
+    PrivacyErasureInProgress, IdempotencyKeyReused,
 )
 from uk_rent_agent.web.identity import (
     resolve_user_id, normalize_message, valid_user_id, InvalidUserId, InvalidMessage,
+    text_is_storable,
 )
 from uk_rent_agent.web.auth_store import (
     AuthStore, AuthError, InvalidUsername, WeakPassword, UsernameTaken,
 )
 from uk_rent_agent.config import Config
+from uk_rent_agent.agent.progress import report_progress
 from uk_rent_agent.agent.architecture import MANAGER_V1_ARCH, uses_fc_runtime
 from uk_rent_agent.web.rate_limit import SlidingWindowRateLimiter
 from uk_rent_agent.agent.persistence import get_sqlite_checkpointer, get_prefs_store, graph_config
@@ -48,11 +53,14 @@ from uk_rent_agent.observability import (
     agent_execution_context,
     new_request_id,
     request_context,
+    request_id_var,
 )
 from core.data_loader import load_mock_properties_from_csv, load_properties
 from core.tool_system import create_tool_registry
 from core.langgraph_agent import build_agent_graph, create_initial_state
 from core.tools.search_properties import search_properties_impl
+from core.tenancy_reference import monthly_from_weekly
+from core.source_status import retrieval_metadata
 from core.context_assembler import (
     assemble as assemble_context,
     build_turn_snapshot,
@@ -67,84 +75,13 @@ from core.llm_interface import call_ollama
 from core.candidate_validation import (
     render_candidate_status, validate_search_payload_with_provider,
 )
+from uk_rent_agent.web.view_state import view_state
 
 
-def _consume_abandoned_graph_task(task) -> None:
-    try:
-        task.exception()
-    except (asyncio.CancelledError, Exception):
-        pass
-
-
-class _GraphLoopRunner:
-    """One loop-local graph/provider generation in a bounded self-healing pool."""
-
-    def __init__(self):
-        self._start_lock = threading.Lock()
-        self._ready = threading.Event()
-        self._loop = None
-        self._thread = None
-        self._quarantined = False
-        self.graph = None
-
-    def _serve(self):
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        self._loop = loop
-        self._ready.set()
-        loop.run_forever()
-
-    def _ensure_started(self):
-        with self._start_lock:
-            if self._thread is None or not self._thread.is_alive():
-                self._ready.clear()
-                self._thread = threading.Thread(
-                    target=self._serve, name="agent_graph_loop", daemon=True,
-                )
-                self._thread.start()
-        if not self._ready.wait(timeout=5):
-            raise RuntimeError("agent graph loop failed to start")
-        if self._loop is None:
-            raise RuntimeError("agent graph loop unavailable")
-
-    def available(self):
-        with self._start_lock:
-            return not self._quarantined
-
-    def submit(self, coroutine):
-        self._ensure_started()
-        with self._start_lock:
-            if self._quarantined:
-                coroutine.close()
-                raise RuntimeError("agent graph loop is quarantined")
-            loop = self._loop
-        return asyncio.run_coroutine_threadsafe(coroutine, loop)
-
-    def quarantine(self, recovered_callback):
-        """Reject new work until a queued heartbeat proves this loop is responsive."""
-        self._ensure_started()
-        with self._start_lock:
-            if self._quarantined:
-                return False
-            self._quarantined = True
-            loop = self._loop
-
-        async def _heartbeat():
-            return True
-
-        probe = asyncio.run_coroutine_threadsafe(_heartbeat(), loop)
-
-        def _recovered(_future):
-            try:
-                _future.result()
-            except BaseException:
-                return
-            with self._start_lock:
-                self._quarantined = False
-            recovered_callback(self)
-
-        probe.add_done_callback(_recovered)
-        return True
+from uk_rent_agent.agent.execution import (
+    GraphLoopRunner as _GraphLoopRunner,
+    consume_abandoned_graph_task as _consume_abandoned_graph_task,
+)
 
 
 _GRAPH_RUNNER_CAPACITY = 2
@@ -288,6 +225,7 @@ _agent_init_lock = threading.Lock()
 def _ensure_agent_runtime():
     """Return an atomically published, loop-bound graph/provider generation."""
     global agent_graph, tool_registry, agent_tool_provider
+
 
     # The same lock is used by runner rotation, so callers can only observe a
     # complete (runner, graph) generation. A stale caller still retains the old
@@ -820,7 +758,108 @@ def _crashed_turn_observations() -> dict:
     merged = dict(turn_observations.snapshot())
     merged.update(turn_observations.write_audit_snapshot(AGENT_ARCH))
     merged.update(turn_observations.dsml_snapshot())
+    if _died_before_the_observation_window():
+        # THE FOUR-CELL RULE (README §13). `llm_observer_installed` is a fact about
+        # the PROCESS and is stamped True whenever the callback is attached; the
+        # usage status is a fact about the TURN. A request that died before
+        # `begin_turn()` opened its window has an empty snapshot, so the status
+        # defaulted to `not_instrumented` — the one cell the consumer never forgives
+        # (the 2026-07-25 class: nothing was watching) — while the flag next to it
+        # said something WAS. An anonymous 4xx-shaped request could therefore charge
+        # the canary gate an instrumentation violation (2026-09-03 T3 高-1).
+        #
+        # Nothing here is a guess: the endpoints make every model call AFTER
+        # `begin_turn()`, so a turn that never reached it provably made none. Saying
+        # `no_llm_calls` is the observation; `unknown_turn_signals` then downgrades
+        # it to `partial` for an unobservable outcome, which is the honest,
+        # exemption-eligible cell rather than the accusation.
+        merged["llm_usage_status"] = turn_observations.USAGE_NO_CALLS
+        merged["llm_calls"] = 0
+        # The same argument, applied to every other field `unknown_turn_signals`
+        # nulls. It nulls them because a turn that CRASHED MID-FLIGHT may already
+        # have dispatched a write or flushed partial output, so a 0 there would be
+        # an assumption. That reasoning does not reach a request that never opened
+        # its window: on both canary endpoints nothing between the route entry and
+        # `begin_turn()` calls the model, dispatches a tool or runs a guard, so
+        # "none of that happened" is an OBSERVATION, not a fabricated zero. Stating
+        # it is what stops a pre-window 500 holding the gate on six null required
+        # fields it could never have filled.
+        merged["dsml_blocked"] = 0
+        merged["dsml_leak"] = 0
+        merged["provider_schema_400_count"] = 0
+        merged["denied_write_count"] = 0
+        merged["tainted_write_executed_count"] = 0
+        merged["forbidden_write_executed_count"] = 0
+        merged["write_audit"] = []
     return merged
+
+
+def _died_before_the_observation_window() -> bool:
+    """True when this request failed BEFORE its turn opened an observation window.
+
+    Both conditions are required, and they are independent: `current()` is None
+    whenever no window is open in this context, and `g.canary_turn_started` is
+    stamped in the same breath as `begin_turn()`, so its absence proves the window
+    was never opened for THIS request rather than merely being unreachable from
+    here. A turn that ran and then died at the response boundary fails both tests
+    and keeps reporting exactly what its accumulators saw.
+    """
+    try:
+        if turn_observations.current() is not None:
+            return False
+    except Exception:
+        return False
+    try:
+        if not has_request_context():
+            return False
+        return getattr(g, "canary_turn_started", None) is None
+    except Exception:
+        return False
+
+
+# --- answer contract (manager_v1) -> canary record + API response ----------
+# The arch builds a full AnswerContract (root task id, evidence refs, the answer text
+# itself). None of that may go into an ops log or a canary record, and until now none
+# of it reached ANY consumer at all — the object was written to the graph state and
+# read by nothing (2026-09-03 review P2-1). What is forwarded is the bounded,
+# content-free summary below and nothing else:
+#
+#     {"valid": bool, "limitations": [str], "final_response_truncated": bool}
+#
+# `valid` is True unless the arch explicitly marked the contract invalid (the builder
+# raised and the fallback payload carries `valid: False` plus an error_code).
+# `limitations` are the machine-authored "task X returned no evidence" lines — never
+# user text, never tool output — capped at 8 entries of 200 chars. The whole key is
+# ABSENT (never null) when the architecture produced no contract, so a legacy/fc_loop
+# record stays byte-for-byte what it was.
+_ANSWER_CONTRACT_MAX_LIMITATIONS = 8
+_ANSWER_CONTRACT_MAX_LIMITATION_CHARS = 200
+
+
+def _answer_contract_summary(final_state) -> dict | None:
+    """Bounded, content-free projection of the arch's answer contract, or None."""
+    if not isinstance(final_state, dict):
+        return None
+    contract = final_state.get("answer_contract")
+    if not isinstance(contract, dict) or not contract:
+        return None
+    raw = contract.get("limitations")
+    limitations = []
+    if isinstance(raw, (list, tuple)):
+        for item in raw[:_ANSWER_CONTRACT_MAX_LIMITATIONS]:
+            if not isinstance(item, str):
+                continue
+            text = item.strip()
+            if text:
+                limitations.append(text[:_ANSWER_CONTRACT_MAX_LIMITATION_CHARS])
+    return {
+        # A contract that did not declare itself invalid is valid: the success shape
+        # is the model_dump of a VALIDATED AnswerContract and carries no `valid` key,
+        # while the failure shape sets it to False explicitly.
+        "valid": bool(contract.get("valid", True)),
+        "limitations": limitations,
+        "final_response_truncated": bool(contract.get("final_response_truncated")),
+    }
 
 
 def _build_fc_signals(final_state) -> dict:
@@ -881,8 +920,59 @@ def _build_fc_signals(final_state) -> dict:
     }
     _CANARY_TOOL_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,127}$")
 
-    def _tool_latency_from_artifacts(artifacts) -> dict:
-        """Per-tool latency, derived from the artifact ledger both arches already write.
+    def _wave_latency_rows(task_results):
+        """The legacy WAVE executor's calls, projected onto the artifact fold's shape.
+
+        A parallel wave (`dispatch_tasks -> task_worker -> gather_wave`) writes
+        `task_results`, never `tool_artifacts` — `tool_artifacts` has no reducer in
+        `agent.state`, so concurrent `Send` workers cannot append to it. `tool_batches`
+        counts a wave regardless (`wave_batches` below), which is how a legacy turn
+        reported `tool_batches: 1` with NO `tool_latency` key at all: the calls happened,
+        were timed, and were invisible to the only function that reads timings.
+
+        The rows are NOT folded into `tool_artifacts` — that ledger is read by the
+        critic, `_has_usable_retrieval_evidence` and `_collect_grounding_evidence`, and a
+        telemetry fix must not move a grounding decision. They are projected HERE
+        instead, and only into the latency summary.
+
+        `task_worker_node` writes `started_at`/`ended_at`/`elapsed_ms` in the same field
+        names `agent_loop._artifact` uses, so the fold needs no second implementation —
+        only the two shape differences a wave row has:
+
+          * identity is `(run_id, id, index)` rather than an artifact position, so a
+            duplicated `Send` (the reducer is an append) cannot double-count a call;
+          * there are no `timed_out`/`abandoned` FLAGS. A per-task timeout is reported in
+            `obs`, using one exact producer-side template, so that template — not a loose
+            search for the word "timeout" — is what identifies it. A killed task is
+            counted and kept OUT of the samples, exactly as a timed-out artifact is: the
+            duration measures the budget, not the tool.
+        """
+        rows = []
+        seen_ids = set()
+        if not isinstance(task_results, list):
+            return rows
+        for r in task_results:
+            if not isinstance(r, dict):
+                continue
+            name = r.get("tool")
+            name = name.strip() if isinstance(name, str) else ""
+            if not _CANARY_TOOL_NAME_RE.fullmatch(name):
+                continue
+            key = (r.get("run_id"), r.get("id"), r.get("index"), name)
+            if key in seen_ids:
+                continue
+            seen_ids.add(key)
+            obs = r.get("obs")
+            timed_out = (isinstance(obs, str)
+                         and obs.startswith(f"Error: {name} timed out after"))
+            rows.append({"tool": name, "elapsed_ms": r.get("elapsed_ms"),
+                         "timed_out": timed_out, "abandoned": False,
+                         "params": r.get("params")})
+        return rows
+
+    def _tool_latency_from_artifacts(artifacts, task_results=None) -> dict:
+        """Per-tool latency, derived from the artifact ledger both arches already write,
+        plus the legacy wave's `task_results` (see ``_wave_latency_rows``).
 
         ``elapsed_ms`` is set on EVERY artifact (see ``agent_loop._artifact``), so this
         needs no new instrumentation on the hot path — only a fold at the end of the
@@ -897,10 +987,40 @@ def _build_fc_signals(final_state) -> dict:
         """
         import math as _math
 
+        rows = [a for a in artifacts if isinstance(a, dict)]
+        wave_rows = _wave_latency_rows(task_results)
+        if wave_rows:
+            # Cross-path de-duplication. The single-tool node and the wave are different
+            # routes and do not normally both run for one call, but "normally" is not a
+            # guarantee: if a call appears in BOTH ledgers it is ONE call, and counting it
+            # twice would understate p50 by pairing a duration with itself. The shared key
+            # is (tool, params digest) — the same digest the no-progress guard uses, so
+            # two rows that agree on it are the same call by the runtime's own definition.
+            try:
+                from core.langgraph_agent import _params_digest as _digest
+            except Exception:
+                _digest = None
+            if _digest is not None:
+                seen = {
+                    (a.get("tool"), a.get("params_digest"))
+                    for a in rows
+                    if isinstance(a.get("params_digest"), str) and a.get("params_digest")
+                }
+                if seen:
+                    kept = []
+                    for row in wave_rows:
+                        try:
+                            digest = _digest(row["tool"], row.get("params") or {})
+                        except Exception:
+                            digest = None
+                        if digest is not None and (row["tool"], digest) in seen:
+                            continue
+                        kept.append(row)
+                    wave_rows = kept
+            rows = rows + wave_rows
+
         samples: dict = {}
-        for a in artifacts:
-            if not isinstance(a, dict):
-                continue
+        for a in rows:
             name = a.get("tool")
             name = name.strip() if isinstance(name, str) else ""
             if not _CANARY_TOOL_NAME_RE.fullmatch(name):
@@ -938,7 +1058,8 @@ def _build_fc_signals(final_state) -> dict:
                          "timed_out": slot["timed_out"], "abandoned": slot["abandoned"]}
         return out
 
-    tool_latency = _tool_latency_from_artifacts(artifacts)
+    tool_latency = _tool_latency_from_artifacts(
+        artifacts, final_state.get("task_results"))
     wave_batches = 1 if final_state.get("task_results") else 0
     tool_batches = len(artifact_turns) + wave_batches
     signals = {
@@ -1008,6 +1129,10 @@ def _build_fc_signals(final_state) -> dict:
         # Optional, non-gating diagnostics. The telemetry layer already strips
         # objectives, arguments, data, errors and any other user-derived content.
         signals["specialist"] = dict(specialist)
+    _contract = _answer_contract_summary(final_state)
+    if _contract is not None:
+        # Additive and non-gating; absent entirely on an arch that produced none.
+        signals["answer_contract"] = _contract
     return signals
 
 
@@ -1111,6 +1236,8 @@ def _get_session(user_id, conversation_id):
         try:
             snap = conversation_store.latest_snapshot(user_id, conversation_id)
             if snap:
+                from core.snapshot_recovery import recover_snapshot
+                snap = recover_snapshot(snap, conversation_store.get_messages(user_id, conversation_id))
                 patch = snapshot_to_session_patch(snap)  # SnapshotSchemaError on old ver
                 ps = sess.persistent_state
                 if patch.get("user_preferences"):
@@ -1118,13 +1245,16 @@ def _get_session(user_id, conversation_id):
                 if patch.get("accumulated_search_criteria"):
                     ps["accumulated_search_criteria"] = patch["accumulated_search_criteria"]
                 ec = ps.setdefault("extracted_context", {})
+                if isinstance(patch.get("search_retrieval"), dict):
+                    ec["search_retrieval"] = patch["search_retrieval"]
                 if patch.get("rolling_summary"):
                     ec["rolling_summary"] = patch["rolling_summary"]
                 if patch.get("rolling_summary_through_turn_id"):
                     ec["rolling_summary_through_turn_id"] = patch["rolling_summary_through_turn_id"]
-                if patch.get("last_results") and not sess.last_results:
-                    sess.last_results = patch["last_results"]
-                    previous, structured = _build_results_context(patch["last_results"])
+                if 'view_results' in snap or patch.get("last_results"):
+                    sess.last_results = snap.get('view_results', patch['last_results'])
+                    ec['view_results'] = sess.last_results
+                    previous, structured = _build_results_context(sess.last_results)
                     ec["previous_search_results"] = previous
                     ec["last_results"] = structured
                 # 累计推荐注册表随快照存活重启/fork（轻量条目，体积可控）。
@@ -1144,10 +1274,10 @@ def _get_session(user_id, conversation_id):
             # Rehydrate the last structured search as well as text history. A browser
             # refresh must not make property follow-ups lose their target merely because
             # the in-memory cache was evicted.
-            if not sess.last_results:
+            if not sess.last_results and 'view_results' not in sess.persistent_state.get('extracted_context', {}):
                 for message in reversed(conversation_store.get_messages(user_id, conversation_id)):
                     recommendations = message.get('recommendations')
-                    if message.get('role') == 'assistant' and isinstance(recommendations, list) and recommendations:
+                    if message.get('role') == 'assistant' and isinstance(recommendations, list):
                         sess.last_results = recommendations
                         previous, structured = _build_results_context(recommendations)
                         sess.persistent_state.setdefault('extracted_context', {})
@@ -1194,6 +1324,7 @@ def _handle_http_exception(e: HTTPException):
     if _is_api_path():
         message = {
             400: "bad request", 404: "not found", 405: "method not allowed",
+            413: "request body is too large",
             415: "unsupported media type", 500: "internal server error",
         }.get(e.code, (e.description or e.name or "error"))
         return jsonify({"error": message}), (e.code or 500)
@@ -1259,7 +1390,7 @@ def _emit_canary_boundary_5xx() -> None:
             # request id) and appends a uuid4 so distinct turns stay distinct.
             request_id=(getattr(g, "canary_request_id", None)
                         or f"unknown:{uuid.uuid4().hex}"),
-            http_status=500,
+            http_status=200 if getattr(g, "chat_streaming", False) else 500,
             turn_outcome=OUTCOME_SERVER_ERROR,
             turn_latency_ms=latency,
             # None (not unknown_turn_signals()) so this goes through the SAME overlay
@@ -1327,12 +1458,106 @@ def _request_body():
     return None
 
 
+# Bounds for the post-parse text scan below. A body is already capped at
+# MAX_REQUEST_BYTES, so these only stop a pathological shape (a deeply nested or
+# very wide document) from making the scan itself the expensive part of the request.
+_BODY_SCAN_MAX_DEPTH = 12
+_BODY_SCAN_MAX_NODES = 5000
+
+
+def _reject_unstorable_text(data) -> None:
+    """Refuse a parsed body carrying text no durable store can hold.
+
+    `json.loads` accepts a `\\udXXX` escape and hands back a Python str containing a
+    LONE SURROGATE; sqlite3 encodes bind parameters as strict UTF-8 and raises
+    `UnicodeEncodeError` on one. Before this check that surfaced as an anonymous
+    HTTP 500 from inside `conversation_store.start_request_turn` — with a canary
+    record charging the gate an instrumentation violation for a one-line request
+    body (2026-09-03 T3 高-1). An embedded NUL is refused for the same reason: it
+    truncates the value for several readers rather than being stored as typed.
+
+    This is the request-wide layer; `normalize_message` states the same rule for the
+    chat message specifically, and the store now sanitises as a third line of
+    defence. A client error is reported as a 4xx here, never as a server error.
+    """
+    stack = [(data, 0)]
+    nodes = 0
+    while stack:
+        node, depth = stack.pop()
+        nodes += 1
+        if nodes > _BODY_SCAN_MAX_NODES or depth > _BODY_SCAN_MAX_DEPTH:
+            # Too big/deep to verify exhaustively. The store sanitises what it is
+            # handed, so stopping here degrades to "sanitised" rather than "500".
+            return
+        if isinstance(node, str):
+            if not text_is_storable(node):
+                raise ApiError(
+                    400,
+                    "request body contains text that cannot be stored "
+                    "(unpaired unicode surrogate or NUL byte)")
+        elif isinstance(node, dict):
+            for key, value in node.items():
+                if isinstance(key, str) and not text_is_storable(key):
+                    raise ApiError(
+                        400,
+                        "request body contains a field name that cannot be stored "
+                        "(unpaired unicode surrogate or NUL byte)")
+                stack.append((value, depth + 1))
+        elif isinstance(node, (list, tuple)):
+            for value in node:
+                stack.append((value, depth + 1))
+
+
+# A 409 "turn in progress" is NOT rate limiting, and its Retry-After is a polling hint.
+# It used to carry the remaining LEASE (up to 900 s, the crash-recovery bound) even when
+# the live turn finished in seconds, and the UI turned that into a pane-wide "Too many
+# requests. Please wait 480 seconds" lock-out (2026-10-19 C-05). The lease bound is still
+# reported, in the body, as `lease_expires_in`.
+_BUSY_RETRY_HINT_S = 3
+
+
+def _busy_retry_after(exc) -> str:
+    return str(max(1, min(int(getattr(exc, "retry_after", 1) or 1), _BUSY_RETRY_HINT_S)))
+
+
+def _conversation_busy_response(exc, **body):
+    """The one 409 shape for a write refused because a turn holds the lease."""
+    payload = {
+        "error": "a conversation turn is still running; retry after it finishes",
+        "code": "turn_in_progress",
+        "running_turn_id": exc.turn_id,
+        "lease_expires_in": int(getattr(exc, "retry_after", 1) or 1),
+    }
+    payload.update(body)
+    response = jsonify(payload)
+    response.status_code = 409
+    response.headers["Retry-After"] = _busy_retry_after(exc)
+    return response
+
+
 def get_json_or_400() -> dict:
-    """Parse a REQUIRED JSON object body, mapping Flask's HTML errors to JSON per contract."""
+    """Parse a REQUIRED JSON object body, mapping Flask's HTML errors to JSON per contract.
+
+    An over-size body is a 413 with the limit stated, NOT the generic 400: Flask
+    raises `RequestEntityTooLarge` from `get_data()`, which is not a `BadRequest`
+    subclass and used to fall into the catch-all below and be reported as "malformed
+    JSON body" — a client could not tell "too big" from "syntactically broken"
+    (2026-09-03 T3 低-1).
+    """
+    limit = _runtime_config.max_request_bytes
+    declared = None
+    try:
+        declared = request.content_length
+    except Exception:
+        declared = None
+    if isinstance(declared, int) and limit and declared > limit:
+        raise ApiError(413, f"request body exceeds the {limit}-byte limit")
     try:
         data = request.get_json(silent=False)
     except UnsupportedMediaType:
         raise ApiError(415, "Content-Type must be application/json")
+    except RequestEntityTooLarge:
+        raise ApiError(413, f"request body exceeds the {limit}-byte limit")
     except BadRequest:
         raise ApiError(400, "malformed JSON body")
     except Exception:
@@ -1341,6 +1566,7 @@ def get_json_or_400() -> dict:
         raise ApiError(400, "request body must be JSON")
     if not isinstance(data, dict):
         raise ApiError(400, "request body must be a JSON object")
+    _reject_unstorable_text(data)
     return data
 
 
@@ -1369,14 +1595,8 @@ def _authed_user_id():
     be overridden by a (spoofable) client-supplied user_id. Returns None for guests, which
     preserves the original header/query/cookie/mint resolution untouched.
     """
-    try:
-        if session.get('authenticated'):
-            uid = session.get('auth_user_id')
-            if valid_user_id(uid or ''):
-                return uid
-    except Exception:
-        pass
-    return None
+    view = _validated_auth()
+    return view['user_id'] if view else None
 
 
 def resolve_identity(data=None):
@@ -1565,20 +1785,38 @@ def index():
 # keep the original self-declared-id behaviour, so this layer is purely additive.
 # ============================================================================
 
+_AUTH_SESSION_KEYS = ('authenticated', 'auth_user_id', 'auth_sid', 'username', 'display_name', 'user_id')
+
+
+def _validated_auth():
+    """Resolve one live server-side principal for every transport in this request."""
+    if hasattr(g, 'validated_auth'):
+        return g.validated_auth
+    view = None
+    if session.get('authenticated'):
+        view = auth_store.get_session(session.get('auth_sid'))
+        if not view or view['user_id'] != session.get('auth_user_id'):
+            view = None
+            g.invalid_auth_session = True
+            for key in _AUTH_SESSION_KEYS:
+                session.pop(key, None)
+    g.validated_auth = view
+    return view
+
+
 def _current_auth() -> dict:
     """Public auth view for the current session, or {"authenticated": False} for a guest."""
-    if session.get('authenticated') and valid_user_id(session.get('auth_user_id') or ''):
-        return {
-            "authenticated": True,
-            "user_id": session.get('auth_user_id'),
-            "username": session.get('username'),
-            "display_name": session.get('display_name') or session.get('username'),
-        }
+    view = _validated_auth()
+    if view:
+        return {"authenticated": True, **view}
     return {"authenticated": False}
 
 
 def _establish_session(view: dict) -> None:
     """Persist a verified account into the signed session cookie."""
+    auth_store.revoke_session(session.get('auth_sid'))
+    session.clear()
+    session['auth_sid'] = auth_store.create_session(view['user_id'], _runtime_config.session_ttl_seconds)
     session['authenticated'] = True
     session['auth_user_id'] = view['user_id']
     session['username'] = view['username']
@@ -1589,16 +1827,38 @@ def _establish_session(view: dict) -> None:
 @app.before_request
 def _enforce_auth():
     """When REQUIRE_AUTH is on, gate every /api/* route (except /api/auth/*) behind login."""
-    if not _runtime_config.require_auth:
-        return None
     if request.method == 'OPTIONS':
         return None  # never block CORS preflight
     path = request.path or ''
     if not path.startswith('/api/') or path.startswith('/api/auth/'):
         return None
-    if session.get('authenticated'):
+    view = _validated_auth()
+    if view:
+        return None
+    if not _runtime_config.require_auth and not getattr(g, 'invalid_auth_session', False):
         return None
     return jsonify({"error": "authentication required"}), 401
+
+
+def _trusted_proxy_ips() -> frozenset:
+    """The peer addresses whose ``X-Forwarded-For`` this process will believe.
+
+    EMPTY BY DEFAULT, and that is the fix. The previous rule was "if the peer is
+    loopback, take the rightmost XFF value", which meant anything that could reach
+    the app on loopback could pick its own rate-limit bucket: 15 requests with 15
+    different `X-Forwarded-For` values all passed a limiter that was already tripped
+    (2026-09-03 T3 低-3). Loopback is not evidence of nginx — in the one deployment
+    where nginx really is the peer, it is uvicorn's `--proxy-headers`
+    (docker-compose.yml passes it on both pools) that has ALREADY rewritten
+    `remote_addr` to the client address, so nothing here needs to read the header at
+    all. An operator running a reverse proxy without that flag opts in explicitly
+    with `TRUSTED_PROXY_IPS=127.0.0.1` (comma-separated).
+    """
+    raw = os.getenv("TRUSTED_PROXY_IPS", "")
+    return frozenset(part.strip() for part in raw.split(",") if part.strip())
+
+
+_TRUSTED_PROXY_IPS = _trusted_proxy_ips()
 
 
 def _rate_limit_subject() -> str:
@@ -1606,10 +1866,29 @@ def _rate_limit_subject() -> str:
     if user_id:
         return f"user:{user_id}"
     remote = request.remote_addr or "unknown"
-    if remote in {"127.0.0.1", "::1"}:
-        # Direct WSGI/test deployments may not run Uvicorn's proxy middleware.
-        # Production nginx overwrites XFF with exactly one address; accepting
-        # the rightmost value here preserves that one-hop contract.
+    if _TRUSTED_PROXY_IPS and remote in _TRUSTED_PROXY_IPS:
+        # A CONFIGURED hop, so the LAST element of the chain is the address that hop
+        # itself wrote, and everything left of it is whatever the client sent.
+        #
+        # The rightmost element is the right answer under BOTH nginx configurations
+        # in play here, which is why the rule is stated this way rather than as a
+        # single-address check:
+        #
+        #   * the nginx INSTALLED on this box (/etc/nginx/sites-available/
+        #     rentcompass.co.uk.conf) sets `X-Forwarded-For $proxy_add_x_forwarded_for`
+        #     — an APPEND, so the header is `<whatever the client sent>, <real peer>`
+        #     and only the last element is trustworthy;
+        #   * `deploy/nginx/*.conf` in this repo sets `X-Forwarded-For $remote_addr`
+        #     — a REPLACE, so the header is exactly one address, which is also the
+        #     last element.
+        #
+        # A forged prefix therefore cannot move the bucket: the client controls every
+        # element except the final one, and the final one is the only one read. What
+        # closed T3 低-3 is the TRUST decision above (an unconfigured peer never
+        # reaches this branch at all), not a restriction on the chain's shape — and an
+        # earlier revision of this fix rejected multi-element chains outright, which
+        # would have silently fallen back to `remote_addr` for every request behind
+        # the appending config that is actually deployed.
         xff = request.headers.get("X-Forwarded-For", "")
         forwarded = xff.rsplit(",", 1)[-1].strip() if xff else ""
         if forwarded:
@@ -1636,7 +1915,8 @@ def _limit_expensive_api_requests():
     )
     if allowed:
         return None
-    response = jsonify({"error": "too many requests; please try again shortly"})
+    response = jsonify({'error': 'too many requests; please try again shortly',
+                        'error_code': 'rate_limited', 'retry_after': retry_after})
     response.status_code = 429
     response.headers['Retry-After'] = str(retry_after)
     return response
@@ -1675,7 +1955,8 @@ def auth_login():
 @app.route('/api/auth/logout', methods=['POST'])
 def auth_logout():
     """Clear the authenticated identity (and the guest fallback id) from the session."""
-    for k in ('authenticated', 'auth_user_id', 'username', 'display_name', 'user_id'):
+    auth_store.revoke_session(session.get('auth_sid'))
+    for k in _AUTH_SESSION_KEYS:
         session.pop(k, None)
     return jsonify({"authenticated": False})
 
@@ -1693,6 +1974,15 @@ def auth_me():
 # 2. 所有请求都通过 LangGraph StateGraph Agent
 # 3. search_properties 工具内部整合了 Fine-tuned Model
 # ============================================================================
+
+def _request_id_reused_response(request_id: str):
+    """409 for an X-Request-Id reused with a different message (R1-15, mirrors C-07)."""
+    response = jsonify({"error": "this request id was already used for a different message",
+                        "code": "idempotency_key_reused"})
+    response.status_code = 409
+    response.headers["X-Request-Id"] = request_id
+    return response
+
 
 def _request_replay_response(user_id: str, request_id: str, turn: dict):
     """Return a durable response for a duplicate request without running the agent again."""
@@ -1717,6 +2007,36 @@ def _request_replay_response(user_id: str, request_id: str, turn: dict):
     return response
 
 
+def _prepare_chat_request():
+    """Resolve the request once for both the JSON and streaming transports."""
+    prepared = getattr(g, "prepared_chat_request", None)
+    if prepared is not None:
+        return prepared
+    from uk_rent_agent.web.chat_request import ChatRequest
+
+    data = get_json_or_400()
+    _validate_conversation_id(data)
+    user_id, _ = resolve_identity(data)
+    try:
+        message = normalize_message(data.get('message'))
+    except InvalidMessage as exc:
+        raise ApiError(400, str(exc))
+    context = data.get('context') or {}
+    if not isinstance(context, dict):
+        # A list/string/number context crashed deep in the turn and answered 502 "Sorry,
+        # something went wrong", after persisting a failed turn (2026-10-19 C-06).
+        raise ApiError(400, "context must be a JSON object")
+    prepared = ChatRequest(
+        data=data, user_id=user_id, message=message,
+        context=context,
+        is_continuation=data.get('is_continuation', False),
+        ui_language=_normalize_ui_language(data.get('ui_language')),
+        request_id=new_request_id(request.headers.get("X-Request-Id")),
+    )
+    g.prepared_chat_request = prepared
+    return prepared
+
+
 @app.route('/api/alex', methods=['POST'])
 async def api_alex():
     """
@@ -1729,35 +2049,56 @@ async def api_alex():
     - 是否需要查询天气（调用 get_weather 工具）
     - 是否需要搜索附近设施（调用 search_nearby_pois 工具）
     - 或者直接回答用户问题
+
+    Conversation contract:
+      * ``conversation_id`` OMITTED (or null) -> a new conversation is created
+        implicitly and its id is echoed in the response.
+      * ``conversation_id`` PRESENT but naming no conversation THIS caller owns ->
+        **404 ``conversation not found``**, matching
+        ``GET /api/conversations/<cid>/messages``. The endpoint never silently
+        substitutes a new conversation for an id the client asked for.
+
+    Response contract additions:
+      * ``answer_contract`` — present only when the architecture produced one
+        (manager_v1 with specialists). ``{"valid": bool, "limitations": [str],
+        "final_response_truncated": bool}``; never contains user text.
     """
-    # --- parse + validate (these raise ApiError → JSON 4xx, NOT 500) -----------
-    data = get_json_or_400()
-    _validate_conversation_id(data)  # reject list/dict/non-string cid before it hits sqlite
-    user_id, _session_id = resolve_identity(data)
-    try:
-        user_message = normalize_message(data.get('message'))
-    except InvalidMessage as e:
-        raise ApiError(400, str(e))
-
-    context = data.get('context', {}) or {}
-    is_continuation = data.get('is_continuation', False)
-    # 前端 UI 语言（并行 agent 发送 ui_language）；缺失/非法按 'en'。用于回复语言决策。
-    ui_language = _normalize_ui_language(data.get('ui_language'))
-
-    request_id = new_request_id(request.headers.get("X-Request-Id"))
+    prepared = _prepare_chat_request()
+    data = prepared.data
+    user_id = prepared.user_id
+    user_message = prepared.message
+    context = prepared.context
+    is_continuation = prepared.is_continuation
+    ui_language = prepared.ui_language
+    request_id = prepared.request_id
     # Idempotency is user-global, not merely conversation-local. This matters when
     # the first request implicitly creates a conversation and the client retries
     # before it has received that conversation id.
     existing_turn = conversation_store.get_request_turn(user_id, request_id)
     if existing_turn is not None:
+        if conversation_store.request_message_differs(user_id, existing_turn, user_message):
+            return _request_id_reused_response(request_id)
         return _request_replay_response(user_id, request_id, existing_turn)
 
     # --- resolve / implicitly create the conversation --------------------------
     # New conversations are stamped with THIS process's architecture provenance at creation;
     # existing ones are reconciled after a pool switch (normally a no-op).
+    #
+    # OMITTED conversation_id  -> implicit creation (the documented first-turn shape).
+    # PRESENT but unknown/not owned by this caller -> 404, the SAME answer
+    # `GET /api/conversations/<cid>/messages` gives. It used to return 200 with a
+    # freshly minted conversation id, so pointing at another user's conversation
+    # produced a success the client could not distinguish from "your conversation
+    # continued" while the read route 404'd on the very same id (2026-09-03 T3 低-2).
+    # 404 is the safer half of that disagreement: no data crossed either way, but a
+    # client that believes it is appending to a conversation is now told when it is
+    # not, and a probe for another user's conversation id gets the same answer
+    # whether or not the id exists for someone else.
     conversation_id = data.get('conversation_id')
-    conv = conversation_store.get_conversation(user_id, conversation_id) if conversation_id else None
-    if conv:
+    if conversation_id:
+        conv = conversation_store.get_conversation(user_id, conversation_id)
+        if not conv:
+            raise ApiError(404, "conversation not found")
         conversation_id = conv["id"]
         _reconcile_agent_arch(user_id, conversation_id, conv)
     else:
@@ -1782,13 +2123,9 @@ async def api_alex():
             strict=DEEPSEEK_STRICT,
         )
     except ConversationBusy as exc:
-        response = jsonify({
-            "error": "another turn is already running for this conversation",
-            "running_turn_id": exc.turn_id,
-            "conversation_id": conversation_id,
-        })
-        response.status_code = 409
-        response.headers["Retry-After"] = str(exc.retry_after)
+        response = _conversation_busy_response(
+            exc, error="another turn is already running for this conversation",
+            conversation_id=conversation_id)
         response.headers["X-Request-Id"] = request_id
         return response
     except PrivacyErasureInProgress:
@@ -1797,6 +2134,8 @@ async def api_alex():
         response.headers["Retry-After"] = "1"
         response.headers["X-Request-Id"] = request_id
         return response
+    except IdempotencyKeyReused:
+        return _request_id_reused_response(request_id)
 
     if turn.get("replayed"):
         return _request_replay_response(user_id, request_id, turn)
@@ -1837,6 +2176,7 @@ async def api_alex():
     try:
         # 所有请求都通过 ReAct Agent 处理
         with request_context(request_id, user_id):
+            report_progress("understanding")
             payload = await handle_with_react_agent(
                 user_message, context, is_continuation, user_id, conversation_id, request_id,
                 ui_language=ui_language, turn=turn,
@@ -1847,6 +2187,21 @@ async def api_alex():
         # at all — see _emit_canary_cancelled_turn. Record it, then re-raise
         # UNCHANGED: swallowing a cancellation would leave this coroutine running
         # after its caller stopped waiting.
+        try:
+            conversation_store.finalize_request_turn(
+                user_id, turn_id, status="failed", response_type="error",
+                assistant_content=("请求已取消。" if _resolve_reply_language(user_message, ui_language) == "zh"
+                                   else "Request cancelled."),
+                recommendations=[], snapshot=None, background_jobs=[],
+            )
+        except Exception as exc:
+            logger.error("agent.turn.cancel_persistence_failed", extra={"error_type": type(exc).__name__})
+            try:
+                conversation_store.fail_turn(user_id, turn_id)
+            except Exception as cleanup_exc:
+                logger.error("agent.turn.cancel_cleanup_failed", extra={"error_type": type(cleanup_exc).__name__})
+        finally:
+            _session_store.clear(user_id, conversation_id)
         _emit_canary_cancelled_turn(
             endpoint=ENDPOINT_ALEX, conversation_id=conversation_id,
             user_id=user_id, request_id=request_id, started=_turn_started_ms)
@@ -1858,6 +2213,7 @@ async def api_alex():
                 "request_id": request_id,
                 "conversation_id": conversation_id,
                 "error_type": type(e).__name__,
+                "error_location": _exception_location(e),
                 "agent_arch": AGENT_ARCH,
             },
         )
@@ -1876,6 +2232,15 @@ async def api_alex():
     # conversation_id + turn_id are echoed in EVERY response (incl. errors + implicit creation).
     payload["conversation_id"] = conversation_id
     payload["turn_id"] = turn_id
+    # The SAME bounded summary the canary record carries (see _answer_contract_summary),
+    # so the client and the gate read one object rather than two descriptions of it.
+    # Absent when the architecture produced no contract, or when the turn crashed
+    # before one existed.
+    _fc_for_response = _turn_fc_signals.get()
+    if isinstance(_fc_for_response, dict):
+        _contract_for_response = _fc_for_response.get("answer_contract")
+        if isinstance(_contract_for_response, dict):
+            payload["answer_contract"] = dict(_contract_for_response)
     _serialization_failed = False
     try:
         payload, _boundary_blocked = _guard_payload_before_persistence(payload)
@@ -1929,10 +2294,14 @@ async def api_alex():
                 "turn_id": turn_id,
             }
 
+    if _snapshot is not None:
+        payload['view_state'] = view_state(_snapshot)
+
     # Assistant message, terminal status and snapshot are committed together. A
     # database failure escapes to the API 500 handler; fail_turn releases the lease
     # so the conversation is not permanently wedged.
     try:
+        report_progress("saving")
         conversation_store.finalize_request_turn(
             user_id,
             turn_id,
@@ -1942,6 +2311,9 @@ async def api_alex():
             recommendations=payload.get("recommendations"),
             snapshot=_snapshot,
             background_jobs=([] if _terminal_failed else _background_jobs),
+            response_metadata={k: payload[k] for k in (
+                'options', 'clarification_kind', 'missing_fields', 'missing_optional_fields',
+                'known_criteria', 'error_code', 'retryable', 'retry_after') if k in payload},
         )
     except Exception as e:
         logger.error(
@@ -1990,11 +2362,12 @@ async def api_alex():
     response = _dsml_boundary_check(response, payload)
 
     # Canary: one structured record per turn (both archs; fc signals default when absent).
-    # http_status reflects the actual response, including a controlled agent 502.
+    # Streaming transport commits HTTP 200 before the final event, whose status
+    # carries a controlled application error. Keep telemetry tied to HTTP itself.
     _emit_canary_turn(
         endpoint=ENDPOINT_ALEX,
         conversation_id=conversation_id, user_id=user_id, request_id=request_id,
-        http_status=response.status_code,
+        http_status=200 if getattr(g, "chat_streaming", False) else response.status_code,
         turn_outcome=(OUTCOME_SERVER_ERROR if _serialization_failed else
                       OUTCOME_CRASH if _turn_crashed else
                       OUTCOME_AGENT_ERROR if payload.get("response_type") == "error"
@@ -2526,6 +2899,10 @@ def _build_turn_snapshot_after_turn(user_id, conversation_id, turn_id):
         context_revision = 1
     with _session_store.turn_lock(user_id, conversation_id):
         _sess = _get_session(user_id, conversation_id)
+        from core.candidate_validation import revalidate_view_results
+        _sess.last_results = revalidate_view_results(
+            _sess.last_results or [], _sess.persistent_state.get('accumulated_search_criteria'))
+        _sess.persistent_state.setdefault('extracted_context', {})['view_results'] = _sess.last_results
         return build_turn_snapshot(
             turn_id=turn_id,
             persistent_state=_sess.persistent_state,
@@ -2553,13 +2930,87 @@ def _queue_background_job(job: dict) -> bool:
     return True
 
 
+def _exception_location(exc: BaseException) -> str:
+    """``file.py:line:function`` of the innermost frame, never a message or value (R4-01)."""
+    try:
+        import os as _os
+        import traceback as _traceback
+        frames = _traceback.extract_tb(exc.__traceback__)
+        if not frames:
+            return "-"
+        frame = frames[-1]
+        return f"{_os.path.basename(frame.filename)}:{frame.lineno}:{frame.name}"[:160]
+    except Exception:
+        return "-"
+
+
+def _turn_memory_contract(final_state: dict) -> dict:
+    """The write contract for EVERY remember call of the turn, as agent_loop builds it.
+
+    "Remember that I have a cat. 记住我对花粉过敏。" saved both rows, but a contract built from
+    the LAST remember artifact only acknowledged the second (R3-05)."""
+    from core.memory_contract import memory_contract_from_artifacts
+    artifacts = [artifact for artifact in (final_state.get('tool_artifacts') or [])
+                 if isinstance(artifact, dict) and artifact.get('tool') == 'remember']
+    if artifacts:
+        return memory_contract_from_artifacts(artifacts)
+    return final_state.get('memory_write_contract') or {}
+
+
+def _memory_criteria_changes(before, after) -> dict:
+    """The turn's criteria slot changes for the memory job; never raises (R3-02)."""
+    try:
+        from rag.agent_memory import criteria_changes
+        return criteria_changes(before, after)
+    except Exception:
+        return {}
+
+
 def _process_background_job(job: dict, worker_id: str) -> None:
     """Prepare and apply one leased outbox job.
 
     Summary preparation is checkpointed before it mutates the latest snapshot, so a
     crash re-applies the same value rather than making a second LLM call. Memory uses
     its own per-user idempotency key and is therefore safe under at-least-once delivery.
+
+    CORRELATION. Both job kinds make a BILLED provider call (the rolling-summary fold
+    and auto-memory's fact extraction), and they make it here — on the outbox consumer
+    thread, minutes after the turn returned. A thread starts with an empty context, so
+    every one of those calls used to log ``request_id: "-"`` and belong to no turn.
+
+    The fix is not a context snapshot taken where the worker was spawned: the consumer
+    is a LONG-LIVED thread shared by every turn, so a snapshot would stamp all of its
+    work with whichever request happened to start it. The id travels WITH THE JOB
+    instead (queued into the payload), and is bound around this call. ``request_context``
+    sets only ``request_id``/``user_id``; it does NOT re-open the turn's observation
+    window, whose canary record was written long ago — the work becomes correlatable
+    without being counted into a record already on disk.
     """
+    payload = job.get("payload") or {}
+    correlation = payload.get("request_id") if isinstance(payload, dict) else None
+    if not isinstance(correlation, str) or not correlation:
+        # A job queued before this field existed, or one whose turn had no id. A
+        # job-scoped sentinel is still better than "-": it says which job spent the
+        # money, and it can never be mistaken for a real request id.
+        correlation = f"job:{job.get('id') or 'unknown'}"
+
+    def _run():
+        with request_context(correlation, str(job.get("user_id") or "-")):
+            _apply_background_job(job, worker_id)
+
+    # `bind_post_turn_context` runs `_run` in a COPY of this context with the
+    # observation window explicitly cleared. Both halves matter. The consumer thread
+    # normally has no window, but "normally" is not an invariant — an inline consumer
+    # (tests), or any future path that drains the outbox from inside a request, would
+    # otherwise let this job's provider call append to a canary record that was
+    # emitted minutes ago, silently making the in-memory turn disagree with the line
+    # on disk. Clearing it inside a context COPY also means neither that clear nor the
+    # `request_context` above can leak back to whatever called us.
+    turn_observations.bind_post_turn_context(_run)()
+
+
+def _apply_background_job(job: dict, worker_id: str) -> None:
+    """The body of one outbox job, run inside its correlation context."""
     kind = job.get("kind")
     payload = job.get("payload") or {}
     if not isinstance(payload, dict):
@@ -2612,6 +3063,8 @@ def _process_background_job(job: dict, worker_id: str) -> None:
                 turn_id=job["turn_id"],
                 turn_started_at=payload.get("turn_started_at"),
                 context_tainted=bool(payload.get("context_tainted", False)),
+                **({"criteria_changes": payload["criteria_changes"]}
+                   if payload.get("criteria_changes") else {}),
             )
             if ok is False:
                 raise RuntimeError("memory store did not acknowledge the turn")
@@ -2657,14 +3110,27 @@ def _spawn_rolling_summary_update(user_id, conversation_id, dropped_turns,
             "dropped_turns": copy.deepcopy(dropped_turns),
             "through_turn_id": through_turn_id,
             "reply_language": reply_language,
+            # Same reason as the memory job: update_rolling_summary makes a billed
+            # provider call inside the outbox worker, long after this turn returned.
+            "request_id": request_id_var.get() or None,
         },
     })
+
+
+_REMEMBERED_QUESTION = re.compile(
+    r"\b(?:what|anything|everything|which)\b[^.?!]{0,40}\b(?:remember|saved|stored|kept|know)\b"
+    r"[^.?!]{0,25}\b(?:about\s+me|me|my)\b|\bdo\s+you\s+(?:remember|store|keep|save)\b|"
+    r"记得.{0,12}我|记住了.{0,8}(?:什么|哪些)|(?:保存|存储|存)了.{0,10}(?:什么|哪些|我)", re.I)
+
+
+def _asks_what_is_remembered(message: str) -> bool:
+    return bool(_REMEMBERED_QUESTION.search(str(message or "")[:2000]))
 
 
 def _write_back_turn(user_id, conversation_id, user_message, assistant_text,
                      recommendations, *, user_preferences=_UNSET,
                      accumulated_search_criteria=_UNSET, criteria_overwrite=None,
-                     turn_id=None, reply_language="en"):
+                     turn_id=None, reply_language="en", search_retrieval=_UNSET):
     """Atomic phase-3 L2 write-back shared by the ReAct path (handle_with_react_agent)
     and the deterministic /api/search_direct endpoint (pure refactor — the ReAct path's
     behaviour is unchanged from the previously-inlined version).
@@ -2691,6 +3157,13 @@ def _write_back_turn(user_id, conversation_id, user_message, assistant_text,
         if user_preferences is not _UNSET:
             _sess.persistent_state['user_preferences'] = user_preferences
         if accumulated_search_criteria is not _UNSET:
+            if (isinstance(accumulated_search_criteria, dict)
+                    and accumulated_search_criteria.get('soft_preferences')):
+                # Stored criteria keep the housing requirement, not a health reason (R2-04).
+                from rag.agent_memory import sanitize_soft_preferences
+                accumulated_search_criteria = dict(accumulated_search_criteria)
+                accumulated_search_criteria['soft_preferences'] = sanitize_soft_preferences(
+                    accumulated_search_criteria['soft_preferences'])
             _sess.persistent_state['accumulated_search_criteria'] = accumulated_search_criteria
         if criteria_overwrite:
             _sess.persistent_state.setdefault('accumulated_search_criteria', {})
@@ -2701,10 +3174,13 @@ def _write_back_turn(user_id, conversation_id, user_message, assistant_text,
             # into the rolling summary (background) — otherwise their context is lost.
             dropped_turns = [dict(h) for h in _sess.history[:-MAX_HISTORY_LENGTH]]
             del _sess.history[:-MAX_HISTORY_LENGTH]
-        if recommendations:
+        if search_retrieval is not _UNSET:
+            _sess.persistent_state.setdefault('extracted_context', {})['search_retrieval'] = search_retrieval
+        if recommendations is not None:
             _sess.last_results = recommendations
             _sess.persistent_state.setdefault('extracted_context', {})
             _ec = _sess.persistent_state['extracted_context']
+            _ec['view_results'] = list(recommendations)
             _ec['previous_search_results'] = prev_results_context
             _ec['last_results'] = structured_results
             # 累计推荐注册表：把本轮推荐 merge 进历史注册表（去重/首见 index 稳定/上限），
@@ -2761,6 +3237,10 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     """
     global agent_graph, tool_registry, agent_tool_provider
 
+    from core.constraint_updates import resolve_clarification_reply
+    _conversation_messages = conversation_store.get_messages(user_id, conversation_id)
+    user_message = resolve_clarification_reply(user_message, _conversation_messages)
+
     # ── Phase 1: snapshot THIS conversation's L2 state under the per-conv lock ──
     # The turn lock makes the read here and the write-back in phase 3 atomic vs.
     # concurrent same-conversation requests, WITHOUT being held across the slow LLM
@@ -2775,10 +3255,21 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         # extracted_context 里只留 6 条）。在同一把锁内浅拷贝，避免跨慢速 LLM 调用再次加锁。
         last_results_snapshot = list(_sess.last_results or [])
 
-    request_graph = _ensure_agent_runtime()
+    from core.criteria_recovery import repair_criteria_sources, preferences_after_criteria_repair
+    persistent_snapshot['accumulated_search_criteria'] = await asyncio.to_thread(
+        repair_criteria_sources, persistent_snapshot.get('accumulated_search_criteria') or {},
+        _conversation_messages)
+    persistent_snapshot['user_preferences'] = preferences_after_criteria_repair(
+        persistent_snapshot.get('user_preferences') or {},
+        persistent_snapshot['accumulated_search_criteria'])
+
+    request_graph = await asyncio.to_thread(_ensure_agent_runtime)
 
     # ── 构建本轮 extracted_context ──────────────────────────────
     extracted_context = dict(persistent_snapshot.get('extracted_context', {}))
+    from datetime import datetime as _datetime
+    from zoneinfo import ZoneInfo
+    extracted_context['current_date'] = _datetime.now(ZoneInfo('Europe/London')).date().isoformat()
 
     # Refinement-in-place needs the COMPLETE set the panel is currently rendering, not the
     # 6-row prompt digest in extracted_context['last_results'] — narrowing over the digest
@@ -2880,17 +3371,41 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     # 长期记忆（Generative-Agents 评分检索）——按 user_id 命名空间共享（跨会话），branch_lineage
     # 让分叉会话只看到它真正继承的 episodic 记忆（semantic/reflection 仍全局）。
     _mem_block = ""
+    _mems = []
+    _semantic_defaults = []
     try:
         from rag.agent_memory import get_agent_memory
         _am = get_agent_memory()
         _lineage = conversation_store.get_branch_lineage(user_id, conversation_id)
         _mems = _am.retrieve(user_message, session_id=user_id, user_id=user_id, n=6,
                              branch_lineage=_lineage)
+        from core.constraint_updates import references_saved_criteria
+        if references_saved_criteria(user_message):
+            _semantic_defaults = _am.semantic_records(user_id=user_id)
+        if _asks_what_is_remembered(user_message):
+            # "What do you remember about me?" is answered from EVERY saved fact, not the six
+            # most relevant mixed records: a recall of 12 saved facts merged, dropped and
+            # miscounted them, and filled the gap with inferences (R2-20).
+            _seen = {m.get('id') for m in _mems}
+            _mems = [m for m in _am.semantic_records(user_id=user_id)[:20]
+                     if m.get('id') not in _seen] + _mems
         _mem_block = _am.format_for_prompt(_mems)
         if _mem_block:
             print(f"[Memory] 🧠 注入 {len(_mems)} 条相关记忆")
     except Exception as _e:
         print(f"[Memory] retrieve skipped; error_type={type(_e).__name__}")
+
+    from core.constraint_updates import restore_saved_criteria
+    persistent_snapshot['accumulated_search_criteria'] = restore_saved_criteria(
+        persistent_snapshot.get('accumulated_search_criteria') or {},
+        _semantic_defaults or _mems, user_message)
+    selected_memory_ids = {source.get('memory_id') for source in (
+        persistent_snapshot['accumulated_search_criteria'].get('constraint_sources') or {}).values()
+        if isinstance(source, dict) and source.get('source') == 'saved_preference'}
+    selected_defaults = [record for record in _semantic_defaults if record.get('id') in selected_memory_ids]
+    if selected_defaults:
+        _mems = selected_defaults + [record for record in _mems if record.get('id') not in selected_memory_ids]
+        _mem_block = _am.format_for_prompt(_mems[:6])
 
     # Assemble the legacy query as before. FC-compatible arches have a dedicated channel for
     # long-term memory; putting the same block into user_query would show it twice in
@@ -2920,6 +3435,10 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     # ── 构建 AgentState 并调用 LangGraph ─────────────────────────
     # session_id passed to the graph/checkpointer IS the conversation_id, so the
     # checkpointer thread_id = f"{user_id}:{conversation_id}".
+    # The criteria as they stood BEFORE this turn: the memory job diffs them against the
+    # turn's final criteria so an elliptical correction supersedes the old fact (R3-02).
+    import copy as _copy
+    _criteria_before_turn = _copy.deepcopy(persistent_snapshot['accumulated_search_criteria'] or {})
     initial_state = create_initial_state(
         user_query=query_with_history,
         extracted_context=extracted_context,
@@ -3039,15 +3558,98 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     response_text = final_state.get('final_response', '')
     response_type = final_state.get('response_type', 'answer')
     tool_data = final_state.get('tool_data', {})
+    if isinstance(tool_data, dict) and 'recommendations' in tool_data:
+        # Check the final user constraints again, independently of the tool's echo.
+        from core.candidate_validation import validate_candidates, candidate_reason_text
+        from core.criteria_contract import reconcile_search_criteria
+        accumulated = reconcile_search_criteria(
+            final_state.get('accumulated_search_criteria') or {}, tool_data.get('search_criteria') or {})
+        final_state['accumulated_search_criteria'] = accumulated
+        actual_criteria = dict(accumulated)
+        if accumulated.get('max_budget') is not None:
+            actual_criteria['rent_filter_ceiling_monthly'] = (tool_data.get('search_criteria') or {}).get('max_budget_monthly')
+            actual_criteria['max_budget_monthly'] = accumulated['max_budget']
+        ledger = validate_candidates(tool_data.get('recommendations') or [], actual_criteria,
+                                     tool_data.get('commute_evidence') or [],
+                                     transport_cost_evidence=final_state.get('tool_artifacts') or [])
+        checked = []
+        for status in ledger['statuses']:
+            row = dict(status['candidate'])
+            row['qualification'] = {
+                'status': status['status'], 'reasons': status['reasons'],
+                'unknown_reasons': status['unknown_reasons'],
+                'constraints': ledger['constraints'], 'source': 'structured_listing',
+                'reason_messages': {lang: [candidate_reason_text(reason, language=lang)
+                    for reason in status['reasons'] + status['unknown_reasons']] for lang in ('en', 'zh')},
+            }
+            row['budget_basis'] = ledger['constraints']['max_budget_monthly']
+            row['budget_status_code'] = ('over' if row.get('candidate_reasons') and any(
+                'exceeds budget' in reason for reason in row['candidate_reasons']) else
+                'within' if row['budget_basis'] is not None else 'unspecified')
+            if row['budget_basis'] is None:
+                row['budget_status'] = ''
+            checked.append(row)
+        tool_data = dict(tool_data, recommendations=checked, search_criteria=actual_criteria)
+        if ledger['excluded'] or ledger['unknown']:
+            response_text = render_candidate_status(ledger, language=extracted_context.get('reply_language', 'en'))
+            from core.candidate_validation import render_structured_evidence_fallback
+            evidence = render_structured_evidence_fallback(final_state, language=extracted_context.get('reply_language', 'en'))
+            if evidence:
+                response_text += '\n\n' + evidence
+        final_state['tool_data'] = tool_data
+    from core.memory_contract import (strip_saved_content_quote,
+                                      compose_memory_contract_response)
+    memory_contract = _turn_memory_contract(final_state)
+    _memory_language = extracted_context.get('reply_language', 'en')
+    # Verify provider claims separately from the exact user text the memory tool saved.
+    response_text = strip_saved_content_quote(response_text, memory_contract, _memory_language)
+    from core.listing_identity import bind_listing_links, listing_entities
+    response_text = bind_listing_links(response_text, listing_entities([
+        tool_data, final_state.get('tool_artifacts') or [], extracted_context,
+        _get_session(user_id, conversation_id).last_results,
+    ]))
+    from core.candidate_validation import (validate_evidence_scope, humanize_requirement_text,
+        render_nearby_failure_notice)
+    response_text = validate_evidence_scope(response_text, final_state)
+    from core.constraint_updates import validate_current_criteria_recap
+    response_text = validate_current_criteria_recap(
+        response_text, final_state.get('accumulated_search_criteria') or {},
+        message=user_message, language=extracted_context.get('reply_language', 'en'))
+    response_text = humanize_requirement_text(response_text, language=_memory_language)
+    _nearby_notice = render_nearby_failure_notice(final_state, language=_memory_language)
+    if _nearby_notice and _nearby_notice not in response_text:
+        response_text += '\n\n' + _nearby_notice
+    if memory_contract.get('requested'):
+        from core.constraint_updates import independent_memory_task
+        other_result = any(artifact.get('tool') not in ('remember','recall_memory','ask_user',None)
+                           and artifact.get('success') is True
+                           for artifact in final_state.get('tool_artifacts') or [])
+        response_text = compose_memory_contract_response(
+            response_text, memory_contract, language=_memory_language,
+            preserve_content=other_result or independent_memory_task(user_message))
+    # Explicit frequency arithmetic uses this turn's observed fare, never a stored
+    # price or an inferred property cost. The estimate cannot qualify a candidate.
+    from core.commuting_estimate import estimate_monthly_commuting, render_monthly_commuting_estimate
+    for artifact in reversed(final_state.get('tool_artifacts') or []):
+        if artifact.get('tool') != 'get_transport_info' or artifact.get('success') is not True:
+            continue
+        estimate = estimate_monthly_commuting(user_message, artifact.get('raw_data') or {})
+        if estimate:
+            tool_data = dict(tool_data, monthly_commuting_estimate=estimate)
+            rendered = render_monthly_commuting_estimate(estimate, language=extracted_context.get('reply_language', 'en'))
+            if rendered and rendered not in response_text:
+                response_text += '\n\n' + rendered
+            break
     recommendations = tool_data.get('recommendations')
 
     # ── Tool-markup guard, LAYER 1: before anything persists this ──
     # Placement is the whole point. response_text goes into the conversation DB
-    # (_write_back_turn, just below) and into auto-memory (remember_turn_async)
-    # before any payload exists, so a guard at the HTTP boundary would still let raw
-    # control markup land in storage — where it is replayed into the next turn's
-    # context and may be acted on. Both arches converge here, so one scan covers
-    # fc_loop and legacy without either graph having to cooperate.
+    # (_write_back_turn, just below) and into auto-memory (the durable `memory_turn`
+    # outbox job queued below) before any payload exists, so a guard at the HTTP
+    # boundary would still let raw control markup land in storage — where it is
+    # replayed into the next turn's context and may be acted on. Both arches
+    # converge here, so one scan covers fc_loop and legacy without either graph
+    # having to cooperate.
     _reply_lang = extracted_context.get('reply_language', 'en')
     try:
         g.reply_language = _reply_lang  # so the boundary fallback matches the conversation
@@ -3075,7 +3677,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     # in the report did), so the panel must not shrink just because no tool ran. Placed
     # ahead of _write_back_turn and the conversation-store write so the persisted message
     # carries them too — otherwise a page reload would reproduce the empty panel.
-    if not recommendations:
+    if recommendations is None:
         try:
             _cached = _get_session(user_id, conversation_id).last_results
             if _narrates_cached_listings(response_text, _cached):
@@ -3097,6 +3699,8 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         accumulated_search_criteria=final_state.get('accumulated_search_criteria', _UNSET),
         turn_id=(turn.get("id") if isinstance(turn, dict) else None),
         reply_language=extracted_context.get('reply_language', 'en'),
+        search_retrieval=(retrieval_metadata(tool_data)
+                          if isinstance(tool_data, dict) and 'recommendations' in tool_data else _UNSET),
     )
 
     # ── 长期记忆：随 turn 原子提交到 durable outbox，响应路径不做 LLM/SQLite 写入 ──
@@ -3115,16 +3719,24 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             "session_id": user_id,
             "tool_used": _tool_used,
             "idempotency_key": f"turn:{request_id}" if request_id else None,
+            # Correlation for the DEFERRED provider call this job will make. See
+            # _process_background_job: the outbox consumer is a long-lived thread
+            # shared by every turn, so the id has to travel WITH the job.
+            "request_id": request_id or None,
             "turn_started_at": (turn.get("started_at") if isinstance(turn, dict) else None),
             # Taint A+ (§2.8c): a tainted turn hardens the auto-memory bypass to
             # user-only fact extraction so untrusted content can't seed durable memory.
             "context_tainted": bool(final_state.get('context_tainted', False)),
+            # Deterministic slot changes of this turn (system criteria state, never
+            # assistant prose): "Make that Poplar" replaces the stored area (R3-02).
+            "criteria_changes": _memory_criteria_changes(
+                _criteria_before_turn, final_state.get('accumulated_search_criteria')),
         },
     })
 
     # ── 构建响应 payload（conversation_id 由调用方 api_alex 注入）──
     _tool_data = tool_data if isinstance(tool_data, dict) else {}
-    if recommendations:
+    if recommendations is not None:
         # Frontend contract: forward the canonical search_criteria (Agent 2's
         # format_output stores it in tool_data for found searches) so the search form
         # can reflect what was actually searched. Defaults to {} when absent.
@@ -3132,9 +3744,11 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             "response_type": "search",
             "message": response_text,
             "recommendations": recommendations,
-            "search_criteria": _tool_data.get('search_criteria') or {},
+            "search_criteria": _tool_data.get('search_criteria') or final_state.get('accumulated_search_criteria') or {},
             # 🆕 目的地附近推荐居住区（可点击 chips → 多区域再搜）。
             "area_recommendations": _tool_data.get('area_recommendations') or [],
+            **retrieval_metadata(_tool_data),
+            **({"monthly_commuting_estimate": _tool_data["monthly_commuting_estimate"]} if _tool_data.get("monthly_commuting_estimate") else {}),
         }
 
     if response_type == 'question' or response_type == 'clarification':
@@ -3160,12 +3774,24 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         # soft recommended-criteria gate ('soft_criteria') for the frontend.
         if 'clarification_kind' in _tool_data:
             payload["clarification_kind"] = _tool_data['clarification_kind']
+        if 'options' in _tool_data:
+            payload['options'] = _tool_data['options']
+        if _tool_data.get("monthly_commuting_estimate"):
+            payload["monthly_commuting_estimate"] = _tool_data["monthly_commuting_estimate"]
         return payload
 
     if response_type == 'answer':
         return {
             "response_type": "chat",
             "message": response_text,
+            **({"monthly_commuting_estimate": _tool_data["monthly_commuting_estimate"]} if _tool_data.get("monthly_commuting_estimate") else {}),
+        }
+
+    if response_type == 'error':
+        return {
+            'response_type': 'error', 'message': response_text,
+            'error_code': _tool_data.get('error_code') or 'agent_error',
+            'retryable': bool(_tool_data.get('retryable')),
         }
 
     return {
@@ -3218,6 +3844,24 @@ def _coerce_optional_int(value, field_name, *, min_value, max_value):
         raise ApiError(400, f"{field_name} must be between {min_value} and {max_value}")
     return n
 
+
+
+def _coerce_optional_money(value, field_name, *, min_value, max_value):
+    """A rent ceiling is a currency amount; accepting pennies must not relax it."""
+    from decimal import Decimal, InvalidOperation
+    if value is None or value == '':
+        return None
+    try:
+        if isinstance(value, bool):
+            raise ValueError
+        amount = Decimal(str(value).strip())
+        if not amount.is_finite():
+            raise ValueError
+        if not Decimal(str(min_value)) <= amount <= Decimal(str(max_value)):
+            raise ValueError
+    except (InvalidOperation, ValueError, TypeError):
+        raise ApiError(400, f'{field_name} must be an amount between {min_value} and {max_value} without rounding')
+    return float(amount) if amount % 1 else int(amount)
 
 def _coerce_bool(value) -> bool:
     """Coerce a JSON bool (or a common truthy string) to a real bool."""
@@ -3342,10 +3986,11 @@ async def api_search_direct():
     #   max_budget      £[1, 100000]  — 0 is not a real limit; reject fractional/absurd.
     #   bedrooms        [0, 20]       — 0 = studio/any; reject negative and >20.
     #   max_commute_time [1, 300] min — reject 0/negative and absurdly large.
-    max_budget = _coerce_optional_int(
+    max_budget = _coerce_optional_money(
         criteria.get('max_budget'), "max_budget", min_value=1, max_value=100000)
     bedrooms = _coerce_optional_int(
         criteria.get('bedrooms'), "bedrooms", min_value=0, max_value=20)
+    bedrooms_minimum = _coerce_bool(criteria.get('bedrooms_minimum'))
     max_commute_time = _coerce_optional_int(
         criteria.get('max_commute_time'), "max_commute_time", min_value=1, max_value=300)
     no_commute = _coerce_bool(criteria.get('no_commute'))
@@ -3362,7 +4007,7 @@ async def api_search_direct():
     room_type = criteria.get('room_type')
     if isinstance(room_type, str):
         room_type = room_type.strip().lower() or None
-        if room_type not in ('studio', 'ensuite', 'shared'):
+        if room_type not in ('studio', 'ensuite', 'shared', 'whole'):
             room_type = None
     else:
         room_type = None
@@ -3387,6 +4032,8 @@ async def api_search_direct():
     request_id = new_request_id(request.headers.get("X-Request-Id"))
     existing_turn = conversation_store.get_request_turn(user_id, request_id)
     if existing_turn is not None:
+        if conversation_store.request_message_differs(user_id, existing_turn, readable):
+            return _request_id_reused_response(request_id)
         return _request_replay_response(user_id, request_id, existing_turn)
 
     # --- resolve / implicitly create the conversation (mirrors /api/alex) -------
@@ -3412,13 +4059,9 @@ async def api_search_direct():
             strict=DEEPSEEK_STRICT,
         )
     except ConversationBusy as exc:
-        response = jsonify({
-            "error": "another turn is already running for this conversation",
-            "running_turn_id": exc.turn_id,
-            "conversation_id": conversation_id,
-        })
-        response.status_code = 409
-        response.headers["Retry-After"] = str(exc.retry_after)
+        response = _conversation_busy_response(
+            exc, error="another turn is already running for this conversation",
+            conversation_id=conversation_id)
         response.headers["X-Request-Id"] = request_id
         return response
     except PrivacyErasureInProgress:
@@ -3427,6 +4070,8 @@ async def api_search_direct():
         response.headers["Retry-After"] = "1"
         response.headers["X-Request-Id"] = request_id
         return response
+    except IdempotencyKeyReused:
+        return _request_id_reused_response(request_id)
 
     if turn.get("replayed"):
         return _request_replay_response(user_id, request_id, turn)
@@ -3460,6 +4105,21 @@ async def api_search_direct():
 
     # --- call the search tool DIRECTLY (no LangGraph / critic / memory) ---------
     try:
+        # Unexposed hard constraints (pets/accessibility/total budget/attendance/changes)
+        # belong to this conversation, even when the visible form submits only its slots.
+        from core.criteria_contract import apply_form_criteria
+        with _session_store.turn_lock(user_id, conversation_id):
+            _retained = copy.deepcopy(_get_session(user_id, conversation_id).persistent_state.get(
+                'accumulated_search_criteria') or {})
+        _form_criteria = {
+            'area':area, 'areas':areas, 'commute_destination':commute_destination,
+            'max_budget':monthly_from_weekly(max_budget) if max_budget and budget_period == 'week' else max_budget,
+            'max_travel_time':max_commute_time, 'no_commute':no_commute,
+            'bedrooms':bedrooms, 'bedrooms_minimum':bedrooms_minimum, 'budget_period':'month',
+            'room_type':room_type, 'move_in_date':move_in_date,
+        }
+        _direct_criteria = apply_form_criteria(_retained, _form_criteria)
+
         from core.agent_loop import _turn_ceiling_s
         _direct_deadline = time.monotonic() + _turn_ceiling_s()
         with request_context(request_id, user_id):
@@ -3472,9 +4132,15 @@ async def api_search_direct():
                 max_commute_time=max_commute_time,
                 no_commute=no_commute,
                 bedrooms=bedrooms,
+                bedrooms_minimum=bedrooms_minimum,
                 budget_period=budget_period,
                 room_type=room_type,
                 move_in_date=move_in_date,
+                property_features=_direct_criteria.get('property_features') or [],
+                accumulated_preferences=_direct_criteria.get('soft_preferences') or [],
+                monthly_total_budget=_direct_criteria.get('monthly_total_budget'),
+                office_days_per_week=_direct_criteria.get('office_days_per_week'),
+                max_changes=_direct_criteria.get('max_changes'),
                 # The panel Search button is an explicit user confirmation, so this path
                 # BYPASSES the soft criteria gate (never returns a soft clarification).
                 confirmed=True,
@@ -3486,6 +4152,7 @@ async def api_search_direct():
             # The tool returns structured failures instead of raising. Do not turn a
             # provider/RAG failure into the misleading "no matching properties" state.
             raise RuntimeError((result or {}).get('error', 'property search failed'))
+        result = dict(result, search_criteria={**(result.get('search_criteria') or {}), **_direct_criteria})
         result, commute_evidence = await validate_search_payload_with_provider(
             tool_registry, result,
             timeout_s=20.0, deadline_monotonic=_direct_deadline)
@@ -3494,7 +4161,9 @@ async def api_search_direct():
             result["candidate_status_text"] = render_candidate_status(
                 result["candidate_validation"], language=reply_language)
         # 工具已按 reply_language 本地化 summary；仅兜底文案由本端点自己本地化。
-        recommendations = result.get('recommendations') or []
+        from core.langgraph_agent import _structured_search_tool_data
+        result, panel_data = _structured_search_tool_data(result, {}, commute_evidence=commute_evidence)
+        recommendations = panel_data['recommendations']
         if recommendations:
             _fallback = (f"为你找到 {len(recommendations)} 套匹配房源。" if reply_language == 'zh'
                          else f"Found {len(recommendations)} matching properties.")
@@ -3516,6 +4185,7 @@ async def api_search_direct():
             "unverified_candidates": result.get("unverified_candidates") or [],
             "commute_evidence": result.get("commute_evidence") or [],
             "area_recommendations": result.get('area_recommendations') or [],
+            **retrieval_metadata(result),
         }
     except asyncio.CancelledError:
         # Same reason as /api/alex: a cancelled turn must not vanish from the
@@ -3582,21 +4252,10 @@ async def api_search_direct():
             # No long-term-memory write occurs on this deterministic path.
             _write_back_turn(
                 user_id, conversation_id, readable, message, recommendations,
-                criteria_overwrite={
-                    'area': area,
-                    'areas': areas,
-                    'commute_destination': commute_destination,
-                    'destination': commute_destination,
-                    'max_budget': max_budget,
-                    'max_travel_time': max_commute_time,
-                    'no_commute': no_commute,
-                    'bedrooms': bedrooms,
-                    'budget_period': budget_period,
-                    'room_type': room_type,
-                    'move_in_date': move_in_date,
-                },
+                accumulated_search_criteria=_direct_criteria,
                 turn_id=turn_id,
                 reply_language=reply_language,
+                search_retrieval=retrieval_metadata(result),
             )
             _snapshot = _build_turn_snapshot_after_turn(
                 user_id, conversation_id, turn_id
@@ -3628,6 +4287,9 @@ async def api_search_direct():
         finally:
             _background_jobs = list(_turn_background_jobs.get() or [])
             _turn_background_jobs.reset(_outbox_token)
+
+    if _snapshot is not None:
+        payload['view_state'] = view_state(_snapshot)
 
     try:
         conversation_store.finalize_request_turn(
@@ -3712,6 +4374,9 @@ def create_conversation():
     """Create a new conversation. Body: {user_id, title?}."""
     data = get_json_or_400()
     user_id, _ = resolve_identity(data)
+    if data.get('title') is not None and not isinstance(data.get('title'), str):
+        # A list/number/object title reached `.strip()` in the store and 500'd (C-09).
+        raise ApiError(400, "title must be a string")
     # Stamp architecture provenance at creation (this process's constants).
     conv = conversation_store.create_conversation(
         user_id, title=data.get('title'),
@@ -3738,7 +4403,13 @@ def delete_conversation(cid):
     """Delete a conversation + its messages, hot-cache slice, and checkpointer thread.
     Does NOT touch long-term (SQLite) memory. 404 if not owned."""
     user_id, _ = _identity_from_request()
-    if not conversation_store.delete_conversation(user_id, cid):
+    try:
+        deleted = conversation_store.delete_conversation(user_id, cid)
+    except ConversationBusy as exc:
+        # Deleting under a running turn made that turn 500 after spending its model and
+        # tool budget, and its graph wrote the deleted checkpoint thread back (C-03).
+        return _conversation_busy_response(exc, deleted=False)
+    if not deleted:
         raise ApiError(404, "conversation not found")
     _session_store.clear(user_id, cid)
     _delete_checkpoint_thread(user_id, cid)
@@ -3754,7 +4425,10 @@ def get_conversation_messages(cid):
     user_id, _ = _identity_from_request()
     if conversation_store.get_conversation(user_id, cid) is None:
         raise ApiError(404, "conversation not found")
-    return jsonify({"messages": conversation_store.get_messages(user_id, cid)})
+    from core.snapshot_recovery import recover_snapshot
+    messages = conversation_store.get_messages(user_id, cid)
+    snapshot = recover_snapshot(conversation_store.latest_snapshot(user_id, cid), messages)
+    return jsonify({"messages": messages, "view_state": view_state(snapshot)})
 
 
 # fork_conversation errors → (http status, stable error code, client message). Returned
@@ -3767,6 +4441,8 @@ _FORK_ERROR_MAP = (
     (TurnNotInConversation, 400, "turn_not_in_conversation",
      "turn does not belong to this conversation"),
     (TurnNotCompleted, 400, "turn_not_completed", "turn is not completed"),
+    (IdempotencyKeyReused, 409, "idempotency_key_reused",
+     "this idempotency key was already used for a different request"),
 )
 
 
@@ -3781,6 +4457,9 @@ def fork_conversation(cid):
     replay. Fork validation failures return {"error", "code"} at 404/400 (see _FORK_ERROR_MAP).
     """
     data = _request_body() or {}
+    # Same request-boundary rule as get_json_or_400: the optional body is still stored
+    # (title, idempotency key), so unstorable text is a 400 here too (C-02).
+    _reject_unstorable_text(data)
     user_id, _ = resolve_identity(data)
 
     after_turn_id = data.get('after_turn_id')
@@ -3828,6 +4507,7 @@ def edit_turn(cid):
     edited_slot_turn_id...}, "idempotent": bool}: 201 on create, 200 on idempotent replay.
     Validation failures return {"error", "code"} at 404/400 (shared _FORK_ERROR_MAP)."""
     data = _request_body() or {}
+    _reject_unstorable_text(data)   # see fork_conversation (C-02)
     user_id, _ = resolve_identity(data)
 
     turn_id = data.get('turn_id')
@@ -3896,11 +4576,18 @@ def clear_history():
         # conversation the caller doesn't own is a 404, not a silent no-op success.
         if conversation_store.get_conversation(user_id, cid) is None:
             raise ApiError(404, "conversation not found")
-        conversation_store.clear_conversation_messages(user_id, cid)
+        try:
+            conversation_store.clear_conversation_messages(user_id, cid)
+        except ConversationBusy as exc:     # same race as DELETE (C-03)
+            return _conversation_busy_response(exc, success=False)
         _session_store.clear(user_id, cid)
         _delete_checkpoint_thread(user_id, cid)
     else:
-        for c in conversation_store.delete_all_conversations(user_id):
+        try:
+            cleared = conversation_store.delete_all_conversations(user_id)
+        except ConversationBusy as exc:
+            return _conversation_busy_response(exc, success=False)
+        for c in cleared:
             _delete_checkpoint_thread(user_id, c)
         _session_store.clear_user(user_id)
     logger.info(
@@ -3923,15 +4610,7 @@ def forget_me():
     try:
         conversation_store.begin_privacy_erasure(user_id)
     except ConversationBusy as exc:
-        response = jsonify({
-            "forgotten": False,
-            "status": "busy",
-            "error": "a conversation turn is still running; retry after it finishes",
-            "running_turn_id": exc.turn_id,
-        })
-        response.status_code = 409
-        response.headers["Retry-After"] = str(exc.retry_after)
-        return response
+        return _conversation_busy_response(exc, forgotten=False, status="busy")
     except PrivacyErasureInProgress:
         response = jsonify({
             "forgotten": False,
@@ -4049,9 +4728,7 @@ def forget_me():
             and credentials_ok and hot_ok
         )
         if complete:
-            for key in (
-                "authenticated", "auth_user_id", "username", "display_name", "user_id"
-            ):
+            for key in _AUTH_SESSION_KEYS:
                 session.pop(key, None)
         logger.info(
             "privacy.erasure.completed" if complete else "privacy.erasure.partial",
@@ -4089,7 +4766,10 @@ def add_favorite():
     url = data.get('url') or data.get('URL')
     if not url:
         raise ApiError(400, "Property URL is required")
-    conversation_store.add_favorite(user_id, str(url), data)
+    if not isinstance(url, str):
+        # str() of a list/dict used to be stored as the favourite's key (C-16).
+        raise ApiError(400, "Property URL must be a string")
+    conversation_store.add_favorite(user_id, url, data)
     return jsonify({"success": True, "message": "Added to favorites"})
 
 
@@ -4097,7 +4777,9 @@ def add_favorite():
 def get_favorites_list():
     """Return all of the resolved user's saved properties (full stored dicts)."""
     user_id, _ = _identity_from_request()
-    return jsonify({"favorites": conversation_store.list_favorites(user_id)})
+    from core.candidate_validation import revalidate_saved_favorite
+    return jsonify({"favorites": [revalidate_saved_favorite(row)
+        for row in conversation_store.list_favorites(user_id)]})
 
 
 @app.route('/api/favorites/<path:url>', methods=['DELETE'])

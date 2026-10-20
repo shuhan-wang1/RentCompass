@@ -1,0 +1,33 @@
+[
+  {
+    "case": "other_signed_identity_cannot_read_conversation/messages",
+    "status": 404,
+    "passed": true
+  },
+  {
+    "case": "other_signed_identity_cannot_read_conversation/version_map",
+    "status": 404,
+    "passed": true
+  },
+  {
+    "case": "other_signed_identity_cannot_read_conversation",
+    "status": 405,
+    "passed": false
+  },
+  {
+    "case": "query_user_id_cannot_override_signed_identity",
+    "status": 200,
+    "favorite_count": 0,
+    "passed": true
+  },
+  {
+    "case": "body_user_id_cannot_write_another_identity_favorites",
+    "post_status": 200,
+    "passed": true
+  },
+  {
+    "case": "tampered_signed_cookie_cannot_read_student",
+    "status": 404,
+    "passed": true
+  }
+]

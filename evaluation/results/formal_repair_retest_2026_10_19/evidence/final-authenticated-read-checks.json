@@ -1,0 +1,1019 @@
+{
+  "at": 1792416137.5287094,
+  "exact_final_source": true,
+  "checks": {
+    "no_new_model_calls": true,
+    "all_profiles_passed": true
+  },
+  "profiles": {
+    "student": {
+      "checks": {
+        "conversation_readable": true,
+        "criteria_restored": true,
+        "two_favorites": true
+      },
+      "status": 200,
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "area": "Camden",
+          "areas": [
+            "Camden"
+          ],
+          "bedrooms": 2,
+          "bedrooms_minimum": false,
+          "budget_period": "month",
+          "commute_destination": "University College London, Gower Street, London WC1E 6BT",
+          "constraint_sources": {
+            "area": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": "Camden"
+            },
+            "areas": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": [
+                "Camden"
+              ]
+            },
+            "bedrooms": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": 2
+            },
+            "bedrooms_minimum": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": false
+            },
+            "budget_period": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": "month"
+            },
+            "commute_destination": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": "University College London, Gower Street, London WC1E 6BT"
+            },
+            "destination": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": "University College London, Gower Street, London WC1E 6BT"
+            },
+            "max_budget": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": 2400
+            },
+            "max_travel_time": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": 30
+            },
+            "move_in_date": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": null
+            },
+            "no_commute": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": false
+            },
+            "room_type": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": "whole"
+            }
+          },
+          "destination": "University College London, Gower Street, London WC1E 6BT",
+          "max_budget": 2400,
+          "max_travel_time": 30,
+          "move_in_date": null,
+          "no_commute": false,
+          "property_features": [],
+          "room_type": "whole",
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "retrieval": {
+          "area_status": {
+            "Camden": "results"
+          },
+          "data_source": "OnTheMarket (cached)",
+          "incomplete_areas": [],
+          "partial": false,
+          "retrieval_outcome": "no_matching_candidates"
+        },
+        "revision": 1
+      },
+      "favorite_identities": [
+        "https://www.onthemarket.com/details/14141441/",
+        "https://www.onthemarket.com/details/20578363/"
+      ]
+    },
+    "professional": {
+      "checks": {
+        "conversation_readable": true,
+        "criteria_restored": true,
+        "two_favorites": true,
+        "budget_alias_consistent": true
+      },
+      "status": 200,
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "area": "Lewisham",
+          "areas": [
+            "Lewisham",
+            "Stratford"
+          ],
+          "bedrooms": 1,
+          "bedrooms_minimum": false,
+          "budget_period": "month",
+          "commute_destination": "Bank station, London",
+          "constraint_sources": {
+            "area": {
+              "source": "form",
+              "value": "Lewisham"
+            },
+            "areas": {
+              "source": "form",
+              "value": [
+                "Lewisham",
+                "Stratford"
+              ]
+            },
+            "bedrooms": {
+              "source": "form",
+              "value": 1
+            },
+            "bedrooms_minimum": {
+              "source": "form",
+              "value": false
+            },
+            "budget_period": {
+              "source": "form",
+              "value": "month"
+            },
+            "commute_destination": {
+              "source": "form",
+              "value": "Bank station, London"
+            },
+            "destination": {
+              "source": "user_message",
+              "text": "I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?",
+              "value": "Bank station, London"
+            },
+            "max_budget": {
+              "message_id": 35,
+              "original_source": {
+                "source": "user_message",
+                "text": " Keep my current £2,000/month rent cap separate from the £2,150/month rent-plus-commute ceiling, based on two office days a week",
+                "value": 2150
+              },
+              "reason": "parser_value_corrected",
+              "source": "criteria_recovery",
+              "value": 2000
+            },
+            "max_travel_time": {
+              "source": "form",
+              "value": 45
+            },
+            "monthly_total_budget": {
+              "source": "user_message",
+              "text": "I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?",
+              "value": 2150
+            },
+            "move_in_date": {
+              "source": "form",
+              "value": null
+            },
+            "no_commute": {
+              "source": "form",
+              "value": false
+            },
+            "office_days_per_week": {
+              "source": "user_message",
+              "text": "My employer now only needs me in the office two days a week, Tuesday and Thursday. Please increase my rent ceiling to £2,000 per month, while keeping the separate rent-plus-commuting ceiling at £2,150 per month. I still want a self-contained whole one-bedroom flat in Lewisham or Stratford, about 45 minutes or less to Bank station. Please update my search and show the actual suitable or clearly labelled unverified listings.",
+              "value": 2
+            },
+            "room_type": {
+              "source": "form",
+              "value": "whole"
+            }
+          },
+          "criteria_repair_provenance": [
+            {
+              "field": "max_budget",
+              "message_id": 27,
+              "previous_value": 1850,
+              "reason": "parser_value_corrected",
+              "value": 1850
+            },
+            {
+              "field": "max_budget",
+              "message_id": 35,
+              "previous_value": 2150,
+              "reason": "parser_value_corrected",
+              "value": 2000
+            }
+          ],
+          "destination": "Bank station, London",
+          "max_budget": 2000,
+          "max_budget_monthly": 2000,
+          "max_commute_time": 45,
+          "max_travel_time": 45,
+          "monthly_total_budget": 2150,
+          "move_in_date": null,
+          "no_commute": false,
+          "office_days_per_week": 2,
+          "plans": {
+            "Lewisham": {
+              "amenities_of_interest": [],
+              "area": "Lewisham",
+              "areas": [
+                "Lewisham",
+                "Stratford"
+              ],
+              "bedrooms": 1,
+              "bedrooms_minimum": false,
+              "budget_period": "month",
+              "commute_destination": "Bank station, London",
+              "constraint_sources": {
+                "area": {
+                  "source": "form",
+                  "value": "Lewisham"
+                },
+                "areas": {
+                  "source": "form",
+                  "value": [
+                    "Lewisham",
+                    "Stratford"
+                  ]
+                },
+                "bedrooms": {
+                  "source": "form",
+                  "value": 1
+                },
+                "bedrooms_minimum": {
+                  "source": "form",
+                  "value": false
+                },
+                "budget_period": {
+                  "source": "form",
+                  "value": "month"
+                },
+                "commute_destination": {
+                  "source": "form",
+                  "value": "Bank station, London"
+                },
+                "destination": {
+                  "source": "user_message",
+                  "text": "I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?",
+                  "value": "Bank station, London"
+                },
+                "max_budget": {
+                  "source": "user_message",
+                  "text": " Keep my current £2,000/month rent cap separate from the £2,150/month rent-plus-commute ceiling, based on two office days a week",
+                  "value": 2150
+                },
+                "max_travel_time": {
+                  "source": "form",
+                  "value": 45
+                },
+                "monthly_total_budget": {
+                  "source": "user_message",
+                  "text": "I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?",
+                  "value": 2150
+                },
+                "move_in_date": {
+                  "source": "form",
+                  "value": null
+                },
+                "no_commute": {
+                  "source": "form",
+                  "value": false
+                },
+                "office_days_per_week": {
+                  "source": "user_message",
+                  "text": "My employer now only needs me in the office two days a week, Tuesday and Thursday. Please increase my rent ceiling to £2,000 per month, while keeping the separate rent-plus-commuting ceiling at £2,150 per month. I still want a self-contained whole one-bedroom flat in Lewisham or Stratford, about 45 minutes or less to Bank station. Please update my search and show the actual suitable or clearly labelled unverified listings.",
+                  "value": 2
+                },
+                "room_type": {
+                  "source": "form",
+                  "value": "whole"
+                }
+              },
+              "criteria_repair_provenance": [
+                {
+                  "field": "max_budget",
+                  "message_id": 27,
+                  "previous_value": 1850,
+                  "reason": "parser_value_corrected",
+                  "value": 1850
+                }
+              ],
+              "destination": "Bank station, London",
+              "max_budget": 2150,
+              "max_budget_monthly": 2000,
+              "max_commute_time": 45,
+              "max_travel_time": 45,
+              "monthly_total_budget": 2150,
+              "move_in_date": null,
+              "no_commute": false,
+              "office_days_per_week": 2,
+              "property_features": [],
+              "room_type": "whole",
+              "soft_preferences": []
+            }
+          },
+          "property_features": [],
+          "room_type": "whole",
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [
+          {
+            "absent_features": [],
+            "address": "Unex Tower, 7 Station Street, London, E15",
+            "alternative": true,
+            "area": "Stratford",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": 1,
+            "budget_basis": 2000.0,
+            "budget_status": "⚠️ 超预算 £300",
+            "candidate_status": "excluded",
+            "description": "",
+            "distance_miles": 0.01,
+            "explanation": "1 bedroom flat to rent in Unex Tower, 7 Station Street, London, E15 (commute not verified for current criteria)",
+            "geo_location": "51.541389, -0.003575",
+            "images": [
+              "https://media.onthemarket.com/properties/14951549/1638581326/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/14951549/1638581326/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/14951549/1638581326/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/14951549/1638581326/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/14951549/1638581326/image-4-480x320.jpg"
+            ],
+            "match_type": "soft_violation",
+            "possibly_outdated": false,
+            "price": "£2300/month",
+            "property_type": "1 bed Flat",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "lewisham",
+                  "stratford"
+                ],
+                "bedrooms": 1.0,
+                "bedrooms_minimum": false,
+                "commute_destination": "Bank station, London",
+                "max_budget_monthly": 2000.0,
+                "max_changes": null,
+                "max_commute_minutes": 45.0,
+                "monthly_total_budget": 2150.0,
+                "move_in_date": null,
+                "no_commute": false,
+                "office_days_per_week": 2.0,
+                "property_features": [],
+                "room_type": "whole"
+              },
+              "reason_messages": {
+                "en": [
+                  "alternative is outside the declared hard result set",
+                  "monthly price 2300 exceeds budget 2000",
+                  "monthly rent 2300 alone exceeds total budget 2150",
+                  "commute tool skipped"
+                ],
+                "zh": [
+                  "该房源是备选，未满足全部已声明条件",
+                  "月租 £2300 超过预算 £2000",
+                  "仅月租 £2300 就已超过每月总预算 £2150",
+                  "通勤条件尚未核实（未完成查询）"
+                ]
+              },
+              "reasons": [
+                "alternative is outside the declared hard result set",
+                "monthly price 2300 exceeds budget 2000",
+                "monthly rent 2300 alone exceeds total budget 2150"
+              ],
+              "source": "structured_listing",
+              "status": "excluded",
+              "unknown_reasons": [
+                "commute tool skipped"
+              ]
+            },
+            "rank": 1,
+            "room_type": "whole",
+            "score": 35.12,
+            "score_breakdown": {
+              "commute": 18.47,
+              "freshness": 8.75,
+              "price": 0.0,
+              "semantic": 7.9
+            },
+            "source": "OnTheMarket (cached)",
+            "status_reason": "over_budget",
+            "travel_time": "Commute not verified for current criteria",
+            "travel_time_source": "routing",
+            "unverified_features": [],
+            "url": "https://www.onthemarket.com/details/14951549/",
+            "verified_features": []
+          }
+        ],
+        "retrieval": {
+          "area_status": {
+            "Lewisham": "results",
+            "Stratford": "results"
+          },
+          "data_source": "OnTheMarket (cached)",
+          "incomplete_areas": [],
+          "partial": false,
+          "partial_note": "",
+          "possibly_outdated": false,
+          "retrieval_outcome": "candidates_returned"
+        },
+        "revision": 9
+      },
+      "favorite_identities": [
+        "https://www.onthemarket.com/details/20567130/",
+        "https://www.onthemarket.com/details/14951549/"
+      ]
+    },
+    "family": {
+      "checks": {
+        "conversation_readable": true,
+        "criteria_restored": true,
+        "two_favorites": true,
+        "no_stale_tfl_display": true,
+        "unknown_commute_labelled": true
+      },
+      "status": 200,
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "area": "Stratford",
+          "areas": [
+            "Stratford",
+            "Leyton"
+          ],
+          "bedrooms": 2,
+          "bedrooms_minimum": true,
+          "budget_period": "month",
+          "commute_destination": "King's Cross",
+          "constraint_sources": {
+            "area": {
+              "source": "user_message",
+              "text": "Could you help us find a family home in Stratford or Leyton;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less",
+              "value": "Stratford"
+            },
+            "areas": {
+              "source": "user_message",
+              "text": "Could you help us find a family home in Stratford or Leyton;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less",
+              "value": [
+                "Stratford",
+                "Leyton"
+              ]
+            },
+            "bedrooms": {
+              "source": "user_message",
+              "text": "Could you help us find a family home in Stratford or Leyton;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less",
+              "value": 2
+            },
+            "bedrooms_minimum": {
+              "source": "user_message",
+              "text": "Could you help us find a family home in Stratford or Leyton;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less",
+              "value": true
+            },
+            "budget_period": {
+              "source": "user_message",
+              "text": "Could you help us find a family home in Stratford or Leyton;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less",
+              "value": "month"
+            },
+            "commute_destination": {
+              "source": "user_message",
+              "text": "Could you help us find a family home in Stratford or Leyton;  There are two adults, our seven-year-old and a cat;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less;  I use a manual wheelchair that's 68 cm wide: step-free entry and usable space through the doors and bathroom are essential;  Our cat must be allowed, and we'd need written consent before committing;  A balcony or small garden would be lovely but isn't essential",
+              "value": "King's Cross"
+            },
+            "destination": {
+              "source": "user_message",
+              "text": "Could you help us find a family home in Stratford or Leyton;  There are two adults, our seven-year-old and a cat;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less;  I use a manual wheelchair that's 68 cm wide: step-free entry and usable space through the doors and bathroom are essential;  Our cat must be allowed, and we'd need written consent before committing;  A balcony or small garden would be lovely but isn't essential",
+              "value": "King's Cross"
+            },
+            "max_budget": {
+              "source": "user_message",
+              "text": "Could you help us find a family home in Stratford or Leyton;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less",
+              "value": 2800
+            },
+            "max_travel_time": {
+              "source": "user_message",
+              "text": "Could you help us find a family home in Stratford or Leyton;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less",
+              "value": 45
+            },
+            "no_commute": {
+              "source": "user_message",
+              "text": "Could you help us find a family home in Stratford or Leyton;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less",
+              "value": false
+            },
+            "property_features": {
+              "source": "user_message",
+              "text": "Could you help us find a family home in Stratford or Leyton;  There are two adults, our seven-year-old and a cat;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less;  I use a manual wheelchair that's 68 cm wide: step-free entry and usable space through the doors and bathroom are essential;  Our cat must be allowed, and we'd need written consent before committing;  A balcony or small garden would be lovely but isn't essential",
+              "value": [
+                "cats allowed",
+                "wheelchair-accessible",
+                "wheelchair_space_68cm",
+                "cat_written_consent",
+                "step-free"
+              ]
+            },
+            "room_type": {
+              "source": "user_message",
+              "text": "Could you help us find a family home in Stratford or Leyton;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less",
+              "value": "whole"
+            },
+            "soft_preferences": {
+              "source": "user_message",
+              "text": "Could you help us find a family home in Stratford or Leyton;  There are two adults, our seven-year-old and a cat;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less;  I use a manual wheelchair that's 68 cm wide: step-free entry and usable space through the doors and bathroom are essential;  Our cat must be allowed, and we'd need written consent before committing;  A balcony or small garden would be lovely but isn't essential",
+              "value": [
+                "family home",
+                "cat allowed",
+                "accessible bathroom",
+                "balcony or garden preferred"
+              ]
+            }
+          },
+          "criteria_repair_provenance": [
+            {
+              "field": "property_features",
+              "message_id": 23,
+              "previous_value": [
+                "cats allowed",
+                "wheelchair-accessible",
+                "lift"
+              ],
+              "reason": "lift_insufficiency_statement_is_not_requirement",
+              "value": [
+                "cats allowed",
+                "wheelchair-accessible"
+              ]
+            }
+          ],
+          "destination": "King's Cross",
+          "max_budget": 2800,
+          "max_travel_time": 45,
+          "no_commute": false,
+          "plans": {
+            "Stratford": {
+              "amenities_of_interest": [],
+              "area": "Stratford",
+              "areas": [
+                "Stratford",
+                "Leyton"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "budget_period": "month",
+              "commute_destination": "King's Cross",
+              "constraint_sources": {
+                "area": {
+                  "source": "user_message",
+                  "text": "Could you help us find a family home in Stratford or Leyton;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less",
+                  "value": "Stratford"
+                },
+                "areas": {
+                  "source": "user_message",
+                  "text": "Could you help us find a family home in Stratford or Leyton;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less",
+                  "value": [
+                    "Stratford",
+                    "Leyton"
+                  ]
+                },
+                "bedrooms": {
+                  "source": "user_message",
+                  "text": "Could you help us find a family home in Stratford or Leyton;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less",
+                  "value": 2
+                },
+                "bedrooms_minimum": {
+                  "source": "user_message",
+                  "text": "Could you help us find a family home in Stratford or Leyton;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less",
+                  "value": true
+                },
+                "budget_period": {
+                  "source": "user_message",
+                  "text": "Could you help us find a family home in Stratford or Leyton;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less",
+                  "value": "month"
+                },
+                "commute_destination": {
+                  "source": "user_message",
+                  "text": "Could you help us find a family home in Stratford or Leyton;  There are two adults, our seven-year-old and a cat;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less;  I use a manual wheelchair that's 68 cm wide: step-free entry and usable space through the doors and bathroom are essential;  Our cat must be allowed, and we'd need written consent before committing;  A balcony or small garden would be lovely but isn't essential",
+                  "value": "King's Cross"
+                },
+                "destination": {
+                  "source": "user_message",
+                  "text": "Could you help us find a family home in Stratford or Leyton;  There are two adults, our seven-year-old and a cat;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less;  I use a manual wheelchair that's 68 cm wide: step-free entry and usable space through the doors and bathroom are essential;  Our cat must be allowed, and we'd need written consent before committing;  A balcony or small garden would be lovely but isn't essential",
+                  "value": "King's Cross"
+                },
+                "max_budget": {
+                  "source": "user_message",
+                  "text": "Could you help us find a family home in Stratford or Leyton;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less",
+                  "value": 2800
+                },
+                "max_travel_time": {
+                  "source": "user_message",
+                  "text": "Could you help us find a family home in Stratford or Leyton;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less",
+                  "value": 45
+                },
+                "no_commute": {
+                  "source": "user_message",
+                  "text": "Could you help us find a family home in Stratford or Leyton;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less",
+                  "value": false
+                },
+                "property_features": {
+                  "source": "user_message",
+                  "text": "Could you help us find a family home in Stratford or Leyton;  There are two adults, our seven-year-old and a cat;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less;  I use a manual wheelchair that's 68 cm wide: step-free entry and usable space through the doors and bathroom are essential;  Our cat must be allowed, and we'd need written consent before committing;  A balcony or small garden would be lovely but isn't essential",
+                  "value": [
+                    "cats allowed",
+                    "wheelchair-accessible",
+                    "wheelchair_space_68cm",
+                    "cat_written_consent",
+                    "step-free"
+                  ]
+                },
+                "room_type": {
+                  "source": "user_message",
+                  "text": "Could you help us find a family home in Stratford or Leyton;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less",
+                  "value": "whole"
+                },
+                "soft_preferences": {
+                  "source": "user_message",
+                  "text": "Could you help us find a family home in Stratford or Leyton;  There are two adults, our seven-year-old and a cat;  We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less;  I use a manual wheelchair that's 68 cm wide: step-free entry and usable space through the doors and bathroom are essential;  Our cat must be allowed, and we'd need written consent before committing;  A balcony or small garden would be lovely but isn't essential",
+                  "value": [
+                    "family home",
+                    "cat allowed",
+                    "accessible bathroom",
+                    "balcony or garden preferred"
+                  ]
+                }
+              },
+              "criteria_repair_provenance": [
+                {
+                  "field": "property_features",
+                  "message_id": 23,
+                  "previous_value": [
+                    "cats allowed",
+                    "wheelchair-accessible",
+                    "lift"
+                  ],
+                  "reason": "lift_insufficiency_statement_is_not_requirement",
+                  "value": [
+                    "cats allowed",
+                    "wheelchair-accessible"
+                  ]
+                }
+              ],
+              "destination": "King's Cross",
+              "max_budget": 2800,
+              "max_travel_time": 45,
+              "no_commute": false,
+              "property_features": [
+                "cats allowed",
+                "wheelchair-accessible",
+                "wheelchair_space_68cm",
+                "cat_written_consent",
+                "step-free"
+              ],
+              "room_type": "whole",
+              "soft_preferences": [
+                "family home",
+                "cat allowed",
+                "accessible bathroom",
+                "balcony or garden preferred"
+              ]
+            }
+          },
+          "property_features": [
+            "cats allowed",
+            "wheelchair-accessible",
+            "wheelchair_space_68cm",
+            "cat_written_consent",
+            "step-free"
+          ],
+          "room_type": "whole",
+          "soft_preferences": [
+            "family home",
+            "cat allowed",
+            "accessible bathroom",
+            "balcony or garden preferred"
+          ]
+        },
+        "operation": "replace",
+        "results": [
+          {
+            "absent_features": [],
+            "address": "Angel Lane, London, E15",
+            "area": "Stratford",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": 2,
+            "budget_basis": 2800.0,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "unknown",
+            "candidate_unknown_reasons": [
+              "required features are not verified: cats allowed, wheelchair-accessible, wheelchair_space_68cm, cat_written_consent, step-free",
+              "commute evidence is missing"
+            ],
+            "description": "",
+            "distance_miles": 0.26,
+            "explanation": "2 bedroom apartment to rent in Angel Lane, London, E15 (commute not verified for current criteria)",
+            "geo_location": "51.544021, 0.000647",
+            "images": [
+              "https://media.onthemarket.com/properties/20560450/1652286648/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/20560450/1652286648/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/20560450/1652286648/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/20560450/1652286648/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/20560450/1652286648/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": false,
+            "price": "£2450/month",
+            "property_type": "2 bed Apartment",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "stratford",
+                  "leyton"
+                ],
+                "bedrooms": 2.0,
+                "bedrooms_minimum": true,
+                "commute_destination": "King's Cross",
+                "max_budget_monthly": 2800.0,
+                "max_changes": null,
+                "max_commute_minutes": 45.0,
+                "monthly_total_budget": null,
+                "move_in_date": null,
+                "no_commute": false,
+                "office_days_per_week": null,
+                "property_features": [
+                  "cats allowed",
+                  "wheelchair-accessible",
+                  "wheelchair_space_68cm",
+                  "cat_written_consent",
+                  "step-free"
+                ],
+                "room_type": "whole"
+              },
+              "reason_messages": {
+                "en": [
+                  "required features are not verified: cats allowed, wheelchair-accessible, door and bathroom clearance for a 68 cm wheelchair, written permission for the cat, step-free",
+                  "commute evidence is missing"
+                ],
+                "zh": [
+                  "必需设施尚未核实：允许养猫、轮椅通行条件、68cm轮椅通过房门及浴室的通行空间、猫的书面饲养许可、无台阶通行",
+                  "缺少该房源的通勤证据"
+                ]
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "unknown",
+              "unknown_reasons": [
+                "required features are not verified: cats allowed, wheelchair-accessible, wheelchair_space_68cm, cat_written_consent, step-free",
+                "commute evidence is missing"
+              ]
+            },
+            "rank": 2,
+            "room_type": "whole",
+            "score": 44.04,
+            "score_breakdown": {
+              "commute": 9.37,
+              "features": 0.0,
+              "freshness": 7.78,
+              "price": 20.21,
+              "semantic": 6.68
+            },
+            "source": "OnTheMarket (cached)",
+            "status_reason": "required conditions are not fully verified",
+            "travel_time": "Commute not verified for current criteria",
+            "travel_time_source": "routing",
+            "unverified_features": [
+              "cats allowed",
+              "wheelchair-accessible",
+              "wheelchair_space_68cm",
+              "cat_written_consent",
+              "step-free"
+            ],
+            "url": "https://www.onthemarket.com/details/20560450/",
+            "verified_features": []
+          },
+          {
+            "absent_features": [],
+            "address": "at Folio London, Flat 18, Warton House, , 150 High Street E15",
+            "area": "Stratford",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": 2,
+            "budget_basis": 2800.0,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "unknown",
+            "candidate_unknown_reasons": [
+              "required features are not verified: cats allowed, wheelchair-accessible, wheelchair_space_68cm, cat_written_consent, step-free",
+              "commute evidence is missing"
+            ],
+            "description": "",
+            "distance_miles": 0.47,
+            "explanation": "2 bedroom apartment to rent in at Folio London, Flat 18, Warton House, , 150 High Street E15 (estimated from coordinates: ~42 min to King's Cross, not a verified journey time)",
+            "geo_location": "51.534727, -0.006785",
+            "images": [
+              "https://media.onthemarket.com/properties/19900647/1650666689/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/19900647/1650666689/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/19900647/1650666689/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/19900647/1650666689/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/19900647/1650666689/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": false,
+            "price": "£2225/month",
+            "property_type": "2 bed Apartment",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "stratford",
+                  "leyton"
+                ],
+                "bedrooms": 2.0,
+                "bedrooms_minimum": true,
+                "commute_destination": "King's Cross",
+                "max_budget_monthly": 2800.0,
+                "max_changes": null,
+                "max_commute_minutes": 45.0,
+                "monthly_total_budget": null,
+                "move_in_date": null,
+                "no_commute": false,
+                "office_days_per_week": null,
+                "property_features": [
+                  "cats allowed",
+                  "wheelchair-accessible",
+                  "wheelchair_space_68cm",
+                  "cat_written_consent",
+                  "step-free"
+                ],
+                "room_type": "whole"
+              },
+              "reason_messages": {
+                "en": [
+                  "required features are not verified: cats allowed, wheelchair-accessible, door and bathroom clearance for a 68 cm wheelchair, written permission for the cat, step-free",
+                  "commute evidence is missing"
+                ],
+                "zh": [
+                  "必需设施尚未核实：允许养猫、轮椅通行条件、68cm轮椅通过房门及浴室的通行空间、猫的书面饲养许可、无台阶通行",
+                  "缺少该房源的通勤证据"
+                ]
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "unknown",
+              "unknown_reasons": [
+                "required features are not verified: cats allowed, wheelchair-accessible, wheelchair_space_68cm, cat_written_consent, step-free",
+                "commute evidence is missing"
+              ]
+            },
+            "rank": 4,
+            "room_type": "whole",
+            "score": 43.09,
+            "score_breakdown": {
+              "commute": 6.43,
+              "features": 0.0,
+              "freshness": 7.78,
+              "price": 21.41,
+              "semantic": 7.47
+            },
+            "source": "OnTheMarket (cached)",
+            "status_reason": "required conditions are not fully verified",
+            "travel_time": "~42 min to King's Cross (estimated, unverified)",
+            "travel_time_source": "estimate",
+            "unverified_features": [
+              "cats allowed",
+              "wheelchair-accessible",
+              "wheelchair_space_68cm",
+              "cat_written_consent",
+              "step-free"
+            ],
+            "url": "https://www.onthemarket.com/details/19900647/",
+            "verified_features": []
+          },
+          {
+            "absent_features": [],
+            "address": "Three Mill Lane, London, E3",
+            "area": "Stratford",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": 2,
+            "budget_basis": 2800.0,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "unknown",
+            "candidate_unknown_reasons": [
+              "required features are not verified: cats allowed, wheelchair-accessible, wheelchair_space_68cm, cat_written_consent, step-free",
+              "commute evidence is missing"
+            ],
+            "description": "",
+            "distance_miles": 0.96,
+            "explanation": "2 bedroom flat to rent in Three Mill Lane, London, E3 (commute not verified for current criteria)",
+            "geo_location": "51.527822, -0.008714",
+            "images": [
+              "https://media.onthemarket.com/properties/20553936/1652035250/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/20553936/1652035250/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/20553936/1652035250/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/20553936/1652035250/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/20553936/1652035250/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": false,
+            "price": "£2500/month",
+            "property_type": "2 bed Flat",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "stratford",
+                  "leyton"
+                ],
+                "bedrooms": 2.0,
+                "bedrooms_minimum": true,
+                "commute_destination": "King's Cross",
+                "max_budget_monthly": 2800.0,
+                "max_changes": null,
+                "max_commute_minutes": 45.0,
+                "monthly_total_budget": null,
+                "move_in_date": null,
+                "no_commute": false,
+                "office_days_per_week": null,
+                "property_features": [
+                  "cats allowed",
+                  "wheelchair-accessible",
+                  "wheelchair_space_68cm",
+                  "cat_written_consent",
+                  "step-free"
+                ],
+                "room_type": "whole"
+              },
+              "reason_messages": {
+                "en": [
+                  "required features are not verified: cats allowed, wheelchair-accessible, door and bathroom clearance for a 68 cm wheelchair, written permission for the cat, step-free",
+                  "commute evidence is missing"
+                ],
+                "zh": [
+                  "必需设施尚未核实：允许养猫、轮椅通行条件、68cm轮椅通过房门及浴室的通行空间、猫的书面饲养许可、无台阶通行",
+                  "缺少该房源的通勤证据"
+                ]
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "unknown",
+              "unknown_reasons": [
+                "required features are not verified: cats allowed, wheelchair-accessible, wheelchair_space_68cm, cat_written_consent, step-free",
+                "commute evidence is missing"
+              ]
+            },
+            "rank": 5,
+            "room_type": "whole",
+            "score": 41.27,
+            "score_breakdown": {
+              "commute": 5.25,
+              "features": 0.0,
+              "freshness": 7.78,
+              "price": 19.94,
+              "semantic": 8.3
+            },
+            "source": "OnTheMarket (cached)",
+            "status_reason": "required conditions are not fully verified",
+            "travel_time": "Commute not verified for current criteria",
+            "travel_time_source": "routing",
+            "unverified_features": [
+              "cats allowed",
+              "wheelchair-accessible",
+              "wheelchair_space_68cm",
+              "cat_written_consent",
+              "step-free"
+            ],
+            "url": "https://www.onthemarket.com/details/20553936/",
+            "verified_features": []
+          }
+        ],
+        "retrieval": {},
+        "revision": 7
+      },
+      "favorite_identities": [
+        "https://www.onthemarket.com/details/20489843/",
+        "https://www.onthemarket.com/details/20553936/"
+      ]
+    }
+  }
+}

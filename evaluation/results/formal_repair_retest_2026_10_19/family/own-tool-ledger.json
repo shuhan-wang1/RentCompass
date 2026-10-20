@@ -1,0 +1,3648 @@
+{
+  "boundary": "Only actual Tool.execute records for this persona authenticated conversation(s). Terminal ask_user is graph-managed and is not recorded here; no absence implies no clarification.",
+  "turns": [
+    {
+      "turn_id": "215008be9c00461990528d572904cbfc",
+      "conversation_id": "76e9351df6d1450582bf1576b6e2116f",
+      "request_id": "e0b7bf30d3c941a8bf3ed3b1b84ac21d",
+      "status": "completed"
+    },
+    {
+      "turn_id": "58ef949d568049568333398ea01c714f",
+      "conversation_id": "76e9351df6d1450582bf1576b6e2116f",
+      "request_id": "1011f25fbccd4830802e2b91444674dd",
+      "status": "completed"
+    },
+    {
+      "turn_id": "2f6cdaec78b14ec0ac7ef09ca6f3c8cf",
+      "conversation_id": "76e9351df6d1450582bf1576b6e2116f",
+      "request_id": "84d9baea39b74626927349e6d873e8da",
+      "status": "completed"
+    },
+    {
+      "turn_id": "b9d48d246eb64f7d841229850b3be626",
+      "conversation_id": "76e9351df6d1450582bf1576b6e2116f",
+      "request_id": "e8f99de2f9434129b174f190d5c3d3d1",
+      "status": "completed"
+    },
+    {
+      "turn_id": "ce59e2d771c94864965c7adf12c65686",
+      "conversation_id": "76e9351df6d1450582bf1576b6e2116f",
+      "request_id": "fc525d53f3c54b8dba0a363e83c1f93f",
+      "status": "completed"
+    },
+    {
+      "turn_id": "ffe5e79f44504595b4c49f0223753040",
+      "conversation_id": "76e9351df6d1450582bf1576b6e2116f",
+      "request_id": "6578553bab8844a88e4ae5997e3b758f",
+      "status": "completed"
+    },
+    {
+      "turn_id": "e36b92b78591464ea999635d2721a57a",
+      "conversation_id": "76e9351df6d1450582bf1576b6e2116f",
+      "request_id": "b589dc66cf1443ccb822c2a400efa8d2",
+      "status": "completed"
+    }
+  ],
+  "actual_dispatches": [
+    {
+      "started": 1792412799.742509,
+      "request_id": "e0b7bf30d3c941a8bf3ed3b1b84ac21d",
+      "tool": "search_properties",
+      "args": {
+        "area": "Stratford",
+        "areas": [
+          "Stratford",
+          "Leyton"
+        ],
+        "commute_destination": "King's Cross, London",
+        "max_budget": 2800,
+        "budget_period": "month",
+        "room_type": "whole",
+        "bedrooms": 2,
+        "bedrooms_minimum": true,
+        "max_commute_time": 45,
+        "no_commute": false,
+        "property_features": [],
+        "accumulated_preferences": [
+          "family home",
+          "cat allowed",
+          "step-free entry",
+          "accessible bathroom",
+          "balcony or garden preferred"
+        ],
+        "current_message": "Could you help us find a family home in Stratford or Leyton? There are two adults, our seven-year-old and a cat. We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less. I use a manual wheelchair that's 68 cm wide: step-free entry and usable space through the doors and bathroom are essential. Our cat must be allowed, and we'd need written consent before committing. A balcony or small garden would be lovely but isn't essential. Please show available candidates and be clear about which of those needs the listings actually evidence.",
+        "confirmed": true,
+        "limit": 12,
+        "reply_language": "en",
+        "idempotency_key": "de4612d041fe9035cafc6e0bc417663ad9b46b8ca3b5f606b2a8c430fc28e1e2"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "success": true,
+          "status": "found",
+          "total_found": 8,
+          "data_source": "OnTheMarket (cached)",
+          "possibly_outdated": false,
+          "search_criteria": {
+            "area": "Stratford",
+            "areas": [
+              "Stratford",
+              "Leyton"
+            ],
+            "commute_destination": "King's Cross, London",
+            "no_commute": false,
+            "bedrooms": 2,
+            "bedrooms_minimum": true,
+            "budget_period": "month",
+            "room_type": "whole",
+            "move_in_date": null,
+            "destination": "King's Cross, London",
+            "max_budget": 2800.0,
+            "max_travel_time": 45,
+            "monthly_total_budget": null,
+            "office_days_per_week": null,
+            "max_changes": null,
+            "property_features": [],
+            "soft_preferences": [
+              "family home",
+              "cat allowed",
+              "step-free entry",
+              "accessible bathroom",
+              "balcony or garden preferred"
+            ]
+          },
+          "known_criteria": {
+            "area": "Stratford",
+            "areas": [
+              "Stratford",
+              "Leyton"
+            ],
+            "commute_destination": "King's Cross, London",
+            "max_budget": 2800.0,
+            "max_travel_time": 45,
+            "monthly_total_budget": null,
+            "office_days_per_week": null,
+            "max_changes": null,
+            "no_commute": false,
+            "bedrooms": 2,
+            "bedrooms_minimum": true,
+            "budget_period": "month",
+            "room_type": "whole",
+            "move_in_date": null,
+            "property_features": [],
+            "soft_preferences": [
+              "family home",
+              "cat allowed",
+              "step-free entry",
+              "accessible bathroom",
+              "balcony or garden preferred"
+            ]
+          },
+          "recommendations": [
+            {
+              "rank": 1,
+              "address": "Station Parade, High Road Leyton",
+              "price": "£1700/month",
+              "budget_status": "✅ 在预算内",
+              "score": 52.85,
+              "score_breakdown": {
+                "price": 27.25,
+                "commute": 5.91,
+                "semantic": 10.94,
+                "freshness": 8.75
+              },
+              "property_type": "2 bed Flat",
+              "room_type": "whole",
+              "bedrooms": 2,
+              "match_type": "perfect",
+              "source": "OnTheMarket (cached)",
+              "possibly_outdated": false,
+              "url": "https://www.onthemarket.com/details/20394849/",
+              "images": [
+                "https://media.onthemarket.com/properties/20394849/1646561399/image-0-480x320.jpg",
+                "https://media.onthemarket.com/properties/20394849/1646561399/image-1-480x320.jpg",
+                "https://media.onthemarket.com/properties/20394849/1646561399/image-2-480x320.jpg",
+                "https://media.onthemarket.com/properties/20394849/1646561399/image-3-480x320.jpg",
+                "https://media.onthemarket.com/properties/20394849/1646561399/image-4-480x320.jpg"
+              ],
+              "geo_location": "51.5685, -0.008746",
+              "distance_miles": 0.31,
+              "explanation": "2 bedroom flat to rent in Station Parade, High Road Leyton (estimated from coordinates: ~44 min to King's Cross, London, not a verified journey time)",
+              "area": "Leyton",
+              "description": "",
+              "available_from": "",
+              "availability_status": "",
+              "verified_features": [],
+              "unverified_features": [],
+              "absent_features": [],
+              "travel_time": "~44 min to King's Cross, London (estimated, unverified)",
+              "travel_time_source": "estimate"
+            },
+            {
+              "rank": 2,
+              "address": "Tennyson Road, Stratford",
+              "price": "£2000/month",
+              "budget_status": "✅ 在预算内",
+              "score": 52.05,
+              "score_breakdown": {
+                "price": 25.45,
+                "commute": 5.91,
+                "semantic": 11.94,
+                "freshness": 8.75
+              },
+              "property_type": "2 bed House",
+              "room_type": "whole",
+              "bedrooms": 2,
+              "match_type": "perfect",
+              "source": "OnTheMarket (cached)",
+              "possibly_outdated": false,
+              "url": "https://www.onthemarket.com/details/20489843/",
+              "images": [
+                "https://media.onthemarket.com/properties/20489843/1650116932/image-0-480x320.jpg",
+                "https://media.onthemarket.com/properties/20489843/1650116932/image-1-480x320.jpg",
+                "https://media.onthemarket.com/properties/20489843/1650116932/image-2-480x320.jpg",
+                "https://media.onthemarket.com/properties/20489843/1650116932/image-3-480x320.jpg",
+                "https://media.onthemarket.com/properties/20489843/1650116932/image-4-480x320.jpg"
+              ],
+              "geo_location": "51.54103, 0.006745",
+              "distance_miles": 0.44,
+              "explanation": "2 bedroom house to rent in Tennyson Road, Stratford (TfL transit: 44 min to King's Cross, London)",
+              "area": "Stratford",
+              "description": "",
+              "available_from": "",
+              "availability_status": "",
+              "verified_features": [],
+              "unverified_features": [],
+              "absent_features": [],
+              "travel_time": "44 min to King's Cross, London",
+              "travel_time_source": "routing"
+            },
+            {
+              "rank": 3,
+              "address": "Borthwick Road, London, E15",
+              "price": "£2100/month",
+              "budget_status": "✅ 在预算内",
+              "score": 51.93,
+              "score_breakdown": {
+                "price": 24.84,
+                "commute": 7.23,
+                "semantic": 11.11,
+                "freshness": 8.75
+              },
+              "property_type": "2 bed Flat",
+              "room_type": "whole",
+              "bedrooms": 2,
+              "match_type": "perfect",
+              "source": "OnTheMarket (cached)",
+              "possibly_outdated": false,
+              "url": "https://www.onthemarket.com/details/20489040/",
+              "images": [
+                "https://media.onthemarket.com/properties/20489040/1650072073/image-0-480x320.jpg",
+                "https://media.onthemarket.com/properties/20489040/1650072073/image-1-480x320.jpg",
+                "https://media.onthemarket.com/properties/20489040/1650072073/image-2-480x320.jpg",
+                "https://media.onthemarket.com/properties/20489040/1650072073/image-3-480x320.jpg",
+                "https://media.onthemarket.com/properties/20489040/1650072073/image-4-480x320.jpg"
+              ],
+              "geo_location": "51.552978, 0.008483",
+              "distance_miles": 1.55,
+              "explanation": "2 bedroom flat to rent in Borthwick Road, London, E15 (TfL transit: 42 min to King's Cross, London)",
+              "area": "Leyton",
+              "description": "",
+              "available_from": "",
+              "availability_status": "",
+              "verified_features": [],
+              "unverified_features": [],
+              "absent_features": [],
+              "travel_time": "42 min to King's Cross, London",
+              "travel_time_source": "routing"
+            },
+            {
+              "rank": 4,
+              "address": "at Folio London, Flat 18, Warton House, , 150 High Street E15",
+              "price": "£2225/month",
+              "budget_status": "✅ 在预算内",
+              "score": 50.08,
+              "score_breakdown": {
+                "price": 24.09,
+                "commute": 7.23,
+                "semantic": 10.01,
+                "freshness": 8.75
+              },
+              "property_type": "2 bed Apartment",
+              "room_type": "whole",
+              "bedrooms": 2,
+              "match_type": "perfect",
+              "source": "OnTheMarket (cached)",
+              "possibly_outdated": false,
+              "url": "https://www.onthemarket.com/details/19900647/",
+              "images": [
+                "https://media.onthemarket.com/properties/19900647/1650666689/image-0-480x320.jpg",
+                "https://media.onthemarket.com/properties/19900647/1650666689/image-1-480x320.jpg",
+                "https://media.onthemarket.com/properties/19900647/1650666689/image-2-480x320.jpg",
+                "https://media.onthemarket.com/properties/19900647/1650666689/image-3-480x320.jpg",
+                "https://media.onthemarket.com/properties/19900647/1650666689/image-4-480x320.jpg"
+              ],
+              "geo_location": "51.534727, -0.006785",
+              "distance_miles": 0.47,
+              "explanation": "2 bedroom apartment to rent in at Folio London, Flat 18, Warton House, , 150 High Street E15 (estimated from coordinates: ~42 min to King's Cross, London, not a verified journey time)",
+              "area": "Stratford",
+              "description": "",
+              "available_from": "",
+              "availability_status": "",
+              "verified_features": [],
+              "unverified_features": [],
+              "absent_features": [],
+              "travel_time": "~42 min to King's Cross, London (estimated, unverified)",
+              "travel_time_source": "estimate"
+            },
+            {
+              "rank": 5,
+              "address": "Brennan House, High Road Leyton, London E10",
+              "price": "£2500/month",
+              "budget_status": "✅ 在预算内",
+              "score": 50.82,
+              "score_breakdown": {
+                "price": 22.43,
+                "commute": 9.22,
+                "semantic": 10.42,
+                "freshness": 8.75
+              },
+              "property_type": "3 bed Apartment",
+              "room_type": "whole",
+              "bedrooms": 3,
+              "match_type": "perfect",
+              "source": "OnTheMarket (cached)",
+              "possibly_outdated": false,
+              "url": "https://www.onthemarket.com/details/20577550/",
+              "images": [
+                "https://media.onthemarket.com/properties/20577550/1653000790/image-0-480x320.jpg",
+                "https://media.onthemarket.com/properties/20577550/1653000790/image-1-480x320.jpg",
+                "https://media.onthemarket.com/properties/20577550/1653000790/image-2-480x320.jpg",
+                "https://media.onthemarket.com/properties/20577550/1653000790/image-3-480x320.jpg",
+                "https://media.onthemarket.com/properties/20577550/1653000790/image-4-480x320.jpg"
+              ],
+              "geo_location": "51.568784, -0.008194",
+              "distance_miles": 0.33,
+              "explanation": "3 bedroom apartment to rent in Brennan House, High Road Leyton, London E10 (TfL transit: 39 min to King's Cross, London)",
+              "area": "Leyton",
+              "description": "",
+              "available_from": "",
+              "availability_status": "",
+              "verified_features": [],
+              "unverified_features": [],
+              "absent_features": [],
+              "travel_time": "39 min to King's Cross, London",
+              "travel_time_source": "routing"
+            },
+            {
+              "rank": 6,
+              "address": "Three Mill Lane, London, E3",
+              "price": "£2500/month",
+              "budget_status": "✅ 在预算内",
+              "score": 47.51,
+              "score_breakdown": {
+                "price": 22.43,
+                "commute": 5.91,
+                "semantic": 10.42,
+                "freshness": 8.75
+              },
+              "property_type": "2 bed Flat",
+              "room_type": "whole",
+              "bedrooms": 2,
+              "match_type": "perfect",
+              "source": "OnTheMarket (cached)",
+              "possibly_outdated": false,
+              "url": "https://www.onthemarket.com/details/20553936/",
+              "images": [
+                "https://media.onthemarket.com/properties/20553936/1652035250/image-0-480x320.jpg",
+                "https://media.onthemarket.com/properties/20553936/1652035250/image-1-480x320.jpg",
+                "https://media.onthemarket.com/properties/20553936/1652035250/image-2-480x320.jpg",
+                "https://media.onthemarket.com/properties/20553936/1652035250/image-3-480x320.jpg",
+                "https://media.onthemarket.com/properties/20553936/1652035250/image-4-480x320.jpg"
+              ],
+              "geo_location": "51.527822, -0.008714",
+              "distance_miles": 0.96,
+              "explanation": "2 bedroom flat to rent in Three Mill Lane, London, E3 (TfL transit: 44 min to King's Cross, London)",
+              "area": "Stratford",
+              "description": "",
+              "available_from": "",
+              "availability_status": "",
+              "verified_features": [],
+              "unverified_features": [],
+              "absent_features": [],
+              "travel_time": "44 min to King's Cross, London",
+              "travel_time_source": "routing"
+            },
+            {
+              "rank": 7,
+              "address": "Lambourne Road, London, E11",
+              "price": "£2750/month",
+              "budget_status": "✅ 在预算内",
+              "score": 46.9,
+              "score_breakdown": {
+                "price": 20.93,
+                "commute": 6.57,
+                "semantic": 10.65,
+                "freshness": 8.75
+              },
+              "property_type": "3 bed House",
+              "room_type": "whole",
+              "bedrooms": 3,
+              "match_type": "perfect",
+              "source": "OnTheMarket (cached)",
+              "possibly_outdated": false,
+              "url": "https://www.onthemarket.com/details/20551559/",
+              "images": [
+                "https://media.onthemarket.com/properties/20551559/1652001367/image-0-480x320.jpg",
+                "https://media.onthemarket.com/properties/20551559/1652001367/image-1-480x320.jpg",
+                "https://media.onthemarket.com/properties/20551559/1652001367/image-2-480x320.jpg",
+                "https://media.onthemarket.com/properties/20551559/1652001367/image-3-480x320.jpg",
+                "https://media.onthemarket.com/properties/20551559/1652001367/image-4-480x320.jpg"
+              ],
+              "geo_location": "51.570187, -0.003414",
+              "distance_miles": 0.53,
+              "explanation": "3 bedroom house to rent in Lambourne Road, London, E11 (TfL transit: 43 min to King's Cross, London)",
+              "area": "Leyton",
+              "description": "",
+              "available_from": "",
+              "availability_status": "",
+              "verified_features": [],
+              "unverified_features": [],
+              "absent_features": [],
+              "travel_time": "43 min to King's Cross, London",
+              "travel_time_source": "routing"
+            },
+            {
+              "rank": 8,
+              "address": "Station Parade, High Road Leyton, London",
+              "price": "£2000/month",
+              "budget_status": "✅ 在预算内",
+              "score": 51.81,
+              "score_breakdown": {
+                "price": 25.45,
+                "commute": 5.91,
+                "semantic": 11.7,
+                "freshness": 8.75
+              },
+              "property_type": "3 bed Flat",
+              "room_type": "whole",
+              "bedrooms": 3,
+              "match_type": "perfect",
+              "source": "OnTheMarket (cached)",
+              "possibly_outdated": false,
+              "url": "https://www.onthemarket.com/details/20394794/",
+              "images": [
+                "https://media.onthemarket.com/properties/20394794/1646559312/image-0-480x320.jpg",
+                "https://media.onthemarket.com/properties/20394794/1646559312/image-1-480x320.jpg",
+                "https://media.onthemarket.com/properties/20394794/1646559312/image-2-480x320.jpg",
+                "https://media.onthemarket.com/properties/20394794/1646559312/image-3-480x320.jpg",
+                "https://media.onthemarket.com/properties/20394794/1646559312/image-4-480x320.jpg"
+              ],
+              "geo_location": "51.5685, -0.008746",
+              "distance_miles": 0.31,
+              "explanation": "3 bedroom flat to rent in Station Parade, High Road Leyton, London (estimated from coordinates: ~44 min to King's Cross, London, not a verified journey time)",
+              "area": "Leyton",
+              "description": "",
+              "available_from": "",
+              "availability_status": "",
+              "verified_features": [],
+              "unverified_features": [],
+              "absent_features": [],
+              "travel_time": "~44 min to King's Cross, London (estimated, unverified)",
+              "travel_time_source": "estimate"
+            }
+          ],
+          "over_budget_alternatives": [],
+          "over_budget_alternatives_label": "",
+          "perfect_count": 8,
+          "soft_count": 0,
+          "summary": "I found 8 current listings across Stratford, Leyton (Whole property) (by area — Stratford: 3, Leyton: 5). Prices range £1700–£2750/month (median ~£2225). Filters applied: budget ≤£2800.0/month, room type Whole property, commute ≤45 min to King's Cross, London. See the full listings in the right-hand panel.",
+          "area_recommendations": [],
+          "partial": false,
+          "incomplete_areas": [],
+          "partial_note": "",
+          "cache_stats": {
+            "hits": 2,
+            "misses": 0
+          },
+          "area_status": {
+            "Stratford": "results",
+            "Leyton": "results"
+          },
+          "retrieval_outcome": "candidates_returned",
+          "commute_unverified": false,
+          "commute_note": ""
+        },
+        "error": null,
+        "execution_time_ms": 29000.79894065857,
+        "tool_name": "search_properties",
+        "version": "1",
+        "idempotency_key": "de4612d041fe9035cafc6e0bc417663ad9b46b8ca3b5f606b2a8c430fc28e1e2",
+        "outcome": "complete"
+      },
+      "elapsed_s": 29.001
+    },
+    {
+      "started": 1792412828.7494414,
+      "request_id": "e0b7bf30d3c941a8bf3ed3b1b84ac21d",
+      "tool": "calculate_commute",
+      "args": {
+        "from_address": "Station Parade, High Road Leyton",
+        "to_address": "King's Cross, London",
+        "mode": "transit"
+      },
+      "context": {},
+      "result": {
+        "success": false,
+        "data": {
+          "success": false,
+          "error": "无法计算通勤时间（地址解析失败）"
+        },
+        "error": "无法计算通勤时间（地址解析失败）",
+        "execution_time_ms": 1023.8051414489746,
+        "tool_name": "calculate_commute",
+        "version": "1",
+        "idempotency_key": null,
+        "outcome": "failed"
+      },
+      "elapsed_s": 1.024
+    },
+    {
+      "started": 1792412828.7520719,
+      "request_id": "e0b7bf30d3c941a8bf3ed3b1b84ac21d",
+      "tool": "calculate_commute",
+      "args": {
+        "from_address": "at Folio London, Flat 18, Warton House, , 150 High Street E15",
+        "to_address": "King's Cross, London",
+        "mode": "transit"
+      },
+      "context": {},
+      "result": {
+        "success": false,
+        "data": {
+          "success": false,
+          "error": "无法计算通勤时间（地址解析失败）"
+        },
+        "error": "无法计算通勤时间（地址解析失败）",
+        "execution_time_ms": 1033.1530570983887,
+        "tool_name": "calculate_commute",
+        "version": "1",
+        "idempotency_key": null,
+        "outcome": "failed"
+      },
+      "elapsed_s": 1.033
+    },
+    {
+      "started": 1792412829.7751226,
+      "request_id": "e0b7bf30d3c941a8bf3ed3b1b84ac21d",
+      "tool": "calculate_commute",
+      "args": {
+        "from_address": "Brennan House, High Road Leyton, London E10",
+        "to_address": "King's Cross, London",
+        "mode": "transit"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "from_address": "Brennan House, High Road Leyton, London E10",
+          "to_address": "King's Cross, London",
+          "mode": "transit",
+          "route_summary": "Walk to Leyton Midland Road Rail Station (5 min) -> Overground Suffragette to Blackhorse Road Rail Station (5 min) -> Tube Victoria to King's Cross St. Pancras Underground Station (13 min) -> Walk to 1 PANCRAS SQUARE, LONDON (10 min)",
+          "route_legs": [
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 5,
+              "summary": "Walk to Leyton Midland Road Station",
+              "from": "612 HIGH ROAD LEYTON",
+              "to": "Leyton Midland Road Rail Station"
+            },
+            {
+              "mode": "overground",
+              "lines": [
+                "Suffragette"
+              ],
+              "duration_minutes": 5,
+              "summary": "Suffragette line to Blackhorse Road Rail Station",
+              "from": "Leyton Midland Road Rail Station",
+              "to": "Blackhorse Road Rail Station"
+            },
+            {
+              "mode": "tube",
+              "lines": [
+                "Victoria"
+              ],
+              "duration_minutes": 13,
+              "summary": "Victoria line to King's Cross St.Pancras",
+              "from": "Blackhorse Road Underground Station",
+              "to": "King's Cross St. Pancras Underground Station"
+            },
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 10,
+              "summary": "Walk to 1 PANCRAS SQUARE, LONDON",
+              "from": "King's Cross St. Pancras Underground Station",
+              "to": "1 PANCRAS SQUARE, LONDON"
+            }
+          ],
+          "changes_count": 1,
+          "route_source": "TfL Journey Planner",
+          "basis": "tfl_journey_plan",
+          "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+          "success": true,
+          "duration_minutes": 39,
+          "is_acceptable": true,
+          "duration_category": "Medium (20-45 min)"
+        },
+        "error": null,
+        "execution_time_ms": 1471.3284969329834,
+        "tool_name": "calculate_commute",
+        "version": "1",
+        "idempotency_key": null,
+        "outcome": "complete"
+      },
+      "elapsed_s": 1.472
+    },
+    {
+      "started": 1792412829.7867982,
+      "request_id": "e0b7bf30d3c941a8bf3ed3b1b84ac21d",
+      "tool": "calculate_commute",
+      "args": {
+        "from_address": "Three Mill Lane, London, E3",
+        "to_address": "King's Cross, London",
+        "mode": "transit"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "from_address": "Three Mill Lane, London, E3",
+          "to_address": "King's Cross, London",
+          "mode": "transit",
+          "route_summary": "Walk to Bromley-by-Bow Underground Station (8 min) -> Tube District to Mile End Underground Station (4 min) -> Tube Central to Liverpool Street Underground Station (6 min) -> Tube Circle to King's Cross St. Pancras Underground Station (7 min) -> Walk to 1 PANCRAS SQUARE, LONDON (10 min)",
+          "route_legs": [
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 8,
+              "summary": "Walk to Bromley-By-Bow",
+              "from": "28 HANCOCK ROAD, LONDON",
+              "to": "Bromley-by-Bow Underground Station"
+            },
+            {
+              "mode": "tube",
+              "lines": [
+                "District"
+              ],
+              "duration_minutes": 4,
+              "summary": "District line to Mile End",
+              "from": "Bromley-by-Bow Underground Station",
+              "to": "Mile End Underground Station"
+            },
+            {
+              "mode": "tube",
+              "lines": [
+                "Central"
+              ],
+              "duration_minutes": 6,
+              "summary": "Central line to Liverpool Street",
+              "from": "Mile End Underground Station",
+              "to": "Liverpool Street Underground Station"
+            },
+            {
+              "mode": "tube",
+              "lines": [
+                "Circle"
+              ],
+              "duration_minutes": 7,
+              "summary": "Circle line to King's Cross St.Pancras",
+              "from": "Liverpool Street Underground Station",
+              "to": "King's Cross St. Pancras Underground Station"
+            },
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 10,
+              "summary": "Walk to 1 PANCRAS SQUARE, LONDON",
+              "from": "King's Cross St. Pancras Underground Station",
+              "to": "1 PANCRAS SQUARE, LONDON"
+            }
+          ],
+          "changes_count": 2,
+          "route_source": "TfL Journey Planner",
+          "basis": "tfl_journey_plan",
+          "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+          "success": true,
+          "duration_minutes": 44,
+          "is_acceptable": true,
+          "duration_category": "Medium (20-45 min)"
+        },
+        "error": null,
+        "execution_time_ms": 2678.3156394958496,
+        "tool_name": "calculate_commute",
+        "version": "1",
+        "idempotency_key": null,
+        "outcome": "complete"
+      },
+      "elapsed_s": 2.679
+    },
+    {
+      "started": 1792412828.7507827,
+      "request_id": "e0b7bf30d3c941a8bf3ed3b1b84ac21d",
+      "tool": "calculate_commute",
+      "args": {
+        "from_address": "Tennyson Road, Stratford",
+        "to_address": "King's Cross, London",
+        "mode": "transit"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "from_address": "Tennyson Road, Stratford",
+          "to_address": "King's Cross, London",
+          "mode": "transit",
+          "route_summary": "Walk to Stratford High Street DLR Station (15 min) -> Dlr DLR to Stratford International DLR Station (4 min) -> Walk to Stratford International Rail Station (6 min) -> National-rail Southeastern to London St Pancras International Rail Station (7 min) -> Walk to 1 PANCRAS SQUARE, LONDON (12 min)",
+          "route_legs": [
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 15,
+              "summary": "Walk to Stratford High Street",
+              "from": "99 TENNYSON ROAD, LONDON",
+              "to": "Stratford High Street DLR Station"
+            },
+            {
+              "mode": "dlr",
+              "lines": [
+                "DLR"
+              ],
+              "duration_minutes": 4,
+              "summary": "DLR to Stratford International DLR Station",
+              "from": "Stratford High Street DLR Station",
+              "to": "Stratford International DLR Station"
+            },
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 6,
+              "summary": "Walk to Stratford International Station",
+              "from": "Stratford International DLR Station",
+              "to": "Stratford International Rail Station"
+            },
+            {
+              "mode": "national-rail",
+              "lines": [
+                "Southeastern"
+              ],
+              "duration_minutes": 7,
+              "summary": "Southeastern to London St Pancras International",
+              "from": "Stratford International Rail Station",
+              "to": "London St Pancras International Rail Station"
+            },
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 12,
+              "summary": "Walk to 1 PANCRAS SQUARE, LONDON",
+              "from": "London St Pancras International Rail Station",
+              "to": "1 PANCRAS SQUARE, LONDON"
+            }
+          ],
+          "changes_count": 1,
+          "route_source": "TfL Journey Planner",
+          "basis": "tfl_journey_plan",
+          "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+          "success": true,
+          "duration_minutes": 44,
+          "is_acceptable": true,
+          "duration_category": "Medium (20-45 min)"
+        },
+        "error": null,
+        "execution_time_ms": 4623.165130615234,
+        "tool_name": "calculate_commute",
+        "version": "1",
+        "idempotency_key": null,
+        "outcome": "complete"
+      },
+      "elapsed_s": 4.623
+    },
+    {
+      "started": 1792412832.466834,
+      "request_id": "e0b7bf30d3c941a8bf3ed3b1b84ac21d",
+      "tool": "calculate_commute",
+      "args": {
+        "from_address": "Station Parade, High Road Leyton, London",
+        "to_address": "King's Cross, London",
+        "mode": "transit"
+      },
+      "context": {},
+      "result": {
+        "success": false,
+        "data": {
+          "success": false,
+          "error": "无法计算通勤时间（地址解析失败）"
+        },
+        "error": "无法计算通勤时间（地址解析失败）",
+        "execution_time_ms": 1010.239839553833,
+        "tool_name": "calculate_commute",
+        "version": "1",
+        "idempotency_key": null,
+        "outcome": "failed"
+      },
+      "elapsed_s": 1.01
+    },
+    {
+      "started": 1792412831.2482176,
+      "request_id": "e0b7bf30d3c941a8bf3ed3b1b84ac21d",
+      "tool": "calculate_commute",
+      "args": {
+        "from_address": "Lambourne Road, London, E11",
+        "to_address": "King's Cross, London",
+        "mode": "transit"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "from_address": "Lambourne Road, London, E11",
+          "to_address": "King's Cross, London",
+          "mode": "transit",
+          "route_summary": "Walk to Leyton Midland Road Rail Station (9 min) -> Overground Suffragette to Blackhorse Road Rail Station (5 min) -> Tube Victoria to King's Cross St. Pancras Underground Station (13 min) -> Walk to 1 PANCRAS SQUARE, LONDON (10 min)",
+          "route_legs": [
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 9,
+              "summary": "Walk to Leyton Midland Road Station",
+              "from": "1 LAMBOURNE ROAD, LEYTONSTONE",
+              "to": "Leyton Midland Road Rail Station"
+            },
+            {
+              "mode": "overground",
+              "lines": [
+                "Suffragette"
+              ],
+              "duration_minutes": 5,
+              "summary": "Suffragette line to Blackhorse Road Rail Station",
+              "from": "Leyton Midland Road Rail Station",
+              "to": "Blackhorse Road Rail Station"
+            },
+            {
+              "mode": "tube",
+              "lines": [
+                "Victoria"
+              ],
+              "duration_minutes": 13,
+              "summary": "Victoria line to King's Cross St.Pancras",
+              "from": "Blackhorse Road Underground Station",
+              "to": "King's Cross St. Pancras Underground Station"
+            },
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 10,
+              "summary": "Walk to 1 PANCRAS SQUARE, LONDON",
+              "from": "King's Cross St. Pancras Underground Station",
+              "to": "1 PANCRAS SQUARE, LONDON"
+            }
+          ],
+          "changes_count": 1,
+          "route_source": "TfL Journey Planner",
+          "basis": "tfl_journey_plan",
+          "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+          "success": true,
+          "duration_minutes": 43,
+          "is_acceptable": true,
+          "duration_category": "Medium (20-45 min)"
+        },
+        "error": null,
+        "execution_time_ms": 4338.307857513428,
+        "tool_name": "calculate_commute",
+        "version": "1",
+        "idempotency_key": null,
+        "outcome": "complete"
+      },
+      "elapsed_s": 4.339
+    },
+    {
+      "started": 1792412828.7514484,
+      "request_id": "e0b7bf30d3c941a8bf3ed3b1b84ac21d",
+      "tool": "calculate_commute",
+      "args": {
+        "from_address": "Borthwick Road, London, E15",
+        "to_address": "King's Cross, London",
+        "mode": "transit"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "from_address": "Borthwick Road, London, E15",
+          "to_address": "King's Cross, London",
+          "mode": "transit",
+          "route_summary": "Walk to Burgess Road (6 min) -> Bus 339 to Stratford International Station (8 min) -> National-rail Southeastern to London St Pancras International Rail Station (7 min) -> Walk to 1 PANCRAS SQUARE, LONDON (14 min)",
+          "route_legs": [
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 6,
+              "summary": "Walk to Burgess Road",
+              "from": "37B BORTHWICK ROAD, STRATFORD",
+              "to": "Burgess Road"
+            },
+            {
+              "mode": "bus",
+              "lines": [
+                "339"
+              ],
+              "duration_minutes": 8,
+              "summary": "339 bus to Stratford International Station",
+              "from": "Burgess Road",
+              "to": "Stratford International Station"
+            },
+            {
+              "mode": "national-rail",
+              "lines": [
+                "Southeastern"
+              ],
+              "duration_minutes": 7,
+              "summary": "Southeastern to London St Pancras International",
+              "from": "Stratford International Rail Station",
+              "to": "London St Pancras International Rail Station"
+            },
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 14,
+              "summary": "Walk to 1 PANCRAS SQUARE, LONDON",
+              "from": "London St Pancras International Rail Station",
+              "to": "1 PANCRAS SQUARE, LONDON"
+            }
+          ],
+          "changes_count": 1,
+          "route_source": "TfL Journey Planner",
+          "basis": "tfl_journey_plan",
+          "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+          "success": true,
+          "duration_minutes": 42,
+          "is_acceptable": true,
+          "duration_category": "Medium (20-45 min)"
+        },
+        "error": null,
+        "execution_time_ms": 9280.14326095581,
+        "tool_name": "calculate_commute",
+        "version": "1",
+        "idempotency_key": null,
+        "outcome": "complete"
+      },
+      "elapsed_s": 9.28
+    },
+    {
+      "started": 1792412839.815877,
+      "request_id": "e0b7bf30d3c941a8bf3ed3b1b84ac21d",
+      "tool": "get_property_details",
+      "args": {
+        "property_url": "https://www.onthemarket.com/details/20489040/",
+        "question": "Is there step-free entry, wheelchair access, a pet/cat policy, a balcony or garden, and how many bedrooms?",
+        "idempotency_key": "186fec00e938790572d0de9f27c6aa755976c468d87263ff943c1c2fd4693f93"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "source": "OnTheMarket (cached)",
+          "data_source": "OnTheMarket (cached)",
+          "source_url": "https://www.onthemarket.com/details/20489040/",
+          "from_cache": true,
+          "live_verified": false,
+          "possibly_outdated": true,
+          "cache_status": "fresh",
+          "fetched_at": "2026-10-19T11:58:42.577099+00:00",
+          "cache_age_seconds": 1717.265,
+          "cache_ttl_seconds": 43200.0,
+          "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+          "provenance": {
+            "source": "OnTheMarket (cached)",
+            "data_source": "OnTheMarket (cached)",
+            "source_url": "https://www.onthemarket.com/details/20489040/",
+            "from_cache": true,
+            "live_verified": false,
+            "possibly_outdated": true,
+            "cache_status": "fresh",
+            "fetched_at": "2026-10-19T11:58:42.577099+00:00",
+            "cache_age_seconds": 1717.265,
+            "cache_ttl_seconds": 43200.0,
+            "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them."
+          },
+          "success": true,
+          "found": true,
+          "search_query": "https://www.onthemarket.com/details/20489040/",
+          "match": {
+            "verdict": "exact_url",
+            "requested": "https://www.onthemarket.com/details/20489040/",
+            "requested_name": "",
+            "requested_postcode": "",
+            "resolved": "Borthwick Road, London, E15",
+            "resolved_postcode": "e15",
+            "corroborated_by": [
+              "listing_url"
+            ],
+            "reasons": []
+          },
+          "property": {
+            "source": "OnTheMarket (cached)",
+            "data_source": "OnTheMarket (cached)",
+            "source_url": "https://www.onthemarket.com/details/20489040/",
+            "from_cache": true,
+            "live_verified": false,
+            "possibly_outdated": true,
+            "cache_status": "fresh",
+            "fetched_at": "2026-10-19T11:58:42.577099+00:00",
+            "cache_age_seconds": 1717.265,
+            "cache_ttl_seconds": 43200.0,
+            "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+            "address": "Borthwick Road, London, E15",
+            "price": "£2,100 pcm",
+            "room_type": "2 bed Flat",
+            "description": "2 bedroom flat to rent in Borthwick Road, London, E15",
+            "amenities": "No Agent Fees, Property Reference Number: 3064532",
+            "guest_policy": "",
+            "payment_rules": "",
+            "excluded_features": "",
+            "url": "https://www.onthemarket.com/details/20489040/",
+            "available_from": "Contact agent",
+            "geo_location": "51.552978, 0.008483"
+          },
+          "room_type_analysis": {
+            "is_studio": false,
+            "is_shared_room": false,
+            "is_ensuite": false,
+            "has_private_kitchen": false,
+            "room_type_category": "2 bed Flat"
+          },
+          "formatted_details": "✅ Identity confirmed by listing URL: this IS the listing you asked about (Borthwick Road, London, E15).\n\nCached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.\n\n📍 **Borthwick Road, London, E15**\n\n💰 **价格**: £2,100 pcm\n🏠 **房型**: 2 bed Flat\n📅 **可入住日期**: Contact agent\n\n📝 **描述**:\n2 bedroom flat to rent in Borthwick Road, London, E15\n\n✨ **设施与配置**:\nNo Agent Fees, Property Reference Number: 3064532\n\n👥 **访客政策**:\n\n\n💳 **付款规则**:\n\n\n⛔ **不包含的设施**:\n\n\n🔗 **链接**: https://www.onthemarket.com/details/20489040/",
+          "total_matches": 1,
+          "message": "找到房产: Borthwick Road, London, E15（已核对与请求一致）"
+        },
+        "error": null,
+        "execution_time_ms": 26.10468864440918,
+        "tool_name": "get_property_details",
+        "version": "1",
+        "idempotency_key": "186fec00e938790572d0de9f27c6aa755976c468d87263ff943c1c2fd4693f93",
+        "outcome": "complete"
+      },
+      "elapsed_s": 0.026
+    },
+    {
+      "started": 1792412839.8163774,
+      "request_id": "e0b7bf30d3c941a8bf3ed3b1b84ac21d",
+      "tool": "get_property_details",
+      "args": {
+        "property_url": "https://www.onthemarket.com/details/20489843/",
+        "question": "Is there step-free entry, wheelchair access, a pet/cat policy, a balcony or garden, and how many bedrooms?",
+        "idempotency_key": "d8a592634dd2e67fba28d7087b0d72d7f1659aac3cbb33b70ce953ec45857a19"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "source": "OnTheMarket (cached)",
+          "data_source": "OnTheMarket (cached)",
+          "source_url": "https://www.onthemarket.com/details/20489843/",
+          "from_cache": true,
+          "live_verified": false,
+          "possibly_outdated": true,
+          "cache_status": "fresh",
+          "fetched_at": "2026-10-19T11:58:41.537315+00:00",
+          "cache_age_seconds": 1718.309,
+          "cache_ttl_seconds": 43200.0,
+          "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+          "provenance": {
+            "source": "OnTheMarket (cached)",
+            "data_source": "OnTheMarket (cached)",
+            "source_url": "https://www.onthemarket.com/details/20489843/",
+            "from_cache": true,
+            "live_verified": false,
+            "possibly_outdated": true,
+            "cache_status": "fresh",
+            "fetched_at": "2026-10-19T11:58:41.537315+00:00",
+            "cache_age_seconds": 1718.309,
+            "cache_ttl_seconds": 43200.0,
+            "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them."
+          },
+          "success": true,
+          "found": true,
+          "search_query": "https://www.onthemarket.com/details/20489843/",
+          "match": {
+            "verdict": "exact_url",
+            "requested": "https://www.onthemarket.com/details/20489843/",
+            "requested_name": "",
+            "requested_postcode": "",
+            "resolved": "Tennyson Road, Stratford",
+            "resolved_postcode": "",
+            "corroborated_by": [
+              "listing_url"
+            ],
+            "reasons": []
+          },
+          "property": {
+            "source": "OnTheMarket (cached)",
+            "data_source": "OnTheMarket (cached)",
+            "source_url": "https://www.onthemarket.com/details/20489843/",
+            "from_cache": true,
+            "live_verified": false,
+            "possibly_outdated": true,
+            "cache_status": "fresh",
+            "fetched_at": "2026-10-19T11:58:41.537315+00:00",
+            "cache_age_seconds": 1718.309,
+            "cache_ttl_seconds": 43200.0,
+            "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+            "address": "Tennyson Road, Stratford",
+            "price": "£2,000 pcm",
+            "room_type": "2 bed House",
+            "description": "2 bedroom house to rent in Tennyson Road, Stratford",
+            "amenities": "Terrace, Furnished",
+            "guest_policy": "",
+            "payment_rules": "",
+            "excluded_features": "",
+            "url": "https://www.onthemarket.com/details/20489843/",
+            "available_from": "Contact agent",
+            "geo_location": "51.54103, 0.006745"
+          },
+          "room_type_analysis": {
+            "is_studio": false,
+            "is_shared_room": false,
+            "is_ensuite": false,
+            "has_private_kitchen": false,
+            "room_type_category": "2 bed House"
+          },
+          "formatted_details": "✅ Identity confirmed by listing URL: this IS the listing you asked about (Tennyson Road, Stratford).\n\nCached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.\n\n📍 **Tennyson Road, Stratford**\n\n💰 **价格**: £2,000 pcm\n🏠 **房型**: 2 bed House\n📅 **可入住日期**: Contact agent\n\n📝 **描述**:\n2 bedroom house to rent in Tennyson Road, Stratford\n\n✨ **设施与配置**:\nTerrace, Furnished\n\n👥 **访客政策**:\n\n\n💳 **付款规则**:\n\n\n⛔ **不包含的设施**:\n\n\n🔗 **链接**: https://www.onthemarket.com/details/20489843/",
+          "total_matches": 1,
+          "message": "找到房产: Tennyson Road, Stratford（已核对与请求一致）"
+        },
+        "error": null,
+        "execution_time_ms": 30.782461166381836,
+        "tool_name": "get_property_details",
+        "version": "1",
+        "idempotency_key": "d8a592634dd2e67fba28d7087b0d72d7f1659aac3cbb33b70ce953ec45857a19",
+        "outcome": "complete"
+      },
+      "elapsed_s": 0.031
+    },
+    {
+      "started": 1792412839.816832,
+      "request_id": "e0b7bf30d3c941a8bf3ed3b1b84ac21d",
+      "tool": "get_property_details",
+      "args": {
+        "property_url": "https://www.onthemarket.com/details/20577550/",
+        "question": "Is there step-free entry, wheelchair access, a pet/cat policy, a balcony or garden, and how many bedrooms?",
+        "idempotency_key": "dec5d71a7c9f488b8275f5bfd62bf92da75862554b88ac8cc765c3af48b96c36"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "source": "OnTheMarket (cached)",
+          "data_source": "OnTheMarket (cached)",
+          "source_url": "https://www.onthemarket.com/details/20577550/",
+          "from_cache": true,
+          "live_verified": false,
+          "possibly_outdated": true,
+          "cache_status": "fresh",
+          "fetched_at": "2026-10-19T11:58:42.577099+00:00",
+          "cache_age_seconds": 1717.276,
+          "cache_ttl_seconds": 43200.0,
+          "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+          "provenance": {
+            "source": "OnTheMarket (cached)",
+            "data_source": "OnTheMarket (cached)",
+            "source_url": "https://www.onthemarket.com/details/20577550/",
+            "from_cache": true,
+            "live_verified": false,
+            "possibly_outdated": true,
+            "cache_status": "fresh",
+            "fetched_at": "2026-10-19T11:58:42.577099+00:00",
+            "cache_age_seconds": 1717.276,
+            "cache_ttl_seconds": 43200.0,
+            "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them."
+          },
+          "success": true,
+          "found": true,
+          "search_query": "https://www.onthemarket.com/details/20577550/",
+          "match": {
+            "verdict": "exact_url",
+            "requested": "https://www.onthemarket.com/details/20577550/",
+            "requested_name": "",
+            "requested_postcode": "",
+            "resolved": "Brennan House, High Road Leyton, London E10",
+            "resolved_postcode": "e10",
+            "corroborated_by": [
+              "listing_url"
+            ],
+            "reasons": []
+          },
+          "property": {
+            "source": "OnTheMarket (cached)",
+            "data_source": "OnTheMarket (cached)",
+            "source_url": "https://www.onthemarket.com/details/20577550/",
+            "from_cache": true,
+            "live_verified": false,
+            "possibly_outdated": true,
+            "cache_status": "fresh",
+            "fetched_at": "2026-10-19T11:58:42.577099+00:00",
+            "cache_age_seconds": 1717.276,
+            "cache_ttl_seconds": 43200.0,
+            "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+            "address": "Brennan House, High Road Leyton, London E10",
+            "price": "£2,500 pcm",
+            "room_type": "3 bed Apartment",
+            "description": "3 bedroom apartment to rent in Brennan House, High Road Leyton, London E10",
+            "amenities": "Three Bedroom Apartment, Open Plan Lounge/Kitchen",
+            "guest_policy": "",
+            "payment_rules": "",
+            "excluded_features": "",
+            "url": "https://www.onthemarket.com/details/20577550/",
+            "available_from": "Contact agent",
+            "geo_location": "51.568784, -0.008194"
+          },
+          "room_type_analysis": {
+            "is_studio": false,
+            "is_shared_room": false,
+            "is_ensuite": false,
+            "has_private_kitchen": false,
+            "room_type_category": "3 bed Apartment"
+          },
+          "formatted_details": "✅ Identity confirmed by listing URL: this IS the listing you asked about (Brennan House, High Road Leyton, London E10).\n\nCached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.\n\n📍 **Brennan House, High Road Leyton, London E10**\n\n💰 **价格**: £2,500 pcm\n🏠 **房型**: 3 bed Apartment\n📅 **可入住日期**: Contact agent\n\n📝 **描述**:\n3 bedroom apartment to rent in Brennan House, High Road Leyton, London E10\n\n✨ **设施与配置**:\nThree Bedroom Apartment, Open Plan Lounge/Kitchen\n\n👥 **访客政策**:\n\n\n💳 **付款规则**:\n\n\n⛔ **不包含的设施**:\n\n\n🔗 **链接**: https://www.onthemarket.com/details/20577550/",
+          "total_matches": 1,
+          "message": "找到房产: Brennan House, High Road Leyton, London E10（已核对与请求一致）"
+        },
+        "error": null,
+        "execution_time_ms": 36.70501708984375,
+        "tool_name": "get_property_details",
+        "version": "1",
+        "idempotency_key": "dec5d71a7c9f488b8275f5bfd62bf92da75862554b88ac8cc765c3af48b96c36",
+        "outcome": "complete"
+      },
+      "elapsed_s": 0.037
+    },
+    {
+      "started": 1792413050.3940892,
+      "request_id": "84d9baea39b74626927349e6d873e8da",
+      "tool": "get_property_details",
+      "args": {
+        "property_url": "https://www.onthemarket.com/details/20489843/",
+        "question": "What are the full address and coordinates, and are cats allowed / is there step-free access?",
+        "idempotency_key": "802501947fd40719ac82739b112d63eb0471596355f59995872faf4c6fcdfc46"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "source": "OnTheMarket (cached)",
+          "data_source": "OnTheMarket (cached)",
+          "source_url": "https://www.onthemarket.com/details/20489843/",
+          "from_cache": true,
+          "live_verified": false,
+          "possibly_outdated": true,
+          "cache_status": "fresh",
+          "fetched_at": "2026-10-19T11:58:41.537315+00:00",
+          "cache_age_seconds": 1928.872,
+          "cache_ttl_seconds": 43200.0,
+          "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+          "provenance": {
+            "source": "OnTheMarket (cached)",
+            "data_source": "OnTheMarket (cached)",
+            "source_url": "https://www.onthemarket.com/details/20489843/",
+            "from_cache": true,
+            "live_verified": false,
+            "possibly_outdated": true,
+            "cache_status": "fresh",
+            "fetched_at": "2026-10-19T11:58:41.537315+00:00",
+            "cache_age_seconds": 1928.872,
+            "cache_ttl_seconds": 43200.0,
+            "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them."
+          },
+          "success": true,
+          "found": true,
+          "search_query": "https://www.onthemarket.com/details/20489843/",
+          "match": {
+            "verdict": "exact_url",
+            "requested": "https://www.onthemarket.com/details/20489843/",
+            "requested_name": "",
+            "requested_postcode": "",
+            "resolved": "Tennyson Road, Stratford",
+            "resolved_postcode": "",
+            "corroborated_by": [
+              "listing_url"
+            ],
+            "reasons": []
+          },
+          "property": {
+            "source": "OnTheMarket (cached)",
+            "data_source": "OnTheMarket (cached)",
+            "source_url": "https://www.onthemarket.com/details/20489843/",
+            "from_cache": true,
+            "live_verified": false,
+            "possibly_outdated": true,
+            "cache_status": "fresh",
+            "fetched_at": "2026-10-19T11:58:41.537315+00:00",
+            "cache_age_seconds": 1928.872,
+            "cache_ttl_seconds": 43200.0,
+            "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+            "address": "Tennyson Road, Stratford",
+            "price": "£2,000 pcm",
+            "room_type": "2 bed House",
+            "description": "2 bedroom house to rent in Tennyson Road, Stratford",
+            "amenities": "Terrace, Furnished",
+            "guest_policy": "",
+            "payment_rules": "",
+            "excluded_features": "",
+            "url": "https://www.onthemarket.com/details/20489843/",
+            "available_from": "Contact agent",
+            "geo_location": "51.54103, 0.006745"
+          },
+          "room_type_analysis": {
+            "is_studio": false,
+            "is_shared_room": false,
+            "is_ensuite": false,
+            "has_private_kitchen": false,
+            "room_type_category": "2 bed House"
+          },
+          "formatted_details": "✅ Identity confirmed by listing URL: this IS the listing you asked about (Tennyson Road, Stratford).\n\nCached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.\n\n📍 **Tennyson Road, Stratford**\n\n💰 **价格**: £2,000 pcm\n🏠 **房型**: 2 bed House\n📅 **可入住日期**: Contact agent\n\n📝 **描述**:\n2 bedroom house to rent in Tennyson Road, Stratford\n\n✨ **设施与配置**:\nTerrace, Furnished\n\n👥 **访客政策**:\n\n\n💳 **付款规则**:\n\n\n⛔ **不包含的设施**:\n\n\n🔗 **链接**: https://www.onthemarket.com/details/20489843/",
+          "total_matches": 1,
+          "message": "找到房产: Tennyson Road, Stratford（已核对与请求一致）"
+        },
+        "error": null,
+        "execution_time_ms": 15.662908554077148,
+        "tool_name": "get_property_details",
+        "version": "1",
+        "idempotency_key": "802501947fd40719ac82739b112d63eb0471596355f59995872faf4c6fcdfc46",
+        "outcome": "complete"
+      },
+      "elapsed_s": 0.016
+    },
+    {
+      "started": 1792413050.3935525,
+      "request_id": "84d9baea39b74626927349e6d873e8da",
+      "tool": "check_safety",
+      "args": {
+        "area": "Stratford",
+        "user_query": "For Tennyson Road, Stratford — the home at https://www.onthemarket.com/details/20489843/ — could you find primary schools and GP surgeries within 1 km for our seven-year-old, and tell us about the local recorded crime? Please give the actual reference point, distance/radius and crime data month so I can judge how local the evidence is. Nearby does not mean we have a school place or can register with a GP. Leave the housing search conditions unchanged for this question.",
+        "idempotency_key": "9b15407811ac1dd6b7127224234f999f559b0f2452eb1afe4d28ce3714b49022"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "address": "Stratford",
+          "safety_score": 99,
+          "safety_level": "Very Safe",
+          "crime_data": {
+            "reference_point": {
+              "query": "Stratford",
+              "precision": "area",
+              "is_specific_address": false,
+              "distance_basis": "straight_line",
+              "measured_from": "the geocoded point for 'Stratford', at area precision; not coordinates borrowed from another tool",
+              "lat": 52.1927803,
+              "lon": -1.70634,
+              "coordinate_source": "nominatim",
+              "resolved_name": "Stratford-upon-Avon, Stratford-on-Avon, Warwickshire, England, United Kingdom"
+            },
+            "source": "data.police.uk",
+            "source_url": "https://data.police.uk/api/crimes-street/all-crime",
+            "radius_miles": 1.0,
+            "radius_m": 1609.344,
+            "radius_basis": "provider_default_approximately_one_mile",
+            "cache_status": "miss",
+            "from_cache": false,
+            "queried_months": [
+              "2026-08",
+              "2026-07",
+              "2026-06"
+            ],
+            "successful_months": [
+              "2026-08",
+              "2026-07",
+              "2026-06"
+            ],
+            "failed_months": [],
+            "partial": false,
+            "data_months": [
+              "2026-06",
+              "2026-07",
+              "2026-08"
+            ],
+            "months_covered": 3,
+            "fetched_at": "2026-10-19T13:30:53.337160+01:00",
+            "total_crimes_6m": 733,
+            "crimes_per_month": 244.3,
+            "most_recent_month_count": 262,
+            "crime_trend": "stable",
+            "category_breakdown": {
+              "Anti Social Behaviour": 199,
+              "Violent Crime": 199,
+              "Shoplifting": 104
+            }
+          },
+          "scoring_explanation": "**How this score was produced:**\n\n1. **Source**: data.police.uk (official UK police crime data)\n2. **Coverage**: about a 1 mile radius around this point, last 3 months\n3. **Records**: 733 incidents (about 244 per month)\n4. **Method**: ranked against a sample of 13 UK areas rather than deducted from a\n   flat count. This area is **quieter than most areas we sampled**, which maps to **99/100**.\n5. **Important limitation**: Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.\n\n📊 **Trend**: Crime rate is relatively stable.",
+          "safety_analysis": "Location: Stratford; actual query point: the geocoded point for 'Stratford', at area precision; not coordinates borrowed from another tool\nData months: 2026-06, 2026-07, 2026-08; 3-month total: 733 incidents; monthly average: 244.3.\nCoverage: the police endpoint defaults to approximately a 1 mile radius; it does not establish the safety of a walking route or an individual home.\nAnti Social Behaviour: 199 incidents\nViolent Crime: 199 incidents\nShoplifting: 104 incidents\nCounts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.",
+          "crimes_per_month": 244.3,
+          "months_covered": 3,
+          "radius_miles": 1.0,
+          "radius_m": 1609.344,
+          "radius_basis": "provider_default_approximately_one_mile",
+          "reference_point": {
+            "query": "Stratford",
+            "precision": "area",
+            "is_specific_address": false,
+            "distance_basis": "straight_line",
+            "measured_from": "the geocoded point for 'Stratford', at area precision; not coordinates borrowed from another tool",
+            "lat": 52.1927803,
+            "lon": -1.70634,
+            "coordinate_source": "nominatim",
+            "resolved_name": "Stratford-upon-Avon, Stratford-on-Avon, Warwickshire, England, United Kingdom"
+          },
+          "source": "data.police.uk",
+          "source_url": "https://data.police.uk/api/crimes-street/all-crime",
+          "data_months": [
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ],
+          "queried_months": [
+            "2026-08",
+            "2026-07",
+            "2026-06"
+          ],
+          "successful_months": [
+            "2026-08",
+            "2026-07",
+            "2026-06"
+          ],
+          "failed_months": [],
+          "partial": false,
+          "from_cache": false,
+          "cache_status": "miss",
+          "possibly_outdated": false,
+          "fetched_at": "2026-10-19T13:30:53.337160+01:00",
+          "reference_basis": "compared against 13 sampled UK areas (2026-05 data.police.uk, ~1 mile radius)",
+          "caveat": "Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.",
+          "recommendation": "This area has a safety level of Very Safe with a safety score of 99/100 (compared against 13 sampled UK areas (2026-05 data.police.uk, ~1 mile radius)). Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.",
+          "next_action_hint": "NOW use Final Answer to summarize this safety information for the user. Do NOT call search_properties again - the user already has property recommendations."
+        },
+        "error": null,
+        "execution_time_ms": 2949.2509365081787,
+        "tool_name": "check_safety",
+        "version": "1",
+        "idempotency_key": "9b15407811ac1dd6b7127224234f999f559b0f2452eb1afe4d28ce3714b49022",
+        "outcome": "complete"
+      },
+      "elapsed_s": 2.949
+    },
+    {
+      "started": 1792413050.3923044,
+      "request_id": "84d9baea39b74626927349e6d873e8da",
+      "tool": "search_nearby_pois",
+      "args": {
+        "address": "Stratford",
+        "user_query": "For Tennyson Road, Stratford — the home at https://www.onthemarket.com/details/20489843/ — could you find primary schools and GP surgeries within 1 km for our seven-year-old, and tell us about the local recorded crime? Please give the actual reference point, distance/radius and crime data month so I can judge how local the evidence is. Nearby does not mean we have a school place or can register with a GP. Leave the housing search conditions unchanged for this question.",
+        "latitude": 51.54103,
+        "longitude": 0.006745,
+        "radius": 1000,
+        "idempotency_key": "42a70bd0dd7ed088d1d437aeb4e7be9340eb21a45ac70cadd72a9b6dd917a6ff"
+      },
+      "context": {},
+      "result": {
+        "success": false,
+        "data": {
+          "success": false,
+          "address": "Stratford",
+          "pois": {},
+          "source": "OpenStreetMap Overpass",
+          "requested_radius_m": 1000,
+          "radius_m": 800,
+          "user_requested_radius_m": 1000,
+          "radius_clamped": true,
+          "requested_types": [
+            "school",
+            "gp"
+          ],
+          "executed_types": [
+            "school",
+            "gp"
+          ],
+          "completed_types": [],
+          "empty_types": [],
+          "failed_types": [
+            "school",
+            "gp"
+          ],
+          "skipped_types": [],
+          "unsupported_types": [],
+          "unqueried_types": [],
+          "category_status": {
+            "school": {
+              "status": "failed",
+              "error": "POI lookup failed",
+              "error_type": "OverpassError",
+              "retryable": true,
+              "service_status": "cooldown",
+              "attempts": 0,
+              "radius_m": 800,
+              "source": "OpenStreetMap Overpass"
+            },
+            "gp": {
+              "status": "failed",
+              "error": "POI lookup failed",
+              "error_type": "OverpassError",
+              "retryable": true,
+              "service_status": "cooldown",
+              "attempts": 0,
+              "radius_m": 800,
+              "source": "OpenStreetMap Overpass"
+            }
+          },
+          "reference_point": {
+            "query": "Stratford",
+            "precision": "listing_coordinates",
+            "is_specific_address": true,
+            "distance_basis": "straight_line",
+            "measured_from": "the supplied coordinates for 'Stratford', supplied with the request rather than geocoded. Their property identity is not independently verified. Distances are straight-line, not walking distance.",
+            "lat": 51.54103,
+            "lon": 0.006745,
+            "coordinate_source": "caller_supplied",
+            "coordinate_identity_verified": false
+          },
+          "budget_seconds": 51.0,
+          "partial": true,
+          "search_status": "failed",
+          "service_status": "unavailable",
+          "unknown_types": [
+            "school",
+            "gp"
+          ],
+          "elapsed_seconds": 0.301,
+          "error": "Nearby POI lookup failed",
+          "failure_note": "No requested category completed; do not report this as no nearby places.",
+          "retryable": true,
+          "message": "Nearby POI lookup failed",
+          "note": "Requested radius 1000m; actual search radius 800m (configured maximum 800m). The user asked for 1000m; only 800m was searched. Lookup FAILED (not an empty result): school, gp. School/clinic map records do not verify primary-school phase, school places, GP registration, catchment or wheelchair access.",
+          "summary": "Found 0 places in completed categories within the actual 800m straight-line search radius, measured from the supplied coordinates for 'Stratford', supplied with the request rather than geocoded. Their property identity is not independently verified. Distances are straight-line, not walking distance.\n\nRequested radius 1000m; actual search radius 800m (configured maximum 800m). The user asked for 1000m; only 800m was searched. Lookup FAILED (not an empty result): school, gp. School/clinic map records do not verify primary-school phase, school places, GP registration, catchment or wheelchair access."
+        },
+        "error": "Nearby POI lookup failed",
+        "execution_time_ms": 13816.019058227539,
+        "tool_name": "search_nearby_pois",
+        "version": "1",
+        "idempotency_key": "42a70bd0dd7ed088d1d437aeb4e7be9340eb21a45ac70cadd72a9b6dd917a6ff",
+        "outcome": "failed"
+      },
+      "elapsed_s": 13.816
+    },
+    {
+      "started": 1792413066.198338,
+      "request_id": "84d9baea39b74626927349e6d873e8da",
+      "tool": "search_nearby_pois",
+      "args": {
+        "address": "Tennyson Road, Stratford, London E15",
+        "latitude": 51.54103,
+        "longitude": 0.006745,
+        "poi_type": "school,gp",
+        "radius": 1000,
+        "user_query": "For Tennyson Road, Stratford — the home at https://www.onthemarket.com/details/20489843/ — could you find primary schools and GP surgeries within 1 km for our seven-year-old, and tell us about the local recorded crime? Please give the actual reference point, distance/radius and crime data month so I can judge how local the evidence is. Nearby does not mean we have a school place or can register with a GP. Leave the housing search conditions unchanged for this question.",
+        "idempotency_key": "1d546702f77667af94a891526749cdc27d032882008ecd11f85d328574d3d8c1"
+      },
+      "context": {},
+      "result": {
+        "success": false,
+        "data": {
+          "success": false,
+          "address": "Tennyson Road, Stratford, London E15",
+          "pois": {},
+          "source": "OpenStreetMap Overpass",
+          "requested_radius_m": 1000,
+          "radius_m": 800,
+          "user_requested_radius_m": 1000,
+          "radius_clamped": true,
+          "requested_types": [
+            "school",
+            "gp"
+          ],
+          "executed_types": [
+            "school",
+            "gp"
+          ],
+          "completed_types": [],
+          "empty_types": [],
+          "failed_types": [
+            "school",
+            "gp"
+          ],
+          "skipped_types": [],
+          "unsupported_types": [],
+          "unqueried_types": [],
+          "category_status": {
+            "school": {
+              "status": "failed",
+              "error": "POI lookup failed",
+              "error_type": "OverpassError",
+              "retryable": true,
+              "service_status": "cooldown",
+              "attempts": 0,
+              "radius_m": 800,
+              "source": "OpenStreetMap Overpass"
+            },
+            "gp": {
+              "status": "failed",
+              "error": "POI lookup failed",
+              "error_type": "OverpassError",
+              "retryable": true,
+              "service_status": "cooldown",
+              "attempts": 0,
+              "radius_m": 800,
+              "source": "OpenStreetMap Overpass"
+            }
+          },
+          "reference_point": {
+            "query": "Tennyson Road, Stratford, London E15",
+            "precision": "listing_coordinates",
+            "is_specific_address": true,
+            "distance_basis": "straight_line",
+            "measured_from": "the supplied coordinates for 'Tennyson Road, Stratford, London E15', supplied with the request rather than geocoded. Their property identity is not independently verified. Distances are straight-line, not walking distance.",
+            "lat": 51.54103,
+            "lon": 0.006745,
+            "coordinate_source": "caller_supplied",
+            "coordinate_identity_verified": false
+          },
+          "budget_seconds": 51.0,
+          "partial": true,
+          "search_status": "failed",
+          "service_status": "unavailable",
+          "unknown_types": [
+            "school",
+            "gp"
+          ],
+          "elapsed_seconds": 0.301,
+          "error": "Nearby POI lookup failed",
+          "failure_note": "No requested category completed; do not report this as no nearby places.",
+          "retryable": true,
+          "message": "Nearby POI lookup failed",
+          "note": "Requested radius 1000m; actual search radius 800m (configured maximum 800m). The user asked for 1000m; only 800m was searched. Lookup FAILED (not an empty result): school, gp. School/clinic map records do not verify primary-school phase, school places, GP registration, catchment or wheelchair access.",
+          "summary": "Found 0 places in completed categories within the actual 800m straight-line search radius, measured from the supplied coordinates for 'Tennyson Road, Stratford, London E15', supplied with the request rather than geocoded. Their property identity is not independently verified. Distances are straight-line, not walking distance.\n\nRequested radius 1000m; actual search radius 800m (configured maximum 800m). The user asked for 1000m; only 800m was searched. Lookup FAILED (not an empty result): school, gp. School/clinic map records do not verify primary-school phase, school places, GP registration, catchment or wheelchair access."
+        },
+        "error": "Nearby POI lookup failed",
+        "execution_time_ms": 1605.9443950653076,
+        "tool_name": "search_nearby_pois",
+        "version": "1",
+        "idempotency_key": "1d546702f77667af94a891526749cdc27d032882008ecd11f85d328574d3d8c1",
+        "outcome": "failed"
+      },
+      "elapsed_s": 1.606
+    },
+    {
+      "started": 1792413066.1993847,
+      "request_id": "84d9baea39b74626927349e6d873e8da",
+      "tool": "check_safety",
+      "args": {
+        "address": "Tennyson Road, Stratford, London E15",
+        "latitude": 51.54103,
+        "longitude": 0.006745,
+        "user_query": "local recorded crime near Tennyson Road, Stratford, London E15",
+        "idempotency_key": "00aa6ad5e7adc10d1756ec0fd036798c73adddac928c989385d7e7235f2cdd55"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "address": "Tennyson Road, Stratford, London E15",
+          "safety_score": 38,
+          "safety_level": "Concerning",
+          "crime_data": {
+            "reference_point": {
+              "query": "Tennyson Road, Stratford, London E15",
+              "precision": "supplied_coordinates",
+              "is_specific_address": false,
+              "distance_basis": "straight_line",
+              "measured_from": "the coordinates supplied to this safety query; their association with a particular property has not been independently verified",
+              "lat": 51.54103,
+              "lon": 0.006745,
+              "coordinate_source": "caller_supplied"
+            },
+            "source": "data.police.uk",
+            "source_url": "https://data.police.uk/api/crimes-street/all-crime",
+            "radius_miles": 1.0,
+            "radius_m": 1609.344,
+            "radius_basis": "provider_default_approximately_one_mile",
+            "cache_status": "miss",
+            "from_cache": false,
+            "queried_months": [
+              "2026-08",
+              "2026-07",
+              "2026-06"
+            ],
+            "successful_months": [
+              "2026-08",
+              "2026-07",
+              "2026-06"
+            ],
+            "failed_months": [],
+            "partial": false,
+            "data_months": [
+              "2026-06",
+              "2026-07",
+              "2026-08"
+            ],
+            "months_covered": 3,
+            "fetched_at": "2026-10-19T13:31:10.745263+01:00",
+            "total_crimes_6m": 4671,
+            "crimes_per_month": 1557.0,
+            "most_recent_month_count": 1569,
+            "crime_trend": "stable",
+            "category_breakdown": {
+              "Violent Crime": 1049,
+              "Anti Social Behaviour": 1043,
+              "Shoplifting": 684
+            }
+          },
+          "scoring_explanation": "**How this score was produced:**\n\n1. **Source**: data.police.uk (official UK police crime data)\n2. **Coverage**: about a 1 mile radius around this point, last 3 months\n3. **Records**: 4671 incidents (about 1557 per month)\n4. **Method**: ranked against a sample of 13 UK areas rather than deducted from a\n   flat count. This area is **busier than most areas we sampled**, which maps to **38/100**.\n5. **Important limitation**: Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.\n\n📊 **Trend**: Crime rate is relatively stable.",
+          "safety_analysis": "Location: Tennyson Road, Stratford, London E15; actual query point: the coordinates supplied to this safety query; their association with a particular property has not been independently verified\nData months: 2026-06, 2026-07, 2026-08; 3-month total: 4671 incidents; monthly average: 1557.\nCoverage: the police endpoint defaults to approximately a 1 mile radius; it does not establish the safety of a walking route or an individual home.\nViolent Crime: 1049 incidents\nAnti Social Behaviour: 1043 incidents\nShoplifting: 684 incidents\nCounts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.",
+          "crimes_per_month": 1557.0,
+          "months_covered": 3,
+          "radius_miles": 1.0,
+          "radius_m": 1609.344,
+          "radius_basis": "provider_default_approximately_one_mile",
+          "reference_point": {
+            "query": "Tennyson Road, Stratford, London E15",
+            "precision": "supplied_coordinates",
+            "is_specific_address": false,
+            "distance_basis": "straight_line",
+            "measured_from": "the coordinates supplied to this safety query; their association with a particular property has not been independently verified",
+            "lat": 51.54103,
+            "lon": 0.006745,
+            "coordinate_source": "caller_supplied"
+          },
+          "source": "data.police.uk",
+          "source_url": "https://data.police.uk/api/crimes-street/all-crime",
+          "data_months": [
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ],
+          "queried_months": [
+            "2026-08",
+            "2026-07",
+            "2026-06"
+          ],
+          "successful_months": [
+            "2026-08",
+            "2026-07",
+            "2026-06"
+          ],
+          "failed_months": [],
+          "partial": false,
+          "from_cache": false,
+          "cache_status": "miss",
+          "possibly_outdated": false,
+          "fetched_at": "2026-10-19T13:31:10.745263+01:00",
+          "reference_basis": "compared against 13 sampled UK areas (2026-05 data.police.uk, ~1 mile radius)",
+          "caveat": "Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.",
+          "recommendation": "This area has a safety level of Concerning with a safety score of 38/100 (compared against 13 sampled UK areas (2026-05 data.police.uk, ~1 mile radius)). Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.",
+          "next_action_hint": "NOW use Final Answer to summarize this safety information for the user. Do NOT call search_properties again - the user already has property recommendations."
+        },
+        "error": null,
+        "execution_time_ms": 4555.194616317749,
+        "tool_name": "check_safety",
+        "version": "1",
+        "idempotency_key": "00aa6ad5e7adc10d1756ec0fd036798c73adddac928c989385d7e7235f2cdd55",
+        "outcome": "complete"
+      },
+      "elapsed_s": 4.555
+    },
+    {
+      "started": 1792414443.2927783,
+      "request_id": "e8f99de2f9434129b174f190d5c3d3d1",
+      "tool": "search_properties",
+      "args": {
+        "area": "Stratford",
+        "areas": [
+          "Stratford",
+          "Leyton"
+        ],
+        "commute_destination": "King's Cross",
+        "max_budget": 2800,
+        "budget_period": "month",
+        "room_type": "whole",
+        "bedrooms": 2,
+        "bedrooms_minimum": true,
+        "max_commute_time": 45,
+        "property_features": [
+          "cats allowed",
+          "wheelchair-accessible",
+          "wheelchair_space_68cm",
+          "cat_written_consent",
+          "step-free"
+        ],
+        "accumulated_preferences": [
+          "family home",
+          "cat allowed",
+          "accessible bathroom",
+          "balcony or garden preferred"
+        ],
+        "confirmed": true,
+        "criteria_gate_shown": true,
+        "current_message": "Could you help us find a family home in Stratford or Leyton? There are two adults, our seven-year-old and a cat. We need a whole place with at least two bedrooms, paying no more than £2,800 a month in rent before bills, and a public-transport journey to King's Cross of about 45 minutes or less. I use a manual wheelchair that's 68 cm wide: step-free entry and usable space through the doors and bathroom are essential. Our cat must be allowed, and we'd need written consent before committing. A balcony or small garden would be lovely but isn't essential. Please show available candidates and be clear about which of those needs the listings actually evidence.",
+        "limit": 10,
+        "reply_language": "en",
+        "no_commute": false,
+        "idempotency_key": "b68271814098078fb667f62a53aceab6bab1c491e535bc81bc19cf3f343c4b22"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "success": true,
+          "status": "found",
+          "total_found": 7,
+          "data_source": "OnTheMarket (cached)",
+          "possibly_outdated": false,
+          "search_criteria": {
+            "area": "Stratford",
+            "areas": [
+              "Stratford",
+              "Leyton"
+            ],
+            "commute_destination": "King's Cross",
+            "no_commute": false,
+            "bedrooms": 2,
+            "bedrooms_minimum": true,
+            "budget_period": "month",
+            "room_type": "whole",
+            "move_in_date": null,
+            "destination": "King's Cross",
+            "max_budget": 2800.0,
+            "max_travel_time": 45,
+            "monthly_total_budget": null,
+            "office_days_per_week": null,
+            "max_changes": null,
+            "property_features": [
+              "cats allowed",
+              "wheelchair-accessible",
+              "wheelchair_space_68cm",
+              "cat_written_consent",
+              "step-free"
+            ],
+            "soft_preferences": [
+              "family home",
+              "cat allowed",
+              "accessible bathroom",
+              "balcony or garden preferred"
+            ]
+          },
+          "known_criteria": {
+            "area": "Stratford",
+            "areas": [
+              "Stratford",
+              "Leyton"
+            ],
+            "commute_destination": "King's Cross",
+            "max_budget": 2800.0,
+            "max_travel_time": 45,
+            "monthly_total_budget": null,
+            "office_days_per_week": null,
+            "max_changes": null,
+            "no_commute": false,
+            "bedrooms": 2,
+            "bedrooms_minimum": true,
+            "budget_period": "month",
+            "room_type": "whole",
+            "move_in_date": null,
+            "property_features": [
+              "cats allowed",
+              "wheelchair-accessible",
+              "wheelchair_space_68cm",
+              "cat_written_consent",
+              "step-free"
+            ],
+            "soft_preferences": [
+              "family home",
+              "cat allowed",
+              "accessible bathroom",
+              "balcony or garden preferred"
+            ]
+          },
+          "recommendations": [
+            {
+              "rank": 1,
+              "address": "High Road Leyton, London, E10",
+              "price": "£2150/month",
+              "budget_status": "✅ 在预算内",
+              "score": 44.89,
+              "score_breakdown": {
+                "price": 21.82,
+                "commute": 5.25,
+                "semantic": 10.04,
+                "features": 0.0,
+                "freshness": 7.78
+              },
+              "property_type": "2 bed Flat",
+              "room_type": "whole",
+              "bedrooms": 2,
+              "match_type": "perfect",
+              "source": "OnTheMarket (cached)",
+              "possibly_outdated": false,
+              "url": "https://www.onthemarket.com/details/20563472/",
+              "images": [
+                "https://media.onthemarket.com/properties/20563472/1652335934/image-0-480x320.jpg",
+                "https://media.onthemarket.com/properties/20563472/1652335934/image-1-480x320.jpg",
+                "https://media.onthemarket.com/properties/20563472/1652335934/image-2-480x320.jpg",
+                "https://media.onthemarket.com/properties/20563472/1652335934/image-3-480x320.jpg",
+                "https://media.onthemarket.com/properties/20563472/1652335934/image-4-480x320.jpg"
+              ],
+              "geo_location": "51.568784, -0.008194",
+              "distance_miles": 0.33,
+              "explanation": "2 bedroom flat to rent in High Road Leyton, London, E10 (TfL transit: 44 min to King's Cross)",
+              "area": "Leyton",
+              "description": "",
+              "available_from": "",
+              "availability_status": "",
+              "verified_features": [],
+              "unverified_features": [
+                "cats allowed",
+                "wheelchair-accessible",
+                "wheelchair_space_68cm",
+                "cat_written_consent",
+                "step-free"
+              ],
+              "absent_features": [],
+              "travel_time": "44 min to King's Cross",
+              "travel_time_source": "routing"
+            },
+            {
+              "rank": 2,
+              "address": "Angel Lane, London, E15",
+              "price": "£2450/month",
+              "budget_status": "✅ 在预算内",
+              "score": 44.04,
+              "score_breakdown": {
+                "price": 20.21,
+                "commute": 9.37,
+                "semantic": 6.68,
+                "features": 0.0,
+                "freshness": 7.78
+              },
+              "property_type": "2 bed Apartment",
+              "room_type": "whole",
+              "bedrooms": 2,
+              "match_type": "perfect",
+              "source": "OnTheMarket (cached)",
+              "possibly_outdated": false,
+              "url": "https://www.onthemarket.com/details/20560450/",
+              "images": [
+                "https://media.onthemarket.com/properties/20560450/1652286648/image-0-480x320.jpg",
+                "https://media.onthemarket.com/properties/20560450/1652286648/image-1-480x320.jpg",
+                "https://media.onthemarket.com/properties/20560450/1652286648/image-2-480x320.jpg",
+                "https://media.onthemarket.com/properties/20560450/1652286648/image-3-480x320.jpg",
+                "https://media.onthemarket.com/properties/20560450/1652286648/image-4-480x320.jpg"
+              ],
+              "geo_location": "51.544021, 0.000647",
+              "distance_miles": 0.26,
+              "explanation": "2 bedroom apartment to rent in Angel Lane, London, E15 (TfL transit: 37 min to King's Cross)",
+              "area": "Stratford",
+              "description": "",
+              "available_from": "",
+              "availability_status": "",
+              "verified_features": [],
+              "unverified_features": [
+                "cats allowed",
+                "wheelchair-accessible",
+                "wheelchair_space_68cm",
+                "cat_written_consent",
+                "step-free"
+              ],
+              "absent_features": [],
+              "travel_time": "37 min to King's Cross",
+              "travel_time_source": "routing"
+            },
+            {
+              "rank": 3,
+              "address": "Station Parade, High Road Leyton",
+              "price": "£1700/month",
+              "budget_status": "✅ 在预算内",
+              "score": 44.88,
+              "score_breakdown": {
+                "price": 24.23,
+                "commute": 5.25,
+                "semantic": 7.62,
+                "features": 0.0,
+                "freshness": 7.78
+              },
+              "property_type": "2 bed Flat",
+              "room_type": "whole",
+              "bedrooms": 2,
+              "match_type": "perfect",
+              "source": "OnTheMarket (cached)",
+              "possibly_outdated": false,
+              "url": "https://www.onthemarket.com/details/20394849/",
+              "images": [
+                "https://media.onthemarket.com/properties/20394849/1646561399/image-0-480x320.jpg",
+                "https://media.onthemarket.com/properties/20394849/1646561399/image-1-480x320.jpg",
+                "https://media.onthemarket.com/properties/20394849/1646561399/image-2-480x320.jpg",
+                "https://media.onthemarket.com/properties/20394849/1646561399/image-3-480x320.jpg",
+                "https://media.onthemarket.com/properties/20394849/1646561399/image-4-480x320.jpg"
+              ],
+              "geo_location": "51.5685, -0.008746",
+              "distance_miles": 0.31,
+              "explanation": "2 bedroom flat to rent in Station Parade, High Road Leyton (estimated from coordinates: ~44 min to King's Cross, not a verified journey time)",
+              "area": "Leyton",
+              "description": "",
+              "available_from": "",
+              "availability_status": "",
+              "verified_features": [],
+              "unverified_features": [
+                "cats allowed",
+                "wheelchair-accessible",
+                "wheelchair_space_68cm",
+                "cat_written_consent",
+                "step-free"
+              ],
+              "absent_features": [],
+              "travel_time": "~44 min to King's Cross (estimated, unverified)",
+              "travel_time_source": "estimate"
+            },
+            {
+              "rank": 4,
+              "address": "at Folio London, Flat 18, Warton House, , 150 High Street E15",
+              "price": "£2225/month",
+              "budget_status": "✅ 在预算内",
+              "score": 43.09,
+              "score_breakdown": {
+                "price": 21.41,
+                "commute": 6.43,
+                "semantic": 7.47,
+                "features": 0.0,
+                "freshness": 7.78
+              },
+              "property_type": "2 bed Apartment",
+              "room_type": "whole",
+              "bedrooms": 2,
+              "match_type": "perfect",
+              "source": "OnTheMarket (cached)",
+              "possibly_outdated": false,
+              "url": "https://www.onthemarket.com/details/19900647/",
+              "images": [
+                "https://media.onthemarket.com/properties/19900647/1650666689/image-0-480x320.jpg",
+                "https://media.onthemarket.com/properties/19900647/1650666689/image-1-480x320.jpg",
+                "https://media.onthemarket.com/properties/19900647/1650666689/image-2-480x320.jpg",
+                "https://media.onthemarket.com/properties/19900647/1650666689/image-3-480x320.jpg",
+                "https://media.onthemarket.com/properties/19900647/1650666689/image-4-480x320.jpg"
+              ],
+              "geo_location": "51.534727, -0.006785",
+              "distance_miles": 0.47,
+              "explanation": "2 bedroom apartment to rent in at Folio London, Flat 18, Warton House, , 150 High Street E15 (estimated from coordinates: ~42 min to King's Cross, not a verified journey time)",
+              "area": "Stratford",
+              "description": "",
+              "available_from": "",
+              "availability_status": "",
+              "verified_features": [],
+              "unverified_features": [
+                "cats allowed",
+                "wheelchair-accessible",
+                "wheelchair_space_68cm",
+                "cat_written_consent",
+                "step-free"
+              ],
+              "absent_features": [],
+              "travel_time": "~42 min to King's Cross (estimated, unverified)",
+              "travel_time_source": "estimate"
+            },
+            {
+              "rank": 5,
+              "address": "Three Mill Lane, London, E3",
+              "price": "£2500/month",
+              "budget_status": "✅ 在预算内",
+              "score": 41.27,
+              "score_breakdown": {
+                "price": 19.94,
+                "commute": 5.25,
+                "semantic": 8.3,
+                "features": 0.0,
+                "freshness": 7.78
+              },
+              "property_type": "2 bed Flat",
+              "room_type": "whole",
+              "bedrooms": 2,
+              "match_type": "perfect",
+              "source": "OnTheMarket (cached)",
+              "possibly_outdated": false,
+              "url": "https://www.onthemarket.com/details/20553936/",
+              "images": [
+                "https://media.onthemarket.com/properties/20553936/1652035250/image-0-480x320.jpg",
+                "https://media.onthemarket.com/properties/20553936/1652035250/image-1-480x320.jpg",
+                "https://media.onthemarket.com/properties/20553936/1652035250/image-2-480x320.jpg",
+                "https://media.onthemarket.com/properties/20553936/1652035250/image-3-480x320.jpg",
+                "https://media.onthemarket.com/properties/20553936/1652035250/image-4-480x320.jpg"
+              ],
+              "geo_location": "51.527822, -0.008714",
+              "distance_miles": 0.96,
+              "explanation": "2 bedroom flat to rent in Three Mill Lane, London, E3 (TfL transit: 44 min to King's Cross)",
+              "area": "Stratford",
+              "description": "",
+              "available_from": "",
+              "availability_status": "",
+              "verified_features": [],
+              "unverified_features": [
+                "cats allowed",
+                "wheelchair-accessible",
+                "wheelchair_space_68cm",
+                "cat_written_consent",
+                "step-free"
+              ],
+              "absent_features": [],
+              "travel_time": "44 min to King's Cross",
+              "travel_time_source": "routing"
+            },
+            {
+              "rank": 6,
+              "address": "Lambourne Road, London, E11",
+              "price": "£2750/month",
+              "budget_status": "✅ 在预算内",
+              "score": 40.56,
+              "score_breakdown": {
+                "price": 18.6,
+                "commute": 5.84,
+                "semantic": 8.34,
+                "features": 0.0,
+                "freshness": 7.78
+              },
+              "property_type": "3 bed House",
+              "room_type": "whole",
+              "bedrooms": 3,
+              "match_type": "perfect",
+              "source": "OnTheMarket (cached)",
+              "possibly_outdated": false,
+              "url": "https://www.onthemarket.com/details/20551559/",
+              "images": [
+                "https://media.onthemarket.com/properties/20551559/1652001367/image-0-480x320.jpg",
+                "https://media.onthemarket.com/properties/20551559/1652001367/image-1-480x320.jpg",
+                "https://media.onthemarket.com/properties/20551559/1652001367/image-2-480x320.jpg",
+                "https://media.onthemarket.com/properties/20551559/1652001367/image-3-480x320.jpg",
+                "https://media.onthemarket.com/properties/20551559/1652001367/image-4-480x320.jpg"
+              ],
+              "geo_location": "51.570187, -0.003414",
+              "distance_miles": 0.53,
+              "explanation": "3 bedroom house to rent in Lambourne Road, London, E11 (TfL transit: 43 min to King's Cross)",
+              "area": "Leyton",
+              "description": "",
+              "available_from": "",
+              "availability_status": "",
+              "verified_features": [],
+              "unverified_features": [
+                "cats allowed",
+                "wheelchair-accessible",
+                "wheelchair_space_68cm",
+                "cat_written_consent",
+                "step-free"
+              ],
+              "absent_features": [],
+              "travel_time": "43 min to King's Cross",
+              "travel_time_source": "routing"
+            },
+            {
+              "rank": 7,
+              "address": "Station Parade, High Road Leyton, London",
+              "price": "£2000/month",
+              "budget_status": "✅ 在预算内",
+              "score": 43.85,
+              "score_breakdown": {
+                "price": 22.62,
+                "commute": 5.25,
+                "semantic": 8.2,
+                "features": 0.0,
+                "freshness": 7.78
+              },
+              "property_type": "3 bed Flat",
+              "room_type": "whole",
+              "bedrooms": 3,
+              "match_type": "perfect",
+              "source": "OnTheMarket (cached)",
+              "possibly_outdated": false,
+              "url": "https://www.onthemarket.com/details/20394794/",
+              "images": [
+                "https://media.onthemarket.com/properties/20394794/1646559312/image-0-480x320.jpg",
+                "https://media.onthemarket.com/properties/20394794/1646559312/image-1-480x320.jpg",
+                "https://media.onthemarket.com/properties/20394794/1646559312/image-2-480x320.jpg",
+                "https://media.onthemarket.com/properties/20394794/1646559312/image-3-480x320.jpg",
+                "https://media.onthemarket.com/properties/20394794/1646559312/image-4-480x320.jpg"
+              ],
+              "geo_location": "51.5685, -0.008746",
+              "distance_miles": 0.31,
+              "explanation": "3 bedroom flat to rent in Station Parade, High Road Leyton, London (estimated from coordinates: ~44 min to King's Cross, not a verified journey time)",
+              "area": "Leyton",
+              "description": "",
+              "available_from": "",
+              "availability_status": "",
+              "verified_features": [],
+              "unverified_features": [
+                "cats allowed",
+                "wheelchair-accessible",
+                "wheelchair_space_68cm",
+                "cat_written_consent",
+                "step-free"
+              ],
+              "absent_features": [],
+              "travel_time": "~44 min to King's Cross (estimated, unverified)",
+              "travel_time_source": "estimate"
+            }
+          ],
+          "over_budget_alternatives": [],
+          "over_budget_alternatives_label": "",
+          "perfect_count": 7,
+          "soft_count": 0,
+          "summary": "I found 7 current listings across Stratford, Leyton (Whole property) (by area — Stratford: 3, Leyton: 4). Prices range £1700–£2750/month (median ~£2225). Filters applied: budget ≤£2800.0/month, room type Whole property, commute ≤45 min to King's Cross. See the full listings in the right-hand panel.",
+          "area_recommendations": [],
+          "partial": false,
+          "incomplete_areas": [],
+          "partial_note": "",
+          "cache_stats": {
+            "hits": 2,
+            "misses": 0
+          },
+          "area_status": {
+            "Stratford": "results",
+            "Leyton": "results"
+          },
+          "retrieval_outcome": "candidates_returned",
+          "commute_unverified": false,
+          "commute_note": ""
+        },
+        "error": null,
+        "execution_time_ms": 23283.65159034729,
+        "tool_name": "search_properties",
+        "version": "1",
+        "idempotency_key": "b68271814098078fb667f62a53aceab6bab1c491e535bc81bc19cf3f343c4b22",
+        "outcome": "complete"
+      },
+      "elapsed_s": 23.284
+    },
+    {
+      "started": 1792414466.5813138,
+      "request_id": "e8f99de2f9434129b174f190d5c3d3d1",
+      "tool": "calculate_commute",
+      "args": {
+        "from_address": "High Road Leyton, London, E10",
+        "to_address": "King's Cross",
+        "mode": "transit"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "from_address": "High Road Leyton, London, E10",
+          "to_address": "King's Cross",
+          "mode": "transit",
+          "route_summary": "Walk to Vicarage Road (1 min) -> Bus 97 to Leyton Midland Road Station (3 min) -> Overground Suffragette to Blackhorse Road Rail Station (5 min) -> Tube Victoria to King's Cross St. Pancras Underground Station (13 min) -> Walk to 1 PANCRAS SQUARE, LONDON (10 min)",
+          "route_legs": [
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 1,
+              "summary": "Walk to Vicarage Road (E10)",
+              "from": "452C HIGH ROAD LEYTON",
+              "to": "Vicarage Road"
+            },
+            {
+              "mode": "bus",
+              "lines": [
+                "97"
+              ],
+              "duration_minutes": 3,
+              "summary": "97 bus to Leyton Midland Road Station",
+              "from": "Vicarage Road",
+              "to": "Leyton Midland Road Station"
+            },
+            {
+              "mode": "overground",
+              "lines": [
+                "Suffragette"
+              ],
+              "duration_minutes": 5,
+              "summary": "Suffragette line to Blackhorse Road Rail Station",
+              "from": "Leyton Midland Road Rail Station",
+              "to": "Blackhorse Road Rail Station"
+            },
+            {
+              "mode": "tube",
+              "lines": [
+                "Victoria"
+              ],
+              "duration_minutes": 13,
+              "summary": "Victoria line to King's Cross St.Pancras",
+              "from": "Blackhorse Road Underground Station",
+              "to": "King's Cross St. Pancras Underground Station"
+            },
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 10,
+              "summary": "Walk to 1 PANCRAS SQUARE, LONDON",
+              "from": "King's Cross St. Pancras Underground Station",
+              "to": "1 PANCRAS SQUARE, LONDON"
+            }
+          ],
+          "changes_count": 2,
+          "route_source": "TfL Journey Planner",
+          "basis": "tfl_journey_plan",
+          "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+          "success": true,
+          "duration_minutes": 44,
+          "is_acceptable": true,
+          "duration_category": "Medium (20-45 min)"
+        },
+        "error": null,
+        "execution_time_ms": 97.98669815063477,
+        "tool_name": "calculate_commute",
+        "version": "1",
+        "idempotency_key": null,
+        "outcome": "complete"
+      },
+      "elapsed_s": 0.098
+    },
+    {
+      "started": 1792414466.5817502,
+      "request_id": "e8f99de2f9434129b174f190d5c3d3d1",
+      "tool": "calculate_commute",
+      "args": {
+        "from_address": "Angel Lane, London, E15",
+        "to_address": "King's Cross",
+        "mode": "transit"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "from_address": "Angel Lane, London, E15",
+          "to_address": "King's Cross",
+          "mode": "transit",
+          "route_summary": "Walk to Stratford International Rail Station (16 min) -> National-rail Southeastern to London St Pancras International Rail Station (7 min) -> Walk to 1 PANCRAS SQUARE, LONDON (14 min)",
+          "route_legs": [
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 16,
+              "summary": "Walk to Stratford International Station",
+              "from": "1 ANGEL LANE, LONDON",
+              "to": "Stratford International Rail Station"
+            },
+            {
+              "mode": "national-rail",
+              "lines": [
+                "Southeastern"
+              ],
+              "duration_minutes": 7,
+              "summary": "Southeastern to London St Pancras International",
+              "from": "Stratford International Rail Station",
+              "to": "London St Pancras International Rail Station"
+            },
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 14,
+              "summary": "Walk to 1 PANCRAS SQUARE, LONDON",
+              "from": "London St Pancras International Rail Station",
+              "to": "1 PANCRAS SQUARE, LONDON"
+            }
+          ],
+          "changes_count": 0,
+          "route_source": "TfL Journey Planner",
+          "basis": "tfl_journey_plan",
+          "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+          "success": true,
+          "duration_minutes": 37,
+          "is_acceptable": true,
+          "duration_category": "Medium (20-45 min)"
+        },
+        "error": null,
+        "execution_time_ms": 1303.1213283538818,
+        "tool_name": "calculate_commute",
+        "version": "1",
+        "idempotency_key": null,
+        "outcome": "complete"
+      },
+      "elapsed_s": 1.303
+    },
+    {
+      "started": 1792414466.5819476,
+      "request_id": "e8f99de2f9434129b174f190d5c3d3d1",
+      "tool": "calculate_commute",
+      "args": {
+        "from_address": "Station Parade, High Road Leyton",
+        "to_address": "King's Cross",
+        "mode": "transit"
+      },
+      "context": {},
+      "result": {
+        "success": false,
+        "data": {
+          "success": false,
+          "error": "无法计算通勤时间（地址解析失败）"
+        },
+        "error": "无法计算通勤时间（地址解析失败）",
+        "execution_time_ms": 2445.9846019744873,
+        "tool_name": "calculate_commute",
+        "version": "1",
+        "idempotency_key": null,
+        "outcome": "failed"
+      },
+      "elapsed_s": 2.446
+    },
+    {
+      "started": 1792414466.681323,
+      "request_id": "e8f99de2f9434129b174f190d5c3d3d1",
+      "tool": "calculate_commute",
+      "args": {
+        "from_address": "Three Mill Lane, London, E3",
+        "to_address": "King's Cross",
+        "mode": "transit"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "from_address": "Three Mill Lane, London, E3",
+          "to_address": "King's Cross",
+          "mode": "transit",
+          "route_summary": "Walk to Bromley-by-Bow Underground Station (8 min) -> Tube Hammersmith & City to King's Cross St. Pancras Underground Station (26 min) -> Walk to 1 PANCRAS SQUARE, LONDON (10 min)",
+          "route_legs": [
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 8,
+              "summary": "Walk to Bromley-By-Bow",
+              "from": "28 HANCOCK ROAD, LONDON",
+              "to": "Bromley-by-Bow Underground Station"
+            },
+            {
+              "mode": "tube",
+              "lines": [
+                "Hammersmith & City"
+              ],
+              "duration_minutes": 26,
+              "summary": "Hammersmith & City line to King's Cross St.Pancras",
+              "from": "Bromley-by-Bow Underground Station",
+              "to": "King's Cross St. Pancras Underground Station"
+            },
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 10,
+              "summary": "Walk to 1 PANCRAS SQUARE, LONDON",
+              "from": "King's Cross St. Pancras Underground Station",
+              "to": "1 PANCRAS SQUARE, LONDON"
+            }
+          ],
+          "changes_count": 0,
+          "route_source": "TfL Journey Planner",
+          "basis": "tfl_journey_plan",
+          "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+          "success": true,
+          "duration_minutes": 44,
+          "is_acceptable": true,
+          "duration_category": "Medium (20-45 min)"
+        },
+        "error": null,
+        "execution_time_ms": 2399.80411529541,
+        "tool_name": "calculate_commute",
+        "version": "1",
+        "idempotency_key": null,
+        "outcome": "complete"
+      },
+      "elapsed_s": 2.4
+    },
+    {
+      "started": 1792414466.5826786,
+      "request_id": "e8f99de2f9434129b174f190d5c3d3d1",
+      "tool": "calculate_commute",
+      "args": {
+        "from_address": "at Folio London, Flat 18, Warton House, , 150 High Street E15",
+        "to_address": "King's Cross",
+        "mode": "transit"
+      },
+      "context": {},
+      "result": {
+        "success": false,
+        "data": {
+          "success": false,
+          "error": "无法计算通勤时间（地址解析失败）"
+        },
+        "error": "无法计算通勤时间（地址解析失败）",
+        "execution_time_ms": 3655.959129333496,
+        "tool_name": "calculate_commute",
+        "version": "1",
+        "idempotency_key": null,
+        "outcome": "failed"
+      },
+      "elapsed_s": 3.656
+    },
+    {
+      "started": 1792414467.8868413,
+      "request_id": "e8f99de2f9434129b174f190d5c3d3d1",
+      "tool": "calculate_commute",
+      "args": {
+        "from_address": "Lambourne Road, London, E11",
+        "to_address": "King's Cross",
+        "mode": "transit"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "from_address": "Lambourne Road, London, E11",
+          "to_address": "King's Cross",
+          "mode": "transit",
+          "route_summary": "Walk to Leyton Midland Road Rail Station (9 min) -> Overground Suffragette to Blackhorse Road Rail Station (5 min) -> Tube Victoria to King's Cross St. Pancras Underground Station (13 min) -> Walk to 1 PANCRAS SQUARE, LONDON (10 min)",
+          "route_legs": [
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 9,
+              "summary": "Walk to Leyton Midland Road Station",
+              "from": "1 LAMBOURNE ROAD, LEYTONSTONE",
+              "to": "Leyton Midland Road Rail Station"
+            },
+            {
+              "mode": "overground",
+              "lines": [
+                "Suffragette"
+              ],
+              "duration_minutes": 5,
+              "summary": "Suffragette line to Blackhorse Road Rail Station",
+              "from": "Leyton Midland Road Rail Station",
+              "to": "Blackhorse Road Rail Station"
+            },
+            {
+              "mode": "tube",
+              "lines": [
+                "Victoria"
+              ],
+              "duration_minutes": 13,
+              "summary": "Victoria line to King's Cross St.Pancras",
+              "from": "Blackhorse Road Underground Station",
+              "to": "King's Cross St. Pancras Underground Station"
+            },
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 10,
+              "summary": "Walk to 1 PANCRAS SQUARE, LONDON",
+              "from": "King's Cross St. Pancras Underground Station",
+              "to": "1 PANCRAS SQUARE, LONDON"
+            }
+          ],
+          "changes_count": 1,
+          "route_source": "TfL Journey Planner",
+          "basis": "tfl_journey_plan",
+          "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+          "success": true,
+          "duration_minutes": 43,
+          "is_acceptable": true,
+          "duration_category": "Medium (20-45 min)"
+        },
+        "error": null,
+        "execution_time_ms": 4192.004919052124,
+        "tool_name": "calculate_commute",
+        "version": "1",
+        "idempotency_key": null,
+        "outcome": "complete"
+      },
+      "elapsed_s": 4.192
+    },
+    {
+      "started": 1792414469.0297084,
+      "request_id": "e8f99de2f9434129b174f190d5c3d3d1",
+      "tool": "calculate_commute",
+      "args": {
+        "from_address": "Station Parade, High Road Leyton, London",
+        "to_address": "King's Cross",
+        "mode": "transit"
+      },
+      "context": {},
+      "result": {
+        "success": false,
+        "data": {
+          "success": false,
+          "error": "无法计算通勤时间（地址解析失败）"
+        },
+        "error": "无法计算通勤时间（地址解析失败）",
+        "execution_time_ms": 3613.189697265625,
+        "tool_name": "calculate_commute",
+        "version": "1",
+        "idempotency_key": null,
+        "outcome": "failed"
+      },
+      "elapsed_s": 3.613
+    },
+    {
+      "started": 1792414474.4041595,
+      "request_id": "e8f99de2f9434129b174f190d5c3d3d1",
+      "tool": "get_property_details",
+      "args": {
+        "property_url": "https://www.onthemarket.com/details/20563472/",
+        "question": "Is the cat allowed with written consent? Is there step-free entry, and are there door/bathroom width measurements for a 68 cm wheelchair?",
+        "idempotency_key": "46061d37d9658cf6e89bee54da4898a33e432837e4a0c85bc53da7edd4bdbe8f"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "source": "OnTheMarket (cached)",
+          "data_source": "OnTheMarket (cached)",
+          "source_url": "https://www.onthemarket.com/details/20563472/",
+          "from_cache": true,
+          "live_verified": false,
+          "possibly_outdated": true,
+          "cache_status": "fresh",
+          "fetched_at": "2026-10-19T11:58:42.577099+00:00",
+          "cache_age_seconds": 3351.847,
+          "cache_ttl_seconds": 43200.0,
+          "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+          "provenance": {
+            "source": "OnTheMarket (cached)",
+            "data_source": "OnTheMarket (cached)",
+            "source_url": "https://www.onthemarket.com/details/20563472/",
+            "from_cache": true,
+            "live_verified": false,
+            "possibly_outdated": true,
+            "cache_status": "fresh",
+            "fetched_at": "2026-10-19T11:58:42.577099+00:00",
+            "cache_age_seconds": 3351.847,
+            "cache_ttl_seconds": 43200.0,
+            "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them."
+          },
+          "success": true,
+          "found": true,
+          "search_query": "https://www.onthemarket.com/details/20563472/",
+          "match": {
+            "verdict": "exact_url",
+            "requested": "https://www.onthemarket.com/details/20563472/",
+            "requested_name": "",
+            "requested_postcode": "",
+            "resolved": "High Road Leyton, London, E10",
+            "resolved_postcode": "e10",
+            "corroborated_by": [
+              "listing_url"
+            ],
+            "reasons": []
+          },
+          "property": {
+            "source": "OnTheMarket (cached)",
+            "data_source": "OnTheMarket (cached)",
+            "source_url": "https://www.onthemarket.com/details/20563472/",
+            "from_cache": true,
+            "live_verified": false,
+            "possibly_outdated": true,
+            "cache_status": "fresh",
+            "fetched_at": "2026-10-19T11:58:42.577099+00:00",
+            "cache_age_seconds": 3351.847,
+            "cache_ttl_seconds": 43200.0,
+            "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+            "address": "High Road Leyton, London, E10",
+            "price": "£2,150 pcm",
+            "room_type": "2 bed Flat",
+            "description": "2 bedroom flat to rent in High Road Leyton, London, E10",
+            "amenities": "No Agent Fees, Students Can Enquire",
+            "guest_policy": "",
+            "payment_rules": "",
+            "excluded_features": "",
+            "url": "https://www.onthemarket.com/details/20563472/",
+            "available_from": "Contact agent",
+            "geo_location": "51.568784, -0.008194"
+          },
+          "room_type_analysis": {
+            "is_studio": false,
+            "is_shared_room": false,
+            "is_ensuite": false,
+            "has_private_kitchen": false,
+            "room_type_category": "2 bed Flat"
+          },
+          "formatted_details": "✅ Identity confirmed by listing URL: this IS the listing you asked about (High Road Leyton, London, E10).\n\nCached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.\n\n📍 **High Road Leyton, London, E10**\n\n💰 **价格**: £2,150 pcm\n🏠 **房型**: 2 bed Flat\n📅 **可入住日期**: Contact agent\n\n📝 **描述**:\n2 bedroom flat to rent in High Road Leyton, London, E10\n\n✨ **设施与配置**:\nNo Agent Fees, Students Can Enquire\n\n👥 **访客政策**:\n\n\n💳 **付款规则**:\n\n\n⛔ **不包含的设施**:\n\n\n🔗 **链接**: https://www.onthemarket.com/details/20563472/",
+          "total_matches": 1,
+          "message": "找到房产: High Road Leyton, London, E10（已核对与请求一致）"
+        },
+        "error": null,
+        "execution_time_ms": 19.980430603027344,
+        "tool_name": "get_property_details",
+        "version": "1",
+        "idempotency_key": "46061d37d9658cf6e89bee54da4898a33e432837e4a0c85bc53da7edd4bdbe8f",
+        "outcome": "complete"
+      },
+      "elapsed_s": 0.02
+    },
+    {
+      "started": 1792414474.405146,
+      "request_id": "e8f99de2f9434129b174f190d5c3d3d1",
+      "tool": "get_property_details",
+      "args": {
+        "property_url": "https://www.onthemarket.com/details/20489843/",
+        "question": "Is the cat allowed with written consent? Is there step-free entry, and are there door/bathroom width measurements for a 68 cm wheelchair?",
+        "idempotency_key": "c0b5d6ef306011714c07f1482287d403f13737f5aab39fb853b977b366e339a6"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "source": "OnTheMarket (cached)",
+          "data_source": "OnTheMarket (cached)",
+          "source_url": "https://www.onthemarket.com/details/20489843/",
+          "from_cache": true,
+          "live_verified": false,
+          "possibly_outdated": true,
+          "cache_status": "fresh",
+          "fetched_at": "2026-10-19T11:58:41.537315+00:00",
+          "cache_age_seconds": 3352.891,
+          "cache_ttl_seconds": 43200.0,
+          "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+          "provenance": {
+            "source": "OnTheMarket (cached)",
+            "data_source": "OnTheMarket (cached)",
+            "source_url": "https://www.onthemarket.com/details/20489843/",
+            "from_cache": true,
+            "live_verified": false,
+            "possibly_outdated": true,
+            "cache_status": "fresh",
+            "fetched_at": "2026-10-19T11:58:41.537315+00:00",
+            "cache_age_seconds": 3352.891,
+            "cache_ttl_seconds": 43200.0,
+            "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them."
+          },
+          "success": true,
+          "found": true,
+          "search_query": "https://www.onthemarket.com/details/20489843/",
+          "match": {
+            "verdict": "exact_url",
+            "requested": "https://www.onthemarket.com/details/20489843/",
+            "requested_name": "",
+            "requested_postcode": "",
+            "resolved": "Tennyson Road, Stratford",
+            "resolved_postcode": "",
+            "corroborated_by": [
+              "listing_url"
+            ],
+            "reasons": []
+          },
+          "property": {
+            "source": "OnTheMarket (cached)",
+            "data_source": "OnTheMarket (cached)",
+            "source_url": "https://www.onthemarket.com/details/20489843/",
+            "from_cache": true,
+            "live_verified": false,
+            "possibly_outdated": true,
+            "cache_status": "fresh",
+            "fetched_at": "2026-10-19T11:58:41.537315+00:00",
+            "cache_age_seconds": 3352.891,
+            "cache_ttl_seconds": 43200.0,
+            "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+            "address": "Tennyson Road, Stratford",
+            "price": "£2,000 pcm",
+            "room_type": "2 bed House",
+            "description": "2 bedroom house to rent in Tennyson Road, Stratford",
+            "amenities": "Terrace, Furnished",
+            "guest_policy": "",
+            "payment_rules": "",
+            "excluded_features": "",
+            "url": "https://www.onthemarket.com/details/20489843/",
+            "available_from": "Contact agent",
+            "geo_location": "51.54103, 0.006745"
+          },
+          "room_type_analysis": {
+            "is_studio": false,
+            "is_shared_room": false,
+            "is_ensuite": false,
+            "has_private_kitchen": false,
+            "room_type_category": "2 bed House"
+          },
+          "formatted_details": "✅ Identity confirmed by listing URL: this IS the listing you asked about (Tennyson Road, Stratford).\n\nCached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.\n\n📍 **Tennyson Road, Stratford**\n\n💰 **价格**: £2,000 pcm\n🏠 **房型**: 2 bed House\n📅 **可入住日期**: Contact agent\n\n📝 **描述**:\n2 bedroom house to rent in Tennyson Road, Stratford\n\n✨ **设施与配置**:\nTerrace, Furnished\n\n👥 **访客政策**:\n\n\n💳 **付款规则**:\n\n\n⛔ **不包含的设施**:\n\n\n🔗 **链接**: https://www.onthemarket.com/details/20489843/",
+          "total_matches": 1,
+          "message": "找到房产: Tennyson Road, Stratford（已核对与请求一致）"
+        },
+        "error": null,
+        "execution_time_ms": 23.896455764770508,
+        "tool_name": "get_property_details",
+        "version": "1",
+        "idempotency_key": "c0b5d6ef306011714c07f1482287d403f13737f5aab39fb853b977b366e339a6",
+        "outcome": "complete"
+      },
+      "elapsed_s": 0.024
+    },
+    {
+      "started": 1792414510.975908,
+      "request_id": "fc525d53f3c54b8dba0a363e83c1f93f",
+      "tool": "get_property_details",
+      "args": {
+        "property_url": "https://www.onthemarket.com/details/20489040/",
+        "question": "Does the listing confirm step-free entry, wheelchair access with door/bathroom measurements, and written cat permission?",
+        "idempotency_key": "0080ceae0089311119a4228879e3241baf64a6084bca0f5b63ecb3e5527d128f"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "source": "OnTheMarket (cached)",
+          "data_source": "OnTheMarket (cached)",
+          "source_url": "https://www.onthemarket.com/details/20489040/",
+          "from_cache": true,
+          "live_verified": false,
+          "possibly_outdated": true,
+          "cache_status": "fresh",
+          "fetched_at": "2026-10-19T11:58:42.577099+00:00",
+          "cache_age_seconds": 3388.416,
+          "cache_ttl_seconds": 43200.0,
+          "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+          "provenance": {
+            "source": "OnTheMarket (cached)",
+            "data_source": "OnTheMarket (cached)",
+            "source_url": "https://www.onthemarket.com/details/20489040/",
+            "from_cache": true,
+            "live_verified": false,
+            "possibly_outdated": true,
+            "cache_status": "fresh",
+            "fetched_at": "2026-10-19T11:58:42.577099+00:00",
+            "cache_age_seconds": 3388.416,
+            "cache_ttl_seconds": 43200.0,
+            "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them."
+          },
+          "success": true,
+          "found": true,
+          "search_query": "https://www.onthemarket.com/details/20489040/",
+          "match": {
+            "verdict": "exact_url",
+            "requested": "https://www.onthemarket.com/details/20489040/",
+            "requested_name": "",
+            "requested_postcode": "",
+            "resolved": "Borthwick Road, London, E15",
+            "resolved_postcode": "e15",
+            "corroborated_by": [
+              "listing_url"
+            ],
+            "reasons": []
+          },
+          "property": {
+            "source": "OnTheMarket (cached)",
+            "data_source": "OnTheMarket (cached)",
+            "source_url": "https://www.onthemarket.com/details/20489040/",
+            "from_cache": true,
+            "live_verified": false,
+            "possibly_outdated": true,
+            "cache_status": "fresh",
+            "fetched_at": "2026-10-19T11:58:42.577099+00:00",
+            "cache_age_seconds": 3388.416,
+            "cache_ttl_seconds": 43200.0,
+            "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+            "address": "Borthwick Road, London, E15",
+            "price": "£2,100 pcm",
+            "room_type": "2 bed Flat",
+            "description": "2 bedroom flat to rent in Borthwick Road, London, E15",
+            "amenities": "No Agent Fees, Property Reference Number: 3064532",
+            "guest_policy": "",
+            "payment_rules": "",
+            "excluded_features": "",
+            "url": "https://www.onthemarket.com/details/20489040/",
+            "available_from": "Contact agent",
+            "geo_location": "51.552978, 0.008483"
+          },
+          "room_type_analysis": {
+            "is_studio": false,
+            "is_shared_room": false,
+            "is_ensuite": false,
+            "has_private_kitchen": false,
+            "room_type_category": "2 bed Flat"
+          },
+          "formatted_details": "✅ Identity confirmed by listing URL: this IS the listing you asked about (Borthwick Road, London, E15).\n\nCached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.\n\n📍 **Borthwick Road, London, E15**\n\n💰 **价格**: £2,100 pcm\n🏠 **房型**: 2 bed Flat\n📅 **可入住日期**: Contact agent\n\n📝 **描述**:\n2 bedroom flat to rent in Borthwick Road, London, E15\n\n✨ **设施与配置**:\nNo Agent Fees, Property Reference Number: 3064532\n\n👥 **访客政策**:\n\n\n💳 **付款规则**:\n\n\n⛔ **不包含的设施**:\n\n\n🔗 **链接**: https://www.onthemarket.com/details/20489040/",
+          "total_matches": 1,
+          "message": "找到房产: Borthwick Road, London, E15（已核对与请求一致）"
+        },
+        "error": null,
+        "execution_time_ms": 17.606258392333984,
+        "tool_name": "get_property_details",
+        "version": "1",
+        "idempotency_key": "0080ceae0089311119a4228879e3241baf64a6084bca0f5b63ecb3e5527d128f",
+        "outcome": "complete"
+      },
+      "elapsed_s": 0.018
+    },
+    {
+      "started": 1792414510.9766722,
+      "request_id": "fc525d53f3c54b8dba0a363e83c1f93f",
+      "tool": "get_property_details",
+      "args": {
+        "property_url": "https://www.onthemarket.com/details/20489843/",
+        "question": "Does the listing confirm step-free entry, wheelchair access with door/bathroom measurements, and written cat permission?",
+        "idempotency_key": "8ae0e16232af8dec19bb5efcef1845ff329a8d03dc1655b5243d5754a7d926a7"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "source": "OnTheMarket (cached)",
+          "data_source": "OnTheMarket (cached)",
+          "source_url": "https://www.onthemarket.com/details/20489843/",
+          "from_cache": true,
+          "live_verified": false,
+          "possibly_outdated": true,
+          "cache_status": "fresh",
+          "fetched_at": "2026-10-19T11:58:41.537315+00:00",
+          "cache_age_seconds": 3389.462,
+          "cache_ttl_seconds": 43200.0,
+          "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+          "provenance": {
+            "source": "OnTheMarket (cached)",
+            "data_source": "OnTheMarket (cached)",
+            "source_url": "https://www.onthemarket.com/details/20489843/",
+            "from_cache": true,
+            "live_verified": false,
+            "possibly_outdated": true,
+            "cache_status": "fresh",
+            "fetched_at": "2026-10-19T11:58:41.537315+00:00",
+            "cache_age_seconds": 3389.462,
+            "cache_ttl_seconds": 43200.0,
+            "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them."
+          },
+          "success": true,
+          "found": true,
+          "search_query": "https://www.onthemarket.com/details/20489843/",
+          "match": {
+            "verdict": "exact_url",
+            "requested": "https://www.onthemarket.com/details/20489843/",
+            "requested_name": "",
+            "requested_postcode": "",
+            "resolved": "Tennyson Road, Stratford",
+            "resolved_postcode": "",
+            "corroborated_by": [
+              "listing_url"
+            ],
+            "reasons": []
+          },
+          "property": {
+            "source": "OnTheMarket (cached)",
+            "data_source": "OnTheMarket (cached)",
+            "source_url": "https://www.onthemarket.com/details/20489843/",
+            "from_cache": true,
+            "live_verified": false,
+            "possibly_outdated": true,
+            "cache_status": "fresh",
+            "fetched_at": "2026-10-19T11:58:41.537315+00:00",
+            "cache_age_seconds": 3389.462,
+            "cache_ttl_seconds": 43200.0,
+            "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+            "address": "Tennyson Road, Stratford",
+            "price": "£2,000 pcm",
+            "room_type": "2 bed House",
+            "description": "2 bedroom house to rent in Tennyson Road, Stratford",
+            "amenities": "Terrace, Furnished",
+            "guest_policy": "",
+            "payment_rules": "",
+            "excluded_features": "",
+            "url": "https://www.onthemarket.com/details/20489843/",
+            "available_from": "Contact agent",
+            "geo_location": "51.54103, 0.006745"
+          },
+          "room_type_analysis": {
+            "is_studio": false,
+            "is_shared_room": false,
+            "is_ensuite": false,
+            "has_private_kitchen": false,
+            "room_type_category": "2 bed House"
+          },
+          "formatted_details": "✅ Identity confirmed by listing URL: this IS the listing you asked about (Tennyson Road, Stratford).\n\nCached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.\n\n📍 **Tennyson Road, Stratford**\n\n💰 **价格**: £2,000 pcm\n🏠 **房型**: 2 bed House\n📅 **可入住日期**: Contact agent\n\n📝 **描述**:\n2 bedroom house to rent in Tennyson Road, Stratford\n\n✨ **设施与配置**:\nTerrace, Furnished\n\n👥 **访客政策**:\n\n\n💳 **付款规则**:\n\n\n⛔ **不包含的设施**:\n\n\n🔗 **链接**: https://www.onthemarket.com/details/20489843/",
+          "total_matches": 1,
+          "message": "找到房产: Tennyson Road, Stratford（已核对与请求一致）"
+        },
+        "error": null,
+        "execution_time_ms": 22.747516632080078,
+        "tool_name": "get_property_details",
+        "version": "1",
+        "idempotency_key": "8ae0e16232af8dec19bb5efcef1845ff329a8d03dc1655b5243d5754a7d926a7",
+        "outcome": "complete"
+      },
+      "elapsed_s": 0.023
+    },
+    {
+      "started": 1792414854.5149367,
+      "request_id": "b589dc66cf1443ccb822c2a400efa8d2",
+      "tool": "get_property_details",
+      "args": {
+        "property_url": "https://www.onthemarket.com/details/20489843/",
+        "question": "Full address, coordinates, amenities, accessibility features, cat policy",
+        "idempotency_key": "a213f485f7533043480dc5251915a837253902b3c5b72b50209c616d1e9eab99"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "source": "OnTheMarket (cached)",
+          "data_source": "OnTheMarket (cached)",
+          "source_url": "https://www.onthemarket.com/details/20489843/",
+          "from_cache": true,
+          "live_verified": false,
+          "possibly_outdated": true,
+          "cache_status": "fresh",
+          "fetched_at": "2026-10-19T11:58:41.537315+00:00",
+          "cache_age_seconds": 3733.004,
+          "cache_ttl_seconds": 43200.0,
+          "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+          "provenance": {
+            "source": "OnTheMarket (cached)",
+            "data_source": "OnTheMarket (cached)",
+            "source_url": "https://www.onthemarket.com/details/20489843/",
+            "from_cache": true,
+            "live_verified": false,
+            "possibly_outdated": true,
+            "cache_status": "fresh",
+            "fetched_at": "2026-10-19T11:58:41.537315+00:00",
+            "cache_age_seconds": 3733.004,
+            "cache_ttl_seconds": 43200.0,
+            "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them."
+          },
+          "success": true,
+          "found": true,
+          "search_query": "https://www.onthemarket.com/details/20489843/",
+          "match": {
+            "verdict": "exact_url",
+            "requested": "https://www.onthemarket.com/details/20489843/",
+            "requested_name": "",
+            "requested_postcode": "",
+            "resolved": "Tennyson Road, Stratford",
+            "resolved_postcode": "",
+            "corroborated_by": [
+              "listing_url"
+            ],
+            "reasons": []
+          },
+          "property": {
+            "source": "OnTheMarket (cached)",
+            "data_source": "OnTheMarket (cached)",
+            "source_url": "https://www.onthemarket.com/details/20489843/",
+            "from_cache": true,
+            "live_verified": false,
+            "possibly_outdated": true,
+            "cache_status": "fresh",
+            "fetched_at": "2026-10-19T11:58:41.537315+00:00",
+            "cache_age_seconds": 3733.004,
+            "cache_ttl_seconds": 43200.0,
+            "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+            "address": "Tennyson Road, Stratford",
+            "price": "£2,000 pcm",
+            "room_type": "2 bed House",
+            "description": "2 bedroom house to rent in Tennyson Road, Stratford",
+            "amenities": "Terrace, Furnished",
+            "guest_policy": "",
+            "payment_rules": "",
+            "excluded_features": "",
+            "url": "https://www.onthemarket.com/details/20489843/",
+            "available_from": "Contact agent",
+            "geo_location": "51.54103, 0.006745"
+          },
+          "room_type_analysis": {
+            "is_studio": false,
+            "is_shared_room": false,
+            "is_ensuite": false,
+            "has_private_kitchen": false,
+            "room_type_category": "2 bed House"
+          },
+          "formatted_details": "✅ Identity confirmed by listing URL: this IS the listing you asked about (Tennyson Road, Stratford).\n\nCached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.\n\n📍 **Tennyson Road, Stratford**\n\n💰 **价格**: £2,000 pcm\n🏠 **房型**: 2 bed House\n📅 **可入住日期**: Contact agent\n\n📝 **描述**:\n2 bedroom house to rent in Tennyson Road, Stratford\n\n✨ **设施与配置**:\nTerrace, Furnished\n\n👥 **访客政策**:\n\n\n💳 **付款规则**:\n\n\n⛔ **不包含的设施**:\n\n\n🔗 **链接**: https://www.onthemarket.com/details/20489843/",
+          "total_matches": 1,
+          "message": "找到房产: Tennyson Road, Stratford（已核对与请求一致）"
+        },
+        "error": null,
+        "execution_time_ms": 26.69382095336914,
+        "tool_name": "get_property_details",
+        "version": "1",
+        "idempotency_key": "a213f485f7533043480dc5251915a837253902b3c5b72b50209c616d1e9eab99",
+        "outcome": "complete"
+      },
+      "elapsed_s": 0.028
+    },
+    {
+      "started": 1792414854.5252128,
+      "request_id": "b589dc66cf1443ccb822c2a400efa8d2",
+      "tool": "get_weather",
+      "args": {
+        "location": "Stratford",
+        "idempotency_key": "0cd356fc460dbabedf50ad81b2d0a82cc7b0e02bccf251234cd9cd4488be8f45"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "success": true,
+          "weather_type": "current",
+          "source": "Open-Meteo",
+          "timezone": "Europe/London",
+          "valid_at": "2026-10-19T14:00",
+          "location": "Stratford",
+          "latitude": 36.33614,
+          "longitude": -102.07212,
+          "temperature": 7.8,
+          "condition": "Clear",
+          "humidity": 64,
+          "wind_speed": 12.5,
+          "uv_index": 0.0,
+          "feels_like": 4.1,
+          "rainfall_chance": null,
+          "recommendation": "未报告降水，外出前可再次核对天气",
+          "current_temp": 7.8
+        },
+        "error": null,
+        "execution_time_ms": 1469.4797992706299,
+        "tool_name": "get_weather",
+        "version": "1",
+        "idempotency_key": "0cd356fc460dbabedf50ad81b2d0a82cc7b0e02bccf251234cd9cd4488be8f45",
+        "outcome": "complete"
+      },
+      "elapsed_s": 1.47
+    },
+    {
+      "started": 1792414854.5172136,
+      "request_id": "b589dc66cf1443ccb822c2a400efa8d2",
+      "tool": "check_safety",
+      "args": {
+        "area": "Stratford",
+        "user_query": "We are considering viewing Tennyson Road, Stratford — https://www.onthemarket.com/details/20489843/ — tomorrow afternoon. Keeping the housing search unchanged, please find primary schools and GP surgeries within 1 km for our seven-year-old and explain recorded crime for this home's actual location, including reference point, radius and data months. Nearby does not guarantee admission or GP registration. Also check the weather for the viewing and the public-transport trip from this home to King's Cross. Please be clear if that route's step-free access is not actually verified for my wheelchair.",
+        "address": "Tennyson Road, Stratford",
+        "latitude": 51.54103,
+        "longitude": 0.006745,
+        "idempotency_key": "ce114fc22f6e1ffb7a71362bb513aa8f03c50d322d5c29f364672242add50159"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "address": "Tennyson Road, Stratford",
+          "safety_score": 38,
+          "safety_level": "Concerning",
+          "crime_data": {
+            "reference_point": {
+              "query": "Tennyson Road, Stratford",
+              "precision": "supplied_coordinates",
+              "is_specific_address": false,
+              "distance_basis": "straight_line",
+              "measured_from": "the coordinates supplied to this safety query; their association with a particular property has not been independently verified",
+              "lat": 51.54103,
+              "lon": 0.006745,
+              "coordinate_source": "caller_supplied"
+            },
+            "source": "data.police.uk",
+            "source_url": "https://data.police.uk/api/crimes-street/all-crime",
+            "radius_miles": 1.0,
+            "radius_m": 1609.344,
+            "radius_basis": "provider_default_approximately_one_mile",
+            "cache_status": "miss",
+            "from_cache": false,
+            "queried_months": [
+              "2026-08",
+              "2026-07",
+              "2026-06"
+            ],
+            "successful_months": [
+              "2026-08",
+              "2026-07",
+              "2026-06"
+            ],
+            "failed_months": [],
+            "partial": false,
+            "data_months": [
+              "2026-06",
+              "2026-07",
+              "2026-08"
+            ],
+            "months_covered": 3,
+            "fetched_at": "2026-10-19T14:00:57.069535+01:00",
+            "total_crimes_6m": 4671,
+            "crimes_per_month": 1557.0,
+            "most_recent_month_count": 1569,
+            "crime_trend": "stable",
+            "category_breakdown": {
+              "Violent Crime": 1049,
+              "Anti Social Behaviour": 1043,
+              "Shoplifting": 684
+            }
+          },
+          "scoring_explanation": "**How this score was produced:**\n\n1. **Source**: data.police.uk (official UK police crime data)\n2. **Coverage**: about a 1 mile radius around this point, last 3 months\n3. **Records**: 4671 incidents (about 1557 per month)\n4. **Method**: ranked against a sample of 13 UK areas rather than deducted from a\n   flat count. This area is **busier than most areas we sampled**, which maps to **38/100**.\n5. **Important limitation**: Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.\n\n📊 **Trend**: Crime rate is relatively stable.",
+          "safety_analysis": "Location: Tennyson Road, Stratford; actual query point: the coordinates supplied to this safety query; their association with a particular property has not been independently verified\nData months: 2026-06, 2026-07, 2026-08; 3-month total: 4671 incidents; monthly average: 1557.\nCoverage: the police endpoint defaults to approximately a 1 mile radius; it does not establish the safety of a walking route or an individual home.\nViolent Crime: 1049 incidents\nAnti Social Behaviour: 1043 incidents\nShoplifting: 684 incidents\nCounts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.",
+          "crimes_per_month": 1557.0,
+          "months_covered": 3,
+          "radius_miles": 1.0,
+          "radius_m": 1609.344,
+          "radius_basis": "provider_default_approximately_one_mile",
+          "reference_point": {
+            "query": "Tennyson Road, Stratford",
+            "precision": "supplied_coordinates",
+            "is_specific_address": false,
+            "distance_basis": "straight_line",
+            "measured_from": "the coordinates supplied to this safety query; their association with a particular property has not been independently verified",
+            "lat": 51.54103,
+            "lon": 0.006745,
+            "coordinate_source": "caller_supplied"
+          },
+          "source": "data.police.uk",
+          "source_url": "https://data.police.uk/api/crimes-street/all-crime",
+          "data_months": [
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ],
+          "queried_months": [
+            "2026-08",
+            "2026-07",
+            "2026-06"
+          ],
+          "successful_months": [
+            "2026-08",
+            "2026-07",
+            "2026-06"
+          ],
+          "failed_months": [],
+          "partial": false,
+          "from_cache": false,
+          "cache_status": "miss",
+          "possibly_outdated": false,
+          "fetched_at": "2026-10-19T14:00:57.069535+01:00",
+          "reference_basis": "compared against 13 sampled UK areas (2026-05 data.police.uk, ~1 mile radius)",
+          "caveat": "Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.",
+          "recommendation": "This area has a safety level of Concerning with a safety score of 38/100 (compared against 13 sampled UK areas (2026-05 data.police.uk, ~1 mile radius)). Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.",
+          "next_action_hint": "NOW use Final Answer to summarize this safety information for the user. Do NOT call search_properties again - the user already has property recommendations."
+        },
+        "error": null,
+        "execution_time_ms": 2561.053991317749,
+        "tool_name": "check_safety",
+        "version": "1",
+        "idempotency_key": "ce114fc22f6e1ffb7a71362bb513aa8f03c50d322d5c29f364672242add50159",
+        "outcome": "complete"
+      },
+      "elapsed_s": 2.561
+    },
+    {
+      "started": 1792414854.5210986,
+      "request_id": "b589dc66cf1443ccb822c2a400efa8d2",
+      "tool": "get_transport_info",
+      "args": {
+        "query_type": "journey",
+        "user_query": "We are considering viewing Tennyson Road, Stratford — https://www.onthemarket.com/details/20489843/ — tomorrow afternoon. Keeping the housing search unchanged, please find primary schools and GP surgeries within 1 km for our seven-year-old and explain recorded crime for this home's actual location, including reference point, radius and data months. Nearby does not guarantee admission or GP registration. Also check the weather for the viewing and the public-transport trip from this home to King's Cross. Please be clear if that route's step-free access is not actually verified for my wheelchair.",
+        "from_location": "this home",
+        "to_location": "King's Cross",
+        "date": "2026-10-20",
+        "idempotency_key": "e821ceee1c224bcffb68463753288488c4a742db423973a7ae4e65bee64e0451"
+      },
+      "context": {},
+      "result": {
+        "success": false,
+        "data": {
+          "success": false,
+          "error": "Couldn't locate the start on the TfL network. Try a nearby station name or a postcode."
+        },
+        "error": "Couldn't locate the start on the TfL network. Try a nearby station name or a postcode.",
+        "execution_time_ms": 6858.194589614868,
+        "tool_name": "get_transport_info",
+        "version": "1",
+        "idempotency_key": "e821ceee1c224bcffb68463753288488c4a742db423973a7ae4e65bee64e0451",
+        "outcome": "failed"
+      },
+      "elapsed_s": 6.859
+    },
+    {
+      "started": 1792414854.518097,
+      "request_id": "b589dc66cf1443ccb822c2a400efa8d2",
+      "tool": "search_nearby_pois",
+      "args": {
+        "address": "Tennyson Road, Stratford",
+        "user_query": "We are considering viewing Tennyson Road, Stratford — https://www.onthemarket.com/details/20489843/ — tomorrow afternoon. Keeping the housing search unchanged, please find primary schools and GP surgeries within 1 km for our seven-year-old and explain recorded crime for this home's actual location, including reference point, radius and data months. Nearby does not guarantee admission or GP registration. Also check the weather for the viewing and the public-transport trip from this home to King's Cross. Please be clear if that route's step-free access is not actually verified for my wheelchair.",
+        "radius": 1000,
+        "latitude": 51.54103,
+        "longitude": 0.006745,
+        "idempotency_key": "8c599ad13458ca9a2c90f814778726cc626edcfe991fa5d9069b8c6cc6c72115"
+      },
+      "context": {},
+      "result": {
+        "success": false,
+        "data": {
+          "success": false,
+          "address": "Tennyson Road, Stratford",
+          "pois": {},
+          "source": "OpenStreetMap Overpass",
+          "requested_radius_m": 1000,
+          "radius_m": 800,
+          "user_requested_radius_m": 1000,
+          "radius_clamped": true,
+          "requested_types": [
+            "restaurant",
+            "school",
+            "gp"
+          ],
+          "executed_types": [
+            "restaurant",
+            "school",
+            "gp"
+          ],
+          "completed_types": [],
+          "empty_types": [],
+          "failed_types": [
+            "restaurant",
+            "school",
+            "gp"
+          ],
+          "skipped_types": [],
+          "unsupported_types": [],
+          "unqueried_types": [],
+          "category_status": {
+            "restaurant": {
+              "status": "failed",
+              "error": "POI lookup failed",
+              "error_type": "OverpassError",
+              "retryable": true,
+              "service_status": "cooldown",
+              "attempts": 0,
+              "radius_m": 800,
+              "source": "OpenStreetMap Overpass"
+            },
+            "school": {
+              "status": "failed",
+              "error": "POI lookup failed",
+              "error_type": "OverpassError",
+              "retryable": true,
+              "service_status": "cooldown",
+              "attempts": 0,
+              "radius_m": 800,
+              "source": "OpenStreetMap Overpass"
+            },
+            "gp": {
+              "status": "failed",
+              "error": "POI lookup failed",
+              "error_type": "OverpassError",
+              "retryable": true,
+              "service_status": "cooldown",
+              "attempts": 0,
+              "radius_m": 800,
+              "source": "OpenStreetMap Overpass"
+            }
+          },
+          "reference_point": {
+            "query": "Tennyson Road, Stratford",
+            "precision": "listing_coordinates",
+            "is_specific_address": true,
+            "distance_basis": "straight_line",
+            "measured_from": "the supplied coordinates for 'Tennyson Road, Stratford', supplied with the request rather than geocoded. Their property identity is not independently verified. Distances are straight-line, not walking distance.",
+            "lat": 51.54103,
+            "lon": 0.006745,
+            "coordinate_source": "caller_supplied",
+            "coordinate_identity_verified": false
+          },
+          "budget_seconds": 51.0,
+          "partial": true,
+          "search_status": "failed",
+          "service_status": "unavailable",
+          "unknown_types": [
+            "restaurant",
+            "school",
+            "gp"
+          ],
+          "elapsed_seconds": 0.602,
+          "error": "Nearby POI lookup failed",
+          "failure_note": "No requested category completed; do not report this as no nearby places.",
+          "retryable": true,
+          "message": "Nearby POI lookup failed",
+          "note": "Requested radius 1000m; actual search radius 800m (configured maximum 800m). The user asked for 1000m; only 800m was searched. Lookup FAILED (not an empty result): restaurant, school, gp. School/clinic map records do not verify primary-school phase, school places, GP registration, catchment or wheelchair access.",
+          "summary": "Found 0 places in completed categories within the actual 800m straight-line search radius, measured from the supplied coordinates for 'Tennyson Road, Stratford', supplied with the request rather than geocoded. Their property identity is not independently verified. Distances are straight-line, not walking distance.\n\nRequested radius 1000m; actual search radius 800m (configured maximum 800m). The user asked for 1000m; only 800m was searched. Lookup FAILED (not an empty result): restaurant, school, gp. School/clinic map records do not verify primary-school phase, school places, GP registration, catchment or wheelchair access."
+        },
+        "error": "Nearby POI lookup failed",
+        "execution_time_ms": 8434.807062149048,
+        "tool_name": "search_nearby_pois",
+        "version": "1",
+        "idempotency_key": "8c599ad13458ca9a2c90f814778726cc626edcfe991fa5d9069b8c6cc6c72115",
+        "outcome": "failed"
+      },
+      "elapsed_s": 8.435
+    },
+    {
+      "started": 1792414865.2483785,
+      "request_id": "b589dc66cf1443ccb822c2a400efa8d2",
+      "tool": "get_weather",
+      "args": {
+        "location": "Stratford, London, UK",
+        "latitude": 51.54103,
+        "longitude": 0.006745,
+        "target_date": "2026-10-20",
+        "target_time": "14:00",
+        "idempotency_key": "7bb20b2cbcbcaac45d5c49bfe5f89a63ddff7ca4009f66aeca049906563c882a"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "success": true,
+          "weather_type": "forecast",
+          "source": "Open-Meteo",
+          "timezone": "Europe/London",
+          "valid_at": "2026-10-20T14:00:00+01:00",
+          "location": "Stratford, London, UK",
+          "latitude": 51.54103,
+          "longitude": 0.006745,
+          "temperature": 13.1,
+          "condition": "Overcast",
+          "humidity": 96,
+          "wind_speed": 5.4,
+          "uv_index": 0.4,
+          "feels_like": 13.1,
+          "rainfall_chance": 55,
+          "recommendation": "未报告降水，外出前可再次核对天气",
+          "forecast_temp": 13.1,
+          "requested_at": "2026-10-20T14:00:00+01:00",
+          "assumed_time": false,
+          "time_note": "Nearest available hourly forecast; valid_at is the forecast hour."
+        },
+        "error": null,
+        "execution_time_ms": 1023.6504077911377,
+        "tool_name": "get_weather",
+        "version": "1",
+        "idempotency_key": "7bb20b2cbcbcaac45d5c49bfe5f89a63ddff7ca4009f66aeca049906563c882a",
+        "outcome": "complete"
+      },
+      "elapsed_s": 1.024
+    },
+    {
+      "started": 1792414865.2475574,
+      "request_id": "b589dc66cf1443ccb822c2a400efa8d2",
+      "tool": "search_nearby_pois",
+      "args": {
+        "address": "Tennyson Road, Stratford, London",
+        "latitude": 51.54103,
+        "longitude": 0.006745,
+        "poi_type": "school,gp,restaurant",
+        "radius": 1000,
+        "user_query": "We are considering viewing Tennyson Road, Stratford — https://www.onthemarket.com/details/20489843/ — tomorrow afternoon. Keeping the housing search unchanged, please find primary schools and GP surgeries within 1 km for our seven-year-old and explain recorded crime for this home's actual location, including reference point, radius and data months. Nearby does not guarantee admission or GP registration. Also check the weather for the viewing and the public-transport trip from this home to King's Cross. Please be clear if that route's step-free access is not actually verified for my wheelchair.",
+        "idempotency_key": "7e55d1b722a030e14d63e56066eb1eede16f298d5c1c377076c3040bc0145101"
+      },
+      "context": {},
+      "result": {
+        "success": false,
+        "data": {
+          "success": false,
+          "address": "Tennyson Road, Stratford, London",
+          "pois": {},
+          "source": "OpenStreetMap Overpass",
+          "requested_radius_m": 1000,
+          "radius_m": 800,
+          "user_requested_radius_m": 1000,
+          "radius_clamped": true,
+          "requested_types": [
+            "school",
+            "gp",
+            "restaurant"
+          ],
+          "executed_types": [
+            "school",
+            "gp",
+            "restaurant"
+          ],
+          "completed_types": [],
+          "empty_types": [],
+          "failed_types": [
+            "school",
+            "gp",
+            "restaurant"
+          ],
+          "skipped_types": [],
+          "unsupported_types": [],
+          "unqueried_types": [],
+          "category_status": {
+            "school": {
+              "status": "failed",
+              "error": "POI lookup failed",
+              "error_type": "OverpassError",
+              "retryable": true,
+              "service_status": "cooldown",
+              "attempts": 0,
+              "radius_m": 800,
+              "source": "OpenStreetMap Overpass"
+            },
+            "gp": {
+              "status": "failed",
+              "error": "POI lookup failed",
+              "error_type": "OverpassError",
+              "retryable": true,
+              "service_status": "cooldown",
+              "attempts": 0,
+              "radius_m": 800,
+              "source": "OpenStreetMap Overpass"
+            },
+            "restaurant": {
+              "status": "failed",
+              "error": "POI lookup failed",
+              "error_type": "OverpassError",
+              "retryable": true,
+              "service_status": "cooldown",
+              "attempts": 0,
+              "radius_m": 800,
+              "source": "OpenStreetMap Overpass"
+            }
+          },
+          "reference_point": {
+            "query": "Tennyson Road, Stratford, London",
+            "precision": "listing_coordinates",
+            "is_specific_address": true,
+            "distance_basis": "straight_line",
+            "measured_from": "the supplied coordinates for 'Tennyson Road, Stratford, London', supplied with the request rather than geocoded. Their property identity is not independently verified. Distances are straight-line, not walking distance.",
+            "lat": 51.54103,
+            "lon": 0.006745,
+            "coordinate_source": "caller_supplied",
+            "coordinate_identity_verified": false
+          },
+          "budget_seconds": 51.0,
+          "partial": true,
+          "search_status": "failed",
+          "service_status": "unavailable",
+          "unknown_types": [
+            "school",
+            "gp",
+            "restaurant"
+          ],
+          "elapsed_seconds": 0.602,
+          "error": "Nearby POI lookup failed",
+          "failure_note": "No requested category completed; do not report this as no nearby places.",
+          "retryable": true,
+          "message": "Nearby POI lookup failed",
+          "note": "Requested radius 1000m; actual search radius 800m (configured maximum 800m). The user asked for 1000m; only 800m was searched. Lookup FAILED (not an empty result): school, gp, restaurant. School/clinic map records do not verify primary-school phase, school places, GP registration, catchment or wheelchair access.",
+          "summary": "Found 0 places in completed categories within the actual 800m straight-line search radius, measured from the supplied coordinates for 'Tennyson Road, Stratford, London', supplied with the request rather than geocoded. Their property identity is not independently verified. Distances are straight-line, not walking distance.\n\nRequested radius 1000m; actual search radius 800m (configured maximum 800m). The user asked for 1000m; only 800m was searched. Lookup FAILED (not an empty result): school, gp, restaurant. School/clinic map records do not verify primary-school phase, school places, GP registration, catchment or wheelchair access."
+        },
+        "error": "Nearby POI lookup failed",
+        "execution_time_ms": 2212.677240371704,
+        "tool_name": "search_nearby_pois",
+        "version": "1",
+        "idempotency_key": "7e55d1b722a030e14d63e56066eb1eede16f298d5c1c377076c3040bc0145101",
+        "outcome": "failed"
+      },
+      "elapsed_s": 2.213
+    },
+    {
+      "started": 1792414865.246543,
+      "request_id": "b589dc66cf1443ccb822c2a400efa8d2",
+      "tool": "get_transport_info",
+      "args": {
+        "from_location": "Stratford, London",
+        "query_type": "journey",
+        "to_location": "King's Cross, London",
+        "user_query": "public transport journey from Stratford to King's Cross",
+        "idempotency_key": "41a6ee74b7153c69e484ff86acc32fff02b8623c9cbc6adee1f0788359da4f73"
+      },
+      "context": {},
+      "result": {
+        "success": true,
+        "data": {
+          "success": true,
+          "query_type": "journey",
+          "coverage": "london",
+          "from": {
+            "input": "Stratford, London",
+            "resolved_station": "E15 1DA",
+            "naptan": "51.541289,-0.0035472"
+          },
+          "to": {
+            "input": "King's Cross, London",
+            "resolved_station": "King's Cross St. Pancras Underground Station",
+            "naptan": "940GZZLUKSX"
+          },
+          "duration_minutes": 26,
+          "changes_count": 0,
+          "route_summary": "Walk to Stratford International Rail Station (12 min) -> National-rail Southeastern to London St Pancras International Rail Station (6 min) -> Walk to King's Cross St. Pancras Underground Station (8 min)",
+          "route_legs": [
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 12,
+              "summary": "Walk to Stratford International Station",
+              "from": "walk inside building, LONDON",
+              "to": "Stratford International Rail Station"
+            },
+            {
+              "mode": "national-rail",
+              "lines": [
+                "Southeastern"
+              ],
+              "duration_minutes": 6,
+              "summary": "Southeastern to London St Pancras International",
+              "from": "Stratford International Rail Station",
+              "to": "London St Pancras International Rail Station"
+            },
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 8,
+              "summary": "Walk to King's Cross St. Pancras Underground Station",
+              "from": "London St Pancras International Rail Station",
+              "to": "King's Cross St. Pancras Underground Station"
+            }
+          ],
+          "selected_itinerary_id": "tfl:774678b40fb9e1ff",
+          "fastest_journey": {
+            "itinerary_id": "tfl:774678b40fb9e1ff",
+            "duration_minutes": 26,
+            "changes_count": 0,
+            "route_summary": "Walk to Stratford International Rail Station (12 min) -> National-rail Southeastern to London St Pancras International Rail Station (6 min) -> Walk to King's Cross St. Pancras Underground Station (8 min)",
+            "route_legs": [
+              {
+                "mode": "walking",
+                "lines": [],
+                "duration_minutes": 12,
+                "summary": "Walk to Stratford International Station",
+                "from": "walk inside building, LONDON",
+                "to": "Stratford International Rail Station"
+              },
+              {
+                "mode": "national-rail",
+                "lines": [
+                  "Southeastern"
+                ],
+                "duration_minutes": 6,
+                "summary": "Southeastern to London St Pancras International",
+                "from": "Stratford International Rail Station",
+                "to": "London St Pancras International Rail Station"
+              },
+              {
+                "mode": "walking",
+                "lines": [],
+                "duration_minutes": 8,
+                "summary": "Walk to King's Cross St. Pancras Underground Station",
+                "from": "London St Pancras International Rail Station",
+                "to": "King's Cross St. Pancras Underground Station"
+              }
+            ],
+            "source": "TfL Unified API Journey Planner",
+            "fare_available": false,
+            "fare_basis": null
+          },
+          "cheapest_journey": null,
+          "source": "TfL Unified API Journey Planner",
+          "from_cache": false,
+          "cache_status": "miss",
+          "stations_used": "E15 1DA -> King's Cross St. Pancras Underground Station",
+          "fare_available": false,
+          "fare_basis": null,
+          "fare_itinerary_id": null,
+          "fare_matches_itinerary": false,
+          "fare_note": "TfL did not return a single fare for this exact routing (often when it uses National Rail or coordinates rather than Tube/DLR stations). See tfl.gov.uk/fares for a precise fare."
+        },
+        "error": null,
+        "execution_time_ms": 3678.1208515167236,
+        "tool_name": "get_transport_info",
+        "version": "1",
+        "idempotency_key": "41a6ee74b7153c69e484ff86acc32fff02b8623c9cbc6adee1f0788359da4f73",
+        "outcome": "complete"
+      },
+      "elapsed_s": 3.678
+    }
+  ]
+}

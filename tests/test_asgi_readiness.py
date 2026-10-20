@@ -5,6 +5,7 @@ import sys
 import threading
 from types import SimpleNamespace
 
+from core.loop_prompts import FC_LOOP_SYSTEM_PROMPT_VERSION
 from uk_rent_agent.config import Config
 from uk_rent_agent.web import asgi
 
@@ -30,7 +31,10 @@ def _install_runtime(monkeypatch, tmp_path, *, dead: int = 0):
     )
     monkeypatch.setitem(sys.modules, "uk_rent_agent._legacy_web_app", module)
     monkeypatch.setenv("APP_IMAGE_DIGEST", "sha256:" + "b" * 64)
-    monkeypatch.setenv("PROMPT_VERSION", "2.1.0")
+    # Read the constant, never a literal: /ready compares the declared PROMPT_VERSION
+    # byte-for-byte with the runtime PromptSpec, so hard-coding it here turned every
+    # legitimate prompt-version bump into three red readiness tests.
+    monkeypatch.setenv("PROMPT_VERSION", FC_LOOP_SYSTEM_PROMPT_VERSION)
     monkeypatch.setenv("PROMPT_SCHEMA_SHA", "c" * 64)
     monkeypatch.setenv("ROUTING_MODE", "blue_green_shared_conversation_store")
     monkeypatch.setenv("RELEASE_METADATA_REQUIRED", "1")
@@ -106,7 +110,8 @@ def test_ready_fails_closed_when_required_release_metadata_is_invalid(monkeypatc
 
 def test_ready_fails_closed_when_declared_prompt_version_differs_from_runtime(monkeypatch, tmp_path):
     _install_runtime(monkeypatch, tmp_path)
-    monkeypatch.setenv("PROMPT_VERSION", "2.0.0")
+    # Deliberately NOT the runtime version: this case asserts the mismatch is fatal.
+    monkeypatch.setenv("PROMPT_VERSION", FC_LOOP_SYSTEM_PROMPT_VERSION + "-not-the-runtime")
 
     body, code = asgi._readiness(_config(tmp_path))
 
@@ -122,7 +127,8 @@ def test_release_prompt_version_is_semantic_not_a_source_qualified_identifier(
 ):
     """APP_SOURCE_SHA owns revision identity; PROMPT_VERSION must match PromptSpec."""
     _install_runtime(monkeypatch, tmp_path)
-    monkeypatch.setenv("PROMPT_VERSION", "2.1.0@" + "a" * 7)
+    monkeypatch.setenv(
+        "PROMPT_VERSION", FC_LOOP_SYSTEM_PROMPT_VERSION + "@" + "a" * 7)
 
     body, code = asgi._readiness(_config(tmp_path))
 

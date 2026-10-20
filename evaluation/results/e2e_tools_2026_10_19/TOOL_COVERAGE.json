@@ -1,0 +1,267 @@
+[
+  {
+    "tool": "search_properties",
+    "e2e_execute_attempts": 12,
+    "e2e_logical_successes": 12,
+    "e2e_logical_failures": 0,
+    "executor_terminal_calls": 0,
+    "covered": true,
+    "persona_or_root_turns": {
+      "student": [
+        2,
+        3,
+        5,
+        6,
+        8,
+        9,
+        13
+      ],
+      "professional": [
+        1
+      ],
+      "family": [
+        1,
+        8,
+        11,
+        13
+      ]
+    },
+    "transport_query_types": null
+  },
+  {
+    "tool": "calculate_commute",
+    "e2e_execute_attempts": 40,
+    "e2e_logical_successes": 40,
+    "e2e_logical_failures": 0,
+    "executor_terminal_calls": 0,
+    "covered": true,
+    "persona_or_root_turns": {
+      "student": [
+        2,
+        11
+      ],
+      "professional": [
+        1,
+        2,
+        3,
+        8,
+        14
+      ],
+      "family": [
+        1,
+        6,
+        7,
+        8,
+        10,
+        11,
+        13,
+        14
+      ]
+    },
+    "transport_query_types": null
+  },
+  {
+    "tool": "calculate_commute_cost",
+    "e2e_execute_attempts": 1,
+    "e2e_logical_successes": 1,
+    "e2e_logical_failures": 0,
+    "executor_terminal_calls": 0,
+    "covered": true,
+    "persona_or_root_turns": {
+      "professional": [
+        10
+      ]
+    },
+    "transport_query_types": null
+  },
+  {
+    "tool": "check_safety",
+    "e2e_execute_attempts": 2,
+    "e2e_logical_successes": 2,
+    "e2e_logical_failures": 0,
+    "executor_terminal_calls": 0,
+    "covered": true,
+    "persona_or_root_turns": {
+      "family": [
+        4,
+        5
+      ]
+    },
+    "transport_query_types": null
+  },
+  {
+    "tool": "get_weather",
+    "e2e_execute_attempts": 7,
+    "e2e_logical_successes": 4,
+    "e2e_logical_failures": 3,
+    "executor_terminal_calls": 0,
+    "covered": true,
+    "persona_or_root_turns": {
+      "family": [
+        6,
+        7,
+        9,
+        10
+      ],
+      "root": [
+        5
+      ]
+    },
+    "transport_query_types": null
+  },
+  {
+    "tool": "web_search",
+    "e2e_execute_attempts": 1,
+    "e2e_logical_successes": 1,
+    "e2e_logical_failures": 0,
+    "executor_terminal_calls": 0,
+    "covered": true,
+    "persona_or_root_turns": {
+      "professional": [
+        9
+      ]
+    },
+    "transport_query_types": null
+  },
+  {
+    "tool": "search_nearby_pois",
+    "e2e_execute_attempts": 6,
+    "e2e_logical_successes": 6,
+    "e2e_logical_failures": 0,
+    "executor_terminal_calls": 0,
+    "covered": true,
+    "persona_or_root_turns": {
+      "student": [
+        4,
+        11,
+        13
+      ],
+      "professional": [
+        9
+      ],
+      "family": [
+        3,
+        5
+      ]
+    },
+    "transport_query_types": null
+  },
+  {
+    "tool": "get_property_details",
+    "e2e_execute_attempts": 12,
+    "e2e_logical_successes": 10,
+    "e2e_logical_failures": 2,
+    "executor_terminal_calls": 0,
+    "covered": true,
+    "persona_or_root_turns": {
+      "student": [
+        4,
+        10,
+        13
+      ],
+      "professional": [
+        14
+      ],
+      "family": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        14
+      ]
+    },
+    "transport_query_types": null
+  },
+  {
+    "tool": "check_transport_cost",
+    "e2e_execute_attempts": 1,
+    "e2e_logical_successes": 1,
+    "e2e_logical_failures": 0,
+    "executor_terminal_calls": 0,
+    "covered": true,
+    "persona_or_root_turns": {
+      "professional": [
+        10
+      ]
+    },
+    "transport_query_types": null
+  },
+  {
+    "tool": "get_transport_info",
+    "e2e_execute_attempts": 5,
+    "e2e_logical_successes": 5,
+    "e2e_logical_failures": 0,
+    "executor_terminal_calls": 0,
+    "covered": true,
+    "persona_or_root_turns": {
+      "professional": [
+        3,
+        10
+      ]
+    },
+    "transport_query_types": [
+      "fare",
+      "journey",
+      "line_status",
+      "travelcard"
+    ]
+  },
+  {
+    "tool": "recall_memory",
+    "e2e_execute_attempts": 2,
+    "e2e_logical_successes": 2,
+    "e2e_logical_failures": 0,
+    "executor_terminal_calls": 0,
+    "covered": true,
+    "persona_or_root_turns": {
+      "root": [
+        1,
+        3
+      ]
+    },
+    "transport_query_types": null
+  },
+  {
+    "tool": "remember",
+    "e2e_execute_attempts": 1,
+    "e2e_logical_successes": 1,
+    "e2e_logical_failures": 0,
+    "executor_terminal_calls": 0,
+    "covered": true,
+    "persona_or_root_turns": {
+      "student": [
+        11
+      ]
+    },
+    "transport_query_types": null
+  },
+  {
+    "tool": "ask_user",
+    "e2e_execute_attempts": 0,
+    "e2e_logical_successes": 0,
+    "e2e_logical_failures": 0,
+    "executor_terminal_calls": 1,
+    "covered": true,
+    "persona_or_root_turns": {
+      "student": [
+        14
+      ]
+    },
+    "transport_query_types": null
+  },
+  {
+    "tool": "compare_or_rank_areas",
+    "e2e_execute_attempts": 2,
+    "e2e_logical_successes": 2,
+    "e2e_logical_failures": 0,
+    "executor_terminal_calls": 0,
+    "covered": true,
+    "persona_or_root_turns": {
+      "professional": [
+        8
+      ]
+    },
+    "transport_query_types": null
+  }
+]

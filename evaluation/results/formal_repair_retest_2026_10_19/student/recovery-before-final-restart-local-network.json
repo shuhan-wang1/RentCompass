@@ -1,0 +1,337 @@
+[
+  {
+    "path": "/api/auth/me",
+    "method": "GET",
+    "status": 200,
+    "response": {
+      "authenticated": false
+    }
+  },
+  {
+    "path": "/api/conversations",
+    "method": "GET",
+    "status": 200,
+    "response": {
+      "conversations": [
+        {
+          "agent_arch": "fc_loop",
+          "agent_version": "repair-retest-frozen-working-tree",
+          "branch_depth": 0,
+          "created_at": "2026-10-19T12:24:17.556568+00:00",
+          "edited_slot_turn_id": null,
+          "fork_reason": null,
+          "forked_from_turn_id": null,
+          "id": "7fc8c690d7bf4e54ab7cf39d8967764a",
+          "message_count": 2,
+          "parent_conversation_id": null,
+          "root_conversation_id": "7fc8c690d7bf4e54ab7cf39d8967764a",
+          "strict": false,
+          "title": "我开了一个新会话。请直接按我已经保存的长期默认租房偏好帮我找房，先说清本次实际采…",
+          "updated_at": "2026-10-19T12:24:31.770488+00:00"
+        },
+        {
+          "agent_arch": "fc_loop",
+          "agent_version": "repair-retest-frozen-working-tree",
+          "branch_depth": 0,
+          "created_at": "2026-10-19T12:01:19.715884+00:00",
+          "edited_slot_turn_id": null,
+          "fork_reason": null,
+          "forked_from_turn_id": null,
+          "id": "bd64dd5d9b12410586b93a31b812a6f0",
+          "message_count": 12,
+          "parent_conversation_id": null,
+          "root_conversation_id": "bd64dd5d9b12410586b93a31b812a6f0",
+          "strict": false,
+          "title": "我下学期要来伦敦读研，想在Camden找个住处。能帮我看看吗？",
+          "updated_at": "2026-10-19T12:23:37.977571+00:00"
+        }
+      ]
+    }
+  },
+  {
+    "path": "/api/conversations/7fc8c690d7bf4e54ab7cf39d8967764a/messages",
+    "method": "GET",
+    "status": 200,
+    "response": {
+      "messages": [
+        {
+          "content": "我开了一个新会话。请直接按我已经保存的长期默认租房偏好帮我找房，先说清本次实际采用的条件，再区分满足条件、被排除和仍待核实的候选。不要让我重新填写已经保存过的条件。",
+          "id": 13,
+          "role": "user",
+          "timestamp": "2026-10-19T12:24:18.106661+00:00",
+          "turn_id": "c346e478a8744485ba2f2a553d00be5f"
+        },
+        {
+          "content": "本次检索数据中，在 Camden 附近没有找到符合条件的房源。请检查区域拼写，或调整预算/区域后重试（可使用右侧搜索表单）。 本次候选中没有满足当前筛选的房源；这不代表市场上没有房源。",
+          "id": 14,
+          "recommendations": [],
+          "response_type": "search",
+          "role": "assistant",
+          "timestamp": "2026-10-19T12:24:31.770488+00:00",
+          "turn_id": "c346e478a8744485ba2f2a553d00be5f"
+        }
+      ],
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "area": "Camden",
+          "areas": [
+            "Camden"
+          ],
+          "bedrooms": 2,
+          "bedrooms_minimum": false,
+          "budget_period": "month",
+          "commute_destination": "University College London, Gower Street, London WC1E 6BT",
+          "constraint_sources": {
+            "area": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": "Camden"
+            },
+            "areas": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": [
+                "Camden"
+              ]
+            },
+            "bedrooms": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": 2
+            },
+            "bedrooms_minimum": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": false
+            },
+            "budget_period": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": "month"
+            },
+            "commute_destination": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": "University College London, Gower Street, London WC1E 6BT"
+            },
+            "destination": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": "University College London, Gower Street, London WC1E 6BT"
+            },
+            "max_budget": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": 2400
+            },
+            "max_travel_time": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": 30
+            },
+            "move_in_date": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": null
+            },
+            "no_commute": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": false
+            },
+            "room_type": {
+              "memory_id": "semantic_a72f4a2bf89e5c498e986e313df9309e",
+              "source": "saved_preference",
+              "value": "whole"
+            }
+          },
+          "destination": "University College London, Gower Street, London WC1E 6BT",
+          "max_budget": 2400,
+          "max_travel_time": 30,
+          "move_in_date": null,
+          "no_commute": false,
+          "property_features": [],
+          "room_type": "whole",
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "retrieval": {
+          "area_status": {
+            "Camden": "results"
+          },
+          "data_source": "OnTheMarket (cached)",
+          "incomplete_areas": [],
+          "partial": false,
+          "retrieval_outcome": "no_matching_candidates"
+        },
+        "revision": 1
+      }
+    }
+  },
+  {
+    "path": "/api/conversations/7fc8c690d7bf4e54ab7cf39d8967764a/version_map",
+    "method": "GET",
+    "status": 200,
+    "response": {
+      "version_groups": {}
+    }
+  },
+  {
+    "path": "/api/favorites",
+    "method": "GET",
+    "status": 200,
+    "response": {
+      "favorites": [
+        {
+          "address": "Apt 108, Castello Court, 309-311 Harrow Road W9",
+          "availability_status": "",
+          "available_from": "2026-11-01",
+          "budget_basis": 2166.67,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "area is not verified",
+            "commute destination is not verified"
+          ],
+          "explanation": "Studio to rent in Apt 108, Castello Court, 309-311 Harrow Road W9 (estimated from coordinates: ~31 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)",
+          "geo_location": "51.523193, -0.197903",
+          "images": [
+            "https://media.onthemarket.com/properties/14141441/1652518454/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/14141441/1652518454/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/14141441/1652518454/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/14141441/1652518454/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/14141441/1652518454/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": false,
+          "price": "£1439/month",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "london"
+              ],
+              "bedrooms": null,
+              "bedrooms_minimum": false,
+              "commute_destination": null,
+              "max_budget_monthly": 2166.67,
+              "max_changes": null,
+              "max_commute_minutes": 45.0,
+              "monthly_total_budget": null,
+              "move_in_date": null,
+              "no_commute": false,
+              "office_days_per_week": null,
+              "property_features": [],
+              "room_type": null
+            },
+            "reason_messages": {
+              "en": [
+                "area is not verified",
+                "commute destination is not verified"
+              ],
+              "zh": [
+                "所在区域尚未核实",
+                "通勤目的地尚未核实，无法判断时长限制"
+              ]
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "area is not verified",
+              "commute destination is not verified"
+            ]
+          },
+          "rank": 1,
+          "saved_at": "2026-10-19T12:04:20.965Z",
+          "source_conversation_title": "我下学期要来伦敦读研，想在Camden找个住处。能帮我看看吗？",
+          "travel_time": "~31 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)",
+          "url": "https://www.onthemarket.com/details/14141441/",
+          "user_id": "88a2593ceb254323b8d340f36a2d06ca"
+        },
+        {
+          "address": "Frognal, London NW3",
+          "area": "Camden",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 1,
+          "budget_basis": 2166.67,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "eligible",
+          "candidate_unknown_reasons": [],
+          "explanation": "1 bedroom flat to rent in Frognal, London NW3 (TfL transit: 38 min to University College London, Gower Street, London WC1E 6BT)",
+          "geo_location": "51.550299, -0.180561",
+          "images": [
+            "https://media.onthemarket.com/properties/20578363/1653013946/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/20578363/1653013946/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/20578363/1653013946/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/20578363/1653013946/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/20578363/1653013946/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": false,
+          "price": "£1800/month",
+          "property_type": "1 bed Flat",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "camden"
+              ],
+              "bedrooms": 1.0,
+              "bedrooms_minimum": false,
+              "commute_destination": "University College London, Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 2166.67,
+              "max_changes": null,
+              "max_commute_minutes": 45.0,
+              "monthly_total_budget": null,
+              "move_in_date": null,
+              "no_commute": false,
+              "office_days_per_week": null,
+              "property_features": [],
+              "room_type": "whole"
+            },
+            "reason_messages": {
+              "en": [],
+              "zh": []
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "eligible",
+            "unknown_reasons": []
+          },
+          "rank": 1,
+          "room_type": "whole",
+          "saved_at": "2026-10-19T12:12:06.763Z",
+          "source_conversation_title": "我下学期要来伦敦读研，想在Camden找个住处。能帮我看看吗？",
+          "travel_time": "38 min to University College London, Gower Street, London WC1E 6BT",
+          "unverified_features": [],
+          "url": "https://www.onthemarket.com/details/20578363/",
+          "user_id": "88a2593ceb254323b8d340f36a2d06ca",
+          "verified_commute_evidence": {
+            "candidate_key": "url:https://www.onthemarket.com/details/20578363",
+            "duration_minutes": 38.0,
+            "evidence_status": "success",
+            "from_address": "Frognal, London NW3",
+            "raw_data": {
+              "basis": "tfl_journey_plan",
+              "changes_count": 0,
+              "duration_minutes": 38.0,
+              "from_address": "Frognal, London NW3",
+              "route_source": "TfL Journey Planner",
+              "to_address": "University College London, Gower Street, London WC1E 6BT"
+            },
+            "success": true,
+            "to_address": "University College London, Gower Street, London WC1E 6BT"
+          },
+          "verified_commute_minutes": 38.0,
+          "verified_features": []
+        }
+      ]
+    }
+  }
+]

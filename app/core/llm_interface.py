@@ -2,6 +2,7 @@
 
 import itertools
 import json
+import logging
 import re
 from typing import Any
 
@@ -38,6 +39,10 @@ def _effective_request_timeout(requested: float | None) -> float:
     if value <= 0:
         raise ValueError("LLM timeout must be positive")
     return min(value, ceiling)
+
+# Structured sink for the post-turn (unattributed) raw calls. Named separately from
+# the module logger so an operator can silence or route it on its own.
+_POST_TURN_LOG = logging.getLogger("core.llm_interface.post_turn")
 
 # One monotonic token per raw-SDK call. Deliberately NOT id(response): CPython
 # recycles an address as soon as the object is freed, so two sequential calls in a
@@ -160,6 +165,7 @@ def _call_deepseek(prompt: str, system_prompt: str = None, timeout: int = 360,
         # saw none of them, so every per-call figure derived from the gate understated the
         # turn. Best-effort by design — a telemetry failure must never break a real answer.
         try:
+            from core.turn_observations import current as _turn_window
             from core.turn_observations import note_raw_llm_call
             note_raw_llm_call(f"rawds:{next(_raw_call_seq)}",
                               usage_blob=_usage_blob(resp),
@@ -168,6 +174,18 @@ def _call_deepseek(prompt: str, system_prompt: str = None, timeout: int = 360,
                               # nested call made inside a specialist is attributed to
                               # it in llm_usage.roles instead of to the whole turn.
                               agent_context=None)
+            if _turn_window() is None:
+                # A billed call with no turn window: post-turn work (critic
+                # regeneration, scraping, auto-memory) that a plain thread or
+                # executor started without inheriting the request context. It can
+                # never appear in a canary record, so the ONLY way it is ever
+                # attributable is this line — and its `request_id` field is the
+                # whole point: `-` means the spawn site did not use
+                # `turn_observations.bind_post_turn_context`, a real id means it
+                # did. Counting these against per-turn cost is wrong either way;
+                # `detached_llm_call_count()` is where the magnitude lives.
+                _POST_TURN_LOG.info("llm.raw_call.post_turn",
+                                    extra={"tool": f"deepseek:{purpose}"})
         except Exception:
             pass
         return resp.choices[0].message.content

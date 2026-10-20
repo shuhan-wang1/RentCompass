@@ -1,0 +1,111 @@
+{
+  "time": 1792407560.2319987,
+  "message": "I'm moving to London for a job next to Bank station. I go into the office Tuesday to Thursday and work from home the other days. My absolute budget is £2,100 a month for rent plus those commuting costs, excluding utility bills. I need a self-contained one-bedroom flat, not a room in a shared house, and a door-to-door commute of at most 35 minutes with no more than one change. Can you find current available flats and show the rent and actual public-transport fare separately so I can tell whether the total fits?",
+  "seconds": 9.357,
+  "error": null,
+  "result": {
+    "status": 200,
+    "payload": {
+      "area_recommendations": [],
+      "conversation_id": "f108b7f2a8d048eca32f83ed764a7135",
+      "message": "I couldn't find listings matching your criteria near London in the retrieved data. Please check the area spelling, or adjust the budget/area and try again (you can also use the search form on the right). No usable source candidates were retrieved; this does not establish that the market is empty.",
+      "recommendations": [],
+      "response_type": "search",
+      "search_criteria": {
+        "amenities_of_interest": [],
+        "area": "London",
+        "areas": [
+          "London"
+        ],
+        "bedrooms": 1,
+        "bedrooms_minimum": false,
+        "budget_period": "month",
+        "commute_destination": null,
+        "destination": null,
+        "max_budget": null,
+        "max_budget_monthly": null,
+        "max_travel_time": null,
+        "move_in_date": null,
+        "no_commute": true,
+        "property_features": [],
+        "rent_filter_ceiling_monthly": null,
+        "room_type": "whole",
+        "soft_preferences": []
+      },
+      "turn_id": "6c604b9d1214480eaf8d191013d798ee",
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "destination": null,
+          "max_budget": null,
+          "max_travel_time": null,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 1
+      }
+    }
+  },
+  "request": {
+    "url": "/api/alex",
+    "body": "{\"message\": \"I'm moving to London for a job next to Bank station. I go into the office Tuesday to Thursday and work from home the other days. My absolute budget is £2,100 a month for rent plus those commuting costs, excluding utility bills. I need a self-contained one-bedroom flat, not a room in a shared house, and a door-to-door commute of at most 35 minutes with no more than one change. Can you find current available flats and show the rent and actual public-transport fare separately so I can tell whether the total fits?\", \"context\": {\"viewed_properties\": []}, \"is_continuation\": false, \"language\": \"en\", \"ui_language\": \"en\"}",
+    "headers": {
+      "Content-Type": "application/json",
+      "Accept": "text/event-stream"
+    }
+  },
+  "dom": "ALEX\nHello! I'm Alex. I can help you find apartments in London.\n\nTry asking me:\n\"Find a 1-bed near King's Cross under £2000\"\n\"What is the vibe like in Hackney?\"\n\"Show me flats with a 20min commute to UCL\"\nI'm moving to London for a job next to Bank station. I go into the office Tuesday to Thursday and work from home the other days. My absolute budget is £2,100 a month for rent plus those commuting costs, excluding utility bills. I need a self-contained one-bedroom flat, not a room in a shared house, and a door-to-door commute of at most 35 minutes with no more than one change. Can you find current available flats and show the rent and actual public-transport fare separately so I can tell whether the total fits?\nEdit message\nALEX\n\nI couldn't find listings matching your criteria near London in the retrieved data. Please check the area spelling, or adjust the budget/area and try again (you can also use the search form on the right). No usable source candidates were retrieved; this does not establish that the market is empty.\n\nBranch from here",
+  "criteria": "RentCompass\nEN\n中文\nCONVERSATIONS\nNew\nI'm moving to London for a job next to B…\njust now\nG\nGuest\nAI Assistant\n\nLondon Rental Intelligence\n\nALEX\nHello! I'm Alex. I can help you find apartments in London.\n\nTry asking me:\n\"Find a 1-bed near King's Cross under £2000\"\n\"What is the vibe like in Hackney?\"\n\"Show me flats with a 20min commute to UCL\"\nI'm moving to London for a job next to Bank station. I go into the office Tuesday to Thursday and work from home the other days. My absolute budget is £2,100 a month for rent plus those commuting costs, excluding utility bills. I need a self-contained one-bedroom flat, not a room in a shared house, and a door-to-door commute of at most 35 minutes with no more than one change. Can you find current available flats and show the rent and actual public-transport fare separately so I can tell whether the total fits?\nEdit message\nALEX\n\nI couldn't find listings matching your criteria near London in the retrieved data. Please check the area spelling, or adjust the budget/area and try again (you can also use the search form on the right). No usable source candidates were retrieved; this does not establish that the market is empty.\n\nBranch from here\nNear UCL\nSafe areas\nRent stats\nListings\nSearch\nSaved\n0\nSearch criteria\nArea\n*\nBudget\nper month\nper week\nBedrooms\nAny\nStudio\n1\n2\n3\n4\n5\n6\nAt least this many bedrooms\nRoom type\nAny\nWhole property\nStudio\nEn-suite room\nShared room\nCommute to\nMax commute (min)\nI don't commute\nMove-in date\nYYYY-MM-DD\nSearch\nNo properties found\n\nTry adjusting your budget or location.",
+  "stages": [
+    {
+      "t": 1792407550943,
+      "text": "Understanding your request…"
+    },
+    {
+      "t": 1792407550961,
+      "text": "Understanding your request…"
+    },
+    {
+      "t": 1792407550978,
+      "text": "Understanding your request…"
+    },
+    {
+      "t": 1792407551017,
+      "text": "Preparing your answer…"
+    },
+    {
+      "t": 1792407552826,
+      "text": "Looking up the requested information…"
+    },
+    {
+      "t": 1792407552856,
+      "text": "Preparing your answer…"
+    },
+    {
+      "t": 1792407554797,
+      "text": "Looking up the requested information…"
+    },
+    {
+      "t": 1792407554810,
+      "text": "Preparing your answer…"
+    },
+    {
+      "t": 1792407556038,
+      "text": "Looking up the requested information…"
+    },
+    {
+      "t": 1792407556055,
+      "text": "Preparing your answer…"
+    },
+    {
+      "t": 1792407559952,
+      "text": "Checking the evidence…"
+    },
+    {
+      "t": 1792407559968,
+      "text": "Saving your results…"
+    }
+  ]
+}

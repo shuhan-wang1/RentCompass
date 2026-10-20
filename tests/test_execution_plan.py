@@ -729,7 +729,8 @@ def test_format_output_dimension_turn_still_emits_listings(lga):
         "extracted_context": {}, "accumulated_search_criteria": {},
     })
     assert out["final_response"].startswith("SYNTHESIS")        # prose is the synthesis
-    assert out["tool_data"]["recommendations"] == _FOUND["recommendations"]
+    assert [{k: row[k] for k in expected} for row, expected in zip(out['tool_data']['recommendations'], _FOUND['recommendations'])] == _FOUND['recommendations']
+    assert all(row['qualification']['status'] == 'eligible' for row in out['tool_data']['recommendations'])
     assert out["tool_data"]["search_criteria"] == {"area": "islington"}
     # A NON-dimension loop synthesis keeps the old behaviour (no listings card).
     out2 = node({
@@ -796,7 +797,8 @@ def test_dimension_fanout_end_to_end_concurrent_and_keeps_listings(lga, monkeypa
     for marker in ("OBS_SAFETY", "OBS_POI", "OBS_COMMUTE"):
         assert marker in prompt, marker
     # The user still gets their listings back in the frontend payload.
-    assert out["tool_data"]["recommendations"] == _FOUND["recommendations"]
+    assert [{k: row[k] for k in expected} for row, expected in zip(out['tool_data']['recommendations'], _FOUND['recommendations'])] == _FOUND['recommendations']
+    assert all(row['qualification']['status'] == 'eligible' for row in out['tool_data']['recommendations'])
     assert out["final_response"]
 
 
@@ -811,5 +813,6 @@ def test_plain_listings_search_end_to_end_runs_exactly_one_tool(lga, monkeypatch
     assert reg.calls == 1
     assert reg.order == ["search_properties"]
     assert gen.prompts == []                                # no generation LLM call at all
-    assert out["tool_data"]["recommendations"] == _FOUND["recommendations"]
+    assert [{k: row[k] for k in expected} for row, expected in zip(out['tool_data']['recommendations'], _FOUND['recommendations'])] == _FOUND['recommendations']
+    assert all(row['qualification']['status'] == 'eligible' for row in out['tool_data']['recommendations'])
     assert out["final_response"] == _FOUND["summary"]        # the structured card, unchanged

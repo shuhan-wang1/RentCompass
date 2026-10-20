@@ -1,0 +1,41 @@
+# gitleaks configuration (CI: .github/workflows/ci.yml, "Secret scan", gitleaks 8.24.3).
+#
+# Every default rule stays on. This file adds two narrow allowlists to ONE rule,
+# generic-api-key. Each applies only when ALL its conditions hold (condition = "AND"):
+# the file is an archived evaluation artefact under evaluation/results/, AND the value
+# is a sha256 digest (exactly 64 lowercase hex characters) in one of two shapes:
+#   1. "idempotency_key": "<sha256>" -- a tool dispatch's idempotency key, the sha256
+#      of the call's arguments (tool-dispatches.jsonl, dispatch and ledger JSON). This
+#      checks the rule's own match, so another value on the same JSONL line is still
+#      checked on its own.
+#   2. "<dir>/<file>.<ext>": "<sha256>" as a whole line -- an integrity-manifest entry
+#      (ARTIFACT_SHA256.json, *source-manifest*.json). The key must be a path
+#      containing "/", and the line must hold nothing else.
+#
+# Why: commit 7483f77 archived live-verification evidence with 842 such digests.
+# generic-api-key matches them because "key" is in the field name, or because the
+# manifest path contains "auth" or "api". None is a secret. "Any 64-hex value" is
+# deliberately NOT allowed: `openssl rand -hex 32` secrets (SEARXNG_SECRET, session
+# secrets) have exactly that shape. So "api_key"/"secret"/"token"-style or dotted keys
+# holding hex, non-hex values, and anything outside evaluation/results/ (app, src,
+# tests, deploy) are all still reported.
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "sha256 idempotency keys in archived evaluation artefacts"
+condition = "AND"
+paths = ['''^evaluation/results/''']
+regexTarget = "match"
+regexes = ['''^idempotency_key["']?\s*:\s*["']?[0-9a-f]{64}["']?$''']
+
+[[rules.allowlists]]
+description = "sha256 integrity-manifest entries in archived evaluation artefacts"
+condition = "AND"
+paths = ['''^evaluation/results/''']
+regexTarget = "line"
+regexes = ['''^\s*"[^"\s]*/[^"\s]*\.[A-Za-z0-9]{1,12}"\s*:\s*"[0-9a-f]{64}",?\s*$''']

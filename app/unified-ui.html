@@ -397,6 +397,7 @@
         /* Cancel / stop state while a request is in flight */
         .send-btn.is-stop { background: var(--text-main); }
         .send-btn.is-stop:hover { background: #000; }
+        .progress-label { margin-top: 6px; font-size: 0.85rem; color: var(--text-secondary); }
 
         /* --- 焦点指示器 (Context Focus) — 聚焦栈：可同时关注多套房源 --- */
         .property-focus-indicator {
@@ -579,7 +580,7 @@
 
         /* --- Feature 1: sidebar branch stacking --- */
         .conv-group { display: flex; flex-direction: column; gap: 2px; }
-        .conv-root-row { display: flex; align-items: stretch; }
+        .conv-root-row { display: flex; align-items: stretch; min-width: 0; }
         .conv-collapse-btn {
             width: 20px; flex-shrink: 0; border: none; background: transparent; cursor: pointer;
             color: var(--text-tertiary); display: flex; align-items: center; justify-content: center;
@@ -914,6 +915,7 @@
         .conv-empty { padding: 28px 12px; text-align: center; color: var(--text-tertiary); font-size: 12px; }
         .conv-item {
             display: flex; align-items: center; border-radius: var(--radius-md);
+            flex: 1; min-width: 0; max-width: 100%;
             transition: var(--transition-base); position: relative;
         }
         .conv-item:hover { background: var(--bg-hover); }
@@ -924,19 +926,21 @@
             padding: 9px 10px; background: none; border: none; cursor: pointer; text-align: left;
             font-family: inherit;
         }
-        .conv-title-row { display: flex; align-items: center; gap: 5px; min-width: 0; }
+        .conv-title-row { display: flex; align-items: center; gap: 5px; min-width: 0; width: 100%; }
         .conv-branch-glyph { flex-shrink: 0; display: inline-flex; color: var(--text-tertiary); }
         .conv-branch-glyph .icon { width: 12px; height: 12px; }
         .conv-item.active .conv-branch-glyph { color: var(--primary-color); }
-        .conv-title { font-size: 0.85rem; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .conv-title { min-width: 0; flex: 1; font-size: 0.85rem; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .conv-meta { font-size: 11px; color: var(--text-tertiary); }
-        .conv-item-actions { display: flex; gap: 2px; padding-right: 6px; opacity: 0; transition: var(--transition-base); }
+        .conv-item-actions { display: flex; flex-shrink: 0; gap: 2px; padding-right: 6px; opacity: 0; transition: var(--transition-base); }
         .conv-item:hover .conv-item-actions, .conv-item.active .conv-item-actions { opacity: 1; }
         .conv-icon-btn {
             width: 26px; height: 26px; border: none; background: transparent; border-radius: var(--radius-sm);
             color: var(--text-tertiary); cursor: pointer; display: flex; align-items: center; justify-content: center;
             transition: var(--transition-base);
         }
+        @media (hover: none) { .conv-item-actions { opacity: 1; } }
+        .conv-item:focus-within .conv-item-actions { opacity: 1; }
         .conv-icon-btn:hover { background: white; color: var(--primary-color); }
         .conv-icon-btn .icon { width: 14px; height: 14px; }
 
@@ -1173,6 +1177,11 @@
         .criteria-modal-cancel { display: flex; justify-content: flex-end; margin-top: 10px; }
 
         .sidebar-backdrop { display: none; }
+        .clarification-options { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+        .clarification-option { border: 1px solid var(--border-medium); border-radius: var(--radius-md); background: white; color: var(--text-main); font: inherit; padding: 8px 12px; cursor: pointer; text-align: left; }
+        .clarification-option:hover { border-color: var(--primary-color); color: var(--primary-color); }
+        .clarification-option:disabled { opacity: .6; cursor: default; }
+        :focus-visible { outline: 2px solid var(--primary-color); outline-offset: 3px; }
 
         /* ============================================================= */
         /* RESPONSIVE                                                     */
@@ -1189,6 +1198,7 @@
             .menu-toggle { display: flex; }
             .conv-sidebar {
                 position: fixed; top: 60px; left: 0; bottom: 0; width: 280px; z-index: 120;
+                height: calc(100dvh - 60px); min-height: 0;
                 transform: translateX(-100%); transition: transform 0.25s ease;
                 box-shadow: var(--shadow-lg); border-right: 1px solid var(--border-medium);
             }
@@ -1210,7 +1220,7 @@
 
     <nav class="navbar">
         <div class="navbar-left">
-            <button class="menu-toggle" id="menuToggle" aria-label="Menu" title="Menu">
+            <button class="menu-toggle" id="menuToggle" aria-label="Menu" title="Menu" aria-controls="convSidebar" aria-expanded="false" data-i18n-aria="menu_label">
                 <svg class="icon" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
             </button>
             <a href="#" class="brand" onclick="return false;" aria-label="RentCompass">
@@ -1246,7 +1256,7 @@
 
     <div class="main-container">
         <!-- CONVERSATION SIDEBAR -->
-        <aside class="conv-sidebar" id="convSidebar">
+        <aside class="conv-sidebar" id="convSidebar" aria-label="Conversations" data-i18n-aria="conversations_title">
             <div class="conv-sidebar-header">
                 <span class="conv-sidebar-title" data-i18n="conversations_title">Conversations</span>
                 <button class="new-chat-btn" id="newChatBtn" data-i18n-title="new_chat">
@@ -1313,6 +1323,7 @@
                     <textarea
                         class="chat-textarea"
                         id="chatInput"
+                        aria-label="Message Alex" data-i18n-aria="message_input_label"
                         rows="1"
                         placeholder="Message Alex..."
                         oninput="autoResize(this)"
@@ -1368,7 +1379,7 @@
     <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 
     <!-- Toast container -->
-    <div class="toast-container" id="toastContainer"></div>
+    <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="false"></div>
 
     <!-- Reusable dialog -->
     <div class="dialog-overlay" id="dialogOverlay"></div>
@@ -1469,6 +1480,7 @@
         const LS_USER_NAME = 'ukra_user_name';
         const LS_ACTIVE_CONV = 'ukra_active_conversation';
         const LS_VIEWED_PROPERTIES_PREFIX = 'ukra_viewed_properties:';
+        const LS_PROPERTY_CONTEXT_PREFIX = 'ukra_property_context:';
         const MAX_VIEWED_PROPERTIES = 10;
 
         function getUserId() {
@@ -1552,11 +1564,82 @@
             }
         }
 
+        // Read only public stages and the final verified response. Model drafts
+        // never render in the browser before the server's evidence checks finish.
+        async function readChatResponse(response, pane) {
+            if (!(response.headers.get('Content-Type') || '').includes('text/event-stream')) {
+                let payload;
+                try { payload = await response.json(); } catch (_) { payload = { error_code: 'invalid_response' }; }
+                return { status: response.status, payload: payload };
+            }
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let final = null;
+            function consume(frame) {
+                let event = 'message';
+                const lines = [];
+                frame.split('\n').forEach(line => {
+                    if (line.startsWith('event:')) event = line.slice(6).trim();
+                    if (line.startsWith('data:')) lines.push(line.slice(5).trimStart());
+                });
+                if (!lines.length) return;
+                const data = JSON.parse(lines.join('\n'));
+                if (event === 'step' && data && typeof data.stage === 'string') {
+                    const label = pane.typingEl && pane.typingEl.querySelector('.progress-label');
+                    const key = 'progress_' + data.stage;
+                    if (label && translations[currentLang] && translations[currentLang][key]) {
+                        label.textContent = t(key);
+                    }
+                } else if (event === 'final' && data && data.payload
+                           && Number.isInteger(data.status)) {
+                    final = data;
+                }
+            }
+            try {
+                while (!final) {
+                    const chunk = await reader.read();
+                    buffer += decoder.decode(chunk.value || new Uint8Array(), { stream: !chunk.done });
+                    buffer = buffer.replace(/\r\n/g, '\n');
+                    let end;
+                    while ((end = buffer.indexOf('\n\n')) !== -1) {
+                        consume(buffer.slice(0, end));
+                        buffer = buffer.slice(end + 2);
+                    }
+                    if (chunk.done) break;
+                }
+                if (!final) { const error = new Error('Chat stream ended before the final response'); error.code = 'incomplete_response'; throw error; }
+                return final;
+            } finally {
+                await reader.cancel().catch(() => {});
+                reader.releaseLock();
+            }
+        }
+
         /* -------------------------------------------------------------------------- */
         /* TRANSLATIONS                                                               */
         /* -------------------------------------------------------------------------- */
         const translations = {
             en: {
+                menu_label: "Conversations menu",
+                message_input_label: "Message Alex",
+                chat_history_label: "Conversation messages",
+                budget_period_label: "Budget period",
+                clarification_options_label: "Choose an answer",
+                error_rate_limit: "Too many requests. Please wait {seconds} seconds before trying again.",
+                error_rate_limit_unknown: "Too many requests. Please wait a moment before trying again.",
+                error_service_unavailable: "The service is temporarily unavailable. Please try again shortly.",
+                error_request_timeout: "The request took too long. Please try again.",
+                error_invalid_request: "Please check your request and try again.",
+                error_not_found: "This conversation or item is no longer available. Please start a new chat.",
+                error_auth_required: "Your session has expired. Please sign in again.",
+                error_forbidden: "This action is not available for your current session.",
+                error_invalid_response: "The response was interrupted. Please try again.",
+                evidence_features_unknown: "Required features not verified: {features}",
+                evidence_features_absent: "Required features not available: {features}",
+                evidence_commute_unknown: "The commute condition has not been verified.",
+                evidence_commute_skipped: "A commute check is still needed.",
+                evidence_step_free: "step-free access", evidence_lift: "lift", evidence_wheelchair: "wheelchair access", evidence_pets: "pet permission",
                 brand: "Alex",
                 assistant_title: "AI Assistant",
                 assistant_subtitle: "London Rental Intelligence",
@@ -1583,6 +1666,10 @@
                 empty_desc: "Tell Alex what you are looking for.",
                 empty_saved_title: "No saved properties",
                 empty_saved_desc: "Tap the heart icon on listings to save them here.",
+                source_unavailable_title: "Listing source unavailable",
+                source_unavailable_desc: "Current listings could not be verified. Your criteria are saved; this does not mean no homes are available.",
+                search_incomplete_title: "Search incomplete",
+                search_incomplete_desc: "Some areas have not been checked yet. More listings may be available.",
                 no_results_title: "No properties found",
                 no_results_desc: "Try adjusting your budget or location.",
                 backend_offline_title: "Backend offline",
@@ -1609,6 +1696,11 @@
                 map_frame_title: "Property location map",
                 error_connection: "Connection error. Please check the server.",
                 request_cancelled: "Request cancelled.",
+                progress_understanding: "Understanding your request…",
+                progress_searching: "Looking up the requested information…",
+                progress_checking: "Checking the evidence…",
+                progress_writing: "Preparing your answer…",
+                progress_saving: "Saving your results…",
                 retry: "Retry",
                 send: "Send",
                 cancel: "Cancel",
@@ -1686,6 +1778,8 @@
                 bedrooms_studio: "Studio",
                 criteria_room_type: "Room type",
                 room_type_any: "Any",
+                room_type_whole: "Whole property",
+                bedrooms_minimum: "At least this many bedrooms",
                 room_type_studio: "Studio",
                 room_type_ensuite: "En-suite room",
                 room_type_shared: "Shared room",
@@ -1776,6 +1870,25 @@
                 split_same_conv: "That conversation is already open in the other pane."
             },
             zh: {
+                menu_label: "会话菜单",
+                message_input_label: "向 Alex 发送消息",
+                chat_history_label: "会话消息",
+                budget_period_label: "预算周期",
+                clarification_options_label: "请选择一个答案",
+                error_rate_limit: "请求过于频繁，请等待 {seconds} 秒后重试。",
+                error_rate_limit_unknown: "请求过于频繁，请稍后重试。",
+                error_service_unavailable: "服务暂时不可用，请稍后重试。",
+                error_request_timeout: "请求用时过长，请重试。",
+                error_invalid_request: "请检查输入内容后重试。",
+                error_not_found: "此会话或项目已不可用，请开始新会话。",
+                error_auth_required: "会话已过期，请重新登录。",
+                error_forbidden: "当前身份无法执行此操作。",
+                error_invalid_response: "响应中断，请重试。",
+                evidence_features_unknown: "以下必要条件尚未核实：{features}",
+                evidence_features_absent: "以下必要条件不具备：{features}",
+                evidence_commute_unknown: "通勤条件尚未核实。",
+                evidence_commute_skipped: "仍需核实通勤。",
+                evidence_step_free: "无台阶通行", evidence_lift: "电梯", evidence_wheelchair: "轮椅通行", evidence_pets: "宠物许可",
                 brand: "Alex",
                 assistant_title: "AI 助手",
                 assistant_subtitle: "伦敦租赁智能分析",
@@ -1802,6 +1915,10 @@
                 empty_desc: "告诉 Alex 您想找什么样的房源。",
                 empty_saved_title: "暂无收藏",
                 empty_saved_desc: "点击房源上的心形图标可将其保存至此处。",
+                source_unavailable_title: "房源来源暂不可用",
+                source_unavailable_desc: "本次无法核实最新房源，找房条件已保留；这不表示没有房源。",
+                search_incomplete_title: "搜索尚未完成",
+                search_incomplete_desc: "部分区域尚未完成检索，可能还有更多房源。",
                 no_results_title: "未找到房源",
                 no_results_desc: "请尝试调整您的预算或位置。",
                 backend_offline_title: "后端离线",
@@ -1828,6 +1945,11 @@
                 map_frame_title: "房源位置地图",
                 error_connection: "连接错误，请检查服务器。",
                 request_cancelled: "请求已取消。",
+                progress_understanding: "正在理解你的需求…",
+                progress_searching: "正在查询相关信息…",
+                progress_checking: "正在核验数据依据…",
+                progress_writing: "正在整理回答…",
+                progress_saving: "正在保存结果…",
                 retry: "重试",
                 send: "发送",
                 cancel: "取消",
@@ -1905,6 +2027,8 @@
                 bedrooms_studio: "单间(Studio)",
                 criteria_room_type: "房型",
                 room_type_any: "不限",
+                room_type_whole: "整套住宅",
+                bedrooms_minimum: "至少这些卧室",
                 room_type_studio: "单间公寓(Studio)",
                 room_type_ensuite: "独立卫浴房间",
                 room_type_shared: "合租房间",
@@ -2062,17 +2186,31 @@
             this.quickActionsEl = opts.quickActionsEl || null;
             this.titleEl = opts.titleEl || null;         // secondary top-bar title (main = null)
             this.conversationId = null;
+            this.stateRevision = -1;
             this.isProcessing = false;
             this.lastResponseType = null;
             this.activeController = null;                 // in-flight request (for cancel)
             this.lastUserMessage = '';
-            this.focusStack = [];                         // 聚焦栈：旧→新，末位=当前聚焦；内存态，切会话清空
+            this.focusStack = [];                         // Oldest to newest; persisted per identity + conversation.
+            this.viewedProperties = [];
+            this.isLoading = false;
+            this.loadToken = 0;
+            this.retryUntil = 0;
             this.versionMap = {};                         // slot_turn_id -> [{conversation_id,created_at,title}]
             this.showingWelcome = false;
             this.typingEl = null;                         // this pane's typing indicator (per-pane, no shared id)
+            this.retrieval = null;
             this.results = [];                            // cached recs so the shared panel can repaint on owner change
             this.areaRecos = [];
             this.root._pane = this;
+            this.messagesEl.setAttribute('role', 'log');
+            this.messagesEl.setAttribute('aria-live', 'polite');
+            this.messagesEl.setAttribute('aria-relevant', 'additions');
+            this.messagesEl.setAttribute('aria-atomic', 'false');
+            this.messagesEl.setAttribute('data-i18n-aria', 'chat_history_label');
+            this.messagesEl.setAttribute('aria-label', t('chat_history_label'));
+            this.inputEl.setAttribute('data-i18n-aria', 'message_input_label');
+            this.inputEl.setAttribute('aria-label', t('message_input_label'));
         }
 
         let mainPane = null;            // the original / left pane (persists to localStorage)
@@ -2122,7 +2260,10 @@
         }
 
         function setLanguage(lang) {
-            currentLang = lang;
+            currentLang = lang === 'zh' ? 'zh' : 'en';
+            lang = currentLang;
+            document.documentElement.lang = currentLang;
+            try { localStorage.setItem('rentcompass.language', currentLang); } catch (_) {}
 
             document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
             const activeBtn = document.querySelector('.lang-btn[data-lang="' + lang + '"]');
@@ -2135,6 +2276,9 @@
             document.querySelectorAll('[data-i18n-title]').forEach(elm => {
                 elm.title = t(elm.getAttribute('data-i18n-title'));
             });
+            document.querySelectorAll('[data-i18n-aria]').forEach(elm => {
+                elm.setAttribute('aria-label', t(elm.getAttribute('data-i18n-aria')));
+            });
             // Placeholders for dynamically-built inputs (criteria panel/modal).
             document.querySelectorAll('[data-i18n-ph]').forEach(elm => {
                 elm.placeholder = t(elm.getAttribute('data-i18n-ph'));
@@ -2142,6 +2286,7 @@
 
             eachPane(pane => {
                 pane.inputEl.placeholder = pane.focusStack.length ? t('placeholder_focus') : t('placeholder_input');
+                renderFocusIndicator(pane);
                 renderQuickActions(pane);
                 if (!pane.isProcessing) setProcessingUI(pane, false);
                 if (pane.showingWelcome) renderWelcomeMessage(pane);
@@ -2414,6 +2559,7 @@
         function showToast(message, type, action) {
             const container = document.getElementById('toastContainer');
             const toast = el('div', 'toast' + (type ? ' toast-' + type : ''));
+            toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
             const span = document.createElement('span');
             span.textContent = message;
             toast.appendChild(span);
@@ -2427,7 +2573,7 @@
                 toast.appendChild(btn);
             }
             container.appendChild(toast);
-            const ttl = action ? 9000 : 4500;
+            const ttl = action && action.ttl ? Math.max(9000, action.ttl) : (action ? 9000 : 4500);
             setTimeout(() => removeToast(toast), ttl);
         }
         function removeToast(toast) {
@@ -2440,6 +2586,7 @@
         /* REUSABLE DIALOG                                                            */
         /* -------------------------------------------------------------------------- */
         function openDialog(opts) {
+            closeSidebarMobile();
             const overlay = document.getElementById('dialogOverlay');
             overlay.innerHTML = '';
             const card = el('div', 'dialog-card');
@@ -2460,6 +2607,7 @@
                 input.type = 'text';
                 input.value = opts.defaultValue || '';
                 input.placeholder = opts.placeholder || '';
+                input.setAttribute('aria-label', opts.title || opts.placeholder || t('message_input_label'));
                 input.setAttribute('maxlength', '120');
                 card.appendChild(input);
             }
@@ -2485,6 +2633,7 @@
 
             overlay.appendChild(card);
             overlay.style.display = 'flex';
+            activateDialogAccessibility(card, title);
 
             if (input) {
                 input.focus();
@@ -2492,12 +2641,36 @@
                 input.addEventListener('keydown', e => {
                     if (e.key === 'Enter') { e.preventDefault(); doConfirm(); }
                 });
-            }
+            } else { confirm.focus(); }
         }
+        function activateDialogAccessibility(card, title) {
+            const overlay = document.getElementById('dialogOverlay');
+            overlay._returnFocus = document.activeElement;
+            card.setAttribute('role', 'dialog');
+            card.setAttribute('aria-modal', 'true');
+            card.setAttribute('aria-label', title.textContent || t('clarification_options_label'));
+            document.querySelector('.main-container').inert = true;
+            document.querySelector('.navbar').inert = true;
+            card.addEventListener('keydown', event => {
+                if (event.key !== 'Tab') return;
+                const controls = Array.from(card.querySelectorAll('button, input, select, textarea, a[href], [tabindex="0"]'))
+                    .filter(node => !node.disabled && node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden');
+                if (!controls.length) { event.preventDefault(); return; }
+                const first = controls[0], last = controls[controls.length - 1];
+                if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+                else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+            });
+        }
+
         function closeDialog() {
             const overlay = document.getElementById('dialogOverlay');
+            const wasOpen = overlay.style.display === 'flex';
             overlay.style.display = 'none';
             overlay.innerHTML = '';
+            document.querySelector('.main-container').inert = false;
+            document.querySelector('.navbar').inert = false;
+            if (wasOpen && overlay._returnFocus && overlay._returnFocus.isConnected) overlay._returnFocus.focus();
+            overlay._returnFocus = null;
             // If the criteria modal was the open dialog, drop its form instance so it
             // no longer participates in busy toggling (Escape / outside-click path).
             if (modalFormApi) { activeCriteriaForms.delete(modalFormApi); modalFormApi = null; }
@@ -2532,19 +2705,65 @@
             else sendMessage(pane);
         }
 
-        function showRetryToast(pane) {
-            showToast(t('error_connection'), 'error', {
-                label: t('retry'),
+        function apiErrorDetails(payload, status, headers) {
+            payload = payload && typeof payload === 'object' ? payload : {};
+            const nested = payload.error && typeof payload.error === 'object' ? payload.error : {};
+            const code = String(payload.error_code || nested.code || '').toLowerCase();
+            let retry = payload.retry_after ?? nested.retry_after;
+            if (retry == null && headers) retry = headers.get('Retry-After');
+            let seconds = Number(retry);
+            if (retry != null && !Number.isFinite(seconds)) seconds = Math.ceil((Date.parse(retry) - Date.now()) / 1000);
+            seconds = Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : 0;
+            let key = '';
+            if (status === 429 || /rate_limit|too_many_requests/.test(code)) key = seconds ? 'error_rate_limit' : 'error_rate_limit_unknown';
+            else if (status === 401 || /unauthenticated|unauthorized|session_expired/.test(code)) key = 'error_auth_required';
+            else if (status === 403 || /forbidden/.test(code)) key = 'error_forbidden';
+            else if (status === 404 || /not_found/.test(code)) key = 'error_not_found';
+            else if (status === 408 || status === 504 || /timeout|deadline/.test(code)) key = 'error_request_timeout';
+            else if (/invalid_response|incomplete_response/.test(code)) key = 'error_invalid_response';
+            else if (status >= 500 || /unavailable|provider_error|upstream_error|model_error/.test(code)) key = 'error_service_unavailable';
+            else if (status === 400 || status === 422 || /invalid_request|validation/.test(code)) key = 'error_invalid_request';
+            const supplied = typeof payload.message === 'string' ? payload.message
+                : typeof payload.error === 'string' ? payload.error
+                : typeof nested.message === 'string' ? nested.message : '';
+            // Only a rate limit locks the pane. A 409 "turn in progress" Retry-After is a
+            // short polling hint, not a cool-down (C-05).
+            const rateLimited = status === 429 || /rate_limit|too_many_requests/.test(code);
+            return { message: key ? t(key).replace('{seconds}', seconds) : (supplied || t('error_connection')),
+                retryAfter: seconds, rateLimited: rateLimited,
+                canRetry: ![400,401,403,404,422].includes(status), status: status };
+        }
+
+        function showRetryToast(pane, details) {
+            details = details || apiErrorDetails({}, 0);
+            if (!details.canRetry) { showToast(details.message, 'error'); return; }
+            showToast(details.message, 'error', {
+                label: t('retry'), ttl: details.retryAfter ? details.retryAfter * 1000 + 9000 : 9000,
                 onClick: () => {
+                    if (pane.retryUntil > Date.now()) {
+                        showToast(t('error_rate_limit').replace('{seconds}', Math.ceil((pane.retryUntil - Date.now()) / 1000)), 'error');
+                        return;
+                    }
                     pane.inputEl.value = pane.lastUserMessage;
                     sendMessage(pane);
                 }
             });
         }
 
+        function showChatError(pane, payload, status, headers, turnId) {
+            const details = apiErrorDetails(payload, status, headers);
+            if (details.rateLimited && details.retryAfter) pane.retryUntil = Date.now() + details.retryAfter * 1000;
+            addMessage(pane, cleanRawResponse(details.message), 'alex', { icon: 'error', turnId: turnId });
+            pane.lastResponseType = 'error';
+            showRetryToast(pane, details);
+        }
+
         function adoptConversationId(cid, pane) {
             if (!cid || cid === pane.conversationId) return;
+            // Revisions belong to a conversation, not to the reusable pane.
+            pane.stateRevision = -1;
             pane.conversationId = cid;
+            persistPropertyContext(pane);
             if (pane === mainPane) persistMainConversation();
         }
 
@@ -2559,15 +2778,42 @@
             displayResults(currentResults);
         }
 
+        function applyResponseState(pane, data) {
+            const state = data.view_state;
+            if (state && state.operation === 'replace') {
+                const revision = Number(state.revision);
+                if (!Number.isFinite(revision) || revision < (pane.stateRevision ?? -1)) return false;
+                pane.stateRevision = revision;
+                pane.retrieval = state.retrieval || null;
+                // Criteria must be set before budget badges are calculated.
+                applyCriteria(state.criteria || {});
+                if (panelFormApi) panelFormApi.fill(currentCriteria, false);
+                paintResults(pane, Array.isArray(state.results) ? state.results : [], data.area_recommendations);
+                return true;
+            }
+            if (data.search_criteria && Object.keys(data.search_criteria).length) applyCriteria(data.search_criteria);
+            if (Array.isArray(data.recommendations)) {
+                pane.retrieval = {source_status: data.source_status, source_message: data.source_message,
+                                  partial: data.partial, partial_note: data.partial_note};
+                paintResults(pane, data.recommendations, data.area_recommendations);
+            }
+            return true;
+        }
+
         // overrideText: used by the edit-turn flow to send the edited message text
         // (bypasses the pane input which the user has since cleared).
         async function sendMessage(pane, overrideText) {
             pane = pane || mainPane;
             const input = pane.inputEl;
             const message = (overrideText != null ? overrideText : input.value).trim();
-            if (!message || pane.isProcessing) return;
+            if (!message || pane.isProcessing || pane.isLoading) return;
+            if (pane.retryUntil > Date.now()) {
+                showToast(t('error_rate_limit').replace('{seconds}', Math.ceil((pane.retryUntil - Date.now()) / 1000)), 'error');
+                return;
+            }
 
             setActivePane(pane);
+            pane.messagesEl.querySelectorAll('.clarification-option').forEach(button => { button.disabled = true; });
             pane.lastUserMessage = message;
             pane.isProcessing = true;
             setProcessingUI(pane, true);
@@ -2577,13 +2823,15 @@
             input.style.height = 'auto';
             showTypingIndicator(pane);
 
+            const sendLoadToken = pane.loadToken;
             pane.activeController = new AbortController();
+            const streamTimeout = setTimeout(() => pane.activeController && pane.activeController.abort(), API_TIMEOUT_MS);
 
             try {
-                const isContinuation = pane.lastResponseType === 'clarification';
+                const isContinuation = ['clarification', 'ask_user'].includes(pane.lastResponseType);
                 // 聚焦栈载荷：focus_stack 顺序为旧→新，末位=当前聚焦。
                 // property 保留向后兼容 = 栈顶（末位）；栈空时两者都不传。
-                const context = { viewed_properties: viewedProperties };
+                const context = { viewed_properties: pane.viewedProperties.slice() };
                 if (pane.focusStack.length) {
                     context.focus_stack = pane.focusStack.slice();
                     context.property = pane.focusStack[pane.focusStack.length - 1];
@@ -2599,19 +2847,21 @@
 
                 const response = await apiFetch('/api/alex', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
                     body: JSON.stringify(body),
                     conversationId: pane.conversationId,
                     signal: pane.activeController.signal
                 });
 
+                const completed = await readChatResponse(response, pane);
+                if (pane.loadToken !== sendLoadToken) return;
                 removeTypingIndicator(pane);
 
-                if (!response.ok) {
+                if (completed.status < 200 || completed.status >= 300) {
                     let errMsg = t('error_connection');
                     let errorData = null;
                     try {
-                        errorData = await response.json();
+                        errorData = completed.payload;
                         if (errorData) errMsg = errorData.message || errorData.error || errMsg;
                     } catch (_) {}
                     if (errorData && errorData.conversation_id) {
@@ -2622,14 +2872,9 @@
                     if (failedTurnId != null && userMsgEl) {
                         tagUserTurn(pane, userMsgEl, failedTurnId);
                     }
-                    addMessage(pane, cleanRawResponse(String(errMsg)), 'alex', {
-                        icon: 'error',
-                        turnId: failedTurnId
-                    });
-                    pane.lastResponseType = 'error';
-                    showRetryToast(pane);
+                    showChatError(pane, errorData, completed.status, response.headers, failedTurnId);
                 } else {
-                    const data = await response.json();
+                    const data = completed.payload;
                     if (data.conversation_id) adoptConversationId(data.conversation_id, pane);
                     // turn_id tags both the user bubble (edit/version) and the assistant
                     // bubble (fork "Branch from here"); absent → no such affordance.
@@ -2637,10 +2882,9 @@
                     if (turnId != null && userMsgEl) tagUserTurn(pane, userMsgEl, turnId);
 
                     if (data.error) {
-                        addMessage(pane, cleanRawResponse(String(data.error)), 'alex', { icon: 'error', turnId: turnId });
-                        pane.lastResponseType = 'error';
-                    } else if (data.response_type === 'clarification') {
-                        addMessage(pane, cleanRawResponse(data.message), 'alex', { icon: 'question', turnId: turnId });
+                        showChatError(pane, data, completed.status, response.headers, turnId);
+                    } else if (data.response_type === 'clarification' || data.response_type === 'ask_user') {
+                        addMessage(pane, cleanRawResponse(data.message || ''), 'alex', { icon: 'question', turnId: turnId, options: data.options });
                         pane.lastResponseType = 'clarification';
                         const missing = Array.isArray(data.missing_fields) ? data.missing_fields : [];
                         // Optional fields the gate merely mentions (e.g. 'move_in') —
@@ -2649,7 +2893,7 @@
                         const missingOptional = Array.isArray(data.missing_optional_fields) ? data.missing_optional_fields : [];
                         // Keep the panel in sync with whatever the backend already knows
                         // (applyCriteria also expands the panel).
-                        if (data.known_criteria || missing.length) applyCriteria(data.known_criteria || {});
+                        if (!data.view_state && data.known_criteria && Object.keys(data.known_criteria).length) applyCriteria(data.known_criteria);
                         const areaMissing = missing.indexOf('area') !== -1;
                         // Only auto-popup the structured form when Area (the one required
                         // field) is missing — not for address/safety/other clarifications.
@@ -2668,43 +2912,41 @@
                         }
                     } else if (data.response_type === 'search' && data.recommendations) {
                         addMessage(pane, cleanRawResponse(data.message || ''), 'alex', { turnId: turnId });
-                        paintResults(pane, data.recommendations, data.area_recommendations);
                         pane.lastResponseType = 'search';
-                        if (data.search_criteria) applyCriteria(data.search_criteria);
                     } else if (data.response_type === 'error') {
-                        addMessage(pane, cleanRawResponse(data.message || t('error_connection')), 'alex', { icon: 'error', turnId: turnId });
-                        pane.lastResponseType = 'error';
+                    showChatError(pane, data, completed.status, response.headers, turnId);
                     } else {
                         const rawText = data.message || data.response || t('error_connection');
                         addMessage(pane, cleanRawResponse(rawText), 'alex', { turnId: turnId });
-                        if (data.recommendations && data.recommendations.length > 0) {
-                            paintResults(pane, data.recommendations, data.area_recommendations);
+                        if (Array.isArray(data.recommendations)) {
                             pane.lastResponseType = 'search';
                         } else {
                             pane.lastResponseType = 'answer';
                         }
-                        if (data.search_criteria) applyCriteria(data.search_criteria);
                     }
+                    applyResponseState(pane, data);
                     // Refresh the sidebar ordering / updated_at (and pick up an
                     // implicitly-created conversation).
                     loadConversations(true);
                 }
             } catch (error) {
+                if (pane.loadToken !== sendLoadToken) return;
                 removeTypingIndicator(pane);
                 if (error && error.name === 'AbortError') {
                     addMessage(pane, t('request_cancelled'), 'alex', { icon: 'error' });
                     pane.lastResponseType = null;
                 } else {
-                    addMessage(pane, t('error_connection'), 'alex', { icon: 'error' });
-                    pane.lastResponseType = 'error';
-                    showRetryToast(pane);
+                    showChatError(pane, { error_code: error && error.code }, 0);
                     console.error('Error:', error);
                 }
             } finally {
-                pane.isProcessing = false;
-                pane.activeController = null;
-                setProcessingUI(pane, false);
-                if (window.innerWidth > 1024) input.focus();
+                clearTimeout(streamTimeout);
+                if (pane.loadToken === sendLoadToken) {
+                    pane.isProcessing = false;
+                    pane.activeController = null;
+                    setProcessingUI(pane, false);
+                    if (window.innerWidth > 1024) input.focus();
+                }
             }
         }
 
@@ -2739,6 +2981,27 @@
                 bubble.innerHTML = inner;
                 messageDiv.appendChild(senderEl);
                 messageDiv.appendChild(bubble);
+                if (Array.isArray(opts.options) && opts.options.length) {
+                    const choices = el('div', 'clarification-options');
+                    choices.setAttribute('role', 'group');
+                    choices.setAttribute('data-i18n-aria', 'clarification_options_label');
+                    choices.setAttribute('aria-label', t('clarification_options_label'));
+                    const choiceConversationId = pane.conversationId;
+                    opts.options.slice(0, 20).forEach(option => {
+                        if (!option || typeof option.label !== 'string' || typeof option.value !== 'string' || !option.value.trim()) return;
+                        const button = el('button', 'clarification-option');
+                        button.type = 'button';
+                        button.textContent = option.label;
+                        button.addEventListener('click', async () => {
+                            if (pane.isProcessing || pane.isLoading || pane.conversationId !== choiceConversationId) return;
+                            choices.querySelectorAll('button').forEach(item => { item.disabled = true; });
+                            pane.lastResponseType = 'clarification';
+                            await sendMessage(pane, option.value);
+                        });
+                        choices.appendChild(button);
+                    });
+                    if (choices.childElementCount) messageDiv.appendChild(choices);
+                }
                 // Per-message fork affordance. Only shown when the turn is known and we
                 // are inside a saved conversation (fork targets a stored conversation).
                 if (opts.turnId != null && opts.turnId !== '' && pane.conversationId) {
@@ -2795,6 +3058,11 @@
             senderEl.textContent = t('brand');
             const bubble = el('div', 'bubble');
             bubble.innerHTML = '<div class="typing-indicator"><span></span><span></span><span></span></div>';
+            const progressLabel = el('div', 'progress-label');
+            progressLabel.setAttribute('role', 'status');
+            progressLabel.setAttribute('aria-live', 'polite');
+            progressLabel.textContent = t('progress_understanding');
+            bubble.appendChild(progressLabel);
             indicator.appendChild(senderEl);
             indicator.appendChild(bubble);
             messagesDiv.appendChild(indicator);
@@ -3045,9 +3313,23 @@
             const recoRow = buildAreaRecommendations(currentAreaRecommendations);
             if (recoRow) content.appendChild(recoRow);
 
+            const retrieval = (resultsOwnerPane && resultsOwnerPane.retrieval) || {};
+            const sourceFailed = ['blocked', 'rate_limited', 'unavailable', 'schema_error',
+                                  'robots_disallowed', 'cooldown', 'timeout', 'error'].includes(retrieval.source_status);
             if (!recommendations || recommendations.length === 0) {
-                content.appendChild(buildEmptyState('search', t('no_results_title'), t('no_results_desc')));
+                const title = sourceFailed ? t('source_unavailable_title') :
+                              retrieval.partial ? t('search_incomplete_title') : t('no_results_title');
+                const desc = sourceFailed ? (retrieval.source_message || t('source_unavailable_desc')) :
+                             retrieval.partial ? (retrieval.partial_note || t('search_incomplete_desc')) : t('no_results_desc');
+                content.appendChild(buildEmptyState(sourceFailed ? 'warning' : 'search', title, desc));
                 return;
+            }
+            if (sourceFailed || retrieval.partial) {
+                const note = el('div', 'alert-box alert-warning');
+                note.setAttribute('role', 'status');
+                note.textContent = sourceFailed ? (retrieval.source_message || t('source_unavailable_desc')) :
+                                   (retrieval.partial_note || t('search_incomplete_desc'));
+                content.appendChild(note);
             }
 
             if (recommendations[0] && recommendations[0].match_type === 'similar_suggestion') {
@@ -3135,8 +3417,53 @@
             submitCriteriaSearch(panelFormApi.read(), panelFormApi);
         }
 
+        function localizeEvidenceReason(reason) {
+            if (reason && typeof reason === 'object') {
+                if (currentLang === 'zh' && typeof reason.message_zh === 'string') return reason.message_zh;
+                reason = reason.message || reason.reason || reason.code || '';
+            }
+            const raw = humanizeEvidenceText(String(reason || ''));
+            const featureKeys = { 'step-free': 'evidence_step_free', 'lift': 'evidence_lift', 'wheelchair-accessible': 'evidence_wheelchair', 'pet-friendly': 'evidence_pets' };
+            let match = raw.match(/^required features are (not verified|absent|not available):\s*(.+)$/i);
+            if (match) {
+                const features = match[2].split(',').map(value => { const text = value.trim(); return featureKeys[text.toLowerCase()] ? t(featureKeys[text.toLowerCase()]) : text; }).join(currentLang === 'zh' ? '、' : ', ');
+                return t(match[1].toLowerCase() === 'not verified' ? 'evidence_features_unknown' : 'evidence_features_absent').replace('{features}', features);
+            }
+            if (/^(cannot verify the commute condition|commute condition could not be verified)$/i.test(raw)) return t('evidence_commute_unknown');
+            if (/^commute tool skipped$/i.test(raw)) return t('evidence_commute_skipped');
+            return raw;
+        }
+
+        function humanizeEvidenceText(text) {
+            return String(text).replace(/wheelchair_space_68cm/g, currentLang === 'zh'
+                ? '68cm轮椅通过房门及浴室的通行空间' : 'door and bathroom clearance for a 68 cm wheelchair')
+                .replace(/cat_written_consent/g, currentLang === 'zh' ? '猫的书面饲养许可' : 'written permission for the cat');
+        }
+
+        function listingMonthlyPrice(rec) {
+            const raw = String(rec.price || '').trim();
+            const match = raw.replace(/,/g, '').match(/(?:£|GBP\s*)?(\d+(?:\.\d+)?)/i);
+            if (!match) return null;
+            const price = Number(match[1]);
+            if (/(?:\/\s*(?:week|wk)|per\s+week|\bpw\b|每周|\/周)/i.test(raw)) return price * 52 / 12;
+            if (/(?:\/\s*(?:month|mo)|per\s+month|\bpcm\b|每月|\/月)/i.test(raw)) return price;
+            return null;  // A price without a period cannot establish a monthly budget match.
+        }
+
         function buildBudgetBadge(rec) {
-            if (!rec.budget_status) return null;
+            const basis = favoritesTabActive() ? rec.budget_basis : (currentCriteria && currentCriteria.max_budget);
+            if (basis == null) return null;
+            const price = listingMonthlyPrice(rec);
+            if (basis != null && price != null && Number.isFinite(price)) {
+                const monthly = !favoritesTabActive() && currentCriteria.budget_period === 'week' ? Number(basis) * 52 / 12 : Number(basis);
+                const badge = document.createElement('span');
+                badge.className = 'budget-badge';
+                badge.textContent = price <= monthly ? t('status_budget_ok') : t('status_budget_over');
+                badge.style.color = price <= monthly ? '#047857' : '#b45309';
+                badge.title = (currentLang === 'zh' ? '月租预算基准：£' : 'Monthly budget basis: £') + monthly.toFixed(0);
+                return badge;
+            }
+            if (!rec.budget_status || !favoritesTabActive()) return null;
             const isOverBudget = rec.match_type === 'similar_suggestion' || rec.match_type === 'soft_violation';
             // Strip emoji/status glyphs, then map to a canonical localized label.
             let clean = String(rec.budget_status).replace(/[✅❌⚠️]/g, '').trim();
@@ -3271,6 +3598,47 @@
             if (badge) details.appendChild(badge);
             top.appendChild(details);
 
+            const evidence = el('div', 'property-evidence');
+            evidence.style.cssText = 'font-size:12px;line-height:1.6;margin:8px 0;';
+            const q = rec.qualification || {};
+            const status = q.status || rec.candidate_status || 'unknown';
+            const statusLabel = favoritesTabActive()
+                ? (currentLang === 'zh'
+                    ? {eligible:'已验证满足收藏时条件', unknown:'收藏时条件仍待核实', excluded:'不满足收藏时硬条件'}
+                    : {eligible:'Verified against saved criteria', unknown:'Saved criteria need verification', excluded:'Does not meet saved criteria'})
+                : (currentLang === 'zh'
+                    ? {eligible:'已验证满足本次条件', unknown:'仍有条件待核实', excluded:'不满足本次硬条件'}
+                    : {eligible:'Verified against these criteria', unknown:'Conditions need verification', excluded:'Does not meet these criteria'});
+            const label = document.createElement('div');
+            label.textContent = statusLabel[status] || statusLabel.unknown;
+            evidence.appendChild(label);
+            const localizedReasons = q.reason_messages && q.reason_messages[currentLang];
+            const reasons = Array.isArray(localizedReasons) ? localizedReasons
+                : [].concat(q.reasons || rec.candidate_reasons || [], q.unknown_reasons || rec.candidate_unknown_reasons || []);
+            reasons.forEach(reason => { const line = document.createElement('div'); line.textContent = Array.isArray(localizedReasons) ? humanizeEvidenceText(reason) : localizeEvidenceReason(reason); evidence.appendChild(line); });
+            const freshness = document.createElement('div');
+            freshness.textContent = rec.possibly_outdated
+                ? (currentLang === 'zh' ? '缓存房源可能已变化，请联系中介核实。' : 'Cached listing may have changed; confirm with the agent.')
+                : (currentLang === 'zh' ? '实时可租状态未核实。' : 'Live availability has not been verified.');
+            evidence.appendChild(freshness);
+            if (rec.saved_at || rec.source_conversation_title) {
+                const saved = document.createElement('div');
+                saved.textContent = (currentLang === 'zh' ? '收藏来源：' : 'Saved from: ') + (rec.source_conversation_title || '') + ' ' + (rec.saved_at || '');
+                evidence.appendChild(saved);
+            }
+            if (favoritesTabActive() && rec.budget_basis != null) {
+                const basis = document.createElement('div');
+                basis.textContent = (currentLang === 'zh' ? '收藏时月租预算：£' : 'Monthly budget when saved: £') + rec.budget_basis;
+                evidence.appendChild(basis);
+            }
+            if (favoritesTabActive() && q.constraints && q.constraints.max_commute_minutes != null) {
+                const basis = document.createElement('div');
+                basis.textContent = (currentLang === 'zh' ? '收藏时通勤上限：' : 'Commute limit when saved: ')
+                    + q.constraints.max_commute_minutes + (currentLang === 'zh' ? ' 分钟' : ' min');
+                evidence.appendChild(basis);
+            }
+            top.appendChild(evidence);
+
             // Move-in availability — always rendered so every card states when the
             // tenancy can start (date / now / "ask the agent"), plus an optional
             // color-coded status chip. All text via textContent (XSS-safe).
@@ -3356,12 +3724,15 @@
         // produced these results). Falls back to the active/main pane.
         function askAboutProperty(property) {
             const pane = ownerPane();
-            const normalized = recordViewedProperty(property);
+            if (pane.isLoading) return;
+            const normalized = recordViewedProperty(property, pane);
+            if (!normalized) return;
             const key = propertyContextKey(normalized);
             // 重复点击已在栈内的房源 → 移到栈顶；否则新入栈。栈满丢最旧。
             pane.focusStack = pane.focusStack.filter(item => propertyContextKey(item) !== key);
             pane.focusStack.push(normalized);
             pane.focusStack = pane.focusStack.slice(-MAX_FOCUS_STACK);
+            persistPropertyContext(pane);
             renderFocusIndicator(pane);
 
             setActivePane(pane);
@@ -3372,6 +3743,7 @@
         // 单套移出聚焦栈；移除后若栈非空，指示条保留并让新栈顶获得高亮。
         function removeFocusItem(key, pane) {
             pane.focusStack = pane.focusStack.filter(item => propertyContextKey(item) !== key);
+            persistPropertyContext(pane);
             if (!pane.focusStack.length) {
                 clearPropertyFocus(pane);
             } else {
@@ -3444,10 +3816,36 @@
         // 清空某 pane 的整个聚焦栈（切换会话 / 分支 / 清除全部）。
         function clearPropertyFocus(pane) {
             pane.focusStack = [];
+            persistPropertyContext(pane);
             const indicator = pane.focusIndicatorEl;
             indicator.style.display = 'none';
             indicator.innerHTML = '';
             pane.inputEl.placeholder = t('placeholder_input');
+        }
+
+        function propertyContextStorageKey(pane) {
+            return pane.conversationId ? LS_PROPERTY_CONTEXT_PREFIX + encodeURIComponent(getUserId()) + ':' + encodeURIComponent(pane.conversationId) : null;
+        }
+        function persistPropertyContext(pane) {
+            const key = propertyContextStorageKey(pane);
+            if (!key) return;
+            try { localStorage.setItem(key, JSON.stringify({ focus_stack: pane.focusStack, viewed_properties: pane.viewedProperties })); } catch (_) {}
+        }
+        function restorePropertyContext(pane) {
+            pane.focusStack = [];
+            pane.viewedProperties = [];
+            try {
+                const raw = JSON.parse(localStorage.getItem(propertyContextStorageKey(pane)) || '{}');
+                function normalizedList(value, limit) {
+                    const unique = new Map();
+                    (Array.isArray(value) ? value : []).forEach(item => { const normalized = normalizePropertyContext(item); if (normalized) unique.set(propertyContextKey(normalized), normalized); });
+                    return Array.from(unique.values()).slice(-limit);
+                }
+                pane.focusStack = normalizedList(raw.focus_stack, MAX_FOCUS_STACK);
+                pane.viewedProperties = normalizedList(raw.viewed_properties, MAX_VIEWED_PROPERTIES);
+            } catch (_) {}
+            renderFocusIndicator(pane);
+            pane.inputEl.placeholder = pane.focusStack.length ? t('placeholder_focus') : t('placeholder_input');
         }
 
         function normalizePropertyContext(property) {
@@ -3492,7 +3890,7 @@
             }
         }
 
-        function recordViewedProperty(property) {
+        function recordViewedProperty(property, pane) {
             const normalized = normalizePropertyContext(property);
             if (!normalized) return property || {};
             const key = propertyContextKey(normalized);
@@ -3501,6 +3899,12 @@
             viewedProperties.push(normalized);
             viewedProperties = viewedProperties.slice(-MAX_VIEWED_PROPERTIES);
             persistViewedProperties();
+            if (pane) {
+                pane.viewedProperties = pane.viewedProperties.filter(item => propertyContextKey(item) !== key);
+                pane.viewedProperties.push(normalized);
+                pane.viewedProperties = pane.viewedProperties.slice(-MAX_VIEWED_PROPERTIES);
+                persistPropertyContext(pane);
+            }
             return normalized;
         }
 
@@ -3515,6 +3919,15 @@
         /* -------------------------------------------------------------------------- */
         function buildFavoritePayload(rec) {
             return {
+                qualification: rec.qualification || null,
+                bedrooms: rec.bedrooms, room_type: rec.room_type, property_type: rec.property_type,
+                area: rec.area, verified_features: rec.verified_features, unverified_features: rec.unverified_features,
+                absent_features: rec.absent_features,
+                verified_commute_evidence: rec.verified_commute_evidence,
+                budget_basis: rec.budget_basis != null ? rec.budget_basis : (currentCriteria && currentCriteria.max_budget),
+                possibly_outdated: !!rec.possibly_outdated,
+                source_conversation_title: conversationTitle(ownerPane().conversationId),
+                saved_at: new Date().toISOString(),
                 user_id: getUserId(),
                 url: rec.url || '',
                 address: rec.address || '',
@@ -3537,7 +3950,12 @@
                 ? fav.travel_time
                 : ((fav.travel_time_minutes != null ? fav.travel_time_minutes : 'N/A') + ' min');
             return {
-                rank: fav.rank != null ? fav.rank : (i + 1),
+                qualification: fav.qualification || null,
+                budget_basis: fav.budget_basis,
+                possibly_outdated: !!fav.possibly_outdated,
+                source_conversation_title: fav.source_conversation_title,
+                saved_at: fav.saved_at,
+                rank: i + 1,
                 address: fav.address || fav.Address || '',
                 price: fav.price || fav.Price || '',
                 travel_time: tt,
@@ -3895,7 +4313,7 @@
 
         // Renders one stored message into a pane. Returns its recommendations (if any)
         // so the caller can seed the pane's cached results.
-        function renderStoredMessage(pane, msg) {
+        function renderStoredMessage(pane, msg, isLatest) {
             if (msg.role === 'user') {
                 const opts = {};
                 if (msg.turn_id != null) opts.turnId = msg.turn_id;
@@ -3903,18 +4321,28 @@
                 return null;
             }
             let icon = null;
-            if (msg.response_type === 'clarification') icon = 'question';
+            if (msg.response_type === 'clarification' || msg.response_type === 'ask_user') icon = 'question';
             else if (msg.response_type === 'error') icon = 'error';
             const opts = {};
             if (icon) opts.icon = icon;
             if (msg.turn_id != null) opts.turnId = msg.turn_id;
+            if (isLatest && (msg.response_type === 'clarification' || msg.response_type === 'ask_user')) opts.options = msg.options || (msg.metadata && msg.metadata.options);
             addMessage(pane, cleanRawResponse(msg.content || ''), 'alex', opts);
-            return (Array.isArray(msg.recommendations) && msg.recommendations.length) ? msg.recommendations : null;
+            return Array.isArray(msg.recommendations) ? msg.recommendations : null;
         }
 
         async function switchConversation(pane, cid) {
             pane = pane || mainPane;
+            persistPropertyContext(pane);
+            cancelRequest(pane);
+            pane.isProcessing = false;
+            pane.activeController = null;
             pane.conversationId = cid;
+            const loadToken = ++pane.loadToken;
+            pane.isLoading = true;
+            pane.inputEl.disabled = true;
+            pane.sendBtnEl.disabled = true;
+            pane.messagesEl.setAttribute('aria-busy', 'true');
             if (pane === mainPane) persistMainConversation();
             setActivePane(pane);
             renderConversationList();
@@ -3924,29 +4352,33 @@
             const messagesDiv = pane.messagesEl;
             messagesDiv.innerHTML = '<div style="text-align:center;padding:40px;"><div class="spinner"></div></div>';
             pane.lastResponseType = null;
+            pane.retrieval = null;
             pane.results = [];
             pane.areaRecos = [];
             pane.versionMap = {};
-            clearPropertyFocus(pane);
+            pane.stateRevision = -1;
+            restorePropertyContext(pane);
             // This pane now owns the shared results/criteria panel; reset it fresh.
             resultsOwnerPane = pane;
             resetCriteria();
 
             try {
                 const response = await apiFetch('/api/conversations/' + encodeURIComponent(cid) + '/messages', { method: 'GET' });
+                if (pane.loadToken !== loadToken || pane.conversationId !== cid) return;
                 if (!response.ok) {
                     showToast(t('error_load_messages'), 'error');
                     renderWelcomeMessage(pane);
                     return;
                 }
                 const data = await response.json();
+                if (pane.loadToken !== loadToken || pane.conversationId !== cid) return;
                 const msgs = Array.isArray(data.messages) ? data.messages : [];
                 messagesDiv.innerHTML = '';
                 let lastRecs = [];
                 if (!msgs.length) {
                     renderWelcomeMessage(pane);
                 } else {
-                    msgs.forEach(m => { const r = renderStoredMessage(pane, m); if (r) lastRecs = r; });
+                    msgs.forEach((m, index) => { const r = renderStoredMessage(pane, m, index === msgs.length - 1); if (r) lastRecs = r; });
                     for (let k = msgs.length - 1; k >= 0; k--) {
                         if (msgs[k].role === 'assistant' && msgs[k].response_type) {
                             pane.lastResponseType = msgs[k].response_type;
@@ -3957,21 +4389,40 @@
                 pane.results = lastRecs;
                 // Re-render property cards from this conversation's most recent recs.
                 if (resultsOwnerPane === pane) { currentResults = lastRecs; displayResults(currentResults); }
+                applyResponseState(pane, data);
                 messagesDiv.scrollTop = messagesDiv.scrollHeight;
                 // Version switchers for this conversation's user turns.
                 loadVersionMap(pane);
             } catch (error) {
                 if (error && error.name === 'AbortError') return;
-                showToast(t('error_connection'), 'error');
-                renderWelcomeMessage(pane);
+                if (pane.loadToken === loadToken) { showToast(t('error_connection'), 'error'); renderWelcomeMessage(pane); }
+            } finally {
+                if (pane.loadToken === loadToken) {
+                    pane.isLoading = false;
+                    pane.inputEl.disabled = false;
+                    pane.sendBtnEl.disabled = false;
+                    pane.messagesEl.setAttribute('aria-busy', 'false');
+                }
             }
         }
 
         function startBlankConversation(pane) {
             pane = pane || mainPane;
+            persistPropertyContext(pane);
+            cancelRequest(pane);
+            pane.isProcessing = false;
+            pane.activeController = null;
+            ++pane.loadToken;
+            pane.isLoading = false;
+            pane.inputEl.disabled = false;
+            pane.sendBtnEl.disabled = false;
+            pane.messagesEl.setAttribute('aria-busy', 'false');
             pane.conversationId = null;
+            pane.stateRevision = -1;
+            pane.viewedProperties = [];
             if (pane === mainPane) persistMainConversation();
             pane.lastResponseType = null;
+            pane.retrieval = null;
             pane.results = [];
             pane.areaRecos = [];
             pane.versionMap = {};
@@ -3999,11 +4450,23 @@
                 const conv = data.conversation || data;
                 if (!conv || !conv.id) { showToast(t('error_create_conversation'), 'error'); return; }
                 conversations.unshift(conv);
+                persistPropertyContext(pane);
+                cancelRequest(pane);
+                ++pane.loadToken;
+                pane.isProcessing = false;
+                pane.activeController = null;
+                pane.isLoading = false;
+                pane.inputEl.disabled = false;
+                pane.sendBtnEl.disabled = false;
+                pane.messagesEl.setAttribute('aria-busy', 'false');
                 pane.conversationId = conv.id;
+                pane.stateRevision = -1;
+                pane.viewedProperties = [];
                 if (pane === mainPane) persistMainConversation();
                 setActivePane(pane);
                 pane.lastResponseType = null;
-                pane.results = [];
+                pane.retrieval = null;
+            pane.results = [];
                 pane.areaRecos = [];
                 pane.versionMap = {};
                 clearPropertyFocus(pane);
@@ -4073,6 +4536,7 @@
                         } else {
                             renderConversationList();
                         }
+                        try { localStorage.removeItem(LS_PROPERTY_CONTEXT_PREFIX + encodeURIComponent(getUserId()) + ':' + encodeURIComponent(conv.id)); } catch (_) {}
                     } catch (error) {
                         if (error && error.name === 'AbortError') return;
                         showToast(t('error_connection'), 'error');
@@ -4214,6 +4678,8 @@
 
         function closeSecondaryPane() {
             if (!secondaryPane) return;
+            persistPropertyContext(secondaryPane);
+            ++secondaryPane.loadToken;
             if (secondaryPane.activeController) secondaryPane.activeController.abort();
             secondaryPane.root.remove();
             if (resultsOwnerPane === secondaryPane) resultsOwnerPane = mainPane;
@@ -4323,10 +4789,19 @@
         // Swap the active identity (guest switch, login, register, logout all funnel here):
         // repoint localStorage, wipe in-memory per-user state, then reload from the server.
         async function applyIdentitySwitch(uid, name) {
+            persistPropertyContext(mainPane);
+            cancelRequest(mainPane);
+            ++mainPane.loadToken;
+            mainPane.isProcessing = false;
+            mainPane.activeController = null;
+            if (secondaryPane) closeSecondaryPane();
+            mainPane.conversationId = null;
+            mainPane.focusStack = [];
+            mainPane.viewedProperties = [];
+            mainPane.retryUntil = 0;
             localStorage.setItem(LS_USER_ID, uid);
             localStorage.setItem(LS_USER_NAME, name || 'Guest');
             localStorage.removeItem(LS_ACTIVE_CONV);
-            if (secondaryPane) closeSecondaryPane();
             conversations = [];
             favorites.clear();
             favoriteItems = [];
@@ -4446,6 +4921,7 @@
         }
 
         function openAuthDialog(mode) {
+            closeSidebarMobile();
             mode = mode || 'login';
             closeUserDropdown();
             const overlay = document.getElementById('dialogOverlay');
@@ -4454,6 +4930,39 @@
 
             const title = el('div', 'dialog-title');
             card.appendChild(title);
+
+            const guestNotice = el('div', 'dialog-message');
+            guestNotice.textContent = currentLang === 'zh'
+                ? '账号使用独立工作区，访客会话和收藏不会自动合并。注册或登录前可下载访客研究备份，之后仍可在备份中查看历史。'
+                : 'Your account uses a separate workspace. Guest conversations and saved homes are not merged automatically. Download your guest research before signing in to keep a readable copy.';
+            if (!authState.authenticated) card.appendChild(guestNotice);
+            const exportGuest = el('button', 'dialog-btn');
+            exportGuest.type = 'button';
+            exportGuest.textContent = currentLang === 'zh' ? '下载访客研究备份' : 'Download guest research';
+            exportGuest.addEventListener('click', async () => {
+                exportGuest.disabled = true;
+                try {
+                    const list = await apiFetch('/api/conversations');
+                    if (!list.ok) throw new Error('export failed');
+                    const body = await list.json();
+                    const records = Array.isArray(body.conversations) ? body.conversations : [];
+                    const history = [];
+                    for (const conversation of records) {
+                        const response = await apiFetch('/api/conversations/' + encodeURIComponent(conversation.id) + '/messages');
+                        if (!response.ok) throw new Error('export failed');
+                        history.push({ title: conversation.title, ...(await response.json()) });
+                    }
+                    const favoritesResponse = await apiFetch('/api/favorites');
+                    if (!favoritesResponse.ok) throw new Error('export failed');
+                    const blob = new Blob([JSON.stringify({exported_at: new Date().toISOString(), conversations: history,
+                        favorites: await favoritesResponse.json()}, null, 2)], {type: 'application/json'});
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a'); link.href = url; link.download = 'rentcompass-guest-research.json'; link.click();
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                } catch (_) { showToast(t('error_connection'), 'error'); }
+                finally { exportGuest.disabled = false; }
+            });
+            if (!authState.authenticated) card.appendChild(exportGuest);
 
             const errBox = el('div', 'dialog-message');
             errBox.style.color = '#e5484d';
@@ -4496,6 +5005,9 @@
                 showErr('');
                 const reg = mode === 'register';
                 title.textContent = reg ? t('register_title') : t('login_title');
+                userInput.setAttribute('aria-label', t('username_label'));
+                passInput.setAttribute('aria-label', t('password_label'));
+                nameInput.setAttribute('aria-label', t('display_name_label'));
                 userInput.placeholder = t('username_label') + (reg ? ' · ' + t('username_placeholder') : '');
                 passInput.placeholder = t('password_label') + (reg ? ' · ' + t('password_placeholder') : '');
                 passInput.autocomplete = reg ? 'new-password' : 'current-password';
@@ -4536,6 +5048,7 @@
             applyMode();
             overlay.appendChild(card);
             overlay.style.display = 'flex';
+            activateDialogAccessibility(card, title);
             userInput.focus();
         }
 
@@ -4559,6 +5072,13 @@
                         favoriteItems = [];
                         currentResults = [];
                         localStorage.removeItem(LS_ACTIVE_CONV);
+                        const contextPrefix = LS_PROPERTY_CONTEXT_PREFIX + encodeURIComponent(getUserId()) + ':';
+                        Object.keys(localStorage).filter(key => key.startsWith(contextPrefix)).forEach(key => localStorage.removeItem(key));
+                        localStorage.removeItem(viewedPropertiesStorageKey());
+                        viewedProperties = [];
+                        mainPane.conversationId = null;
+                        mainPane.focusStack = [];
+                        mainPane.viewedProperties = [];
                         updateFavCount();
                         startBlankConversation(mainPane);
                         showToast(t('forgotten'), 'success');
@@ -4578,6 +5098,12 @@
             if (v === null || v === undefined || v === '') return null;
             const n = parseInt(v, 10);
             return isNaN(n) ? null : n;
+        }
+
+        function parseMoneyOrNull(v) {
+            if (v === null || v === undefined || v === '') return null;
+            const n = Number(v);
+            return Number.isFinite(n) ? n : null;
         }
 
         function defaultCriteria() {
@@ -4614,9 +5140,10 @@
             if (!areas.length && c.area && c.area.trim()) areas = [c.area.trim()];
             c.areas = areas;
             if ((!c.area || !c.area.trim()) && areas.length) c.area = areas[0];
-            c.max_budget = parseIntOrNull(raw.max_budget);
+            c.max_budget = parseMoneyOrNull(raw.max_budget);
             c.budget_period = (raw.budget_period === 'week') ? 'week' : 'month';
             c.bedrooms = parseIntOrNull(raw.bedrooms);   // null=Any, 0=Studio, 1/2/3
+            c.bedrooms_minimum = raw.bedrooms_minimum === true;
             if (typeof raw.room_type === 'string' && raw.room_type) c.room_type = raw.room_type; // null=Any
             if (typeof raw.commute_destination === 'string') c.commute_destination = raw.commute_destination;
             let mct = raw.max_commute_time;
@@ -4716,6 +5243,8 @@
             areaInput.setAttribute('maxlength', '80');
             areaInput.setAttribute('data-i18n-ph', 'criteria_area_ph');
             areaInput.placeholder = t('criteria_area_ph');
+            areaInput.setAttribute('data-i18n-aria', 'criteria_area');
+            areaInput.setAttribute('aria-label', t('criteria_area'));
             areaField.appendChild(areaInput);
             grid.appendChild(areaField);
 
@@ -4788,13 +5317,17 @@
             const budgetField = labelField('criteria_budget', false, false);
             const budgetRow = el('div', 'criteria-budget-row');
             const budgetInput = el('input', 'criteria-input');
+            budgetInput.setAttribute('data-i18n-aria', 'criteria_budget');
+            budgetInput.setAttribute('aria-label', t('criteria_budget'));
             budgetInput.type = 'number';
             budgetInput.min = '0';
-            budgetInput.step = '50';
-            budgetInput.setAttribute('inputmode', 'numeric');
+            budgetInput.step = 'any';
+            budgetInput.setAttribute('inputmode', 'decimal');
             budgetInput.setAttribute('data-i18n-ph', 'criteria_budget_ph');
             budgetInput.placeholder = t('criteria_budget_ph');
             const periodSelect = el('select', 'criteria-select');
+            periodSelect.setAttribute('data-i18n-aria', 'budget_period_label');
+            periodSelect.setAttribute('aria-label', t('budget_period_label'));
             const optM = document.createElement('option');
             optM.value = 'month'; optM.setAttribute('data-i18n', 'per_month'); optM.textContent = t('per_month');
             const optW = document.createElement('option');
@@ -4807,7 +5340,9 @@
             // Bedrooms
             const bedField = labelField('criteria_bedrooms', false, false);
             const bedSelect = el('select', 'criteria-select');
-            [['', 'bedrooms_any', null], ['0', 'bedrooms_studio', null], ['1', null, '1'], ['2', null, '2'], ['3', null, '3+']]
+            bedSelect.setAttribute('data-i18n-aria', 'criteria_bedrooms');
+            bedSelect.setAttribute('aria-label', t('criteria_bedrooms'));
+            [['', 'bedrooms_any', null], ['0', 'bedrooms_studio', null], ['1', null, '1'], ['2', null, '2'], ['3', null, '3'], ['4', null, '4'], ['5', null, '5'], ['6', null, '6']]
                 .forEach(function (o) {
                     const opt = document.createElement('option');
                     opt.value = o[0];
@@ -4816,13 +5351,24 @@
                     bedSelect.appendChild(opt);
                 });
             bedField.appendChild(bedSelect);
+            const bedMinLabel = document.createElement('label');
+            const bedMinInput = document.createElement('input');
+            bedMinInput.type = 'checkbox';
+            bedMinLabel.appendChild(bedMinInput);
+            const bedMinText = document.createElement('span');
+            bedMinText.setAttribute('data-i18n', 'bedrooms_minimum');
+            bedMinText.textContent = t('bedrooms_minimum');
+            bedMinLabel.appendChild(bedMinText);
+            bedField.appendChild(bedMinLabel);
             grid.appendChild(bedField);
 
             // Room type (full width so it doesn't orphan a half-row before the
             // full-width Commute field). Values match the /api/search_direct enum.
             const roomField = labelField('criteria_room_type', false, true);
             const roomSelect = el('select', 'criteria-select');
-            [['', 'room_type_any'], ['studio', 'room_type_studio'], ['ensuite', 'room_type_ensuite'], ['shared', 'room_type_shared']]
+            roomSelect.setAttribute('data-i18n-aria', 'criteria_room_type');
+            roomSelect.setAttribute('aria-label', t('criteria_room_type'));
+            [['', 'room_type_any'], ['whole', 'room_type_whole'], ['studio', 'room_type_studio'], ['ensuite', 'room_type_ensuite'], ['shared', 'room_type_shared']]
                 .forEach(function (o) {
                     const opt = document.createElement('option');
                     opt.value = o[0];
@@ -4836,6 +5382,8 @@
             // Commute destination (full width)
             const destField = labelField('criteria_commute_dest', false, true);
             const destInput = el('input', 'criteria-input');
+            destInput.setAttribute('data-i18n-aria', 'criteria_commute_dest');
+            destInput.setAttribute('aria-label', t('criteria_commute_dest'));
             destInput.type = 'text';
             destInput.setAttribute('maxlength', '80');
             destInput.setAttribute('data-i18n-ph', 'criteria_commute_dest_ph');
@@ -4846,6 +5394,8 @@
             // Max commute
             const maxField = labelField('criteria_max_commute', false, false);
             const maxInput = el('input', 'criteria-input');
+            maxInput.setAttribute('data-i18n-aria', 'criteria_max_commute');
+            maxInput.setAttribute('aria-label', t('criteria_max_commute'));
             maxInput.type = 'number';
             maxInput.min = '0';
             maxInput.step = '5';
@@ -4871,6 +5421,8 @@
             const moveInField = labelField('criteria_move_in', false, true);
             const moveInWrap = el('div', 'criteria-date-wrap is-empty');
             const moveInInput = el('input', 'criteria-input criteria-date-native');
+            moveInInput.setAttribute('data-i18n-aria', 'criteria_move_in');
+            moveInInput.setAttribute('aria-label', t('criteria_move_in'));
             moveInInput.type = 'date';
             moveInInput.setAttribute('data-i18n-title', 'criteria_move_in_hint');
             moveInInput.title = t('criteria_move_in_hint');
@@ -4948,9 +5500,10 @@
                     return {
                         area: areas.length ? areas[0] : '',   // back-compat single area
                         areas: areas,
-                        max_budget: parseIntOrNull(budgetInput.value),
+                        max_budget: parseMoneyOrNull(budgetInput.value),
                         budget_period: periodSelect.value === 'week' ? 'week' : 'month',
                         bedrooms: bedSelect.value === '' ? null : parseIntOrNull(bedSelect.value),
+                        bedrooms_minimum: bedMinInput.checked,
                         room_type: roomSelect.value === '' ? null : roomSelect.value,
                         commute_destination: destInput.value.trim(),
                         max_commute_time: parseIntOrNull(maxInput.value),
@@ -4972,6 +5525,7 @@
                     if (!skip(budgetInput)) budgetInput.value = (c.max_budget != null ? String(c.max_budget) : '');
                     if (!skip(periodSelect)) periodSelect.value = (c.budget_period === 'week' ? 'week' : 'month');
                     if (!skip(bedSelect)) bedSelect.value = (c.bedrooms != null ? String(c.bedrooms) : '');
+                    if (!skip(bedMinInput)) bedMinInput.checked = !!c.bedrooms_minimum;
                     if (!skip(roomSelect)) roomSelect.value = c.room_type || '';
                     if (!skip(destInput)) destInput.value = c.commute_destination || '';
                     if (!skip(maxInput)) maxInput.value = (c.max_commute_time != null ? String(c.max_commute_time) : '');
@@ -5118,6 +5672,7 @@
 
         /* --- Auto-popup modal (only when backend says area is missing) --- */
         function openCriteriaModal(knownRaw) {
+            closeSidebarMobile();
             // Clean any prior instance first.
             if (modalFormApi) { activeCriteriaForms.delete(modalFormApi); modalFormApi = null; }
 
@@ -5149,6 +5704,7 @@
 
             overlay.appendChild(card);
             overlay.style.display = 'flex';
+            activateDialogAccessibility(card, title);
             modalFormApi = formApi;
 
             formApi.fill(normalizeCriteria(knownRaw || {}), false);
@@ -5165,7 +5721,8 @@
         async function submitCriteriaSearch(criteria, sourceApi) {
             // The criteria panel drives the pane that owns the shared results surface.
             const pane = ownerPane();
-            if (pane.isProcessing) return;        // never race with chat send / another submit
+            if (pane.isProcessing || pane.isLoading) return;        // never race with chat send / another submit
+            if (pane.retryUntil > Date.now()) { showToast(t('error_rate_limit').replace('{seconds}', Math.ceil((pane.retryUntil - Date.now()) / 1000)), 'error'); return; }
             // Multi-area: send `areas` plus `area` = areas[0] for back-compat.
             const areas = (criteria && Array.isArray(criteria.areas) && criteria.areas.length)
                 ? dedupeAreas(criteria.areas)
@@ -5190,6 +5747,7 @@
                 reqCriteria.budget_period = criteria.budget_period || 'month';
             }
             if (criteria.bedrooms != null) reqCriteria.bedrooms = criteria.bedrooms;
+            reqCriteria.bedrooms_minimum = !!criteria.bedrooms_minimum;
             if (criteria.room_type) reqCriteria.room_type = criteria.room_type;
             if (!criteria.no_commute) {
                 if (criteria.commute_destination) reqCriteria.commute_destination = criteria.commute_destination;
@@ -5234,12 +5792,7 @@
                     if (failedTurnId != null && userMsgEl) {
                         tagUserTurn(pane, userMsgEl, failedTurnId);
                     }
-                    addMessage(pane, cleanRawResponse(String(errMsg)), 'alex', {
-                        icon: 'error',
-                        turnId: failedTurnId
-                    });
-                    pane.lastResponseType = 'error';
-                    showToast(errMsg, 'error');
+                    showChatError(pane, errorData, response.status, response.headers, failedTurnId);
                 } else {
                     const data = await response.json();
                     if (data.conversation_id) adoptConversationId(data.conversation_id, pane);
@@ -5247,8 +5800,7 @@
                     if (turnId != null && userMsgEl) tagUserTurn(pane, userMsgEl, turnId);
 
                     if (data.response_type === 'error') {
-                        addMessage(pane, cleanRawResponse(data.message || t('error_connection')), 'alex', { icon: 'error', turnId: turnId });
-                        pane.lastResponseType = 'error';
+                        showChatError(pane, data, response.status, response.headers, turnId);
                     } else {
                         addMessage(pane, cleanRawResponse(data.message || ''), 'alex', { turnId: turnId });
                         const recs = Array.isArray(data.recommendations) ? data.recommendations : [];
@@ -5269,6 +5821,7 @@
                             echoed.areas = areas;
                         }
                         applyCriteria(echoed);
+                        if (data.view_state) applyResponseState(pane, data);
                         closeCriteriaModal();     // no-op if the search came from the panel
                     }
                     loadConversations(true);
@@ -5293,17 +5846,50 @@
         /* -------------------------------------------------------------------------- */
         /* MOBILE SIDEBAR                                                             */
         /* -------------------------------------------------------------------------- */
+        let sidebarReturnFocus = null;
+        function syncSidebarAccessibility() {
+            const sidebar = document.getElementById('convSidebar');
+            const mobile = window.innerWidth <= 1024;
+            const open = mobile && sidebar.classList.contains('open');
+            if (!mobile) sidebar.classList.remove('open');
+            sidebar.inert = mobile && !open;
+            sidebar.setAttribute('aria-hidden', mobile && !open ? 'true' : 'false');
+            document.getElementById('menuToggle').setAttribute('aria-expanded', String(open));
+            document.getElementById('sidebarBackdrop').classList.toggle('open', open);
+            document.querySelectorAll('#chatPanesWrap, .results-panel, .navbar .brand, .lang-switch').forEach(node => { node.inert = open; });
+            if (open) { sidebar.setAttribute('role', 'dialog'); sidebar.setAttribute('aria-modal', 'true'); }
+            else { sidebar.removeAttribute('role'); sidebar.removeAttribute('aria-modal'); }
+        }
         function toggleSidebar() {
             const sidebar = document.getElementById('convSidebar');
-            const backdrop = document.getElementById('sidebarBackdrop');
-            const open = sidebar.classList.toggle('open');
-            backdrop.classList.toggle('open', open);
+            if (window.innerWidth > 1024) return;
+            if (sidebar.classList.contains('open')) { closeSidebarMobile(); return; }
+            sidebarReturnFocus = document.activeElement;
+            sidebar.classList.add('open');
+            syncSidebarAccessibility();
+            document.getElementById('newChatBtn').focus();
         }
         function closeSidebarMobile() {
-            if (window.innerWidth <= 1024) {
-                document.getElementById('convSidebar').classList.remove('open');
-                document.getElementById('sidebarBackdrop').classList.remove('open');
+            const sidebar = document.getElementById('convSidebar');
+            const wasOpen = sidebar.classList.contains('open');
+            sidebar.classList.remove('open');
+            syncSidebarAccessibility();
+            if (wasOpen && window.innerWidth <= 1024) {
+                const target = sidebarReturnFocus && sidebarReturnFocus.isConnected ? sidebarReturnFocus : document.getElementById('menuToggle');
+                target.focus();
             }
+            sidebarReturnFocus = null;
+        }
+        function handleSidebarKeyboard(event) {
+            const sidebar = document.getElementById('convSidebar');
+            if (window.innerWidth > 1024 || !sidebar.classList.contains('open')) return;
+            if (event.key === 'Escape') { event.preventDefault(); closeSidebarMobile(); return; }
+            if (event.key !== 'Tab') return;
+            const focusable = [document.getElementById('menuToggle')].concat(Array.from(sidebar.querySelectorAll('button, a[href], input, select, textarea, [tabindex="0"]')))
+                .filter(node => !node.disabled && !node.closest('[inert]') && node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden');
+            const index = focusable.indexOf(document.activeElement);
+            if (event.shiftKey && index <= 0) { event.preventDefault(); focusable[focusable.length - 1].focus(); }
+            else if (!event.shiftKey && (index === -1 || index === focusable.length - 1)) { event.preventDefault(); focusable[0].focus(); }
         }
 
         /* -------------------------------------------------------------------------- */
@@ -5329,6 +5915,7 @@
         // Split-screen needs a wide viewport; drop below the threshold => collapse to single.
         function handleViewportResize() {
             hideDropOverlay();
+            syncSidebarAccessibility();
             if (splitMode && window.innerWidth < 800) closeSecondaryPane();
         }
 
@@ -5344,6 +5931,8 @@
             document.getElementById('menuToggle').addEventListener('click', toggleSidebar);
             document.getElementById('sidebarBackdrop').addEventListener('click', closeSidebarMobile);
             window.addEventListener('resize', handleViewportResize);
+            document.addEventListener('keydown', handleSidebarKeyboard);
+            syncSidebarAccessibility();
             // User menu
             document.getElementById('userMenuBtn').addEventListener('click', e => { e.stopPropagation(); toggleUserDropdown(); });
             document.getElementById('renameUserBtn').addEventListener('click', promptRenameUser);
@@ -5378,7 +5967,9 @@
             initMainPane();               // wrap the static chat DOM into the main ChatPane
             wireEvents();
             initCriteriaPanel();          // build the persistent criteria form before i18n
-            setLanguage('en');            // default language + static strings + welcome
+            let savedLanguage = 'en';
+            try { savedLanguage = localStorage.getItem('rentcompass.language') || 'en'; } catch (_) {}
+            setLanguage(savedLanguage);
             updateUserNameLabel();
 
             // Sync to the authoritative server session BEFORE loading any per-user data,

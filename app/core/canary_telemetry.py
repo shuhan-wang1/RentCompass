@@ -69,8 +69,11 @@ window spanning the change silently averages two different measurements:
   observed ``0`` for both counters instead of ``null``.
 * Additive in v3 and safe to ignore: ``variant_id``, the rollout identity block,
   ``root_agent_context``/``agent_role``/``task_id``/``parent_task_id``,
-  ``tool_latency``, and the ``specialist``
-  ``partial``/``denied_calls``/``dropped_error_codes`` counters.
+  ``tool_latency``, ``answer_contract``, and the ``specialist``
+  ``partial``/``denied_calls``/``dropped_error_codes`` counters. Additive means
+  ADDITIVE: each is emitted only when the caller states it, is absent on every
+  record written before it existed, and its absence is never a violation. That is
+  what lets them ship without another schema version.
 * ``tool_ledger_status`` states whether ``tool_batches`` COULD be counted at all.
   ``tool_batches`` is derived from ``final_state``, and a crashed turn has no
   ``final_state`` — so requiring it unconditionally at v3 made every crash/5xx
@@ -508,6 +511,65 @@ def _specialist_diagnostics(value: Any) -> Optional[Dict[str, Any]]:
 _TOOL_LATENCY_FIELDS = ("count", "p50_ms", "max_ms", "timed_out", "abandoned")
 _MAX_TOOL_LATENCY_ENTRIES = 32
 
+# answer_contract — additive, non-gating, and the ONLY field in this record that
+# can carry model-written prose. The caps below are therefore a privacy bound
+# first and a size bound second.
+ANSWER_CONTRACT_MAX_LIMITATIONS = 8
+ANSWER_CONTRACT_MAX_LIMITATION_CHARS = 200
+
+
+def _answer_contract_summary(value: Any) -> Optional[Dict[str, Any]]:
+    """Whitelist the answer-contract block: three keys, nothing else.
+
+    ``{"valid": bool, "limitations": [str], "final_response_truncated": bool}``.
+
+    Until now this block existed only inside the checkpoint SQLite — the runtime
+    knew an answer was degraded and no consumer could see it. Surfacing it lets the
+    canary report state a limitations rate per arch, which is what makes "the
+    candidate silently returns partial answers more often" a measurable claim
+    instead of an impression.
+
+    ``limitations`` entries are model-written sentences, so they are the one place
+    a user's own words could reach an ops log that is read by humans and shipped
+    off-box. The list is capped at ``ANSWER_CONTRACT_MAX_LIMITATIONS`` entries of
+    ``ANSWER_CONTRACT_MAX_LIMITATION_CHARS`` characters and truncation is DECLARED
+    (``limitations_truncated``) rather than silent — a shortened list that does not
+    say it was shortened is a false statement about what the runtime knew.
+
+    Returns None (the key is then omitted entirely) when the caller stated no
+    contract or stated one that is not a readable object. Omission is the historical
+    shape and is never a violation; a malformed block that was emitted anyway would
+    be.
+    """
+    if not isinstance(value, dict):
+        return None
+    try:
+        valid = value.get("valid")
+        truncated = value.get("final_response_truncated")
+        raw_limitations = value.get("limitations")
+        items = raw_limitations if isinstance(raw_limitations, list) else []
+        kept = [
+            item[:ANSWER_CONTRACT_MAX_LIMITATION_CHARS]
+            for item in items[:ANSWER_CONTRACT_MAX_LIMITATIONS]
+            if isinstance(item, str)
+        ]
+        out: Dict[str, Any] = {
+            # Fail-closed on a missing/miswired flag: `valid` is a claim about the
+            # answer the user received, so anything that is not an explicit True is
+            # recorded as not-valid rather than defaulted to healthy.
+            "valid": valid is True,
+            "limitations": kept,
+            "final_response_truncated": truncated is True,
+        }
+        if len(items) > ANSWER_CONTRACT_MAX_LIMITATIONS or any(
+            isinstance(item, str) and len(item) > ANSWER_CONTRACT_MAX_LIMITATION_CHARS
+            for item in items[:ANSWER_CONTRACT_MAX_LIMITATIONS]
+        ):
+            out["limitations_truncated"] = True
+        return out
+    except Exception:
+        return None
+
 
 def _tool_latency_summary(value: Any) -> Optional[Dict[str, Any]]:
     """Sanitise the per-tool latency summary. Content-free by construction.
@@ -517,6 +579,32 @@ def _tool_latency_summary(value: Any) -> Optional[Dict[str, Any]]:
     would let the shape of one user's session be reconstructed from an ops log,
     and p50/max answer the question ("which tool is eating the budget") just as
     well. Non-gating: this is a Stage-1 instrument, not a threshold.
+
+    FIELD CONTRACT — read this before comparing arms on it
+    ------------------------------------------------------
+    Three absences are legal and mean three different things. None of them is a
+    contract violation, and the consumer must stay tolerant of all three:
+
+    * **``p50_ms``/``max_ms`` null while ``count`` is a real number.** The call was
+      counted but not timed. This is the whole legacy arm today: 9 of 9 post-deploy
+      legacy tool entries carry ``count`` with null timings, because the legacy path
+      has no timing wrapper around its dispatch. A null here means UNMEASURED, never
+      "instant" — never fold it into a percentile as a zero, and never read an empty
+      fc-vs-legacy tool-overhead comparison as "legacy is faster".
+    * **``tool_latency`` absent while ``tool_batches`` > 0.** ``tool_batches``
+      counts dispatch waves; on legacy an execution-plan wave is a batch with no
+      per-tool artifact ledger behind it, so there is nothing to key an entry on.
+      ``tool_batches > 0`` therefore does NOT imply a ``tool_latency`` record —
+      `agenttest-t1-e2-legacy` is a live example (``tool_batches: 1``,
+      ``tool_ledger_status: "complete"``, no ``tool_latency`` key).
+    * **The whole block absent.** The turn dispatched no tool, or its producer
+      predates the field. Historical shape, always fine.
+
+    A pseudo-tool that is dispatched but not executed (``ask_user``) legitimately
+    reports a count with null timings on the fc arm too. If the legacy arm later
+    grows real timings, it fills the SAME five fields with the same meaning — the
+    contract here does not change, so a window spanning that change stays readable
+    and no schema bump is required.
     """
     if not isinstance(value, dict):
         return None
@@ -777,6 +865,11 @@ def build_canary_turn_record(
     observer_installed = sig.get(OBSERVER_INSTALLED_FIELD)
     if isinstance(observer_installed, bool):
         record[OBSERVER_INSTALLED_FIELD] = observer_installed
+    answer_contract = _answer_contract_summary(sig.get("answer_contract"))
+    if answer_contract is not None:
+        # Additive and arch-agnostic, exactly like tool_latency: a turn that states
+        # no contract omits the key and keeps its historical record shape.
+        record["answer_contract"] = answer_contract
     tool_latency = _tool_latency_summary(sig.get("tool_latency"))
     if tool_latency is not None:
         # Additive and arch-agnostic: absent on any turn that dispatched no tool,

@@ -1,0 +1,28 @@
+{
+  "status": "restart_ready",
+  "real_dialogue_turns": 7,
+  "active_conversation": "51817b80f9ea41649667074bee9a3b7f",
+  "user_id": "15f470821e334cc68b70d7f959b67421",
+  "original_conversation": "50644e40a5f84f7f8b2926a5a9252fb0",
+  "current_conversation": "51817b80f9ea41649667074bee9a3b7f",
+  "favorites_count": 1,
+  "favorite_address": "The Grove, Enfield",
+  "original_message_count": 12,
+  "current_message_count": 2,
+  "state_file": "/tmp/rentcompass-e2e-repair-20261019/student_retest/19-restart-ready-paused-state.json",
+  "original_last_criteria": {
+    "max_budget": 2400,
+    "bedrooms": 2,
+    "room_type": "whole",
+    "commute_destination": "Gower Street, London WC1E 6BT",
+    "max_travel_time": 30
+  },
+  "current_criteria": {
+    "max_budget": null,
+    "bedrooms": null,
+    "room_type": null,
+    "max_travel_time": null,
+    "destination": null
+  },
+  "current_results_after_reload": 10
+}

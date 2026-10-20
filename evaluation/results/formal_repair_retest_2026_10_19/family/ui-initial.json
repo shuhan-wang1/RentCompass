@@ -1,0 +1,219 @@
+{
+  "initial": {
+    "body": "RentCompass\nEN\n中文\nCONVERSATIONS\nNew\nNo conversations yet. Start a new chat.\nG\nGuest\nAI Assistant\n\nLondon Rental Intelligence\n\nALEX\nHello! I'm Alex. I can help you find apartments in London.\n\nTry asking me:\n\"Find a 1-bed near King's Cross under £2000\"\n\"What is the vibe like in Hackney?\"\n\"Show me flats with a 20min commute to UCL\"\nNear UCL\nSafe areas\nRent stats\nListings\nSearch\nSaved\n0\nSearch criteria\nNo properties found\n\nTry adjusting your budget or location.",
+    "chat": "ALEX\nHello! I'm Alex. I can help you find apartments in London.\n\nTry asking me:\n\"Find a 1-bed near King's Cross under £2000\"\n\"What is the vibe like in Hackney?\"\n\"Show me flats with a 20min commute to UCL\"",
+    "criteria": "\n                        \n                    Area *Budgetper monthper weekBedroomsAnyStudio123456At least this many bedroomsRoom typeAnyWhole propertyStudioEn-suite roomShared roomCommute toMax commute (min)I don't commuteMove-in dateYYYY-MM-DDSearch",
+    "forms": [
+      {
+        "type": "text",
+        "value": "",
+        "checked": false,
+        "aria": "Area"
+      },
+      {
+        "type": "number",
+        "value": "",
+        "checked": false,
+        "aria": "Budget"
+      },
+      {
+        "type": "select-one",
+        "value": "month",
+        "checked": null,
+        "aria": "Budget period"
+      },
+      {
+        "type": "select-one",
+        "value": "",
+        "checked": null,
+        "aria": "Bedrooms"
+      },
+      {
+        "type": "checkbox",
+        "value": "on",
+        "checked": false,
+        "aria": null
+      },
+      {
+        "type": "select-one",
+        "value": "",
+        "checked": null,
+        "aria": "Room type"
+      },
+      {
+        "type": "text",
+        "value": "",
+        "checked": false,
+        "aria": "Commute to"
+      },
+      {
+        "type": "number",
+        "value": "",
+        "checked": false,
+        "aria": "Max commute (min)"
+      },
+      {
+        "type": "checkbox",
+        "value": "on",
+        "checked": false,
+        "aria": null
+      },
+      {
+        "type": "date",
+        "value": "",
+        "checked": false,
+        "aria": "Move-in date"
+      }
+    ],
+    "card_count": 0,
+    "cards": "No properties found\n\nTry adjusting your budget or location.",
+    "urls": [],
+    "focus": "",
+    "favorite_count": "0",
+    "viewport": {
+      "width": 390,
+      "scrollWidth": 390
+    }
+  },
+  "closed_tabs": [
+    {
+      "id": "menuToggle",
+      "inSidebar": false
+    },
+    {
+      "id": "",
+      "inSidebar": false
+    },
+    {
+      "id": "",
+      "inSidebar": false
+    },
+    {
+      "id": "",
+      "inSidebar": false
+    },
+    {
+      "id": "chatMessages",
+      "inSidebar": false
+    },
+    {
+      "id": "",
+      "inSidebar": false
+    },
+    {
+      "id": "",
+      "inSidebar": false
+    },
+    {
+      "id": "",
+      "inSidebar": false
+    },
+    {
+      "id": "chatInput",
+      "inSidebar": false
+    },
+    {
+      "id": "sendBtn",
+      "inSidebar": false
+    },
+    {
+      "id": "btn-results",
+      "inSidebar": false
+    },
+    {
+      "id": "btn-favorites",
+      "inSidebar": false
+    },
+    {
+      "id": "criteriaHeader",
+      "inSidebar": false
+    },
+    {
+      "id": "",
+      "inSidebar": false
+    },
+    {
+      "id": "menuToggle",
+      "inSidebar": false
+    },
+    {
+      "id": "",
+      "inSidebar": false
+    },
+    {
+      "id": "",
+      "inSidebar": false
+    },
+    {
+      "id": "",
+      "inSidebar": false
+    },
+    {
+      "id": "chatMessages",
+      "inSidebar": false
+    },
+    {
+      "id": "",
+      "inSidebar": false
+    }
+  ],
+  "touch_open": {
+    "expanded": "true",
+    "focus": "newChatBtn"
+  },
+  "open_tabs": [
+    {
+      "id": "userMenuBtn",
+      "inSidebar": true
+    },
+    {
+      "id": "menuToggle",
+      "inSidebar": false
+    },
+    {
+      "id": "newChatBtn",
+      "inSidebar": true
+    },
+    {
+      "id": "userMenuBtn",
+      "inSidebar": true
+    },
+    {
+      "id": "menuToggle",
+      "inSidebar": false
+    },
+    {
+      "id": "newChatBtn",
+      "inSidebar": true
+    },
+    {
+      "id": "userMenuBtn",
+      "inSidebar": true
+    },
+    {
+      "id": "menuToggle",
+      "inSidebar": false
+    },
+    {
+      "id": "newChatBtn",
+      "inSidebar": true
+    },
+    {
+      "id": "userMenuBtn",
+      "inSidebar": true
+    },
+    {
+      "id": "menuToggle",
+      "inSidebar": false
+    },
+    {
+      "id": "newChatBtn",
+      "inSidebar": true
+    }
+  ],
+  "escape": {
+    "expanded": "false",
+    "focus": "menuToggle"
+  },
+  "requests": []
+}

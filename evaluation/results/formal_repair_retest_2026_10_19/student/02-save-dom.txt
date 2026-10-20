@@ -1,0 +1,162 @@
+RentCompass
+EN
+中文
+会话
+新建
+我下学期要来伦敦读研，想在Camden找个住处。能帮我看看吗？
+1分钟前
+G
+Guest
+AI 助手
+
+伦敦租赁智能分析
+
+我下学期要来伦敦读研，想在Camden找个住处。能帮我看看吗？
+编辑消息
+ALEX
+
+好的，Camden 是很受伦敦研究生欢迎的区域。开始搜索前，我想先确认几个条件，这样结果会更贴合你的需求：
+
+房型：Studio（独立厨卫）、Ensuite（独立卫浴、共用厨房），还是合租 shared？
+每月预算大概多少（英镑）？
+需要通勤吗？如果需要，请告诉我通勤到哪所学校或地点；如果不需要，可以说“不通勤”。
+入住时间（可不填）。
+
+你也可以直接说“继续搜索”，我就先按 Camden 全区、不限房型和预算给你看一批房源，之后再逐步缩小范围。
+
+从此处创建分支
+只在Camden找，不是伦敦全区：整租一居室，整套房租每月最高£2166.67，坐公共交通到UCL Bloomsbury主校区（Gower Street）45分钟以内。入住日暂未确定。请按这些条件找实际房源，明确哪些已核实、哪些仍不确定。
+编辑消息
+ALEX
+没有同时满足且已核实的房源。
+
+尚未核实：
+
+Apt 108, Castello Court, 309-311 Harrow Road W9：通勤条件尚未核实（查询失败）
+Fairholme Road, West Kensington, London W14：通勤条件尚未核实（查询失败）
+Eastern Road, London, N22：通勤条件尚未核实（查询失败）
+Fairholme Road, London W14：通勤条件尚未核实（查询失败）
+Fairholme Road, West Kensington, London W14：通勤条件尚未核实（查询失败）
+Fairholme Road, West Kensington, London W14：通勤条件尚未核实（查询失败）
+从此处创建分支
+UCL 附近
+安全区域
+租金统计
+房源列表
+搜索结果
+收藏夹
+1
+搜索条件
+区域
+*
+London
+×
+预算
+每月
+每周
+卧室
+不限
+单间(Studio)
+1
+2
+3
+4
+5
+6
+至少这些卧室
+房型
+不限
+整套住宅
+单间公寓(Studio)
+独立卫浴房间
+合租房间
+通勤目的地
+最长通勤（分钟）
+我不通勤
+入住时间
+年/月/日
+搜索
+5
+#1
+London
+Apt 108, Castello Court, 309-311 Harrow Road W9
+£1439/month
+~31 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)
+预算范围内
+已验证满足本次条件
+实时可租状态未核实。
+2026-11-01 起可入住
+Studio to rent in Apt 108, Castello Court, 309-311 Harrow Road W9 (estimated from coordinates: ~31 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)
+查看详情
+地图
+AI 咨询
+5
+#2
+London
+Fairholme Road, West Kensington, London W14
+£1798/month
+~38 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)
+预算范围内
+已验证满足本次条件
+实时可租状态未核实。
+入住时间请咨询
+Studio to rent in Fairholme Road, West Kensington, London W14 (estimated from coordinates: ~38 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)
+查看详情
+地图
+AI 咨询
+5
+#3
+London
+Eastern Road, London, N22
+£1700/month
+~44 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)
+预算范围内
+已验证满足本次条件
+实时可租状态未核实。
+入住时间请咨询
+2 bedroom apartment to rent in Eastern Road, London, N22 (estimated from coordinates: ~44 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)
+查看详情
+地图
+AI 咨询
+5
+#4
+London
+Fairholme Road, London W14
+£1885/month
+~38 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)
+预算范围内
+已验证满足本次条件
+实时可租状态未核实。
+入住时间请咨询
+Studio to rent in Fairholme Road, London W14 (estimated from coordinates: ~38 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)
+查看详情
+地图
+AI 咨询
+5
+#5
+London
+Fairholme Road, West Kensington, London W14
+£1798/month
+~38 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)
+预算范围内
+已验证满足本次条件
+实时可租状态未核实。
+入住时间请咨询
+Studio to rent in Fairholme Road, West Kensington, London W14 (estimated from coordinates: ~38 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)
+查看详情
+地图
+AI 咨询
+5
+#6
+London
+Fairholme Road, West Kensington, London W14
+£2015/month
+~38 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)
+预算范围内
+已验证满足本次条件
+实时可租状态未核实。
+入住时间请咨询
+Studio to rent in Fairholme Road, West Kensington, London W14 (estimated from coordinates: ~38 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)
+查看详情
+地图
+AI 咨询

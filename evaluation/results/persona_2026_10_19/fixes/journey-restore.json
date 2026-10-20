@@ -1,0 +1,25 @@
+{
+  "checks": [
+    {
+      "case": "Process restart retains the selected conversation",
+      "passed": true
+    },
+    {
+      "case": "Process restart retains empty results and strict budget",
+      "passed": true
+    },
+    {
+      "case": "Process restart retains saved homes and old budget basis",
+      "passed": true
+    },
+    {
+      "case": "Process restart preserves the independent second plan",
+      "passed": true
+    },
+    {
+      "case": "No browser runtime exception",
+      "passed": true
+    }
+  ],
+  "errors": []
+}

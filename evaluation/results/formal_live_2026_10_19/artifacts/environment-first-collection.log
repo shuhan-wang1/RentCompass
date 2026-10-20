@@ -1,0 +1,35 @@
+
+==================================== ERRORS ====================================
+______________ ERROR collecting tests/test_holdout_v3_metrics.py _______________
+ImportError while importing test module '/tmp/rentcompass-live-20261019/source/tests/test_holdout_v3_metrics.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_holdout_v3_metrics.py:13: in <module>
+    import holdout_v3_metrics as m  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ModuleNotFoundError: No module named 'holdout_v3_metrics'
+_____________ ERROR collecting tests/test_holdout_v3_preflight.py ______________
+ImportError while importing test module '/tmp/rentcompass-live-20261019/source/tests/test_holdout_v3_preflight.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_holdout_v3_preflight.py:10: in <module>
+    import holdout_v3_preflight as gate  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ModuleNotFoundError: No module named 'holdout_v3_preflight'
+=============================== warnings summary ===============================
+src/uk_rent_agent/web/asgi.py:14
+  /tmp/rentcompass-live-20261019/source/src/uk_rent_agent/web/asgi.py:14: StarletteDeprecationWarning: starlette.middleware.wsgi is deprecated and will be removed in a future release. Please refer to https://github.com/abersheeran/a2wsgi as a replacement.
+    from starlette.middleware.wsgi import WSGIMiddleware
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+ERROR tests/test_holdout_v3_metrics.py
+ERROR tests/test_holdout_v3_preflight.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!
+1 warning, 2 errors in 18.47s

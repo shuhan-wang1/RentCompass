@@ -1,0 +1,19 @@
+{
+  "checks": {
+    "seven_actual_ui_requests": true,
+    "r3_correct_criteria": true,
+    "r3_exact_budget_form": true,
+    "r3_payload_view_qualifications_agree": true,
+    "r6_complete_saved_conditions": true,
+    "r6_no_conflict_or_removed_warning": true,
+    "r6_actual_criteria": true,
+    "r6_old_listing_excluded_with_bedroom_and_duration": true,
+    "r7_actual_new_conversation": true,
+    "r7_request_no_criteria_restatement": true,
+    "r7_defaults_restored": true,
+    "r7_empty_sample_not_market_exhaustion": true,
+    "cross_session_two_bookmarks": true
+  },
+  "all_checked_passed": true,
+  "note": "These checks cover measured post-repair cases only; original failures and unresolved favorite-label scope remain in REPORT.txt."
+}

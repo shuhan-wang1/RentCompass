@@ -1,0 +1,59 @@
+...................F.......                                              [100%]
+=================================== FAILURES ===================================
+_ test_get_and_cold_session_recover_source_and_card_text_without_rewriting_history _
+
+chat = (<starlette.applications.Starlette object at 0x7fa1dd662870>, <uk_rent_agent.web.chat_transport.NativeChatEndpoint object at 0x7fa1dd61f500>, <uk_rent_agent.web.conversation_store.ConversationStore object at 0x7fa1dd61e3c0>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fa1dd61fb90>
+
+    def test_get_and_cold_session_recover_source_and_card_text_without_rewriting_history(chat, monkeypatch):
+        _, _, store = chat
+        owner = 'snapshot-owner'
+        cid = store.create_conversation(owner)['id']
+        message = ('Keep my current £2,000/month rent cap separate from the £2,150/month '
+                   'rent-plus-commute ceiling, based on two office days a week')
+        message_id = store.add_message(owner, cid, 'user', message)['id']
+        turn_id = store.begin_turn(owner, cid, request_id='read-recovery-test', user_message_id=message_id)['id']
+        criteria = {'max_budget':2150,'max_budget_monthly':2000,'budget_period':'month',
+                    'monthly_total_budget':2150,'office_days_per_week':2,
+                    'destination':"King's Cross",'max_travel_time':45,
+                    'constraint_sources':{'max_budget':{'source':'user_message','value':2150,'text':message}}}
+        row = {'address':'Angel Lane','travel_time':"37 min to King's Cross",
+               'explanation':"2 bedroom flat (TfL transit: 37 min to King's Cross)",
+               'qualification':{'status':'unknown','constraints':hard_constraints(criteria),
+                                'unknown_reasons':['commute evidence is missing'],'reasons':[]}}
+        snapshot = build_turn_snapshot(turn_id=turn_id, persistent_state={
+            'accumulated_search_criteria':criteria,'extracted_context':{'view_results':[row]}},context_revision=9)
+        original = copy.deepcopy(snapshot)
+        store.save_turn_snapshot(owner,cid,turn_id,snapshot)
+>       store.complete_turn(owner,turn_id)
+
+tests/test_formal_snapshot_read_recovery.py:30: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <uk_rent_agent.web.conversation_store.ConversationStore object at 0x7fa1dd61e3c0>
+user_id = 'snapshot-owner', turn_id = '64df32d5fcbb4fabaf6d548780d2855d'
+assistant_message_id = None
+
+    def complete_turn(self, user_id: str, turn_id: str,
+                      assistant_message_id: int | None = None) -> dict | None:
+        """Mark a turn 'completed' (sets completed_at). Optionally record the
+        assistant message id. Returns the updated turn dict, or None if not found."""
+        now = _now_iso()
+        with self._lock:
+            if assistant_message_id is not None:
+                cur = self._conn.execute(
+                    """UPDATE turns SET status='completed', completed_at=?,
+                              assistant_message_id=? WHERE user_id=? AND id=?""",
+                    (now, assistant_message_id, user_id, turn_id),
+                )
+            else:
+>               cur = self._conn.execute(
+                    "UPDATE turns SET status='completed', completed_at=? WHERE user_id=? AND id=?",
+                    (now, user_id, turn_id),
+                )
+E               sqlite3.IntegrityError: completed turn requires assistant_message_id
+
+src/uk_rent_agent/web/conversation_store.py:1228: IntegrityError
+=========================== short test summary info ============================
+FAILED tests/test_formal_snapshot_read_recovery.py::test_get_and_cold_session_recover_source_and_card_text_without_rewriting_history
+1 failed, 26 passed in 5.67s

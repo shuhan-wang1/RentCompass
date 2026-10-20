@@ -266,7 +266,7 @@ def test_snapshot_whitelist_blacklist():
 
     allowed = {
         "schema_version", "turn_id", "user_preferences",
-        "accumulated_search_criteria", "last_results", "recommended_registry", "summary",
+        "accumulated_search_criteria", "last_results", "view_results", "recommended_registry", "summary",
         "summary_through_turn_id", "open_questions", "active_property",
         "context_revision",
     }

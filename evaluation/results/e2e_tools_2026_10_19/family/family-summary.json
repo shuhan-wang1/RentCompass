@@ -1,0 +1,33 @@
+{
+  "persona": "轮椅使用者、两成人与6岁孩子、猫的家庭",
+  "chat_endpoint": "POST /api/alex",
+  "chat_requests": 14,
+  "form_search_requests": 0,
+  "conversation_id": "20c727d1949c4efebe5e5891bfa696fd",
+  "http_statuses": {
+    "200": 14
+  },
+  "latency_seconds": {
+    "min": 3.98,
+    "median": 8.39,
+    "max": 17.589,
+    "sum": 129.202
+  },
+  "client_timeout_or_error_count": 0,
+  "page_errors": [],
+  "browser_sessions": 19,
+  "external_browser_requests_blocked": 274,
+  "tool_calls": {
+    "calculate_commute": 28,
+    "search_properties": 4,
+    "get_property_details": 7,
+    "search_nearby_pois": 2,
+    "check_safety": 2,
+    "get_weather": 6
+  },
+  "tool_call_total": 49,
+  "failed_tool_calls": 5,
+  "restart_restored_user_messages": 14,
+  "read_only_final_probe_chat_requests": 0,
+  "evidence_notice": "Never publish family-storage.json contents or browser cookies. No such values are included in this report."
+}

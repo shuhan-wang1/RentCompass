@@ -255,6 +255,11 @@ def _key_segments(key: Any) -> list[str]:
     return [s for s in _KEY_SPLIT.split(_CAMEL_HUMP.sub("_", str(key))).__iter__() if s]
 
 
+_STATISTIC_KEY = re.compile(
+    r"(?:median|mean|average|avg|min|max|minimum|maximum|low|high|lower|upper|typical|"
+    r"p\d{1,2}|q[13]|lower_quartile|upper_quartile|monthly|weekly|value)", re.I)
+
+
 def _is_money_key(key: Any) -> bool:
     """True when a segment of ``key`` names money, so its numbers are rent-like."""
     return any(seg.lower() in _MONEY_KEY_SEGMENTS for seg in _key_segments(key))
@@ -283,7 +288,13 @@ def _evidence_money_mentions(evidence: Any, key: Any = "") -> list[tuple[float, 
     if evidence is None or isinstance(evidence, bool):
         return out
     if isinstance(evidence, dict):
+        money_parent = _is_money_key(key)
         for child_key, value in evidence.items():
+            # A statistic of a money field is money: compare_or_rank_areas returns
+            # ``areas[].rent = {"median": 2400.0, "min": …}``, and reading "median" alone
+            # flagged correct medians as unsupported_prices (R3-06).
+            if money_parent and _STATISTIC_KEY.fullmatch(str(child_key)):
+                child_key = f"{key}_{child_key}"
             out.extend(_evidence_money_mentions(value, child_key))
         return out
     if isinstance(evidence, (list, tuple, set)):
@@ -463,14 +474,69 @@ def unsupported_reply_prices(response: str, evidence: Any) -> list[float]:
     exempt_bounds_and_intervals = bool(evidence_money)
 
     answer = response or ""
+    arithmetic = _evidenced_arithmetic(answer, evidence_money, supported)
     unsupported: list[float] = []
     for value, _unit in _money_mentions(answer):
-        if _close_to_any(value, supported):
+        if _close_to_any(value, supported) or round(value, 2) in arithmetic:
             continue
         if exempt_bounds_and_intervals and not _asserts_price(answer, value):
             continue
         unsupported.append(value)
     return sorted(set(unsupported))
+
+
+# "£2750 rent + £201.60 = £2951.60 per month" is a sum of two tool figures. Unsupported, it
+# triggered a regeneration told to use only verbatim/derived figures, and the model replaced
+# the total with the rent: "£2750 rent + £201.60 = £2750 per month" (R2-18, 3/5 runs).
+# A sum or difference of two evidence figures is supported EXACTLY (to the penny — no
+# tolerance, so a fabricated rent cannot land on one of thousands of pair sums), and an
+# arithmetic step the answer writes out ("£X + £Y = £Z", "£Z (£X - £Y)") supports its result
+# when it is correct and its operands are supported.
+_ARITH_LIMIT = 120
+_NUM = r"(\d[\d,]*(?:\.\d{1,2})?)"
+_SUM_EXPRESSION = re.compile(
+    r"£\s*" + _NUM + r"[^£=\n]{0,24}?\s*([+\-−–])\s*£\s*" + _NUM + r"[^£=\n]{0,16}?=\s*£\s*" + _NUM)
+_DIFF_ASIDE = re.compile(
+    r"£\s*" + _NUM + r"[^£()\n]{0,40}\(\s*£\s*" + _NUM + r"\s*([+\-−–])\s*£\s*" + _NUM + r"\s*\)")
+
+
+def _evidenced_arithmetic(answer: str, evidence_money, supported: set) -> set:
+    """Exact (2 dp) figures that are a sum/difference of two evidence figures, or the
+    correct result of an arithmetic step the answer shows on supported operands."""
+    base = sorted({round(value, 2) for value, _unit in evidence_money})[:_ARITH_LIMIT]
+    exact: set = set()
+    for index, first in enumerate(base):
+        for second in base[index:]:
+            exact.add(round(first + second, 2))
+            exact.add(round(abs(first - second), 2))
+
+    def number(token: str) -> float | None:
+        try:
+            return float(token.replace(",", ""))
+        except ValueError:
+            return None
+
+    def known(value: float) -> bool:
+        return _close_to_any(value, supported) or round(value, 2) in exact
+
+    steps = []
+    for match in _SUM_EXPRESSION.finditer(answer or ""):
+        steps.append((match.group(1), match.group(2), match.group(3), match.group(4)))
+    for match in _DIFF_ASIDE.finditer(answer or ""):
+        steps.append((match.group(2), match.group(3), match.group(4), match.group(1)))
+    for _round in range(3):
+        grew = False
+        for left, op, right, result in steps:
+            a, b, c = number(left), number(right), number(result)
+            if a is None or b is None or c is None or round(c, 2) in exact:
+                continue
+            value = a + b if op == "+" else a - b
+            if abs(value - c) <= 0.011 and known(a) and known(b):
+                exact.add(round(c, 2))
+                grew = True
+        if not grew:
+            break
+    return exact
 
 
 def _successful_numeric_evidence(evidence: Any) -> str:
@@ -886,17 +952,31 @@ def build_correction_instruction(
         f"{station_rule}"
         "Rewrite the answer so that EVERY monetary figure you mention is either copied "
         "verbatim from the data above or is an explicitly-labelled calculation of those "
-        "figures (a weekly-to-monthly conversion, an annual/N-month total, or a deposit "
-        "of N weeks' rent). Do NOT invent, guess, round, or approximate any price; if a "
-        "figure is not in the data, omit it or say it is unavailable. Keep the rest of "
-        "your answer, its structure, and its language unchanged.\n"
+        "figures (a weekly-to-monthly conversion, an annual/N-month total, a deposit "
+        "of N weeks' rent, or a sum/difference such as rent + monthly travel = total, "
+        "written out with its operands and computed exactly). Do NOT invent, guess, round, "
+        "or approximate any price, and never replace a figure with a different one from "
+        "the data (a total is not the rent); if a figure is not in the data and cannot be "
+        "computed from it, omit it or say it is unavailable. Keep the rest of your answer, "
+        "its structure, and its language unchanged.\n"
         "Corrected response:"
     )
 
 
+CAVEAT_ZH = "请对照房源原始页面核对具体价格。"
+STATION_CAVEAT_ZH = "请对照房源原始页面核对车站名称——本次检索的数据并未确认该车站。"
+_CJK = re.compile(r"[\u4e00-\u9fff]")
+
+
 def append_caveat(text: str, caveat: str = CAVEAT) -> str:
-    """Append the double-check caveat once, without discarding the answer."""
+    """Append the double-check caveat once, without discarding the answer.
+
+    A Chinese answer gets the Chinese caveat: an English footer on a Chinese reply ("Please
+    double-check the exact prices against the source listing.") read as a stray system line
+    (R2-11)."""
     body = (text or "").rstrip()
+    if len(_CJK.findall(body)) >= 20:
+        caveat = {CAVEAT: CAVEAT_ZH, STATION_CAVEAT: STATION_CAVEAT_ZH}.get(caveat, caveat)
     if caveat in body:
         return body
     return f"{body}\n\n{caveat}" if body else caveat
@@ -1011,14 +1091,55 @@ def has_specific_price_claims(text: str) -> bool:
     return bool(_money_mentions(text or ""))
 
 
+_SENTENCE_PIECES = re.compile(r"[^.!?。！？\n]*(?:[.!?。！？](?=\s|$)|[。！？]|$)")
+# The minimum an answer must keep, once its unsupported figures are withdrawn, to ship
+# instead of the generic no-reliable-data template.
+_MIN_SURVIVING_CHARS = 120
+_FAILURE_STATEMENT = re.compile(
+    r"\b(?:unavailable|failed|could\s+not|couldn't|was\s+not\s+able|wasn't\s+able|"
+    r"did\s+not\s+(?:return|work|respond)|down|unreachable|error)\b|"
+    r"不可用|失败|无法|没能|未能", re.I)
+
+
+def _without_unsupported_money(response: str, supported: set) -> str:
+    """``response`` minus each sentence quoting a money figure that ``supported`` lacks.
+
+    A bullet or line that loses every sentence goes with them; headings and figure-free
+    sentences stay. Linear in the text."""
+    lines = []
+    for line in str(response or "").split("\n"):
+        if not _money_mentions(line):
+            lines.append(line)
+            continue
+        kept = []
+        for match in _SENTENCE_PIECES.finditer(line):
+            piece = match.group()
+            if not piece:
+                continue
+            if any(not _close_to_any(value, supported) for value, _unit in _money_mentions(piece)):
+                continue
+            kept.append(piece)
+        rebuilt = "".join(kept).rstrip()
+        if re.search(r"[0-9A-Za-z\u4e00-\u9fff]", re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", rebuilt)):
+            lines.append(rebuilt)
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+
+
 def enforce_no_evidence_numeric_contract(response: str, *, retrieved_evidence: Any,
-                                        user_message: str = "", reply_language: str = "") -> str:
+                                        user_message: str = "", reply_language: str = "",
+                                        failed_lookups: Optional[list] = None) -> str:
     """Fail closed on external money claims when retrieval returned no usable data.
 
     The current user message is an explicit provenance source: repeating ``£900/month``
     that the user supplied is allowed. A new market/listing amount is not. This helper is
     intentionally separate from the general critic so callers can apply the same final
     response guard after regeneration and on deterministic fallback paths.
+
+    The unsupported figures are withdrawn sentence by sentence; the rest of the answer
+    stays when enough of it survives. "I tried to search the web twice, but the search
+    service is currently unavailable…" was replaced whole by the generic template because
+    the draft also quoted £50 and £50,000 (R3-04). ``failed_lookups`` (e.g. ["web search"])
+    names the retrieval that failed; the answer says so when it does not already.
     """
     if evidence_usable(retrieved_evidence) or not has_specific_price_claims(response):
         return response
@@ -1028,9 +1149,24 @@ def enforce_no_evidence_numeric_contract(response: str, *, retrieved_evidence: A
         supported |= _derivations(value, unit)
     unsupported = [value for value, _unit in _money_mentions(response)
                    if not _close_to_any(value, supported)]
-    if unsupported:
-        return no_reliable_data_message(reply_language)
-    return response
+    if not unsupported:
+        return response
+    zh = (reply_language or "").lower().startswith("zh")
+    failed = [str(name) for name in (failed_lookups or []) if str(name or "").strip()]
+    notice = ""
+    if failed:
+        names = "、".join(dict.fromkeys(failed)) if zh else ", ".join(dict.fromkeys(failed))
+        notice = (f"本轮的{names}查询失败，以上内容未经实时来源核实。" if zh else
+                  f"The {names} lookup failed this turn, so nothing above was checked against "
+                  "live sources.")
+    kept = _without_unsupported_money(response, supported)
+    if (len(re.sub(r"\s+", "", kept)) >= _MIN_SURVIVING_CHARS
+            and all(_close_to_any(value, supported) for value, _unit in _money_mentions(kept))):
+        if notice and not (failed and _FAILURE_STATEMENT.search(kept)):
+            kept = f"{kept}\n\n{notice}"
+        return kept
+    generic = no_reliable_data_message(reply_language)
+    return f"{generic}\n\n{notice}" if notice else generic
 
 
 # ── evidence usability (H3) ──────────────────────────────────────────────────

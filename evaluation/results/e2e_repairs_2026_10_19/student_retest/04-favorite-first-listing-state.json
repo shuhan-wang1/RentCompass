@@ -1,0 +1,253 @@
+{
+  "time": 1792400241.120535,
+  "label": "favorite-first-listing",
+  "url": "http://127.0.0.1:15008/",
+  "body": "RentCompass\nEN\n中文\n会话\n新建\n我和两个同学都是中文留学生，下个月去伦敦大学学院 UCL 读硕士，还没确定住处。…\n刚刚\nG\nGuest\nAI 助手\n\n伦敦租赁智能分析\n\nALEX\n你好！我是 Alex。我可以帮你寻找伦敦的公寓。\n\n试着问我：\n\"帮我找国王十字附近 2000 镑以下的一居室\"\n\"Hackney 这个区域怎么样？\"\n\"显示去 UCL 通勤 20 分钟内的公寓\"\n我和两个同学都是中文留学生，下个月去伦敦大学学院 UCL 读硕士，还没确定住处。我们想三个人一起整租3居室，每人每月房租最多£1,000，不含账单，希望到学校别太远。能先帮我们找吗？\n编辑消息\nALEX\n\n根据目前的搜索结果，为你们三个人整租三居室，找到 2 套符合预算的房源。你们的条件是每人每月不超过 £1,000（不含账单），三人合计上限 £3,000/月，以下两套都在预算内：\n\nThe Grove, Enfield\n房型：三居室独栋住宅（3 bed House），整套出租\n租金：£2,300/月（三人平摊约每人每月 £767，此为根据该租金的计算）\n位置：Enfield 一带，属于伦敦北部外围\n链接：https://www.onthemarket.com/details/20335504/\nPerth Road, London, N22\n房型：三居室独栋住宅（3 bed House），整套出租\n租金：£2,500/月（三人平摊约每人每月 £833，此为根据该租金的计算）\n位置：N22 一带，同样在伦敦北部\n链接：https://www.onthemarket.com/details/20347767/\n\n几点需要提醒你们：\n\n通勤时间尚未核实。本轮搜索没有核实这两套房到 UCL 主校区（Gower Street, WC1E 6BT）的实际通勤时间，我不能给出任何通勤时长的承诺。从地理位置看，两套都在伦敦北部外围，到 UCL 通常需要一定路程，建议你们看房前先自行确认交通方案。\n房源可能已过期。这两条结果来自近期缓存，实时刷新暂不可用，价格和可租状态请以中介页面为准，务必联系中介确认是否仍在出租、何时可入住。\n下个月入住的时间点。搜索结果里没有显示可入住日期，这一点也需要向中介直接询问。\n账单不含在租金内。你们提到不含账单，上述租金均仅为房租，水、电、燃气、网络及市政税（Council Tax，全日制学生通常可申请豁免，需向学校或市政厅确认）需另行预算。\n\n如果你们希望缩小范围、提高匹配度，可以告诉我更倾向的区域（例如希望靠近某条地铁线，或限定在某个邮编区），或者指定一个通勤目的地，我下次可以帮你们核实通勤时间。另外，如果你们想了解从某处到 UCL 的地铁票价和路线，也可以直接问我，我可以查询 TfL 的实时信息。\n\nPlease double-check the exact prices against the source listing.\n\n从此处创建分支\nUCL 附近\n安全区域\n租金统计\n房源列表\n搜索结果\n收藏夹\n1\n搜索条件\n区域\n*\n预算\n每月\n每周\n卧室\n不限\n单间(Studio)\n1\n2\n3\n4\n5\n6\n至少这些卧室\n房型\n不限\n整套住宅\n单间公寓(Studio)\n独立卫浴房间\n合租房间\n通勤目的地\n最长通勤（分钟）\n我不通勤\n入住时间\n年/月/日\n搜索\n5\n#1\nLondon\nThe Grove, Enfield\n£2300/month\n预算范围内\n已验证满足本次条件\n缓存房源可能已变化，请联系中介核实。\n入住时间请咨询\n3 bedroom house to rent in The Grove, Enfield\n查看详情\n地图\nAI 咨询\n5\n#2\nLondon\nPerth Road, London, N22\n£2500/month\n预算范围内\n已验证满足本次条件\n缓存房源可能已变化，请联系中介核实。\n入住时间请咨询\n3 bedroom house to rent in Perth Road, London, N22\n查看详情\n地图\nAI 咨询",
+  "local_storage": {
+    "rentcompass.language": "zh",
+    "ukra_user_name": "Guest",
+    "ukra_property_context:15f470821e334cc68b70d7f959b67421:50644e40a5f84f7f8b2926a5a9252fb0": "{\"focus_stack\": [], \"viewed_properties\": []}",
+    "ukra_active_conversation": "50644e40a5f84f7f8b2926a5a9252fb0",
+    "ukra_user_id": "15f470821e334cc68b70d7f959b67421"
+  },
+  "buttons": [
+    {
+      "text": "\n                \n            ",
+      "id": "menuToggle",
+      "title": "Menu",
+      "aria": "会话菜单",
+      "disabled": false
+    },
+    {
+      "text": "EN",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "中文",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "新建",
+      "id": "newChatBtn",
+      "title": "新建会话",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "我和两个同学都是中文留学生，下个月去伦敦大学学院 UCL 读硕士，还没确定住处。…\n刚刚",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "",
+      "id": "",
+      "title": "并排对比",
+      "aria": "并排对比",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "id": "",
+      "title": "创建分支",
+      "aria": "创建分支",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "id": "",
+      "title": "重命名",
+      "aria": "重命名",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "id": "",
+      "title": "删除",
+      "aria": "删除",
+      "disabled": false
+    },
+    {
+      "text": "G\nGuest",
+      "id": "userMenuBtn",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "\n                        \n                        登录 / 注册\n                    ",
+      "id": "loginBtn",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "\n                        \n                        重命名\n                    ",
+      "id": "renameUserBtn",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "\n                        \n                        切换用户\n                    ",
+      "id": "switchUserBtn",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "\n                        \n                        删除我的数据\n                    ",
+      "id": "forgetMeBtn",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "\n                        \n                        退出登录\n                    ",
+      "id": "logoutBtn",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "编辑消息",
+      "id": "",
+      "title": "编辑消息",
+      "aria": "编辑消息",
+      "disabled": false
+    },
+    {
+      "text": "从此处创建分支",
+      "id": "",
+      "title": "从此处创建分支",
+      "aria": "从此处创建分支",
+      "disabled": false
+    },
+    {
+      "text": "UCL 附近",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "安全区域",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "租金统计",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "",
+      "id": "sendBtn",
+      "title": "发送",
+      "aria": "发送",
+      "disabled": false
+    },
+    {
+      "text": "搜索结果",
+      "id": "btn-results",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "收藏夹\n1",
+      "id": "btn-favorites",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "搜索",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "",
+      "id": "",
+      "title": "收藏",
+      "aria": "收藏",
+      "disabled": false
+    },
+    {
+      "text": "地图",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "AI 咨询",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "",
+      "id": "",
+      "title": "收藏",
+      "aria": "收藏",
+      "disabled": false
+    },
+    {
+      "text": "地图",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "AI 咨询",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "\n            \n        ",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    },
+    {
+      "text": "\n                    \n                ",
+      "id": "",
+      "title": "",
+      "aria": null,
+      "disabled": false
+    }
+  ]
+}

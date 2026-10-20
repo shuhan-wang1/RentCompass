@@ -1,0 +1,120 @@
+{
+  "phase": "before local service update; independent UI observations only",
+  "chat_requests": 2,
+  "conversation_id": "bd64dd5d9b12410586b93a31b812a6f0",
+  "observations": [
+    {
+      "id": "S1",
+      "severity": "P1",
+      "expected": "Camden, whole home, one bedroom, UCL Gower Street, 45 minutes",
+      "actual_criteria": {
+        "amenities_of_interest": [],
+        "area": "London",
+        "areas": [
+          "London"
+        ],
+        "budget_period": "month",
+        "constraint_sources": {
+          "area": {
+            "source": "user_message",
+            "text": "我下学期要来伦敦读研，想在Camden找个住处。能帮我看看吗？",
+            "value": "London"
+          },
+          "areas": {
+            "source": "user_message",
+            "text": "我下学期要来伦敦读研，想在Camden找个住处。能帮我看看吗？",
+            "value": [
+              "London"
+            ]
+          },
+          "budget_period": {
+            "source": "user_message",
+            "text": "只在Camden找，不是伦敦全区：整租一居室，整套房租每月最高£2166.67，坐公共交通到UCL Bloomsbury主校区（Gower Street）45分钟以内。入住日暂未确定。请按这些条件找实际房源，明确哪些已核实、哪些仍不确定。",
+            "value": "month"
+          },
+          "max_budget": {
+            "source": "user_message",
+            "text": "只在Camden找，不是伦敦全区：整租一居室，整套房租每月最高£2166.67，坐公共交通到UCL Bloomsbury主校区（Gower Street）45分钟以内。入住日暂未确定。请按这些条件找实际房源，明确哪些已核实、哪些仍不确定。",
+            "value": 2166.67
+          },
+          "max_travel_time": {
+            "source": "user_message",
+            "text": "只在Camden找，不是伦敦全区：整租一居室，整套房租每月最高£2166.67，坐公共交通到UCL Bloomsbury主校区（Gower Street）45分钟以内。入住日暂未确定。请按这些条件找实际房源，明确哪些已核实、哪些仍不确定。",
+            "value": 45
+          },
+          "no_commute": {
+            "source": "user_message",
+            "text": "只在Camden找，不是伦敦全区：整租一居室，整套房租每月最高£2166.67，坐公共交通到UCL Bloomsbury主校区（Gower Street）45分钟以内。入住日暂未确定。请按这些条件找实际房源，明确哪些已核实、哪些仍不确定。",
+            "value": false
+          }
+        },
+        "destination": null,
+        "max_budget": 2166.67,
+        "max_travel_time": 45,
+        "no_commute": false,
+        "property_features": [],
+        "soft_preferences": []
+      },
+      "evidence": [
+        "01-recovery-local-network.json",
+        "02-request.json",
+        "02-response.json",
+        "02-controls-dom.txt"
+      ]
+    },
+    {
+      "id": "S2",
+      "severity": "P1",
+      "expected": "Failed route evidence remains unknown in both answer and cards",
+      "actual_recommendation_statuses": [
+        "unknown",
+        "unknown",
+        "unknown",
+        "unknown",
+        "unknown",
+        "unknown"
+      ],
+      "actual_view_statuses": [
+        "eligible",
+        "eligible",
+        "eligible",
+        "eligible",
+        "eligible",
+        "eligible"
+      ],
+      "ui_text": "已验证满足本次条件 alongside estimated, unverified route",
+      "evidence": [
+        "02-response.json",
+        "02-controls-dom.txt",
+        "02.png",
+        "02-saved-refresh-dom.txt"
+      ]
+    },
+    {
+      "id": "S3",
+      "severity": "P2",
+      "expected_budget_input": "2166.67",
+      "actual_server_budget": 2166.67,
+      "actual_budget_input": "2166",
+      "limitation": "Did not click Search on the truncated form, so submission mutation is not established",
+      "evidence": [
+        "02-controls-state.json",
+        "02.png"
+      ]
+    },
+    {
+      "id": "S4",
+      "status": "pass",
+      "action": "Save first card, close/reopen browser, show saved list",
+      "actual": "One listing and its source conversation and £2166.67 original budget persist",
+      "evidence": [
+        "02-save-local-network.json",
+        "02-saved-refresh-local-network.json",
+        "02-saved-refresh-dom.txt"
+      ]
+    }
+  ],
+  "capture_limit": "Turn1 SSE body unavailable in Playwright Network.getResponseBody; recovered actual assistant answer and view_state from UI-requested conversation messages JSON without resend. Turn2 raw SSE captured using browser fetch clone.",
+  "privacy": "student-storage.json is private and must be excluded from public archive",
+  "pending": "Root requested pause; no further model requests until service update notification. Details/comparison/memory/new session/restart checks remain pending."
+}

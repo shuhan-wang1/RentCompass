@@ -1,0 +1,162 @@
+{
+  "url": "http://127.0.0.1:15009/",
+  "title": "RentCompass",
+  "body": "RentCompass\nEN\n中文\n会话\n新建\n暂无会话，开始一个新会话吧。\nG\nGuest\nAI 助手\n\n伦敦租赁智能分析\n\nALEX\n你好！我是 Alex。我可以帮你寻找伦敦的公寓。\n\n试着问我：\n\"帮我找国王十字附近 2000 镑以下的一居室\"\n\"Hackney 这个区域怎么样？\"\n\"显示去 UCL 通勤 20 分钟内的公寓\"\nUCL 附近\n安全区域\n租金统计\n房源列表\n搜索结果\n收藏夹\n0\n搜索条件\n未找到房源\n\n请尝试调整您的预算或位置。",
+  "inputs": [
+    {
+      "id": "",
+      "type": "text",
+      "placeholder": "例如：Camden，回车添加",
+      "value": ""
+    },
+    {
+      "id": "",
+      "type": "number",
+      "placeholder": "例如：1500",
+      "value": ""
+    },
+    {
+      "id": "",
+      "type": "checkbox",
+      "placeholder": "",
+      "value": "on"
+    },
+    {
+      "id": "",
+      "type": "text",
+      "placeholder": "例如：UCL（选填）",
+      "value": ""
+    },
+    {
+      "id": "",
+      "type": "number",
+      "placeholder": "例如：40",
+      "value": ""
+    },
+    {
+      "id": "",
+      "type": "checkbox",
+      "placeholder": "",
+      "value": "on"
+    },
+    {
+      "id": "",
+      "type": "date",
+      "placeholder": "",
+      "value": ""
+    }
+  ],
+  "buttons": [
+    {
+      "id": "menuToggle",
+      "text": "\n                \n            ",
+      "disabled": false
+    },
+    {
+      "id": "",
+      "text": "EN",
+      "disabled": false
+    },
+    {
+      "id": "",
+      "text": "中文",
+      "disabled": false
+    },
+    {
+      "id": "newChatBtn",
+      "text": "新建",
+      "disabled": false
+    },
+    {
+      "id": "userMenuBtn",
+      "text": "G\nGuest",
+      "disabled": false
+    },
+    {
+      "id": "loginBtn",
+      "text": "\n                        \n                        登录 / 注册\n                    ",
+      "disabled": false
+    },
+    {
+      "id": "renameUserBtn",
+      "text": "\n                        \n                        重命名\n                    ",
+      "disabled": false
+    },
+    {
+      "id": "switchUserBtn",
+      "text": "\n                        \n                        切换用户\n                    ",
+      "disabled": false
+    },
+    {
+      "id": "forgetMeBtn",
+      "text": "\n                        \n                        删除我的数据\n                    ",
+      "disabled": false
+    },
+    {
+      "id": "logoutBtn",
+      "text": "\n                        \n                        退出登录\n                    ",
+      "disabled": false
+    },
+    {
+      "id": "",
+      "text": "UCL 附近",
+      "disabled": false
+    },
+    {
+      "id": "",
+      "text": "安全区域",
+      "disabled": false
+    },
+    {
+      "id": "",
+      "text": "租金统计",
+      "disabled": false
+    },
+    {
+      "id": "sendBtn",
+      "text": "",
+      "disabled": false
+    },
+    {
+      "id": "btn-results",
+      "text": "搜索结果",
+      "disabled": false
+    },
+    {
+      "id": "btn-favorites",
+      "text": "收藏夹\n0",
+      "disabled": false
+    },
+    {
+      "id": "",
+      "text": "搜索",
+      "disabled": false
+    },
+    {
+      "id": "",
+      "text": "\n            \n        ",
+      "disabled": false
+    },
+    {
+      "id": "",
+      "text": "",
+      "disabled": false
+    },
+    {
+      "id": "",
+      "text": "",
+      "disabled": false
+    },
+    {
+      "id": "",
+      "text": "\n                    \n                ",
+      "disabled": false
+    }
+  ],
+  "local_storage": {
+    "rentcompass.language": "zh",
+    "ukra_user_name": "Guest",
+    "ukra_user_id": "b2c519cca16b46a593ea484ba63fd1c0"
+  },
+  "session_storage": {}
+}

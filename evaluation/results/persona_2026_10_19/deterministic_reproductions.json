@@ -1,0 +1,39 @@
+{
+  "method": "Extract only listed pure definitions from current source using AST; no product import, edits, networking or model calls.",
+  "cases": [
+    {
+      "source_function": "_extract_room_type",
+      "evidence": "professional T1",
+      "input": "I work near Liverpool Street station three days a week. I need a whole one-bedroom flat, not a room or studio, up to £2,000 per calendar month, ideally within 35 minutes door to door. Please compare Stratford, Whitechapel and Canary Wharf and show actual options. I care about rent plus commuting cost and want to keep using English.",
+      "actual": "studio",
+      "expected_behavior": "Must not select the negated studio"
+    },
+    {
+      "source_function": "_extract_room_type",
+      "evidence": "professional T19",
+      "input": "Keep only self-contained 1-bedroom flats and remove the rooms in shared houses. The sidebar also shows Sydney Road at £1,495 and Flanders Court at £1,350, so please include them in your comparison rather than treating their data as truncated. Keep the £1,800 monthly ceiling.",
+      "actual": "shared",
+      "expected_behavior": "Must not select explicitly removed shared rooms"
+    },
+    {
+      "source_function": "_extract_budget",
+      "evidence": "professional T19",
+      "input": "Keep only self-contained 1-bedroom flats and remove the rooms in shared houses. The sidebar also shows Sydney Road at £1,495 and Flanders Court at £1,350, so please include them in your comparison rather than treating their data as truncated. Keep the £1,800 monthly ceiling.",
+      "actual": [
+        1495,
+        "month"
+      ],
+      "expected_behavior": "Must preserve explicit £1800 ceiling rather than first quoted property rent"
+    },
+    {
+      "source_function": "_extract_budget",
+      "evidence": "student T7",
+      "input": "请只针对 Otter Close（链接编号20037182）解释：£1100/month 相当于每周多少？一年租金多少？水电网、押金、是否接受没有英国担保人的学生，哪些真的有证据？我需要做总预算，不要把未知当已包含。",
+      "actual": [
+        1100,
+        "month"
+      ],
+      "note": "The deterministic parser returns property-price 1100/month, not the eight-digit 20037182 alleged in the answer; the latter has another unverified origin."
+    }
+  ]
+}

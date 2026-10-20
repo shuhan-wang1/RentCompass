@@ -1,0 +1,297 @@
+[
+  {
+    "path": "/api/auth/login",
+    "method": "POST",
+    "status": 200,
+    "body": {
+      "authenticated": true,
+      "display_name": "authz_a_b9b3935d",
+      "user_id": "9ac0797b278c414ea87becab5b4ca5ed",
+      "username": "authz_a_b9b3935d"
+    }
+  },
+  {
+    "path": "/api/conversations",
+    "method": "POST",
+    "status": 201,
+    "body": {
+      "conversation": {
+        "agent_arch": "fc_loop",
+        "agent_version": "e2e-tools-frozen-working-tree",
+        "branch_depth": 0,
+        "created_at": "2026-10-19T07:54:15.285290+00:00",
+        "edited_slot_turn_id": null,
+        "fork_reason": null,
+        "forked_from_turn_id": null,
+        "id": "2373da1e11954e6388010db20a05d98b",
+        "message_count": 0,
+        "parent_conversation_id": null,
+        "root_conversation_id": "2373da1e11954e6388010db20a05d98b",
+        "strict": false,
+        "title": "Synthetic concurrency and disconnect audit",
+        "updated_at": "2026-10-19T07:54:15.285290+00:00"
+      }
+    }
+  },
+  {
+    "path": "/health",
+    "method": "GET",
+    "status": 200,
+    "body": {
+      "status": "live",
+      "runtime": "asgi",
+      "release": {
+        "arch": "fc_loop",
+        "source_sha": "e2e-tools-frozen-working-tree",
+        "image_digest": "unknown",
+        "prompt": {
+          "version": "2.1.0",
+          "schema_sha": "5081a3d489f3b8113a6dc9e5a3e5908fc25ee7a7ce67981f2a528ccc008ee2f9",
+          "runtime_specs": {
+            "en": {
+              "prompt_id": "uk_rent.fc_loop.system",
+              "prompt_version": "2.1.0",
+              "prompt_variant": "en",
+              "prompt_purpose": "fc_loop_system_policy",
+              "prompt_hash": "48848287235fa5903d0ff08a733daf0d364ba1467b623afd31a9e8dc493c989e"
+            },
+            "zh": {
+              "prompt_id": "uk_rent.fc_loop.system",
+              "prompt_version": "2.1.0",
+              "prompt_variant": "zh",
+              "prompt_purpose": "fc_loop_system_policy",
+              "prompt_hash": "d0e094fde2c56c9297d62e21e376ba5636685029ca38c46f78691c784c5914a4"
+            }
+          }
+        },
+        "routing_mode": "single_pool",
+        "strict": false,
+        "manager_v1_specialists": false
+      }
+    }
+  },
+  {
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 200,
+    "body": {
+      "conversation_id": "ba4040ee3cc746899c67ce51380ee367",
+      "message": "Hi! I'm Alex, your UK student-housing assistant. Tell me your budget, the area you'd like to live in, or where you commute to and we'll start.",
+      "response_type": "chat",
+      "turn_id": "4e32bc10deed4286a18d3ee29fd63857",
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "destination": null,
+          "max_budget": null,
+          "max_travel_time": null,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 1
+      }
+    }
+  },
+  {
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 409,
+    "body": {
+      "conversation_id": "2373da1e11954e6388010db20a05d98b",
+      "error": "another turn is already running for this conversation",
+      "running_turn_id": "8d1c091e1fac4d969ef1c2a6217a21a3"
+    }
+  },
+  {
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 409,
+    "body": {
+      "conversation_id": "2373da1e11954e6388010db20a05d98b",
+      "error": "request is still in progress",
+      "replayed": true,
+      "request_id": "resilience-174b1cf23b534183a139a62dc65b056c",
+      "turn_id": "8d1c091e1fac4d969ef1c2a6217a21a3"
+    }
+  },
+  {
+    "case": "initial-stream",
+    "status": 200,
+    "raw": "event: step\ndata: {\"stage\":\"understanding\"}\n\nevent: step\ndata: {\"stage\":\"understanding\"}\n\nevent: step\ndata: {\"stage\":\"writing\"}\n\nevent: step\ndata: {\"stage\":\"searching\"}\n\nevent: step\ndata: {\"stage\":\"writing\"}\n\nevent: step\ndata: {\"stage\":\"checking\"}\n\nevent: step\ndata: {\"stage\":\"saving\"}\n\nevent: final\ndata: {\"status\":200,\"payload\":{\"conversation_id\":\"2373da1e11954e6388010db20a05d98b\",\"message\":\"**Comparing Bloomsbury and Camden for value and UCL commute**\\n\\n**Commute to UCL (under 45 minutes)**\\nBoth areas meet your requirement equally. The cached commute routing shows a journey time of 32 minutes for both Bloomsbury and Camden. So on commute alone, neither has an edge.\\n\\n**Value**\\nThis is where the two areas diverge sharply in the cached evidence:\\n\\n- **Bloomsbury:** median rent of £2,097.50 per month, based on a sample of 82 cached listings (freshness: 0 days, not a low sample). The cached range runs from £1,090 to £7,367 per month.\\n- **Camden:** median rent of £2,100 per month, based on a sample of 95 cached listings (freshness: 0 days, not a low sample). The cached range runs from £850 to £5,000 per month.\\n\\nThe medians are effectively level, but the composite scoring (weighted 66.67% value, 33.33% commute) rates Bloomsbury far higher on value (100.0 vs 0.0), giving Bloomsbury an overall score of 76.3 against Camden's 9.6. The scoring notes explain that the value component reflects lower median rent adjusted by how many cached listings fall under budget. Note that the budget match rate is null for both areas in the cached data, so the budget-adjustment part of the value score is not evidenced here — treat the value ranking as driven by the cached rent figures rather than a confirmed budget fit.\\n\\n**What the evidence does not cover**\\n- Budget match rate: not available for either area in the cached results.\\n- Individual listing-level detail (specific rooms, landlords, policies) for Camden: the cached area data does not include this. Only the Bloomsbury property data provided (Scape Bloomsbury, a twin room at £1,468 per month) gives room-level detail, and that is a single property, not an area-wide picture.\\n- Current live rents: the cache is 0 days old, but for confirmation check rightmove.co.uk or zoopla.co.uk.\\n\\n**Practical takeaway**\\nOn the cached evidence, Bloomsbury and Camden are tied on commute (32 minutes to UCL, comfortably inside your 45-minute limit), and their median rents are close. The composite scoring favours Bloomsbury for value, but since the budget match rate is missing, I would verify actual listings within your budget in both areas before committing. If you tell me your monthly budget, I can help you interpret which cached listings fall within it. I can also fetch live TfL journey times and fares for specific routes if useful.\\n\\nPlease double-check the exact prices against the source listing.\",\"response_type\":\"chat\",\"turn_id\":\"8d1c091e1fac4d969ef1c2a6217a21a3\",\"view_state\":{\"criteria\":{\"amenities_of_interest\":[],\"commute_destination\":\"Gower Street, London WC1E 6BT\",\"constraint_sources\":{\"max_travel_time\":{\"source\":\"user_message\",\"text\":\"Compare Bloomsbury and Camden in London for value and a commute to UCL under 45 minutes. Use cached rent evidence;  keep missing evidence explicit.\",\"value\":45}},\"destination\":\"Gower Street, London WC1E 6BT\",\"max_budget\":null,\"max_travel_time\":45,\"property_features\":[],\"soft_preferences\":[]},\"operation\":\"replace\",\"results\":[],\"revision\":1}}}\n\n"
+  },
+  {
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 200,
+    "body": {
+      "conversation_id": "2373da1e11954e6388010db20a05d98b",
+      "message": "**Comparing Bloomsbury and Camden for value and UCL commute**\n\n**Commute to UCL (under 45 minutes)**\nBoth areas meet your requirement equally. The cached commute routing shows a journey time of 32 minutes for both Bloomsbury and Camden. So on commute alone, neither has an edge.\n\n**Value**\nThis is where the two areas diverge sharply in the cached evidence:\n\n- **Bloomsbury:** median rent of £2,097.50 per month, based on a sample of 82 cached listings (freshness: 0 days, not a low sample). The cached range runs from £1,090 to £7,367 per month.\n- **Camden:** median rent of £2,100 per month, based on a sample of 95 cached listings (freshness: 0 days, not a low sample). The cached range runs from £850 to £5,000 per month.\n\nThe medians are effectively level, but the composite scoring (weighted 66.67% value, 33.33% commute) rates Bloomsbury far higher on value (100.0 vs 0.0), giving Bloomsbury an overall score of 76.3 against Camden's 9.6. The scoring notes explain that the value component reflects lower median rent adjusted by how many cached listings fall under budget. Note that the budget match rate is null for both areas in the cached data, so the budget-adjustment part of the value score is not evidenced here — treat the value ranking as driven by the cached rent figures rather than a confirmed budget fit.\n\n**What the evidence does not cover**\n- Budget match rate: not available for either area in the cached results.\n- Individual listing-level detail (specific rooms, landlords, policies) for Camden: the cached area data does not include this. Only the Bloomsbury property data provided (Scape Bloomsbury, a twin room at £1,468 per month) gives room-level detail, and that is a single property, not an area-wide picture.\n- Current live rents: the cache is 0 days old, but for confirmation check rightmove.co.uk or zoopla.co.uk.\n\n**Practical takeaway**\nOn the cached evidence, Bloomsbury and Camden are tied on commute (32 minutes to UCL, comfortably inside your 45-minute limit), and their median rents are close. The composite scoring favours Bloomsbury for value, but since the budget match rate is missing, I would verify actual listings within your budget in both areas before committing. If you tell me your monthly budget, I can help you interpret which cached listings fall within it. I can also fetch live TfL journey times and fares for specific routes if useful.\n\nPlease double-check the exact prices against the source listing.",
+      "replayed": true,
+      "response_type": "chat",
+      "turn_id": "8d1c091e1fac4d969ef1c2a6217a21a3",
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "commute_destination": "Gower Street, London WC1E 6BT",
+          "constraint_sources": {
+            "max_travel_time": {
+              "source": "user_message",
+              "text": "Compare Bloomsbury and Camden in London for value and a commute to UCL under 45 minutes. Use cached rent evidence;  keep missing evidence explicit.",
+              "value": 45
+            }
+          },
+          "destination": "Gower Street, London WC1E 6BT",
+          "max_budget": null,
+          "max_travel_time": 45,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 1
+      }
+    }
+  },
+  {
+    "path": "/api/conversations/2373da1e11954e6388010db20a05d98b/turns",
+    "method": "GET",
+    "status": 200,
+    "body": {
+      "turns": [
+        {
+          "assistant_message_id": 120,
+          "completed_at": "2026-10-19T07:54:25.559756+00:00",
+          "conversation_id": "2373da1e11954e6388010db20a05d98b",
+          "id": "8d1c091e1fac4d969ef1c2a6217a21a3",
+          "request_id": "resilience-174b1cf23b534183a139a62dc65b056c",
+          "started_at": "2026-10-19T07:54:15.292243+00:00",
+          "status": "completed",
+          "user_id": "9ac0797b278c414ea87becab5b4ca5ed",
+          "user_message_id": 117
+        }
+      ]
+    }
+  },
+  {
+    "case": "client-disconnect",
+    "status": 200,
+    "disconnected_after_step": true,
+    "raw": "event: step\n"
+  },
+  {
+    "path": "/api/alex",
+    "method": "POST",
+    "status": 200,
+    "body": {
+      "conversation_id": "2373da1e11954e6388010db20a05d98b",
+      "message": "Hello. I can help with UK student housing.\n\nFrom our earlier work, I can\n\n- Check Bloomsbury's weather and neighbourhood safety (data.police.uk) and summarise the evidence\n- Finish the value comparison between the two areas\n- Search actual listings in either area within a budget\n\nWhat would you like to do?\n\nNote: the commute could not be verified for some of these listings, so the unverified commute figures have been removed from this answer.",
+      "response_type": "chat",
+      "turn_id": "df41b421e6dd455594cca423d812b298",
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "commute_destination": "Gower Street, London WC1E 6BT",
+          "constraint_sources": {
+            "max_travel_time": {
+              "source": "user_message",
+              "text": "Compare Bloomsbury and Camden in London for value and a commute to UCL under 45 minutes. Use cached rent evidence;  keep missing evidence explicit.",
+              "value": 45
+            }
+          },
+          "destination": "Gower Street, London WC1E 6BT",
+          "max_budget": null,
+          "max_travel_time": 45,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 2
+      }
+    }
+  },
+  {
+    "path": "/api/conversations/2373da1e11954e6388010db20a05d98b/turns",
+    "method": "GET",
+    "status": 200,
+    "body": {
+      "turns": [
+        {
+          "assistant_message_id": 120,
+          "completed_at": "2026-10-19T07:54:25.559756+00:00",
+          "conversation_id": "2373da1e11954e6388010db20a05d98b",
+          "id": "8d1c091e1fac4d969ef1c2a6217a21a3",
+          "request_id": "resilience-174b1cf23b534183a139a62dc65b056c",
+          "started_at": "2026-10-19T07:54:15.292243+00:00",
+          "status": "completed",
+          "user_id": "9ac0797b278c414ea87becab5b4ca5ed",
+          "user_message_id": 117
+        },
+        {
+          "assistant_message_id": 122,
+          "completed_at": "2026-10-19T07:54:25.597186+00:00",
+          "conversation_id": "2373da1e11954e6388010db20a05d98b",
+          "id": "606948a8ee3447ecb3abd318094f27dc",
+          "request_id": "disconnect-0842ac4e4fc1408eaa5706ddd6eacaac",
+          "started_at": "2026-10-19T07:54:25.588090+00:00",
+          "status": "failed",
+          "user_id": "9ac0797b278c414ea87becab5b4ca5ed",
+          "user_message_id": 121
+        },
+        {
+          "assistant_message_id": 124,
+          "completed_at": "2026-10-19T07:54:28.244077+00:00",
+          "conversation_id": "2373da1e11954e6388010db20a05d98b",
+          "id": "df41b421e6dd455594cca423d812b298",
+          "request_id": "after-cancel-fb978b156401416cb637746dc1dd3998",
+          "started_at": "2026-10-19T07:54:26.606185+00:00",
+          "status": "completed",
+          "user_id": "9ac0797b278c414ea87becab5b4ca5ed",
+          "user_message_id": 123
+        }
+      ]
+    }
+  },
+  {
+    "case": "turns-after-disconnect",
+    "body": {
+      "turns": [
+        {
+          "assistant_message_id": 120,
+          "completed_at": "2026-10-19T07:54:25.559756+00:00",
+          "conversation_id": "2373da1e11954e6388010db20a05d98b",
+          "id": "8d1c091e1fac4d969ef1c2a6217a21a3",
+          "request_id": "resilience-174b1cf23b534183a139a62dc65b056c",
+          "started_at": "2026-10-19T07:54:15.292243+00:00",
+          "status": "completed",
+          "user_id": "9ac0797b278c414ea87becab5b4ca5ed",
+          "user_message_id": 117
+        },
+        {
+          "assistant_message_id": 122,
+          "completed_at": "2026-10-19T07:54:25.597186+00:00",
+          "conversation_id": "2373da1e11954e6388010db20a05d98b",
+          "id": "606948a8ee3447ecb3abd318094f27dc",
+          "request_id": "disconnect-0842ac4e4fc1408eaa5706ddd6eacaac",
+          "started_at": "2026-10-19T07:54:25.588090+00:00",
+          "status": "failed",
+          "user_id": "9ac0797b278c414ea87becab5b4ca5ed",
+          "user_message_id": 121
+        },
+        {
+          "assistant_message_id": 124,
+          "completed_at": "2026-10-19T07:54:28.244077+00:00",
+          "conversation_id": "2373da1e11954e6388010db20a05d98b",
+          "id": "df41b421e6dd455594cca423d812b298",
+          "request_id": "after-cancel-fb978b156401416cb637746dc1dd3998",
+          "started_at": "2026-10-19T07:54:26.606185+00:00",
+          "status": "completed",
+          "user_id": "9ac0797b278c414ea87becab5b4ca5ed",
+          "user_message_id": 123
+        }
+      ]
+    }
+  }
+]

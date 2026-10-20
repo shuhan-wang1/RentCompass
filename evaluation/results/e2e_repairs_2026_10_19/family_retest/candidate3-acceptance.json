@@ -1,0 +1,58 @@
+{
+  "candidate": "candidate_3",
+  "targeted_verdict": "PASS",
+  "whole_family_verdict": "OPEN_ISSUES",
+  "checked_regressions": [
+    "explicit Camden search and immediate cards",
+    "weather-only state isolation",
+    "no forbidden commute",
+    "refresh/focus/favorite persistence"
+  ],
+  "round11": {
+    "turn_id": "8efa0797d2934691a6b31742ccb39d9b",
+    "request_id": "9f19f92df5954ca9a14f67f12c319360",
+    "tools": {
+      "search_properties": 1,
+      "calculate_commute": 5
+    },
+    "immediate_cards": 4,
+    "area": "Camden"
+  },
+  "round12": {
+    "turn_id": "a38b660c80574ffd948a3d8fba41c87c",
+    "request_id": "1340227ce73945ce85390e719bf1d084",
+    "tools": {
+      "get_weather": 1
+    },
+    "exact_replay_of_round9": true,
+    "canonical_criteria_equal": true,
+    "ui_forms_equal": true,
+    "card_urls_equal": true,
+    "focus_equal": true,
+    "favorite_equal": true
+  },
+  "refresh": {
+    "messages": 12,
+    "cards": 4,
+    "favorites": "1",
+    "extra_chat_requests": 0
+  },
+  "open_issues": [
+    {
+      "severity": "P2",
+      "issue": "R11 explicitly requires cat permission but actual hard property_features and accumulated_preferences omit cat permission; cannot count all family requirements as applied.",
+      "evidence": [
+        "turn11-response.json",
+        "candidate3-dispatches.json r11 search_properties args"
+      ]
+    },
+    {
+      "severity": "P2",
+      "issue": "R12 has a dangling final condition sentence and unsolicited commute-claims-removed footer despite only weather execution.",
+      "evidence": [
+        "turn12-response.json"
+      ]
+    }
+  ],
+  "scope": "有UI修复背景。只补两次真实模型请求，未改产品；此前候选2FAIL保持有效历史。"
+}

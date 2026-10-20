@@ -1,0 +1,205 @@
+{
+  "date": "2026-10-19",
+  "formal_acceptance": "FAIL",
+  "live_housing_acceptance": "BLOCKED_AFTER_ROBOTS_PREFLIGHT_403",
+  "regression": {
+    "passed": 4894,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 3,
+    "seconds": 201.929,
+    "skip_reasons": [
+      {
+        "test": "tests.test_classify_place.test_live_osm_university_is_destination",
+        "reason": "set RUN_LIVE_OSM=1 to hit the real Nominatim service"
+      },
+      {
+        "test": "tests.test_classify_place.test_live_osm_suburb_is_area",
+        "reason": "set RUN_LIVE_OSM=1 to hit the real Nominatim service"
+      },
+      {
+        "test": "tests.test_on_demand_listings.test_live_manchester_is_city_correct",
+        "reason": "set RUN_LIVE_SCRAPE=1 to hit the real OnTheMarket site"
+      }
+    ]
+  },
+  "product_source_verification": {
+    "product_changed_during_test": false,
+    "differences": [],
+    "passed": true
+  },
+  "personas": {
+    "student": {
+      "chat_turns": 2,
+      "isolated_parent_context": true,
+      "additional_chat": "automatic review denied as exceeding turn limit; stored records show only two completed turns; no retry"
+    },
+    "professional": {
+      "chat_turns": 3,
+      "isolated_parent_context": true
+    },
+    "family": {
+      "chat_turns": 3,
+      "isolated_parent_context": true,
+      "method_limit": "initial BODY DOM capture included inline client script; removed promptly; reported and not used to derive findings"
+    }
+  },
+  "total_browser_chat_turns": 8,
+  "live_housing": {
+    "actual_external_requests": 1,
+    "actual_request_kind": "robots.txt preflight",
+    "actual_response_status": 403,
+    "actual_listing_search_requests": 0,
+    "actual_detail_requests": 0,
+    "captured_failure_response_replays": 8,
+    "synthetic_success_listing_responses": 0,
+    "retry_or_identity_rotation": false,
+    "robots403_does_not_prove_all_listing_pages_are_unreachable": true
+  },
+  "other_http": {
+    "actual_requests": 43,
+    "host_status_counts": [
+      {
+        "host": "nominatim.openstreetmap.org",
+        "status": 200,
+        "count": 14
+      },
+      {
+        "host": "api.postcodes.io",
+        "status": 200,
+        "count": 1
+      },
+      {
+        "host": "geocoding-api.open-meteo.com",
+        "status": 200,
+        "count": 2
+      },
+      {
+        "host": "api.tfl.gov.uk",
+        "status": 200,
+        "count": 12
+      },
+      {
+        "host": "api.open-meteo.com",
+        "status": 200,
+        "count": 2
+      },
+      {
+        "host": "data.police.uk",
+        "status": 200,
+        "count": 3
+      },
+      {
+        "host": "overpass-api.de",
+        "status": 502,
+        "count": 2
+      },
+      {
+        "host": "overpass.kumi.systems",
+        "status": 500,
+        "count": 2
+      },
+      {
+        "host": "overpass.osm.ch",
+        "status": 200,
+        "count": 2
+      },
+      {
+        "host": "lz4.overpass-api.de",
+        "status": null,
+        "count": 2
+      },
+      {
+        "host": "z.overpass-api.de",
+        "status": 502,
+        "count": 1
+      }
+    ],
+    "successful_http_is_not_automatically_task_success": true
+  },
+  "models": {
+    "requests": 18,
+    "real_upstream_requests": 18,
+    "reported_tokens": 215216,
+    "synthetic_responses": 0,
+    "request_budget": 100,
+    "token_budget": 600000
+  },
+  "tools_registered": 14,
+  "tool_integration_unique_executed": 12,
+  "live_listing_details": "BLOCKED; no valid current identity for positive test",
+  "process_restart": {
+    "checks": 3,
+    "passed": 3
+  },
+  "memory_reopen": {
+    "checks": 2,
+    "passed": 2
+  },
+  "findings": {
+    "P1": 6,
+    "P2": 3,
+    "P3": 1
+  },
+  "environment": {
+    "origin": "http://127.0.0.1:15009",
+    "architecture": "fc_loop",
+    "mcp_tools": false,
+    "independent_test_databases": true,
+    "background_jobs": false,
+    "success_fixtures_for_weather_tfl_police_osm_web": false,
+    "description_auto_enrichment": false
+  },
+  "limitations": [
+    "No successful live housing fetch or detail, price, availability or real property-specific qualification certified",
+    "OTM search failures exercised by replay of captured robots403, not direct responses from listing pages",
+    "Only 8 browser turns and one process restart; not a multiweek soak",
+    "POI timeout and web service degradation; no full live success claim",
+    "Current fc_loop in-process tools; optional MCP/manager architectures not E2E exercised",
+    "Browser external resources/links aborted to prevent unintended OTM traffic",
+    "No product fixes or deployment in this formal acceptance run"
+  ],
+  "cleanup": {
+    "test_processes_stopped": [
+      "app",
+      "relay"
+    ],
+    "test_port_15009_closed": true,
+    "test_secret_and_session_files_removed": [
+      "private/env.json",
+      "runtime/auth.sqlite3",
+      "runtime/unit/auth.sqlite3",
+      "runtime/pytest/test_credential_failure_is_par0/auth.sqlite3",
+      "runtime/pytest/test_memory_failure_returns_pa0/auth.sqlite3",
+      "runtime/pytest/test_active_turn_blocks_erasur0/auth.sqlite3",
+      "runtime/pytest/test_checkpoint_residual_never0/auth.sqlite3",
+      "runtime/pytest/test_forget_me_verifies_all_la0/auth.sqlite3",
+      "runtime/pytest/test_sessions_survive_restart_0/auth.sqlite3",
+      "runtime/pytest/test_successful_erasure_remove0/auth.sqlite3",
+      "runtime/pytest/test_copied_cookie_denied_on_h1/auth.sqlite3",
+      "runtime/pytest/test_copied_cookie_denied_on_h0/auth.sqlite3",
+      "student/student_ucl-storage.json",
+      "professional/professional-storage.json",
+      "family/family-storage.json"
+    ],
+    "existing_services": [
+      {
+        "name": "uk-rent-app-fc",
+        "same_id_and_start_time": true
+      },
+      {
+        "name": "uk-rent-app",
+        "same_id_and_start_time": true
+      },
+      {
+        "name": "uk-rent-searxng",
+        "same_id_and_start_time": true
+      },
+      {
+        "name": "uk-rent-valkey",
+        "same_id_and_start_time": true
+      }
+    ],
+    "existing_services_not_restarted": true
+  }
+}

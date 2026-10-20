@@ -1,0 +1,16 @@
+{
+  "time": 1792412658.101132,
+  "label": "07",
+  "method": "POST",
+  "url": "http://127.0.0.1:15019/api/alex",
+  "body": {
+    "message": "我开了一个新会话。请直接按我已经保存的长期默认租房偏好帮我找房，先说清本次实际采用的条件，再区分满足条件、被排除和仍待核实的候选。不要让我重新填写已经保存过的条件。",
+    "context": {
+      "viewed_properties": []
+    },
+    "is_continuation": false,
+    "language": "zh",
+    "ui_language": "zh",
+    "conversation_id": "7fc8c690d7bf4e54ab7cf39d8967764a"
+  }
+}

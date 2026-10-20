@@ -1,0 +1,20 @@
+{
+  "time": 1792401783.9584029,
+  "url": "http://127.0.0.1:15008/",
+  "title": "RentCompass",
+  "body": "RentCompass\nEN\n中文\nCONVERSATIONS\nNew\nNew chat\njust now\nI'm moving to London on my own and need …\n24m ago\nG\nGuest\nAI Assistant\n\nLondon Rental Intelligence\n\nALEX\nHello! I'm Alex. I can help you find apartments in London.\n\nTry asking me:\n\"Find a 1-bed near King's Cross under £2000\"\n\"What is the vibe like in Hackney?\"\n\"Show me flats with a 20min commute to UCL\"\nNear UCL\nSafe areas\nRent stats\nListings\nSearch\nSaved\n1\nSearch criteria\nNo properties found\n\nTry adjusting your budget or location.",
+  "localStorage": {
+    "rentcompass.language": "en",
+    "ukra_user_name": "Guest",
+    "ukra_active_conversation": "cd7819401058487b9449a9420ad09d9c",
+    "ukra_user_id": "06dc55bfc4554339ad34a1e2672f9644",
+    "ukra_property_context:06dc55bfc4554339ad34a1e2672f9644:cd7819401058487b9449a9420ad09d9c": "{\"focus_stack\": [], \"viewed_properties\": []}",
+    "ukra_property_context:06dc55bfc4554339ad34a1e2672f9644:023e76a5ecbb4c04a7b34285b50e1ce5": "{\"focus_stack\": [], \"viewed_properties\": []}"
+  },
+  "errors": [],
+  "external_requests_blocked": [
+    "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap",
+    "https://media.onthemarket.com/properties/14672649/1644772157/image-0-480x320.jpg",
+    "https://media.onthemarket.com/properties/14672649/1644772157/image-0-480x320.jpg"
+  ]
+}

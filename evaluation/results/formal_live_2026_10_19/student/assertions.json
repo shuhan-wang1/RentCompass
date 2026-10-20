@@ -1,0 +1,150 @@
+[
+  {
+    "id": "CHAT_LIMIT",
+    "status": "PASS",
+    "expected": "最多3次真实聊天",
+    "actual": 2,
+    "evidence": "student_ucl-turns.jsonl; own-messages-latest.json",
+    "severity_if_failed": null
+  },
+  {
+    "id": "CLARIFY_BEFORE_SEARCH",
+    "status": "PASS",
+    "expected": "先澄清，不返回房源",
+    "actual": {
+      "response_type": "clarification",
+      "agent_state": "waiting_for_input"
+    },
+    "evidence": "turn-1-response-payload.json",
+    "severity_if_failed": null
+  },
+  {
+    "id": "BUDGET_BASIS_CLARIFICATION",
+    "status": "PASS",
+    "expected": "询问个人/整套预算口径",
+    "actual": "你的预算表述有两种可能，我需要先确认：每周 250 镑（约合每月 1083 镑）是「你个人分摊的房租」，还是「整套房子的总租金」？另外，你更倾向哪种居住方式：一个人住 studio/一居，还是和同学整租两居（两人分摊）？",
+    "evidence": "turn-1-response-payload.json",
+    "severity_if_failed": null
+  },
+  {
+    "id": "WEEK_TO_MONTH",
+    "status": "PASS",
+    "expected": "个人周£250折月约£1083.33",
+    "actual": 1083,
+    "evidence": "turn-1-response-payload.json",
+    "severity_if_failed": null
+  },
+  {
+    "id": "REFRESH_CLARIFICATION",
+    "status": "PASS",
+    "expected": "刷新保留中文、澄清文本和选项",
+    "actual": {
+      "language": "zh",
+      "option_preserved": true
+    },
+    "evidence": "02-refresh-after-clarification.json; .png",
+    "severity_if_failed": null
+  },
+  {
+    "id": "WHOLE_BUDGET_NOT_PERSONAL",
+    "status": "PASS",
+    "expected": "两人整租总预算约月£2166.67，而非月£1083",
+    "actual": 2167,
+    "evidence": "turn-2-response-payload.json",
+    "severity_if_failed": null
+  },
+  {
+    "id": "HARD_BUDGET_PRECISION",
+    "status": "FAIL",
+    "expected": "保存的最多月租不超£2166.67",
+    "actual": 2167,
+    "evidence": "turn-2-response-payload.json; 04-refresh-after-search.json",
+    "severity_if_failed": "P3：保存/显示上限多£0.33，尚无房源可验证过滤影响"
+  },
+  {
+    "id": "REFRESH_CONFIRMED_CRITERIA",
+    "status": "PASS",
+    "expected": "刷新后保留已确认预算、UCL地址、30分钟和日期",
+    "actual": [
+      "",
+      "2167",
+      "on",
+      "University College London, Gower Street, London WC1E 6BT",
+      "30",
+      "on",
+      "2026-11-15"
+    ],
+    "evidence": "04-refresh-after-search.json; .png",
+    "severity_if_failed": null
+  },
+  {
+    "id": "SAME_CONVERSATION",
+    "status": "PASS",
+    "expected": "两次刷新和两轮聊天在同一会话",
+    "actual": "8d6e107e605d4b81af03463111d59118",
+    "evidence": "student_ucl-turns.jsonl; 02/04-refresh*.json",
+    "severity_if_failed": null
+  },
+  {
+    "id": "PERSISTED_MESSAGES",
+    "status": "PASS",
+    "expected": "本画像持久化2条用户消息、2条助手消息",
+    "actual": {
+      "count": 4,
+      "roles": [
+        "user",
+        "assistant",
+        "user",
+        "assistant"
+      ]
+    },
+    "evidence": "own-messages-latest.json",
+    "severity_if_failed": null
+  },
+  {
+    "id": "NO_INVENTED_LISTINGS",
+    "status": "PASS",
+    "expected": "拒绝数据条件下不虚构候选房源",
+    "actual": {
+      "recommendations": [],
+      "view_results": []
+    },
+    "evidence": "turn-2-response-payload.json",
+    "severity_if_failed": null
+  },
+  {
+    "id": "NO_MARKET_ABSENCE_CLAIM",
+    "status": "PASS",
+    "expected": "说明不能据空数据判断市场无房",
+    "actual": "本次检索数据中，在 London 附近没有找到符合条件的房源。请检查区域拼写，或调整预算/区域后重试（可使用右侧搜索表单）。 未获得可用候选数据，不能据此判断市场上没有房源。",
+    "evidence": "turn-2-response-payload.json",
+    "severity_if_failed": null
+  },
+  {
+    "id": "EXPLICIT_ACCESS_FAILURE",
+    "status": "FAIL",
+    "expected": "明确解释本次访问被拒绝，避免让用户误以为有效检索零匹配",
+    "actual": "本次检索数据中，在 London 附近没有找到符合条件的房源。请检查区域拼写，或调整预算/区域后重试（可使用右侧搜索表单）。 未获得可用候选数据，不能据此判断市场上没有房源。",
+    "evidence": "turn-2-response-payload.json; 03-confirm-shared-budget-search.png",
+    "severity_if_failed": "P2：误导性失败/空结果解释"
+  },
+  {
+    "id": "EMPTY_PANEL_EXPLAINS_FAILURE",
+    "status": "FAIL",
+    "expected": "房源面板用访问失败状态解释数据不可用",
+    "actual": "未找到房源；请尝试调整您的预算或位置。",
+    "evidence": "04-refresh-after-search.json; .png",
+    "severity_if_failed": "P2：与上一项相同根因，不重复计缺陷"
+  },
+  {
+    "id": "NO_BROWSER_ERRORS",
+    "status": "PASS",
+    "expected": "无未处理页面脚本错误",
+    "actual": [
+      [],
+      []
+    ],
+    "evidence": "student_ucl-browser-metadata.jsonl",
+    "severity_if_failed": null
+  }
+]

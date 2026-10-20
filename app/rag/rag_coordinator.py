@@ -6,6 +6,11 @@ class RAGCoordinator:
     def __init__(self):
         self.property_store = PropertyEmbeddingStore()
 
+    def for_search(self):
+        coordinator = type(self).__new__(type(self))
+        coordinator.property_store = self.property_store.fork()
+        return coordinator
+
     def enhanced_search(self, user_query: str, criteria: dict):
         """
         Multi-source retrieval with reranking.

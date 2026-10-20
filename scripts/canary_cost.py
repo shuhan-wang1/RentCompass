@@ -12,6 +12,20 @@ CLI compatibility is retained with the original script:
 --allow-unverified is still accepted for operator compatibility, but it can
 only expose a clearly-labelled provisional figure. An unverified price table
 always produces HOLD and a non-zero exit status.
+
+Two rules about the arithmetic, both of which used to be latent because no
+verified price table had ever shipped:
+
+* ``cache_read_tokens`` is a BREAKDOWN of ``input_tokens``, not an addition to
+  them. The charge is ``(input_tokens - cache_read_tokens)`` at the cache-miss
+  rate plus ``cache_read_tokens`` at the cache-hit rate. Adding all three lines
+  at face value double-charges every cached token, and on this workload cache
+  reads are the large majority of input.
+* An unpriced model no longer erases the window. ``total_cost`` stays ``null``
+  whenever anything is unpriced or unmeasured — that is the fail-closed gate and
+  it does not move — but ``priced_cost`` states the subtotal over the models that
+  DO have verified rates, and ``unpriced_models`` / ``unpriced_usage`` /
+  ``unpriced_call_share`` state exactly how much of the window it omits.
 """
 from __future__ import annotations
 
@@ -321,6 +335,8 @@ def compute_cost(
     total = 0.0
     lines = []
     missing_or_invalid_rates: List[str] = []
+    unpriced_usage = {field: 0 for field in USAGE_FIELDS}
+    priced_usage = {field: 0 for field in USAGE_FIELDS}
     usage_models = [
         name for name in per_model if not str(name).startswith("_")
     ]
@@ -333,24 +349,54 @@ def compute_cost(
             issues.append(f"aggregated usage for model {model!r} is malformed")
             continue
         raw_rate = rates.get(model)
-        if not isinstance(raw_rate, dict):
+        parsed_rates = None
+        if isinstance(raw_rate, dict) and raw_rate.get("verified") is not False:
+            # A per-model `verified: false` marker beats a present rate. A retired
+            # model kept in the table for visibility must read as UNPRICED, not as
+            # priced-at-whatever-was-last-true.
+            parsed_rates = {
+                field: _price_rate(raw_rate.get(field))
+                for field in ("input", "output", "cache_read")
+            }
+            if any(value is None for value in parsed_rates.values()):
+                parsed_rates = None
+        if parsed_rates is None:
             missing_or_invalid_rates.append(model)
+            for field in USAGE_FIELDS:
+                unpriced_usage[field] += metrics[field]
             continue
-        parsed_rates = {
-            field: _price_rate(raw_rate.get(field))
-            for field in ("input", "output", "cache_read")
-        }
-        if any(value is None for value in parsed_rates.values()):
-            missing_or_invalid_rates.append(model)
-            continue
+        # DeepSeek reports cache hits as a BREAKDOWN of prompt_tokens, not as an
+        # extra bucket on top of them (core/turn_observations._usage_from_token_usage
+        # says so at the point of capture). Charging `input_tokens` at the full rate
+        # AND `cache_read_tokens` at the cached rate therefore billed the cached
+        # tokens twice — 246 784 of the fc arm's 286 751 post-deploy input tokens are
+        # cache reads, so the old formula overstated that window's input cost by ~86%
+        # of it. It never showed up because the only price table shipped was
+        # unverified and every total was null; it would have gone live with the first
+        # verified table. Charge the MISS at the full rate and the HIT at the cached
+        # rate, and floor the difference at 0 so an inconsistent record (cache_read >
+        # input) cannot produce a negative charge.
+        cache_read_tokens = min(metrics["cache_read_tokens"], metrics["input_tokens"])
+        if metrics["cache_read_tokens"] > metrics["input_tokens"]:
+            issues.append(
+                f"usage for model {model!r} reports cache_read_tokens "
+                f"{metrics['cache_read_tokens']} > input_tokens "
+                f"{metrics['input_tokens']}; cache reads are a breakdown of input "
+                f"tokens, so this record is internally inconsistent"
+            )
+        cache_miss_tokens = metrics["input_tokens"] - cache_read_tokens
         cost = (
-            metrics["input_tokens"] * parsed_rates["input"]
+            cache_miss_tokens * parsed_rates["input"]
             + metrics["output_tokens"] * parsed_rates["output"]
-            + metrics["cache_read_tokens"] * parsed_rates["cache_read"]
+            + cache_read_tokens * parsed_rates["cache_read"]
         ) / 1_000_000.0
         total += cost
+        for field in USAGE_FIELDS:
+            priced_usage[field] += metrics[field]
         lines.append(
-            {"model": model, **metrics, "cost": round(cost, 6)}
+            {"model": model, **metrics,
+             "cache_miss_tokens": cache_miss_tokens,
+             "cost": round(cost, 6)}
         )
 
     if missing_or_invalid_rates:
@@ -372,6 +418,22 @@ def compute_cost(
         "price_table_version": price_version,
         # Never label an incomplete or unverified subtotal as total cost.
         "total_cost": rounded if ok else None,
+        # ...but do not throw the arithmetic away either. `total_cost: null` used to
+        # be the ONLY output whenever any model was unpriced, so one retired model
+        # name in a window erased the cost of every priced call beside it and the
+        # operator was left with no number at all. The subtotal over the models that
+        # DO have verified rates is stated here, next to exactly how much of the
+        # window it does not cover, so the reader can see both the figure and its
+        # incompleteness. It is a subtotal, never a total: `ok` stays false and the
+        # gate still HOLDs.
+        "priced_cost": rounded,
+        "priced_usage": dict(priced_usage),
+        "unpriced_models": sorted(missing_or_invalid_rates),
+        "unpriced_usage": dict(unpriced_usage),
+        "unpriced_call_share": (
+            unpriced_usage["calls"] / (unpriced_usage["calls"] + priced_usage["calls"])
+            if (unpriced_usage["calls"] + priced_usage["calls"]) else 0.0
+        ),
         "by_model": lines,
         "unmeasured_turns": unmeasured,
         # The crash-driven subset of the line above. Same spend, different cause,

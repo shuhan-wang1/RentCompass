@@ -1,0 +1,196 @@
+{
+  "user_message_count": 10,
+  "focus": "Focusing on 2 properties\nClear all\nCroxley View, Watford, W...\nSt. Augustine's Road, Ca...",
+  "fav_count": "1",
+  "criteria": "Area\n*\nCamden\n×\nBudget\nper month\nper week\nBedrooms\nAny\nStudio\n1\n2\n3\n4\n5\n6\nAt least this many bedrooms\nRoom type\nAny\nWhole property\nStudio\nEn-suite room\nShared room\nCommute to\nMax commute (min)\nI don't commute\nMove-in date\nYYYY-MM-DD\nSearch",
+  "forms": [
+    {
+      "type": "text",
+      "value": "",
+      "checked": false,
+      "aria": "Area"
+    },
+    {
+      "type": "number",
+      "value": "3000",
+      "checked": false,
+      "aria": "Budget"
+    },
+    {
+      "type": "select-one",
+      "value": "month",
+      "checked": null,
+      "aria": "Budget period"
+    },
+    {
+      "type": "select-one",
+      "value": "2",
+      "checked": null,
+      "aria": "Bedrooms"
+    },
+    {
+      "type": "checkbox",
+      "value": "on",
+      "checked": true,
+      "aria": null
+    },
+    {
+      "type": "select-one",
+      "value": "whole",
+      "checked": null,
+      "aria": "Room type"
+    },
+    {
+      "type": "text",
+      "value": "University College London, Gower Street, London WC1E 6BT",
+      "checked": false,
+      "aria": "Commute to"
+    },
+    {
+      "type": "number",
+      "value": "50",
+      "checked": false,
+      "aria": "Max commute (min)"
+    },
+    {
+      "type": "checkbox",
+      "value": "on",
+      "checked": false,
+      "aria": null
+    },
+    {
+      "type": "date",
+      "value": "",
+      "checked": false,
+      "aria": "Move-in date"
+    }
+  ],
+  "cards": "5\n#1\nWatford\nCroxley View, Watford, WD18\n£1600/month\nWithin Budget\nDoes not meet these criteria\narea watford is outside the requested areas\nrequired features are not verified: wheelchair-accessible, step-free\ncommute evidence is missing\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom flat to rent in Croxley View, Watford, WD18\nView Deal\nMap\nAsk AI\n5\n#2\nWatford\nNevill Grove, Watford, WD24\n£1600/month\nWithin Budget\nDoes not meet these criteria\narea watford is outside the requested areas\nrequired features are not verified: wheelchair-accessible, step-free\ncommute evidence is missing\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom terraced house to rent in Nevill Grove, Watford, WD24\nView Deal\nMap\nAsk AI\n5\n#3\nWatford\nRaven Close, Watford WD18\n£1650/month\nWithin Budget\nDoes not meet these criteria\narea watford is outside the requested areas\nrequired features are not verified: wheelchair-accessible, step-free\ncommute evidence is missing\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom flat to rent in Raven Close, Watford WD18\nView Deal\nMap\nAsk AI\n5\n#4\nWatford\nRegent Street, Watford WD24\n£1700/month\nWithin Budget\nDoes not meet these criteria\narea watford is outside the requested areas\nrequired features are not verified: wheelchair-accessible, step-free\ncommute evidence is missing\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom terraced house to rent in Regent Street, Watford WD24\nView Deal\nMap\nAsk AI\n5\n#5\nWatford\nSutton Road WD17, Watford, WD17\n£1700/month\nWithin Budget\nDoes not meet these criteria\narea watford is outside the requested areas\nrequired features are not verified: wheelchair-accessible, step-free\ncommute evidence is missing\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom terraced house to rent in Sutton Road WD17, Watford, WD17\nView Deal\nMap\nAsk AI\n5\n#6\nWatford\nChester Road, WD18 0LJ, Watford, WD18\n£1700/month\nWithin Budget\nDoes not meet these criteria\narea watford is outside the requested areas\nrequired features are not verified: wheelchair-accessible, step-free\ncommute evidence is missing\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom terraced house to rent in Chester Road, WD18 0LJ, Watford, WD18\nView Deal\nMap\nAsk AI\n5\n#7\nWatford\nVilliers Road, Watford, WD19\n£1800/month\nWithin Budget\nDoes not meet these criteria\narea watford is outside the requested areas\nrequired features are not verified: wheelchair-accessible, step-free\ncommute evidence is missing\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n3 bedroom flat to rent in Villiers Road, Watford, WD19\nView Deal\nMap\nAsk AI\n5\n#8\nWatford\nSt. Albans Road, Hertfordshire WD17\n£1850/month\nWithin Budget\nDoes not meet these criteria\narea watford is outside the requested areas\nrequired features are not verified: wheelchair-accessible, step-free\ncommute evidence is missing\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom flat to rent in St. Albans Road, Hertfordshire WD17\nView Deal\nMap\nAsk AI\n5\n#9\nWatford\nRickmansworth Road, Watford, WD18\n£1900/month\nWithin Budget\nDoes not meet these criteria\narea watford is outside the requested areas\nrequired features are not verified: wheelchair-accessible, step-free\ncommute evidence is missing\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom flat to rent in Rickmansworth Road, Watford, WD18\nView Deal\nMap\nAsk AI\n5\n#10\nWatford\nThe Clarendon, Watford | Hertfordshire WD17\n£2250/month\nWithin Budget\nDoes not meet these criteria\narea watford is outside the requested areas\nrequired features are not verified: wheelchair-accessible, step-free\ncommute evidence is missing\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom flat to rent in The Clarendon, Watford | Hertfordshire WD17\nView Deal\nMap\nAsk AI",
+  "view_links": [
+    "https://www.onthemarket.com/details/20472490/",
+    "https://www.onthemarket.com/details/19903982/",
+    "https://www.onthemarket.com/details/20471436/",
+    "https://www.onthemarket.com/details/20486205/",
+    "https://www.onthemarket.com/details/20484057/",
+    "https://www.onthemarket.com/details/20481144/",
+    "https://www.onthemarket.com/details/20132874/",
+    "https://www.onthemarket.com/details/15630770/",
+    "https://www.onthemarket.com/details/20480605/",
+    "https://www.onthemarket.com/details/20475691/"
+  ],
+  "mobile_checks": [
+    {
+      "width": 320,
+      "scroll_width": 320,
+      "tabs": [
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "userMenuBtn",
+          "inside": true
+        },
+        {
+          "id": "menuToggle",
+          "inside": false
+        }
+      ],
+      "expanded_after_escape": "false",
+      "focused_after_escape": "menuToggle"
+    },
+    {
+      "width": 390,
+      "scroll_width": 390,
+      "tabs": [
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "userMenuBtn",
+          "inside": true
+        },
+        {
+          "id": "menuToggle",
+          "inside": false
+        }
+      ],
+      "expanded_after_escape": "false",
+      "focused_after_escape": "menuToggle"
+    }
+  ],
+  "chat_requests": []
+}

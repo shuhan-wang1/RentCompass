@@ -1,0 +1,379 @@
+{
+  "closed_tabs": [
+    {
+      "id": "menuToggle",
+      "text": "",
+      "x": 16,
+      "y": 10.5,
+      "w": 38,
+      "h": 38
+    },
+    {
+      "id": "",
+      "text": "RentCompass",
+      "x": 66,
+      "y": 14.5,
+      "w": 175.328125,
+      "h": 30
+    },
+    {
+      "id": "",
+      "text": "EN",
+      "x": 297.34375,
+      "y": 18.5,
+      "w": 38.25,
+      "h": 22
+    },
+    {
+      "id": "",
+      "text": "中文",
+      "x": 335.59375,
+      "y": 18.5,
+      "w": 34.40625,
+      "h": 22
+    },
+    {
+      "id": "chatMessages",
+      "text": "ALEX\nHello! I'm Alex. I can help you find apartments in Lond",
+      "x": 0,
+      "y": 138.1875,
+      "w": 390,
+      "h": 286.015625
+    },
+    {
+      "id": "",
+      "text": "Near UCL",
+      "x": 24,
+      "y": 441.203125,
+      "w": 82.3125,
+      "h": 28
+    },
+    {
+      "id": "",
+      "text": "Safe areas",
+      "x": 114.3125,
+      "y": 441.203125,
+      "w": 89.40625,
+      "h": 28
+    },
+    {
+      "id": "",
+      "text": "Rent stats",
+      "x": 211.71875,
+      "y": 441.203125,
+      "w": 86.578125,
+      "h": 28
+    },
+    {
+      "id": "chatInput",
+      "text": "",
+      "x": 37,
+      "y": 494.203125,
+      "w": 270,
+      "h": 38.1875
+    },
+    {
+      "id": "sendBtn",
+      "text": "",
+      "x": 317,
+      "y": 494.390625,
+      "w": 36,
+      "h": 36
+    },
+    {
+      "id": "btn-results",
+      "text": "Search",
+      "x": 146.078125,
+      "y": 585.390625,
+      "w": 104.625,
+      "h": 28
+    },
+    {
+      "id": "btn-favorites",
+      "text": "Saved\n0",
+      "x": 252.703125,
+      "y": 585.390625,
+      "w": 117.296875,
+      "h": 28
+    },
+    {
+      "id": "criteriaHeader",
+      "text": "Search criteria",
+      "x": 17,
+      "y": 645.390625,
+      "w": 356,
+      "h": 45.609375
+    },
+    {
+      "id": "",
+      "text": "RentCompass\nEN\n中文\nCONVERSATIONS\nNew\nNo conversations yet. St",
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "id": "menuToggle",
+      "text": "",
+      "x": 16,
+      "y": 10.5,
+      "w": 38,
+      "h": 38
+    },
+    {
+      "id": "",
+      "text": "RentCompass",
+      "x": 66,
+      "y": 14.5,
+      "w": 175.328125,
+      "h": 30
+    },
+    {
+      "id": "",
+      "text": "EN",
+      "x": 297.34375,
+      "y": 18.5,
+      "w": 38.25,
+      "h": 22
+    },
+    {
+      "id": "",
+      "text": "中文",
+      "x": 335.59375,
+      "y": 18.5,
+      "w": 34.40625,
+      "h": 22
+    },
+    {
+      "id": "chatMessages",
+      "text": "ALEX\nHello! I'm Alex. I can help you find apartments in Lond",
+      "x": 0,
+      "y": 138.1875,
+      "w": 390,
+      "h": 286.015625
+    },
+    {
+      "id": "",
+      "text": "Near UCL",
+      "x": 24,
+      "y": 441.203125,
+      "w": 82.3125,
+      "h": 28
+    },
+    {
+      "id": "",
+      "text": "Safe areas",
+      "x": 114.3125,
+      "y": 441.203125,
+      "w": 89.40625,
+      "h": 28
+    },
+    {
+      "id": "",
+      "text": "Rent stats",
+      "x": 211.71875,
+      "y": 441.203125,
+      "w": 86.578125,
+      "h": 28
+    }
+  ],
+  "open": {
+    "expanded": "true",
+    "focused": "newChatBtn"
+  },
+  "open_tabs": [
+    {
+      "id": "userMenuBtn",
+      "inSidebar": true
+    },
+    {
+      "id": "menuToggle",
+      "inSidebar": false
+    },
+    {
+      "id": "newChatBtn",
+      "inSidebar": true
+    },
+    {
+      "id": "userMenuBtn",
+      "inSidebar": true
+    },
+    {
+      "id": "menuToggle",
+      "inSidebar": false
+    },
+    {
+      "id": "newChatBtn",
+      "inSidebar": true
+    },
+    {
+      "id": "userMenuBtn",
+      "inSidebar": true
+    },
+    {
+      "id": "menuToggle",
+      "inSidebar": false
+    },
+    {
+      "id": "newChatBtn",
+      "inSidebar": true
+    },
+    {
+      "id": "userMenuBtn",
+      "inSidebar": true
+    },
+    {
+      "id": "menuToggle",
+      "inSidebar": false
+    },
+    {
+      "id": "newChatBtn",
+      "inSidebar": true
+    },
+    {
+      "id": "userMenuBtn",
+      "inSidebar": true
+    },
+    {
+      "id": "menuToggle",
+      "inSidebar": false
+    },
+    {
+      "id": "newChatBtn",
+      "inSidebar": true
+    },
+    {
+      "id": "userMenuBtn",
+      "inSidebar": true
+    },
+    {
+      "id": "menuToggle",
+      "inSidebar": false
+    },
+    {
+      "id": "newChatBtn",
+      "inSidebar": true
+    },
+    {
+      "id": "userMenuBtn",
+      "inSidebar": true
+    },
+    {
+      "id": "menuToggle",
+      "inSidebar": false
+    }
+  ],
+  "escape": {
+    "expanded": "false",
+    "focused": "menuToggle"
+  },
+  "labels": [
+    {
+      "id": "chatMessages",
+      "tag": "DIV",
+      "type": null,
+      "aria": "Conversation messages",
+      "role": "log",
+      "live": "polite"
+    },
+    {
+      "id": "chatInput",
+      "tag": "TEXTAREA",
+      "type": "textarea",
+      "aria": "Message Alex",
+      "role": null,
+      "live": null
+    },
+    {
+      "id": "",
+      "tag": "INPUT",
+      "type": "text",
+      "aria": "Area",
+      "role": null,
+      "live": null
+    },
+    {
+      "id": "",
+      "tag": "INPUT",
+      "type": "number",
+      "aria": "Budget",
+      "role": null,
+      "live": null
+    },
+    {
+      "id": "",
+      "tag": "SELECT",
+      "type": "select-one",
+      "aria": "Budget period",
+      "role": null,
+      "live": null
+    },
+    {
+      "id": "",
+      "tag": "SELECT",
+      "type": "select-one",
+      "aria": "Bedrooms",
+      "role": null,
+      "live": null
+    },
+    {
+      "id": "",
+      "tag": "INPUT",
+      "type": "checkbox",
+      "aria": null,
+      "role": null,
+      "live": null
+    },
+    {
+      "id": "",
+      "tag": "SELECT",
+      "type": "select-one",
+      "aria": "Room type",
+      "role": null,
+      "live": null
+    },
+    {
+      "id": "",
+      "tag": "INPUT",
+      "type": "text",
+      "aria": "Commute to",
+      "role": null,
+      "live": null
+    },
+    {
+      "id": "",
+      "tag": "INPUT",
+      "type": "number",
+      "aria": "Max commute (min)",
+      "role": null,
+      "live": null
+    },
+    {
+      "id": "",
+      "tag": "INPUT",
+      "type": "checkbox",
+      "aria": null,
+      "role": null,
+      "live": null
+    },
+    {
+      "id": "",
+      "tag": "INPUT",
+      "type": "date",
+      "aria": "Move-in date",
+      "role": null,
+      "live": null
+    }
+  ],
+  "viewports": [
+    {
+      "width": 320,
+      "scrollWidth": 320
+    },
+    {
+      "width": 390,
+      "scrollWidth": 390
+    }
+  ],
+  "chat_requests": []
+}

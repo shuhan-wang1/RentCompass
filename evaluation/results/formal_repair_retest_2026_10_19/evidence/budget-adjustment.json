@@ -1,0 +1,22 @@
+[
+  {
+    "at": 1792413740.2052262,
+    "host": "nominatim.openstreetmap.org",
+    "previous_cap": 60,
+    "new_cap": 100,
+    "reason": "Finish remaining bounded persona retest without confusing an audit-imposed geocoder ceiling with provider failure. Shared 1.2 second host pacing is unchanged.",
+    "otm_cap": 12,
+    "otm_cap_unchanged": true
+  },
+  {
+    "at": 1792414382.1696627,
+    "hosts": [
+      "api.tfl.gov.uk",
+      "nominatim.openstreetmap.org"
+    ],
+    "new_cap": 120,
+    "reason": "Complete final sequential family retest and one direct fare diagnostic. TfL local audit ceiling reached in professional R6; these rejected attempts were not external provider outages. Host pacing remains 1.2s; OnTheMarket cap remains12.",
+    "otm_cap": 12,
+    "otm_cap_unchanged": true
+  }
+]

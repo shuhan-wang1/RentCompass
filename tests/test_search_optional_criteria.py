@@ -109,6 +109,33 @@ def _run(**kwargs):
     return asyncio.run(search_properties_impl(**kwargs))
 
 
+def test_weekly_budget_is_echoed_in_monthly_units(stub_env, monkeypatch):
+    listing = _row('Family flat, Camden', 1500, rt='4 bed Flat')
+    listing['Bedrooms'] = 4
+    _install_listings(monkeypatch, [listing])
+    result = _run(area='Camden', max_budget=350, budget_period='week',
+                  bedrooms=3, bedrooms_minimum=True, room_type='whole', no_commute=True)
+    from core.tenancy_reference import monthly_from_weekly
+    assert result['search_criteria']['max_budget'] == monthly_from_weekly(350)
+    assert result['search_criteria']['max_budget'] < 1517
+    assert result['search_criteria']['budget_period'] == 'month'
+    assert result['search_criteria']['bedrooms_minimum'] is True
+    assert result['recommendations'][0]['bedrooms'] == 4
+
+
+def test_cat_permission_missing_is_unknown_in_full_search(stub_env, monkeypatch):
+    from core.candidate_validation import validate_search_payload
+    listing = _row('Policy missing, Camden', 1400, rt='3 bed Flat')
+    listing['Bedrooms'] = 3
+    _install_listings(monkeypatch, [listing])
+    result = _run(area='Camden', max_budget=1500, room_type='whole',
+                  property_features=['cats allowed'], no_commute=True)
+    assert result['recommendations'][0]['unverified_features'] == ['cats allowed']
+    checked = validate_search_payload(result)
+    assert checked['recommendations'] == []
+    assert checked['unverified_candidates'] and not checked['excluded_candidates']
+
+
 # --------------------------------------------------------------------------
 # search_properties_impl: optional-criteria behaviour
 # --------------------------------------------------------------------------
@@ -175,7 +202,7 @@ def test_search_logs_do_not_echo_query_or_listing_address(
         stub_env, monkeypatch, caplog, capsys):
     secret_query = "PRIVATE_QUERY_TOKEN_47ac"
     secret_address = "PRIVATE_ADDRESS_TOKEN_82bd"
-    secret_budget_digits = "9876"
+    secret_budget_digits = "3987"  # A valid weekly amount after monthly range validation.
     listing = _row(secret_address, 1200)
     listing["Detailed_Amenities"] = "Passenger lift"
     _install_listings(monkeypatch, [listing])

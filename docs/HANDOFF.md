@@ -1,7 +1,183 @@
 # HANDOFF — START HERE
 
 Master index for the fc_loop work. **Every other document is a leaf; this is the only file
-that spans all branches.** Last updated 2026-09-01.
+that spans all branches.** Last updated 2026-09-06.
+
+> ## `1df0d4f` deployed, five-angle test round, fix round — 2026-09-03 → 2026-09-06
+>
+> ### The deploy (2026-09-03, ~10:20 UTC)
+>
+> `1df0d4f` (`1df0d4f7140f366e42b120fc9629fdb87e738428`, the merge of PR #84) was deployed to
+> **both** pools. **Routing UNCHANGED** — `fc_loop` on `:5002` was already serving 100% of the
+> public and the release rebuilt it in place, so no cutover happened and `CANARY_ALLOW_FLIP`
+> was not needed. `.runtime/checkpoints_fc.sqlite3` was kept (no migration; the DB is stamped
+> `{agent_arch: fc_loop, manager_v1_specialists: 0}`). Answer probes passed on both pools. The
+> monitor was reinstalled the same day; `check_install_drift.sh` reported no drift at
+> `src=053bc694474f`.
+>
+> Post-deploy both pools report a full 40-char `X-Agent-Version` **and**
+> `X-Agent-Specialists: 0`. That is new: `LEGACY_APP_SHA` is now set in the root `.env` and
+> `app` was recreated, so the legacy pool can name its commit for the first time. Several
+> deploy comments and runbook steps written before this still say the opposite — see the fix
+> round below.
+>
+> ### The five-angle post-deploy test round (2026-09-03)
+>
+> Five independent testers against the deployed build. **10 高 / 16 中 / 11 低**, 96 model turns.
+> Full reports and the merged summary are in the round's scratchpad (`test5/SUMMARY.md`,
+> `T1.md`–`T5.md`, `D5_report.md`).
+>
+> | angle | scope | verdict as written |
+> |---|---|---|
+> | T1 | live production behaviour, both pools | **DEGRADED** (not broken) — "nothing warrants a rollback: fc is strictly better than legacy on every scenario tested" |
+> | T2 | `manager_v1`+specialists vs `fc_loop`, isolated | **NOT-READY for a 5% canary** — "by a narrow, fixable margin" |
+> | T3 | adversarial / security, isolated | **GAPS** — most claimed properties hold; three do not |
+> | T4 | telemetry contract + canary gate, real data | telemetry **TRUSTWORTHY**; the **GATE is NOT usable as documented today** |
+> | T5 | deploy / rollout / recovery drills | **ROLLOUT-TOOLING TRUSTED** — 4 findings, none 高; 3 stale comments/docs |
+>
+> The load-bearing items: a lone surrogate (`"\ud800"`) in an anonymous request body is a
+> live **500** that also writes a `turn_outcome=server_error` record, so any caller can drive
+> the gate to HOLD; a window straddling the deploy exits **3 (CANARY-BLOCK)** rather than the
+> promised exit 2, and under `run_canary_gate.sh` exit 3 auto-rolls back to weight 0; the
+> zero-tolerance aggregation is endpoint-scoped but not arch-scoped, so pre-deploy legacy
+> history blocks the fc candidate indefinitely; and the only shipped price table has `null`
+> rates for the model production actually uses, so the cost side of the A/B has never been
+> evaluable. On the positive side telemetry is contract-clean on the whole post-deploy
+> population (`llm_calls` matches the containers' provider log 53/53), specialists run with
+> zero invariant violations and zero model calls, and the live checkpoint DB is correctly
+> stamped.
+>
+> ### The fix round (2026-09-06, branch `fix/post-deploy-tests-20260903`) — DONE, PENDING VERIFICATION
+>
+> Five agents on one working tree under strict file ownership. Every assigned finding is
+> implemented and each agent's own and neighbouring suites are green. **Not yet done:** the
+> whole-collection run under both CI shuffle seeds (1009 / 2027) on a settled tree, the
+> five deploy harnesses re-run together, and the gate replay. Nothing is committed or
+> pushed; nothing on the host was mutated (`.runtime` canary logs 255 / 2924 unchanged by
+> all five agents, no pool contacted, no `docker`/`nginx`/`sudo`). Final numbers are the
+> verifier's to fill in.
+>
+> * **F1 — web request boundary, memory-write shape, checkpoint identity.** P0-1 fixed at
+>   three layers (`app.py::_reject_unstorable_text` → 400; `identity.py::normalize_message`
+>   + `SURROGATE_RE`/`CONTROL_RE`; `conversation_store::_EncodeSafeConnection` so no bind
+>   parameter on that store can raise `UnicodeEncodeError` again) plus the telemetry second
+>   order (a parse-time rejection emits **no** record; a genuine pre-model crash reports
+>   `no_llm_calls`, not the never-forgiven `not_instrumented`). P0-6 refused at the
+>   row-creating call (`memory_gate::content_is_instruction_shaped` /
+>   `memory_write_rejection`, `memory_tools::remember_impl`), because the offending
+>   `remember` rode in the same batch as the untrusted read. P0-7 half fixed (below).
+>   P1-13 (`_rate_limit_subject` + `TRUSTED_PROXY_IPS`, empty by default), P1-14 (413),
+>   P1-15 (404). P2-1 app side (`_answer_contract_summary` into `_build_fc_signals` and the
+>   `/api/alex` payload). Also executed F4's wave-latency fold and F2's job-correlation ask.
+> * **F2 — telemetry, gate, cost.** P0-2 (`evaluate_measurement_validity`; precedence is now
+>   measurement-invalid ▸ zero-tolerance ▸ instrumentation-hold ▸ stage-pause ▸ proceed, and
+>   `run_canary_gate.sh` refuses the rollback verb with `ROLLBACK_REFUSED`/exit 2 if handed
+>   a 3 beside `measurement_valid=False`). P0-3 by **build**-scoping (`zero_tolerance_arm`,
+>   `--candidate-sha`). P0-4 (`scripts/pricing/deepseek_prices_v2.json`, v1 untouched) —
+>   and while shipping it, a real billing bug: `cache_read_tokens` is a breakdown of
+>   `input_tokens`, not an addition, so every cached token was billed twice (3.7× on the
+>   measured window). P2-1 telemetry side, P2-2 mechanism, P2-3 (`[INSTRUMENTATION]` block),
+>   P2-5 (`scripts/canary_prune_fixture_rows.py`, written and tested, **not run on live
+>   data** — needs the pool stopped, owner action), P2-6, P2-7, P2-10; runbook §5.
+> * **F3 — the fc/manager loop.** P0-5 (batch-level taint: `execute_tools_node` computes
+>   `batch_tainted` from the batch **as planned**, since reads and writes dispatch
+>   concurrently). P1-1 (`search_readiness.detect_relative_budget_delta` /
+>   `resolve_relative_budget` + `_relative_budget_repair` + an executor-side defence).
+>   P1-2 (`ANNOUNCED_TOOL_PATTERNS`, one corrective iteration, then an explicit stub
+>   marker). P1-3 backstop only (below). P1-5 (`timeout` classification; the evidence note
+>   now names a degraded role's untried grants, `MAX_EVIDENCE_NOTE_CHARS` 700→900).
+>   P1-6 (caveat appended, ledger rendered, never a 71-char replacement). P1-7 — and this
+>   is the number to carry: `issues=['empty_answer']` fired on **6 of 18** live turns, each
+>   of which would have been a zero-length HTTP 200. P1-8. P1-9 fc side. TD-1/TD-2/TD-3
+>   closed with harnesses (`specialist_call_not_planned` now increments `denied_calls`).
+> * **F4 — legacy arch and the tool layer.** P1-4 (the legacy POI planner asked about the
+>   *city*: `_area_named_in_turn` + `most_specific_known_area`, plus a tool-side
+>   `_upgrade_generic_address`; the tool's refusal of a bare city was correct and was
+>   kept). P1-10 (`check_safety.crime_window` — one reply printed 2560 and 1280 from one
+>   total, 7681/3 vs a hardcoded /6). P1-11 (`localize_reason`; English stays the canonical
+>   data form). P1-12 (`reconcile_area_label`, display boundary only, raw string kept as
+>   `provider_address`). P2-4 artifact path (`_legacy_tool_artifact` now emits the same
+>   timing fields as `agent_loop::_artifact`; 6 of 7 live legacy turns carry real numbers
+>   where T1 saw 0 of 11). P1-9 legacy banner. Tools hygiene: a new
+>   `core/tools/_argtext.clean_arg_text` boundary for the three tools that could raise on
+>   hostile arguments. New defect found and fixed in passing: `_extract_area` scanned
+>   `_ZH_AREA_MAP` in table order, so 「伦敦卡姆登」 silently became a London-wide search.
+> * **F5 — deploy tooling, the probe, the runbook.** P2-8 and P2-9 (the four byte-identical
+>   specialist-header comments and the `--allow-unidentified-target` prose corrected to the
+>   post-`1df0d4f` reality; the *rule* is unchanged). TD-4 —
+>   `deploy/test_switch_pool_assertions.sh` defaults moved to the real header shape,
+>   37 → 50, absent-header cases kept as an explicit un-rebuilt-image scenario. TD-5 — new
+>   `deploy/test_set_canary_weight_assertions.sh`, 96 assertions, for the controller every
+>   other lever delegates to. TD-6/P1-2 probe side. P2-11/P2-12 — runbook §0 and §4.
+>   Plus F1's R1 residual: `docker-compose.yml` no longer passes
+>   `--forwarded-allow-ips "*"`. Harnesses **474 assertions / 0 failed**.
+>
+> **Refuted or reclassified — do not re-report these as written.**
+>
+> * **P0-7 is half refuted by T3's own instance log.** T3 中-3 says E6a "served `/live` 200
+>   and `/ready` 200"; `T3/E6a.log` records `GET /ready … 503`. `asgi._check_checkpoint`
+>   already held the deploy gate on `1df0d4f`. The real residual — the process still
+>   *started* and answered `/live` 200 — is what `verify_checkpoint_identity` closes.
+> * **P1-9 does not originate in `app.py`.** `_build_focus_stack_records` composes no prose.
+>   The phrase was authored in prompt text: `loop_prompts::DEICTIC_RULE` and the
+>   `=== FOCUS STACK … ===` banner in `langgraph_agent::build_context_info`. The model was
+>   quoting us.
+> * **T4's P0-3 was build-blind, not arch-blind.** `aggregate_zero_tolerance` was *already*
+>   arch-scoped. 286 of the blocking rows are `agent_arch: fc_loop` records from **earlier
+>   builds** (`4171d84`, `9129280`, `unknown`) that live in the legacy log file. The fix is
+>   build-scoping plus a measurement-validity rule, not arch-scoping.
+> * **P1-3 did not reproduce.** Four isolated runs of T1's exact zh query returned 1 batch /
+>   2 calls / ~7 s / 20.7K tokens, with and without the new cap. Treat T1 高-3 (76.3 s, 7
+>   calls, 101K tokens) as a single-sample outlier of *situational* re-planning, not a
+>   language-path defect. What shipped is a per-turn call cap as a blast-radius bound.
+> * **P1-12's user-visible fix could not be reproduced live.** The plumbing is verified
+>   (every row now carries `provider_address`, so the reconciling builder ran), but the
+>   contradicting listing is no longer in the provider's result set, so the correction had
+>   nothing to correct. The exact T1 string is covered by a unit test only.
+>
+> **Cross-agent facts the reviewer needs.**
+>
+> * `app/core/candidate_validation.py` has **two authors this round** — F4's P1-11 reason
+>   localisation and F3's P1-6 `_drop_commute_lines` / `_commute_fallback_answer`. The hunks
+>   are disjoint and coexist, but the file wants one reviewer.
+> * `tests/test_fix_web_ratelimit.py` was **rewritten, not adjusted**: its five XFF cases
+>   asserted the defect as the contract. The rightmost-element half of its premise was
+>   right — the nginx INSTALLED on this box sets `X-Forwarded-For
+>   $proxy_add_x_forwarded_for` (an APPEND;
+>   `/etc/nginx/sites-available/rentcompass.co.uk.conf:49` and `/etc/nginx/proxy_params:3`),
+>   while `deploy/nginx/*.conf` in the repo sets `$remote_addr` (a REPLACE), and under both
+>   the trustworthy value is the LAST element. What was wrong was WHO the header was
+>   believed from: any loopback peer, which is anything that can reach the port.
+> * `FC_LOOP_SYSTEM_PROMPT_VERSION` **2.1.0 → 2.2.0** (the rendered system prompt changed).
+>   `deploy/update.sh` derives `PROMPT_VERSION` from the pinned `loop_prompts.py`, so a
+>   normal release picks it up; root `.env` correctly still reads 2.1.0, matching the
+>   *deployed* image. The hazard: running a pool from this working tree **without**
+>   rebuilding while `RELEASE_METADATA_REQUIRED=1` makes `/ready` 503 on the mismatch.
+>   `tests/test_asgi_readiness.py` now derives the value from the constant.
+> * `deploy/monitoring/rentcompass-monitor.sh` changed (**comments only**), so the manifest
+>   moved to `ae3ccfc3e5ca4e6d0d7950adc202895cc86a462954a0ef05ac6bccdb9302af72` (was
+>   `053bc694474f…`). `check_install_drift.sh` now exits 1 and
+>   `test_monitor_install_provenance.py::test_the_installed_copy_matches_the_committed_script`
+>   is red **on this box only** (`skipif`-guarded off it, so CI is unaffected).
+>   **Owner action after this branch merges and the next release runs:**
+>   `sudo install -m 0755 deploy/monitoring/rentcompass-monitor.sh /usr/local/bin/rentcompass-monitor.sh`
+>   then `bash deploy/monitoring/check_install_drift.sh`.
+>
+> **Owner decisions this round raises and does not take.**
+>
+> 1. **The loopback XFF bypass is narrowed, not closed.** The published ports are served by
+>    docker-proxy, so nginx and a local process both reach the container as the compose
+>    bridge gateway (`172.19.0.1`) and `--forwarded-allow-ips` cannot separate them.
+>    Genuinely closing it needs nginx to **prove** itself: a shared-secret header the app
+>    requires, a unix socket bind-mounted to nginx, or nginx on the compose network.
+> 2. **Pin `ipam` on `rentnet`?** That would make the gateway a constant instead of a
+>    Docker-assigned value that can drift — but it recreates the network on the next `up`,
+>    so it was not taken unilaterally. Today the value is one overridable variable
+>    (`UVICORN_FORWARDED_ALLOW_IPS`), read by both uvicorn and `TRUSTED_PROXY_IPS`.
+>
+> Also still open from the test round: **the specialist denial path has no live evidence**
+> (TD-1 is closed by a harness, not by a canary), the 121 fixture rows are still in
+> `.runtime/logs/canary-legacy.jsonl`, and `manager_v1` remains NOT-READY for a 5% canary.
 
 > ## PR #83 pre-push review — 2026-09-01
 >

@@ -1,0 +1,6 @@
+{
+  "passed": true,
+  "storage_and_credential_files_excluded": true,
+  "private_credential_substrings_checked": 14,
+  "artifacts_with_exact_credential_match": []
+}

@@ -1,0 +1,410 @@
+{
+  "date": "2026-10-19",
+  "final_candidate": 4,
+  "verdict": "PASS_WITH_SCOPE_LIMITS",
+  "unit_regression": {
+    "passed": 4885,
+    "skipped": 12,
+    "failed": 0,
+    "errors": 0,
+    "seconds": 221.918,
+    "skip_reasons": [
+      {
+        "test": "tests.test_classify_place.test_live_osm_university_is_destination",
+        "reason": "set RUN_LIVE_OSM=1 to hit the real Nominatim service"
+      },
+      {
+        "test": "tests.test_classify_place.test_live_osm_suburb_is_area",
+        "reason": "set RUN_LIVE_OSM=1 to hit the real Nominatim service"
+      },
+      {
+        "test": "tests.test_deploy_release_advances_the_pin.test_release_sh_rehearsal_passes",
+        "reason": "the rehearsal builds a throwaway git repo; needs bash + git"
+      },
+      {
+        "test": "tests.test_deploy_update_targets_live_pool.test_update_sh_rehearsal_passes",
+        "reason": "the rehearsal builds a throwaway git repo; needs bash + git"
+      },
+      {
+        "test": "tests.test_env_files_cannot_be_committed.test_subset_matcher_agrees_with_real_git",
+        "reason": "no usable git (containerised worktree)"
+      },
+      {
+        "test": "tests.test_eval_writer_commit_identity.test_the_real_round_of_record_still_reads_when_it_is_present[round_dir0]",
+        "reason": "retained round not mounted here: /home/shuhan/uk_rent_recommendation/.runtime/round-8793c0b-internal-2026-07-25/eval/sweep"
+      },
+      {
+        "test": "tests.test_grader_provenance_gate.test_the_real_paired_round_really_did_record_two_graders[idp98_r1_base-idp98_r1_cand]",
+        "reason": "retained fp-results round not mounted here"
+      },
+      {
+        "test": "tests.test_grader_provenance_gate.test_the_real_paired_round_really_did_record_two_graders[idp98_r2_base-idp98_r2_cand]",
+        "reason": "retained fp-results round not mounted here"
+      },
+      {
+        "test": "tests.test_grader_provenance_gate.test_the_real_paired_round_really_did_record_two_graders[idp98_r3_base-idp98_r3_cand]",
+        "reason": "retained fp-results round not mounted here"
+      },
+      {
+        "test": "tests.test_monitor_install_provenance.test_the_installed_copy_matches_the_committed_script",
+        "reason": "/usr/local/bin/rentcompass-monitor.sh not present — not the production box (CI/bench container)"
+      },
+      {
+        "test": "tests.test_monitor_install_provenance.test_systemd_runs_the_copy_this_test_just_hashed",
+        "reason": "/usr/local/bin/rentcompass-monitor.sh not present — not the production box (CI/bench container)"
+      },
+      {
+        "test": "tests.test_on_demand_listings.test_live_manchester_is_city_correct",
+        "reason": "set RUN_LIVE_SCRAPE=1 to hit the real OnTheMarket site"
+      }
+    ]
+  },
+  "source_frozen_consistency": {
+    "candidate": 4,
+    "checked_prefixes": [
+      "app/",
+      "src/",
+      "tests/",
+      "tests_refactor/",
+      "scripts/"
+    ],
+    "changed": [],
+    "passed": true
+  },
+  "persona_agent_rounds": {
+    "student": 12,
+    "professional": 10,
+    "family": 12
+  },
+  "parent_final_replays": {
+    "student": 1,
+    "family": 2,
+    "area_ranking": 1,
+    "zone_cost_reference": 1
+  },
+  "persona_independence": {
+    "student": "fresh context; black-box API/browser; no product implementation context",
+    "professional": "fresh context; black-box API/browser; no product implementation context",
+    "family": "reused accessibility repair agent; repair-aware; not a blind test",
+    "candidate4_parent_checks": "implementation-aware acceptance replay; not blind"
+  },
+  "tools_registered": 14,
+  "tools_covered_in_browser_conversation": 14,
+  "api_authorization": {
+    "checks": 253,
+    "passed": 253,
+    "phases": {
+      "guest": {
+        "phase": "guest",
+        "requests": 210,
+        "checks": 205,
+        "passed": 205,
+        "failed": []
+      },
+      "strict": {
+        "phase": "strict",
+        "requests": 36,
+        "checks": 35,
+        "passed": 35,
+        "failed": []
+      },
+      "reproduce": {
+        "phase": "reproduce",
+        "requests": 7,
+        "checks": 7,
+        "passed": 7,
+        "failed": []
+      },
+      "after-restart": {
+        "phase": "after-restart",
+        "requests": 6,
+        "checks": 6,
+        "passed": 6,
+        "failed": []
+      }
+    }
+  },
+  "tool_integration": {
+    "layer": "tool_integration",
+    "checks": 50,
+    "passed": 50,
+    "failed": []
+  },
+  "upstream_fault_integration": {
+    "checks": 19,
+    "passed": 19,
+    "failed": []
+  },
+  "http_sse_protocol": {
+    "checks": 34,
+    "passed": 34,
+    "failed": []
+  },
+  "concurrency_disconnect": {
+    "checks": 8,
+    "passed": 8,
+    "failed": []
+  },
+  "auth_ui": {
+    "checks": 9,
+    "passed": 9
+  },
+  "offline_ui": {
+    "checks": 82,
+    "mock_chat_requests": 14
+  },
+  "final_acceptance": {
+    "candidate4-student": [
+      {
+        "case": "chat-completes-with-success",
+        "passed": true
+      },
+      {
+        "case": "defaults-restored-without-restatement",
+        "passed": true
+      },
+      {
+        "case": "same-listing-commute-evidence-in-response-and-card",
+        "passed": true
+      },
+      {
+        "case": "at-least-one-exact-listing-route-replayed",
+        "passed": true
+      },
+      {
+        "case": "cards-immediately-visible",
+        "passed": true
+      },
+      {
+        "case": "history-and-evidence-survive-browser-refresh",
+        "passed": true
+      }
+    ],
+    "candidate4-family": [
+      {
+        "case": "chat-completes-with-success",
+        "passed": true
+      },
+      {
+        "case": "cat-permission-is-an-active-hard-constraint",
+        "passed": true
+      },
+      {
+        "case": "family-area-bedroom-and-budget-correct",
+        "passed": true
+      },
+      {
+        "case": "unknown-cat-permission-never-green",
+        "passed": true
+      },
+      {
+        "case": "chat-completes-with-success",
+        "passed": true
+      },
+      {
+        "case": "all-housing-criteria-unchanged-after-weather",
+        "passed": true
+      },
+      {
+        "case": "same-card-set-after-weather",
+        "passed": true
+      },
+      {
+        "case": "weather-value-retained",
+        "passed": true
+      },
+      {
+        "case": "no-false-commute-removal-note",
+        "passed": true
+      },
+      {
+        "case": "no-old-dangling-recap",
+        "passed": true
+      },
+      {
+        "case": "cards-survive-browser-refresh",
+        "passed": true
+      },
+      {
+        "case": "weather-dispatch-is-weather-only",
+        "passed": true
+      }
+    ],
+    "model-outage": [
+      {
+        "case": "provider-failure-has-honest-typed-error",
+        "passed": true
+      },
+      {
+        "case": "failure-is-not-a-slow-success-claim",
+        "passed": true
+      },
+      {
+        "case": "same-browser-conversation-recovers",
+        "passed": true
+      }
+    ],
+    "runtime-memory-scope": [
+      {
+        "case": "injected-foreign-user-id-overridden-at-dispatch",
+        "passed": true
+      },
+      {
+        "case": "foreign-private-canary-not-returned",
+        "passed": true
+      },
+      {
+        "case": "controlled-injection-was-consumed",
+        "passed": true
+      }
+    ],
+    "area-scope": [
+      {
+        "case": "mixed-cache-scope-not-claimed-as-whole-flat-data",
+        "passed": true
+      }
+    ]
+  },
+  "actual_container_restarts": 6,
+  "model_requests": {
+    "observed": 231,
+    "real_upstream_requests": 228,
+    "synthetic_503": 2,
+    "synthetic_tool_call_responses": 1,
+    "reported_tokens": 1412584,
+    "request_budget": 320,
+    "token_budget": 1600000
+  },
+  "network": {
+    "container_network": "none",
+    "read_only_root": true,
+    "container_public_bindings": {},
+    "browser_origin": "http://127.0.0.1:15008",
+    "browser_external_requests_aborted": true,
+    "model_upstream_allowlist": [
+      "api.deepseek.com"
+    ],
+    "housing_cache_only": true,
+    "on_the_market_transport_attempts": 0,
+    "socket_external_attempts_blocked": 0,
+    "model_uses_existing_configuration": true
+  },
+  "limits": [
+    "Historical frozen listings; current prices and availability not verified",
+    "Weather, TfL, Police, OSM and web HTTP transport responses are synthetic; real tool implementations run",
+    "Repeated sessions, refreshes and six actual restarts; not a weeks-long soak",
+    "Current fc_loop configuration; optional manager and MCP architectures not E2E exercised",
+    "External map tiles, images and listing navigation blocked",
+    "One existing Starlette WSGI deprecation warning; no deployment performed"
+  ],
+  "cleanup": {
+    "isolated_container_removed": true,
+    "host_processes_signaled": [
+      "relay",
+      "serve",
+      "proxy"
+    ],
+    "test_credential_and_session_files_removed": [
+      "private/model.env",
+      "private/clients.json",
+      "private/memory-scope.json",
+      "private/protocol-cookie.txt",
+      "student_retest/student-storage.json",
+      "professional_retest/primary-storage.json",
+      "family_retest/family_retest-storage.json",
+      "root/root-storage.json",
+      "root/auth-ui-confirmed-storage.json",
+      "runtime/auth.sqlite3",
+      "runtime/round2constraints4/auth.sqlite3",
+      "runtime/finalfull/auth.sqlite3",
+      "runtime/firstfull/auth.sqlite3",
+      "runtime/repairedfull/auth.sqlite3",
+      "runtime/candidate4full/auth.sqlite3",
+      "runtime/constraints2/auth.sqlite3",
+      "runtime/candidate3full/auth.sqlite3",
+      "runtime/candidate4-root-target/auth.sqlite3",
+      "runtime/round2final-target/auth.sqlite3",
+      "runtime/finalfull/pytest/test_credential_failure_is_par0/auth.sqlite3",
+      "runtime/finalfull/pytest/test_memory_failure_returns_pa0/auth.sqlite3",
+      "runtime/finalfull/pytest/test_active_turn_blocks_erasur0/auth.sqlite3",
+      "runtime/finalfull/pytest/test_checkpoint_residual_never0/auth.sqlite3",
+      "runtime/finalfull/pytest/test_forget_me_verifies_all_la0/auth.sqlite3",
+      "runtime/finalfull/pytest/test_sessions_survive_restart_0/auth.sqlite3",
+      "runtime/finalfull/pytest/test_successful_erasure_remove0/auth.sqlite3",
+      "runtime/finalfull/pytest/test_copied_cookie_denied_on_h1/auth.sqlite3",
+      "runtime/finalfull/pytest/test_copied_cookie_denied_on_h0/auth.sqlite3",
+      "runtime/firstfull/pytest/test_credential_failure_is_par0/auth.sqlite3",
+      "runtime/firstfull/pytest/test_memory_failure_returns_pa0/auth.sqlite3",
+      "runtime/firstfull/pytest/test_active_turn_blocks_erasur0/auth.sqlite3",
+      "runtime/firstfull/pytest/test_checkpoint_residual_never0/auth.sqlite3",
+      "runtime/firstfull/pytest/test_forget_me_verifies_all_la0/auth.sqlite3",
+      "runtime/firstfull/pytest/test_sessions_survive_restart_0/auth.sqlite3",
+      "runtime/firstfull/pytest/test_successful_erasure_remove0/auth.sqlite3",
+      "runtime/firstfull/pytest/test_copied_cookie_denied_on_h1/auth.sqlite3",
+      "runtime/firstfull/pytest/test_copied_cookie_denied_on_h0/auth.sqlite3",
+      "runtime/prerelease/pytest/test_generate_map_route_redact0/auth.sqlite3",
+      "runtime/repairedfull/pytest/test_credential_failure_is_par0/auth.sqlite3",
+      "runtime/repairedfull/pytest/test_memory_failure_returns_pa0/auth.sqlite3",
+      "runtime/repairedfull/pytest/test_active_turn_blocks_erasur0/auth.sqlite3",
+      "runtime/repairedfull/pytest/test_checkpoint_residual_never0/auth.sqlite3",
+      "runtime/repairedfull/pytest/test_forget_me_verifies_all_la0/auth.sqlite3",
+      "runtime/repairedfull/pytest/test_sessions_survive_restart_0/auth.sqlite3",
+      "runtime/repairedfull/pytest/test_successful_erasure_remove0/auth.sqlite3",
+      "runtime/repairedfull/pytest/test_copied_cookie_denied_on_h1/auth.sqlite3",
+      "runtime/repairedfull/pytest/test_copied_cookie_denied_on_h0/auth.sqlite3",
+      "runtime/candidate4full/pytest/test_credential_failure_is_par0/auth.sqlite3",
+      "runtime/candidate4full/pytest/test_memory_failure_returns_pa0/auth.sqlite3",
+      "runtime/candidate4full/pytest/test_active_turn_blocks_erasur0/auth.sqlite3",
+      "runtime/candidate4full/pytest/test_checkpoint_residual_never0/auth.sqlite3",
+      "runtime/candidate4full/pytest/test_forget_me_verifies_all_la0/auth.sqlite3",
+      "runtime/candidate4full/pytest/test_sessions_survive_restart_0/auth.sqlite3",
+      "runtime/candidate4full/pytest/test_successful_erasure_remove0/auth.sqlite3",
+      "runtime/candidate4full/pytest/test_copied_cookie_denied_on_h1/auth.sqlite3",
+      "runtime/candidate4full/pytest/test_copied_cookie_denied_on_h0/auth.sqlite3",
+      "runtime/constraints2/pytest/test_sessions_survive_restart_0/auth.sqlite3",
+      "runtime/constraints2/pytest/test_copied_cookie_denied_on_h1/auth.sqlite3",
+      "runtime/constraints2/pytest/test_copied_cookie_denied_on_h0/auth.sqlite3",
+      "runtime/candidate3full/pytest/test_credential_failure_is_par0/auth.sqlite3",
+      "runtime/candidate3full/pytest/test_memory_failure_returns_pa0/auth.sqlite3",
+      "runtime/candidate3full/pytest/test_active_turn_blocks_erasur0/auth.sqlite3",
+      "runtime/candidate3full/pytest/test_checkpoint_residual_never0/auth.sqlite3",
+      "runtime/candidate3full/pytest/test_forget_me_verifies_all_la0/auth.sqlite3",
+      "runtime/candidate3full/pytest/test_sessions_survive_restart_0/auth.sqlite3",
+      "runtime/candidate3full/pytest/test_successful_erasure_remove0/auth.sqlite3",
+      "runtime/candidate3full/pytest/test_copied_cookie_denied_on_h1/auth.sqlite3",
+      "runtime/candidate3full/pytest/test_copied_cookie_denied_on_h0/auth.sqlite3"
+    ],
+    "existing_services": [
+      {
+        "name": "uk-rent-app-fc",
+        "id": "8b51606473c27806d4c6cfe50081c0d88e60ff2f262cd38f68617aee83a48dc4",
+        "started": "2026-09-03T10:21:40.092250377Z",
+        "same_id_and_started": true
+      },
+      {
+        "name": "uk-rent-app",
+        "id": "710cb79bf8ef7b7744df581674d5305ff28deb74394ec3097efbbe0bb412d4b4",
+        "started": "2026-09-03T10:21:10.877219854Z",
+        "same_id_and_started": true
+      },
+      {
+        "name": "uk-rent-searxng",
+        "id": "5782f93ecf5fd9f388d150623ba0ae4b2802bebbfe179829f043feb339687338",
+        "started": "2026-07-17T15:51:13.450635344Z",
+        "same_id_and_started": true
+      },
+      {
+        "name": "uk-rent-valkey",
+        "id": "dadfea5e33e7b9d06f67761e9d24f047c9c6fa95d5b8b25c4efa38fabde82194",
+        "started": "2026-07-09T13:04:52.54164319Z",
+        "same_id_and_started": true
+      }
+    ],
+    "existing_services_unchanged": true
+  },
+  "post_archive_guard": {
+    "passed": 121,
+    "skipped": 1,
+    "failed": 0
+  }
+}

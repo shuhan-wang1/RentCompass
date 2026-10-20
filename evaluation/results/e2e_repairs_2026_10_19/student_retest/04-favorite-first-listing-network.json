@@ -1,0 +1,32 @@
+[
+  {
+    "url": "http://127.0.0.1:15008/api/favorites",
+    "status": 200,
+    "method": "POST",
+    "request_headers": {
+      "accept": "*/*",
+      "content-type": "application/json",
+      "cookie": "[REDACTED]",
+      "origin": "http://127.0.0.1:15008",
+      "referer": "http://127.0.0.1:15008/",
+      "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Linux\""
+    },
+    "request_body": "{\"qualification\": {\"constraints\": {\"areas\": [], \"bedrooms\": 3, \"bedrooms_minimum\": false, \"commute_destination\": \"Gower Street, London WC1E 6BT\", \"max_budget_monthly\": 3000, \"max_commute_minutes\": null, \"move_in_date\": null, \"no_commute\": false, \"property_features\": [], \"room_type\": \"whole\"}, \"reasons\": [], \"source\": \"structured_listing\", \"status\": \"eligible\", \"unknown_reasons\": []}, \"budget_basis\": 3000, \"possibly_outdated\": true, \"source_conversation_title\": \"我和两个同学都是中文留学生，下个月去伦敦大学学院 UCL 读硕士，还没确定住处。…\", \"saved_at\": \"2026-10-19T08:57:20.359Z\", \"user_id\": \"15f470821e334cc68b70d7f959b67421\", \"url\": \"https://www.onthemarket.com/details/20335504/\", \"address\": \"The Grove, Enfield\", \"price\": \"£2300/month\", \"travel_time\": \"\", \"explanation\": \"3 bedroom house to rent in The Grove, Enfield\", \"images\": [\"https://media.onthemarket.com/properties/20335504/1644305883/image-0-480x320.jpg\", \"https://media.onthemarket.com/properties/20335504/1644305883/image-1-480x320.jpg\", \"https://media.onthemarket.com/properties/20335504/1644305883/image-2-480x320.jpg\", \"https://media.onthemarket.com/properties/20335504/1644305883/image-3-480x320.jpg\", \"https://media.onthemarket.com/properties/20335504/1644305883/image-4-480x320.jpg\"], \"geo_location\": \"51.658153, -0.103044\", \"rank\": 1, \"budget_status\": \"✅ 在预算内\", \"match_type\": \"perfect\", \"available_from\": \"\", \"availability_status\": \"\"}",
+    "response_headers": {
+      "x-agent-version": "e2e-repair-frozen-working-tree",
+      "access-control-allow-credentials": "true",
+      "access-control-allow-origin": "http://127.0.0.1:15008",
+      "content-length": "48",
+      "date": "Mon, 19 Oct 2026 08:57:19 GMT",
+      "x-agent-arch": "fc_loop",
+      "content-type": "application/json",
+      "x-agent-specialists": "0",
+      "server": "uvicorn",
+      "vary": "Cookie"
+    },
+    "response_body": "{\"message\": \"Added to favorites\", \"success\": true}"
+  }
+]

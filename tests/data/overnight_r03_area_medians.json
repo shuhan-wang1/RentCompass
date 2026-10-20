@@ -1,0 +1,129 @@
+{
+ "source": "r04 conv 4db2a1444e6d414eb3c101cc2035a6a6 rid 00af8362",
+ "draft": "Here's how the three areas stack up for a 1-bed under £2,200 with a commute to King's Cross. Rent figures come from the cached OnTheMarket listings (about 46 days old for Islington and Camden, 90 days for Hackney), and commute times are area-level estimates to King's Cross.\n\n**1. Islington — best overall**\n- Median rent: £2,400 (range £1,517–£5,000, 59 listings)\n- Commute to King's Cross: about 15 minutes — by far the shortest of the three\n- Share of listings under £2,200: roughly 29%\n- The catch: the median is above your budget, so you'd be looking at the lower end of the market. But the commute is excellent and Islington is the strongest combination of the two.\n\n**2. Camden — best value**\n- Median rent: £2,100 (range £850–£5,000, 95 listings)\n- Commute to King's Cross: about 42 minutes (area-level estimate)\n- Share of listings under £2,200: roughly 56% — the best budget fit by a wide margin\n- Camden has the most stock and the most choice under your ceiling, but the commute figure is much longer than you'd expect for somewhere so close to King's Cross, which drags its score down.\n\n**3. Hackney — weakest fit**\n- Median rent: £2,750 (range £875–£4,500, 29 listings)\n- Commute to King's Cross: about 38 minutes\n- Share of listings under £2,200: roughly 21%\n- Highest median rent, thinnest stock, and the oldest data of the three. Only worth it if you specifically want Hackney.\n\nA few caveats worth knowing: these rent statistics cover mixed listings without filtering for 1-bedroom flats specifically, so the true 1-bed median in each area will differ from the figures above. The commute times are area reference points, not measured journeys from any particular home, and none of the prices are live-verified — always confirm the asking rent and availability with the agent.\n\nIf you want, I can pull actual 1-bed listings under £2,200 in any of these areas so you can see real options rather than area averages.",
+ "raw_data": {
+  "success": true,
+  "status": "ok",
+  "areas": [
+   {
+    "name": "Islington",
+    "slug": "islington",
+    "rent": {
+     "min": 1517.0,
+     "max": 5000.0,
+     "median": 2400.0,
+     "sample_size": 59,
+     "freshness_days": 46,
+     "low_sample": false
+    },
+    "commute_minutes": 15,
+    "budget_match_rate": 0.288,
+    "score": {
+     "total": 62.5,
+     "components": {
+      "value": 43.8,
+      "commute": 100.0
+     },
+     "weights": {
+      "value": 0.6667,
+      "commute": 0.3333
+     },
+     "partial": false
+    },
+    "sources": [
+     "OnTheMarket listing cache",
+     "commute routing"
+    ],
+    "no_data": false,
+    "rank": 1
+   },
+   {
+    "name": "Camden",
+    "slug": "camden",
+    "rent": {
+     "min": 850.0,
+     "max": 5000.0,
+     "median": 2100.0,
+     "sample_size": 95,
+     "freshness_days": 46,
+     "low_sample": false
+    },
+    "commute_minutes": 42,
+    "budget_match_rate": 0.558,
+    "score": {
+     "total": 54.9,
+     "components": {
+      "value": 82.3,
+      "commute": 0.0
+     },
+     "weights": {
+      "value": 0.6667,
+      "commute": 0.3333
+     },
+     "partial": false
+    },
+    "sources": [
+     "OnTheMarket listing cache",
+     "commute routing"
+    ],
+    "no_data": false,
+    "rank": 2
+   },
+   {
+    "name": "Hackney",
+    "slug": "hackney",
+    "rent": {
+     "min": 875.0,
+     "max": 4500.0,
+     "median": 2750.0,
+     "sample_size": 29,
+     "freshness_days": 90,
+     "low_sample": false
+    },
+    "commute_minutes": 38,
+    "budget_match_rate": 0.207,
+    "score": {
+     "total": 10.5,
+     "components": {
+      "value": 8.3,
+      "commute": 14.8
+     },
+     "weights": {
+      "value": 0.6667,
+      "commute": 0.3333
+     },
+     "partial": false
+    },
+    "sources": [
+     "OnTheMarket listing cache",
+     "commute routing"
+    ],
+    "no_data": false,
+    "rank": 3
+   }
+  ],
+  "explanation_notes": [
+   "Composite score = weighted sum of 0-100 components (value = lower median rent, adjusted by how many cached listings fall under budget; commute = shorter time). Weights come from your priorities and sum to 1: value=0.6667, commute=0.3333.",
+   "Rent statistics cover mixed cached listings without room-type or bedroom filtering. Budget match measures rent only. Freshness is the cache age, not verification of current price or availability. Area commute times do not verify individual homes.",
+   "Ranked order (present the areas in this order; #1 is the top recommendation): #1 Islington, #2 Camden, #3 Hackney."
+  ],
+  "priorities": [
+   "value",
+   "commute"
+  ],
+  "weights": {
+   "value": 0.6667,
+   "commute": 0.3333
+  },
+  "evidence_scope": {
+   "rent_sample": "mixed_cached_listings",
+   "room_type_filtered": false,
+   "bedrooms_filtered": false,
+   "budget_match_basis": "rent_only",
+   "freshness_basis": "cache_fetch_time",
+   "live_verified": false,
+   "commute_scope": "area_reference_point"
+  },
+  "not_evaluated": []
+ }
+}

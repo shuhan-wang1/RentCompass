@@ -1,0 +1,29 @@
+{
+  "time_utc": "2026-10-19T05:35:14Z",
+  "container": "rentcompass-persona-test",
+  "network_mode": "none",
+  "readonly_rootfs": true,
+  "port_bindings": {},
+  "running": true,
+  "container_user": "1000:1000",
+  "application_mounts": [
+    {
+      "target": "/work",
+      "writable": false,
+      "kind": "bind"
+    },
+    {
+      "target": "/audit",
+      "writable": true,
+      "kind": "bind"
+    },
+    {
+      "target": "/opt/hf-cache",
+      "writable": false,
+      "kind": "volume"
+    }
+  ],
+  "browser_policy": "Allow exact http://127.0.0.1:15004 origin; fulfill external CSS locally or abort other external requests before network.",
+  "model_relay": "Fixed upstream https://api.deepseek.com; Unix socket bridge only; maximum 500 requests.",
+  "scope": "Test traffic only; production crawler behavior is outside this measurement."
+}

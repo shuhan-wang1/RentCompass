@@ -322,4 +322,7 @@ def test_the_probe_is_stdlib_only_so_it_runs_inside_the_deploy_path():
         for line in source.splitlines()
         if line.startswith(("import ", "from ")) and "__future__" not in line
     }
-    assert imports <= {"argparse", "json", "sys", "urllib", "uuid"}, imports
+    # `re` was added 2026-09-06 for ANNOUNCED_TOOL_PATTERNS (P1-2). Still stdlib:
+    # the point of this test is that the probe imports nothing from the app and
+    # nothing from site-packages, because it runs under sudo from the deploy path.
+    assert imports <= {"argparse", "json", "re", "sys", "urllib", "uuid"}, imports

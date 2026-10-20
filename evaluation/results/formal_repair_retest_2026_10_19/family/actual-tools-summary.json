@@ -1,0 +1,427 @@
+{
+  "boundary": "Only actual Tool.execute records for this persona authenticated conversation(s). Terminal ask_user is graph-managed and is not recorded here; no absence implies no clarification.",
+  "total": {
+    "search_properties": 2,
+    "calculate_commute": 15,
+    "get_property_details": 9,
+    "check_safety": 3,
+    "search_nearby_pois": 4,
+    "get_weather": 2,
+    "get_transport_info": 2
+  },
+  "turns": [
+    {
+      "round": 1,
+      "turn_id": "215008be9c00461990528d572904cbfc",
+      "conversation_id": "76e9351df6d1450582bf1576b6e2116f",
+      "request_id": "e0b7bf30d3c941a8bf3ed3b1b84ac21d",
+      "status": "completed",
+      "tool_counts": {
+        "search_properties": 1,
+        "calculate_commute": 8,
+        "get_property_details": 3
+      },
+      "dispatches": [
+        {
+          "tool": "search_properties",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "calculate_commute",
+          "success": false,
+          "error": "无法计算通勤时间（地址解析失败）"
+        },
+        {
+          "tool": "calculate_commute",
+          "success": false,
+          "error": "无法计算通勤时间（地址解析失败）"
+        },
+        {
+          "tool": "calculate_commute",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "calculate_commute",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "calculate_commute",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "calculate_commute",
+          "success": false,
+          "error": "无法计算通勤时间（地址解析失败）"
+        },
+        {
+          "tool": "calculate_commute",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "calculate_commute",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "get_property_details",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "get_property_details",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "get_property_details",
+          "success": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "turn_id": "58ef949d568049568333398ea01c714f",
+      "conversation_id": "76e9351df6d1450582bf1576b6e2116f",
+      "request_id": "1011f25fbccd4830802e2b91444674dd",
+      "status": "completed",
+      "tool_counts": {},
+      "dispatches": []
+    },
+    {
+      "round": 3,
+      "turn_id": "2f6cdaec78b14ec0ac7ef09ca6f3c8cf",
+      "conversation_id": "76e9351df6d1450582bf1576b6e2116f",
+      "request_id": "84d9baea39b74626927349e6d873e8da",
+      "status": "completed",
+      "tool_counts": {
+        "get_property_details": 1,
+        "check_safety": 2,
+        "search_nearby_pois": 2
+      },
+      "dispatches": [
+        {
+          "tool": "get_property_details",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "check_safety",
+          "success": true,
+          "error": null,
+          "reference_point": {
+            "query": "Stratford",
+            "precision": "area",
+            "is_specific_address": false,
+            "distance_basis": "straight_line",
+            "measured_from": "the geocoded point for 'Stratford', at area precision; not coordinates borrowed from another tool",
+            "lat": 52.1927803,
+            "lon": -1.70634,
+            "coordinate_source": "nominatim",
+            "resolved_name": "Stratford-upon-Avon, Stratford-on-Avon, Warwickshire, England, United Kingdom"
+          },
+          "radius_m": 1609.344,
+          "data_months": [
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ],
+          "partial": false
+        },
+        {
+          "tool": "search_nearby_pois",
+          "success": false,
+          "error": "Nearby POI lookup failed",
+          "requested_radius_m": 1000,
+          "radius_m": 800,
+          "requested_types": [
+            "school",
+            "gp"
+          ],
+          "completed_types": [],
+          "failed_types": [
+            "school",
+            "gp"
+          ],
+          "search_status": "failed",
+          "service_status": "unavailable"
+        },
+        {
+          "tool": "search_nearby_pois",
+          "success": false,
+          "error": "Nearby POI lookup failed",
+          "requested_radius_m": 1000,
+          "radius_m": 800,
+          "requested_types": [
+            "school",
+            "gp"
+          ],
+          "completed_types": [],
+          "failed_types": [
+            "school",
+            "gp"
+          ],
+          "search_status": "failed",
+          "service_status": "unavailable"
+        },
+        {
+          "tool": "check_safety",
+          "success": true,
+          "error": null,
+          "reference_point": {
+            "query": "Tennyson Road, Stratford, London E15",
+            "precision": "supplied_coordinates",
+            "is_specific_address": false,
+            "distance_basis": "straight_line",
+            "measured_from": "the coordinates supplied to this safety query; their association with a particular property has not been independently verified",
+            "lat": 51.54103,
+            "lon": 0.006745,
+            "coordinate_source": "caller_supplied"
+          },
+          "radius_m": 1609.344,
+          "data_months": [
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ],
+          "partial": false
+        }
+      ]
+    },
+    {
+      "round": 4,
+      "turn_id": "b9d48d246eb64f7d841229850b3be626",
+      "conversation_id": "76e9351df6d1450582bf1576b6e2116f",
+      "request_id": "e8f99de2f9434129b174f190d5c3d3d1",
+      "status": "completed",
+      "tool_counts": {
+        "search_properties": 1,
+        "calculate_commute": 7,
+        "get_property_details": 2
+      },
+      "dispatches": [
+        {
+          "tool": "search_properties",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "calculate_commute",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "calculate_commute",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "calculate_commute",
+          "success": false,
+          "error": "无法计算通勤时间（地址解析失败）"
+        },
+        {
+          "tool": "calculate_commute",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "calculate_commute",
+          "success": false,
+          "error": "无法计算通勤时间（地址解析失败）"
+        },
+        {
+          "tool": "calculate_commute",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "calculate_commute",
+          "success": false,
+          "error": "无法计算通勤时间（地址解析失败）"
+        },
+        {
+          "tool": "get_property_details",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "get_property_details",
+          "success": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "round": 5,
+      "turn_id": "ce59e2d771c94864965c7adf12c65686",
+      "conversation_id": "76e9351df6d1450582bf1576b6e2116f",
+      "request_id": "fc525d53f3c54b8dba0a363e83c1f93f",
+      "status": "completed",
+      "tool_counts": {
+        "get_property_details": 2
+      },
+      "dispatches": [
+        {
+          "tool": "get_property_details",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "get_property_details",
+          "success": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "round": 6,
+      "turn_id": "ffe5e79f44504595b4c49f0223753040",
+      "conversation_id": "76e9351df6d1450582bf1576b6e2116f",
+      "request_id": "6578553bab8844a88e4ae5997e3b758f",
+      "status": "completed",
+      "tool_counts": {},
+      "dispatches": []
+    },
+    {
+      "round": 7,
+      "turn_id": "e36b92b78591464ea999635d2721a57a",
+      "conversation_id": "76e9351df6d1450582bf1576b6e2116f",
+      "request_id": "b589dc66cf1443ccb822c2a400efa8d2",
+      "status": "completed",
+      "tool_counts": {
+        "get_property_details": 1,
+        "get_weather": 2,
+        "check_safety": 1,
+        "get_transport_info": 2,
+        "search_nearby_pois": 2
+      },
+      "dispatches": [
+        {
+          "tool": "get_property_details",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "get_weather",
+          "success": true,
+          "error": null,
+          "weather_type": "current",
+          "location": "Stratford",
+          "latitude": 36.33614,
+          "longitude": -102.07212,
+          "temperature": 7.8,
+          "valid_at": "2026-10-19T14:00",
+          "rainfall_chance": null
+        },
+        {
+          "tool": "check_safety",
+          "success": true,
+          "error": null,
+          "reference_point": {
+            "query": "Tennyson Road, Stratford",
+            "precision": "supplied_coordinates",
+            "is_specific_address": false,
+            "distance_basis": "straight_line",
+            "measured_from": "the coordinates supplied to this safety query; their association with a particular property has not been independently verified",
+            "lat": 51.54103,
+            "lon": 0.006745,
+            "coordinate_source": "caller_supplied"
+          },
+          "radius_m": 1609.344,
+          "data_months": [
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ],
+          "partial": false
+        },
+        {
+          "tool": "get_transport_info",
+          "success": false,
+          "error": "Couldn't locate the start on the TfL network. Try a nearby station name or a postcode.",
+          "from": null,
+          "to": null,
+          "duration_minutes": null,
+          "fare_available": null,
+          "fare_note": null
+        },
+        {
+          "tool": "search_nearby_pois",
+          "success": false,
+          "error": "Nearby POI lookup failed",
+          "requested_radius_m": 1000,
+          "radius_m": 800,
+          "requested_types": [
+            "restaurant",
+            "school",
+            "gp"
+          ],
+          "completed_types": [],
+          "failed_types": [
+            "restaurant",
+            "school",
+            "gp"
+          ],
+          "search_status": "failed",
+          "service_status": "unavailable"
+        },
+        {
+          "tool": "get_weather",
+          "success": true,
+          "error": null,
+          "weather_type": "forecast",
+          "location": "Stratford, London, UK",
+          "latitude": 51.54103,
+          "longitude": 0.006745,
+          "temperature": 13.1,
+          "valid_at": "2026-10-20T14:00:00+01:00",
+          "rainfall_chance": 55
+        },
+        {
+          "tool": "search_nearby_pois",
+          "success": false,
+          "error": "Nearby POI lookup failed",
+          "requested_radius_m": 1000,
+          "radius_m": 800,
+          "requested_types": [
+            "school",
+            "gp",
+            "restaurant"
+          ],
+          "completed_types": [],
+          "failed_types": [
+            "school",
+            "gp",
+            "restaurant"
+          ],
+          "search_status": "failed",
+          "service_status": "unavailable"
+        },
+        {
+          "tool": "get_transport_info",
+          "success": true,
+          "error": null,
+          "from": {
+            "input": "Stratford, London",
+            "resolved_station": "E15 1DA",
+            "naptan": "51.541289,-0.0035472"
+          },
+          "to": {
+            "input": "King's Cross, London",
+            "resolved_station": "King's Cross St. Pancras Underground Station",
+            "naptan": "940GZZLUKSX"
+          },
+          "duration_minutes": 26,
+          "fare_available": false,
+          "fare_note": "TfL did not return a single fare for this exact routing (often when it uses National Rail or coordinates rather than Tube/DLR stations). See tfl.gov.uk/fares for a precise fare."
+        }
+      ]
+    }
+  ]
+}

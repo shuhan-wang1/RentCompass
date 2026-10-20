@@ -1,0 +1,284 @@
+[
+  {
+    "case": "protocol-account-A-login",
+    "passed": true,
+    "status": 200,
+    "expected": [
+      200
+    ]
+  },
+  {
+    "case": "empty-object",
+    "passed": true,
+    "status": 400,
+    "expected": [
+      400
+    ]
+  },
+  {
+    "case": "null-json",
+    "passed": true,
+    "status": 400,
+    "expected": [
+      400
+    ]
+  },
+  {
+    "case": "array-json",
+    "passed": true,
+    "status": 400,
+    "expected": [
+      400
+    ]
+  },
+  {
+    "case": "scalar-json",
+    "passed": true,
+    "status": 400,
+    "expected": [
+      400
+    ]
+  },
+  {
+    "case": "nonstring-message",
+    "passed": true,
+    "status": 400,
+    "expected": [
+      400
+    ]
+  },
+  {
+    "case": "empty-message",
+    "passed": true,
+    "status": 400,
+    "expected": [
+      400
+    ]
+  },
+  {
+    "case": "wrong-context",
+    "passed": true,
+    "status": 200,
+    "expected": [
+      200,
+      400
+    ]
+  },
+  {
+    "case": "malformed-json",
+    "passed": true,
+    "status": 400,
+    "expected": [
+      400
+    ]
+  },
+  {
+    "case": "oversized-body",
+    "passed": true,
+    "status": 413,
+    "expected": [
+      413
+    ]
+  },
+  {
+    "case": "wrong-content-type",
+    "passed": true,
+    "status": 415,
+    "expected": [
+      400,
+      415
+    ]
+  },
+  {
+    "case": "map-no-address",
+    "passed": true,
+    "status": 400,
+    "expected": [
+      400
+    ]
+  },
+  {
+    "case": "map-bad-coordinates",
+    "passed": true,
+    "status": 400,
+    "expected": [
+      400
+    ]
+  },
+  {
+    "case": "map-synthetic-positive",
+    "passed": true,
+    "status": 200,
+    "expected": [
+      200
+    ]
+  },
+  {
+    "case": "map-address-escape",
+    "passed": true,
+    "status": 200,
+    "expected": [
+      200
+    ]
+  },
+  {
+    "case": "protocol-account-B-login",
+    "passed": true,
+    "status": 200,
+    "expected": [
+      200
+    ]
+  },
+  {
+    "case": "json-hello",
+    "passed": true,
+    "status": 200,
+    "expected": [
+      200
+    ]
+  },
+  {
+    "case": "json-idempotent-replay",
+    "passed": true,
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "assertion": "same persisted payload plus replayed=true"
+  },
+  {
+    "case": "sse-idempotent-replay",
+    "passed": true,
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "assertion": "same persisted payload plus replayed=true"
+  },
+  {
+    "case": "sse-fresh-hello",
+    "passed": true,
+    "status": 200,
+    "expected": [
+      200
+    ]
+  },
+  {
+    "case": "messages-durable-once",
+    "passed": true,
+    "status": 200,
+    "expected": [
+      200
+    ]
+  },
+  {
+    "case": "refresh-load-0",
+    "passed": true,
+    "status": 200,
+    "expected": [
+      200
+    ]
+  },
+  {
+    "case": "refresh-load-1",
+    "passed": true,
+    "status": 200,
+    "expected": [
+      200
+    ]
+  },
+  {
+    "case": "refresh-load-2",
+    "passed": true,
+    "status": 200,
+    "expected": [
+      200
+    ]
+  },
+  {
+    "case": "bounded-rate-limit-0",
+    "passed": true,
+    "status": 200,
+    "expected": [
+      200,
+      429
+    ]
+  },
+  {
+    "case": "bounded-rate-limit-1",
+    "passed": true,
+    "status": 200,
+    "expected": [
+      200,
+      429
+    ]
+  },
+  {
+    "case": "bounded-rate-limit-2",
+    "passed": true,
+    "status": 200,
+    "expected": [
+      200,
+      429
+    ]
+  },
+  {
+    "case": "bounded-rate-limit-3",
+    "passed": true,
+    "status": 200,
+    "expected": [
+      200,
+      429
+    ]
+  },
+  {
+    "case": "bounded-rate-limit-4",
+    "passed": true,
+    "status": 200,
+    "expected": [
+      200,
+      429
+    ]
+  },
+  {
+    "case": "bounded-rate-limit-5",
+    "passed": true,
+    "status": 200,
+    "expected": [
+      200,
+      429
+    ]
+  },
+  {
+    "case": "bounded-rate-limit-6",
+    "passed": true,
+    "status": 200,
+    "expected": [
+      200,
+      429
+    ]
+  },
+  {
+    "case": "bounded-rate-limit-7",
+    "passed": true,
+    "status": 200,
+    "expected": [
+      200,
+      429
+    ]
+  },
+  {
+    "case": "bounded-rate-limit-8",
+    "passed": true,
+    "status": 429,
+    "expected": [
+      200,
+      429
+    ]
+  },
+  {
+    "case": "rate-limit-retry-after",
+    "passed": true,
+    "status": 429
+  }
+]

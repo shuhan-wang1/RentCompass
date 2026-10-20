@@ -1,0 +1,9 @@
+{
+  "container_network": "none",
+  "listing_producer": "cache_only",
+  "description_enrichment": false,
+  "external_browser_requests": "aborted",
+  "blocked_backend_attempts": 3,
+  "onthemarket_backend_attempts": 0,
+  "real_model_calls": 0
+}

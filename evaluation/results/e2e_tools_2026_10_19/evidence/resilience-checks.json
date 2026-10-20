@@ -1,0 +1,80 @@
+[
+  {
+    "case": "health-responsive-during-tool-turn",
+    "passed": true,
+    "seconds": 0.007
+  },
+  {
+    "case": "independent-conversation-remains-usable",
+    "passed": true,
+    "status": 200
+  },
+  {
+    "case": "same-conversation-single-flight",
+    "passed": true,
+    "status": 409,
+    "body": {
+      "conversation_id": "2373da1e11954e6388010db20a05d98b",
+      "error": "another turn is already running for this conversation",
+      "running_turn_id": "8d1c091e1fac4d969ef1c2a6217a21a3"
+    }
+  },
+  {
+    "case": "inflight-request-retry-no-second-execution",
+    "passed": true,
+    "status": 409,
+    "body": {
+      "conversation_id": "2373da1e11954e6388010db20a05d98b",
+      "error": "request is still in progress",
+      "replayed": true,
+      "request_id": "resilience-174b1cf23b534183a139a62dc65b056c",
+      "turn_id": "8d1c091e1fac4d969ef1c2a6217a21a3"
+    }
+  },
+  {
+    "case": "one-sse-final",
+    "passed": true
+  },
+  {
+    "case": "completed-request-replay",
+    "passed": true,
+    "status": 200
+  },
+  {
+    "case": "duplicate-requests-do-not-append-turns",
+    "passed": true,
+    "actual_turns": 1
+  },
+  {
+    "case": "disconnect-releases-conversation-lease",
+    "passed": true,
+    "status": 200,
+    "body": {
+      "conversation_id": "2373da1e11954e6388010db20a05d98b",
+      "message": "Hello. I can help with UK student housing.\n\nFrom our earlier work, I can\n\n- Check Bloomsbury's weather and neighbourhood safety (data.police.uk) and summarise the evidence\n- Finish the value comparison between the two areas\n- Search actual listings in either area within a budget\n\nWhat would you like to do?\n\nNote: the commute could not be verified for some of these listings, so the unverified commute figures have been removed from this answer.",
+      "response_type": "chat",
+      "turn_id": "df41b421e6dd455594cca423d812b298",
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "commute_destination": "Gower Street, London WC1E 6BT",
+          "constraint_sources": {
+            "max_travel_time": {
+              "source": "user_message",
+              "text": "Compare Bloomsbury and Camden in London for value and a commute to UCL under 45 minutes. Use cached rent evidence;  keep missing evidence explicit.",
+              "value": 45
+            }
+          },
+          "destination": "Gower Street, London WC1E 6BT",
+          "max_budget": null,
+          "max_travel_time": 45,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 2
+      }
+    }
+  }
+]

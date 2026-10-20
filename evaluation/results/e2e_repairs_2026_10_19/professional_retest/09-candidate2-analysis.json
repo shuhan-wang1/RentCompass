@@ -1,0 +1,511 @@
+{
+  "response_type": "search",
+  "criteria": {
+    "amenities_of_interest": [],
+    "area": "London",
+    "areas": [
+      "London"
+    ],
+    "bedrooms": null,
+    "bedrooms_minimum": null,
+    "budget_period": "month",
+    "commute_destination": "Bank station, London",
+    "constraint_sources": {
+      "bedrooms": {
+        "message_id": null,
+        "original_source": {
+          "source": "user_message",
+          "text": "Tell me more about the £1300/month studio on The Vale, London, listing 14672649: the full rent, deposit or fees if known, furnishing, availability, and anything missing from the listing that I should check before viewing. Please use its actual listing details and mark unknowns.",
+          "value": 0
+        },
+        "reason": "read_only_or_ancillary_source",
+        "source": "criteria_recovery",
+        "value": null
+      },
+      "bedrooms_minimum": {
+        "message_id": null,
+        "original_source": {
+          "source": "user_message",
+          "text": "Tell me more about the £1300/month studio on The Vale, London, listing 14672649: the full rent, deposit or fees if known, furnishing, availability, and anything missing from the listing that I should check before viewing. Please use its actual listing details and mark unknowns.",
+          "value": false
+        },
+        "reason": "read_only_or_ancillary_source",
+        "source": "criteria_recovery",
+        "value": null
+      },
+      "commute_destination": {
+        "message_id": 56,
+        "original_source": null,
+        "reason": "generic_destination_placeholder",
+        "source": "criteria_recovery",
+        "value": "Bank station, London"
+      },
+      "destination": {
+        "message_id": 56,
+        "original_source": null,
+        "reason": "generic_destination_placeholder",
+        "source": "criteria_recovery",
+        "value": "Bank station, London"
+      },
+      "room_type": {
+        "source": "user_message",
+        "text": "For the self-contained flat on The Vale, listing 14672649, show me the actual public-transport journey to Bank station arriving at 9 am on the next weekday, the adult fare, whether pay-as-you-go or a monthly Travelcard makes more sense for one office day a week, and any current line disruptions. Please distinguish actual tool results from estimates.",
+        "value": "whole"
+      }
+    },
+    "criteria_repair_provenance": [
+      {
+        "field": "bedrooms",
+        "message_id": null,
+        "previous_value": 0,
+        "reason": "read_only_or_ancillary_source",
+        "value": null
+      },
+      {
+        "field": "bedrooms_minimum",
+        "message_id": null,
+        "previous_value": false,
+        "reason": "read_only_or_ancillary_source",
+        "value": null
+      },
+      {
+        "field": "commute_destination",
+        "message_id": 56,
+        "previous_value": "My office",
+        "reason": "generic_destination_placeholder",
+        "value": "Bank station, London"
+      },
+      {
+        "field": "destination",
+        "message_id": 56,
+        "previous_value": "My office",
+        "reason": "generic_destination_placeholder",
+        "value": "Bank station, London"
+      }
+    ],
+    "destination": "Bank station, London",
+    "max_budget": null,
+    "max_budget_monthly": null,
+    "max_travel_time": null,
+    "monthly_total_budget": 2200,
+    "move_in_date": null,
+    "no_commute": false,
+    "office_days_per_week": 5,
+    "property_features": [],
+    "rent_filter_ceiling_monthly": null,
+    "room_type": "whole",
+    "soft_preferences": []
+  },
+  "results": [
+    {
+      "address": "The Vale, London",
+      "price": "£1300/month",
+      "candidate_status": "unknown",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [
+        "monthly travel cost is not verified for this listing, destination and attendance"
+      ],
+      "budget_status": "✅ 在预算内",
+      "budget_status_code": "unspecified",
+      "qualification": {
+        "constraints": {
+          "areas": [],
+          "bedrooms": null,
+          "bedrooms_minimum": false,
+          "commute_destination": "Bank station, London",
+          "max_budget_monthly": null,
+          "max_commute_minutes": null,
+          "monthly_total_budget": 2200,
+          "move_in_date": null,
+          "no_commute": false,
+          "office_days_per_week": 5,
+          "property_features": [],
+          "room_type": "whole"
+        },
+        "reason_messages": {
+          "en": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ],
+          "zh": [
+            "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+          ]
+        },
+        "reasons": [],
+        "source": "structured_listing",
+        "status": "unknown",
+        "unknown_reasons": [
+          "monthly travel cost is not verified for this listing, destination and attendance"
+        ]
+      }
+    },
+    {
+      "address": "Limes Avenue, Chigwell IG7",
+      "price": "£1400/month",
+      "candidate_status": "unknown",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [
+        "monthly travel cost is not verified for this listing, destination and attendance"
+      ],
+      "budget_status": "✅ 在预算内",
+      "budget_status_code": "unspecified",
+      "qualification": {
+        "constraints": {
+          "areas": [],
+          "bedrooms": null,
+          "bedrooms_minimum": false,
+          "commute_destination": "Bank station, London",
+          "max_budget_monthly": null,
+          "max_commute_minutes": null,
+          "monthly_total_budget": 2200,
+          "move_in_date": null,
+          "no_commute": false,
+          "office_days_per_week": 5,
+          "property_features": [],
+          "room_type": "whole"
+        },
+        "reason_messages": {
+          "en": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ],
+          "zh": [
+            "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+          ]
+        },
+        "reasons": [],
+        "source": "structured_listing",
+        "status": "unknown",
+        "unknown_reasons": [
+          "monthly travel cost is not verified for this listing, destination and attendance"
+        ]
+      }
+    },
+    {
+      "address": "Hewitt Quays, Barking ig11",
+      "price": "£1600/month",
+      "candidate_status": "unknown",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [
+        "monthly travel cost is not verified for this listing, destination and attendance"
+      ],
+      "budget_status": "✅ 在预算内",
+      "budget_status_code": "unspecified",
+      "qualification": {
+        "constraints": {
+          "areas": [],
+          "bedrooms": null,
+          "bedrooms_minimum": false,
+          "commute_destination": "Bank station, London",
+          "max_budget_monthly": null,
+          "max_commute_minutes": null,
+          "monthly_total_budget": 2200,
+          "move_in_date": null,
+          "no_commute": false,
+          "office_days_per_week": 5,
+          "property_features": [],
+          "room_type": "whole"
+        },
+        "reason_messages": {
+          "en": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ],
+          "zh": [
+            "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+          ]
+        },
+        "reasons": [],
+        "source": "structured_listing",
+        "status": "unknown",
+        "unknown_reasons": [
+          "monthly travel cost is not verified for this listing, destination and attendance"
+        ]
+      }
+    },
+    {
+      "address": "Grosvenor Road, London E6",
+      "price": "£1800/month",
+      "candidate_status": "unknown",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [
+        "monthly travel cost is not verified for this listing, destination and attendance"
+      ],
+      "budget_status": "✅ 在预算内",
+      "budget_status_code": "unspecified",
+      "qualification": {
+        "constraints": {
+          "areas": [],
+          "bedrooms": null,
+          "bedrooms_minimum": false,
+          "commute_destination": "Bank station, London",
+          "max_budget_monthly": null,
+          "max_commute_minutes": null,
+          "monthly_total_budget": 2200,
+          "move_in_date": null,
+          "no_commute": false,
+          "office_days_per_week": 5,
+          "property_features": [],
+          "room_type": "whole"
+        },
+        "reason_messages": {
+          "en": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ],
+          "zh": [
+            "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+          ]
+        },
+        "reasons": [],
+        "source": "structured_listing",
+        "status": "unknown",
+        "unknown_reasons": [
+          "monthly travel cost is not verified for this listing, destination and attendance"
+        ]
+      }
+    },
+    {
+      "address": "Acacia House, 51 Kingston Road, New Malden, London",
+      "price": "£1850/month",
+      "candidate_status": "unknown",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [
+        "monthly travel cost is not verified for this listing, destination and attendance"
+      ],
+      "budget_status": "✅ 在预算内",
+      "budget_status_code": "unspecified",
+      "qualification": {
+        "constraints": {
+          "areas": [],
+          "bedrooms": null,
+          "bedrooms_minimum": false,
+          "commute_destination": "Bank station, London",
+          "max_budget_monthly": null,
+          "max_commute_minutes": null,
+          "monthly_total_budget": 2200,
+          "move_in_date": null,
+          "no_commute": false,
+          "office_days_per_week": 5,
+          "property_features": [],
+          "room_type": "whole"
+        },
+        "reason_messages": {
+          "en": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ],
+          "zh": [
+            "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+          ]
+        },
+        "reasons": [],
+        "source": "structured_listing",
+        "status": "unknown",
+        "unknown_reasons": [
+          "monthly travel cost is not verified for this listing, destination and attendance"
+        ]
+      }
+    },
+    {
+      "address": "White City Estate, London W12",
+      "price": "£1899/month",
+      "candidate_status": "unknown",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [
+        "monthly travel cost is not verified for this listing, destination and attendance"
+      ],
+      "budget_status": "✅ 在预算内",
+      "budget_status_code": "unspecified",
+      "qualification": {
+        "constraints": {
+          "areas": [],
+          "bedrooms": null,
+          "bedrooms_minimum": false,
+          "commute_destination": "Bank station, London",
+          "max_budget_monthly": null,
+          "max_commute_minutes": null,
+          "monthly_total_budget": 2200,
+          "move_in_date": null,
+          "no_commute": false,
+          "office_days_per_week": 5,
+          "property_features": [],
+          "room_type": "whole"
+        },
+        "reason_messages": {
+          "en": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ],
+          "zh": [
+            "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+          ]
+        },
+        "reasons": [],
+        "source": "structured_listing",
+        "status": "unknown",
+        "unknown_reasons": [
+          "monthly travel cost is not verified for this listing, destination and attendance"
+        ]
+      }
+    },
+    {
+      "address": "High Street, London N8",
+      "price": "£1900/month",
+      "candidate_status": "unknown",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [
+        "monthly travel cost is not verified for this listing, destination and attendance"
+      ],
+      "budget_status": "✅ 在预算内",
+      "budget_status_code": "unspecified",
+      "qualification": {
+        "constraints": {
+          "areas": [],
+          "bedrooms": null,
+          "bedrooms_minimum": false,
+          "commute_destination": "Bank station, London",
+          "max_budget_monthly": null,
+          "max_commute_minutes": null,
+          "monthly_total_budget": 2200,
+          "move_in_date": null,
+          "no_commute": false,
+          "office_days_per_week": 5,
+          "property_features": [],
+          "room_type": "whole"
+        },
+        "reason_messages": {
+          "en": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ],
+          "zh": [
+            "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+          ]
+        },
+        "reasons": [],
+        "source": "structured_listing",
+        "status": "unknown",
+        "unknown_reasons": [
+          "monthly travel cost is not verified for this listing, destination and attendance"
+        ]
+      }
+    },
+    {
+      "address": "Newmarket Avenue, Northolt UB5",
+      "price": "£1900/month",
+      "candidate_status": "unknown",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [
+        "monthly travel cost is not verified for this listing, destination and attendance"
+      ],
+      "budget_status": "✅ 在预算内",
+      "budget_status_code": "unspecified",
+      "qualification": {
+        "constraints": {
+          "areas": [],
+          "bedrooms": null,
+          "bedrooms_minimum": false,
+          "commute_destination": "Bank station, London",
+          "max_budget_monthly": null,
+          "max_commute_minutes": null,
+          "monthly_total_budget": 2200,
+          "move_in_date": null,
+          "no_commute": false,
+          "office_days_per_week": 5,
+          "property_features": [],
+          "room_type": "whole"
+        },
+        "reason_messages": {
+          "en": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ],
+          "zh": [
+            "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+          ]
+        },
+        "reasons": [],
+        "source": "structured_listing",
+        "status": "unknown",
+        "unknown_reasons": [
+          "monthly travel cost is not verified for this listing, destination and attendance"
+        ]
+      }
+    },
+    {
+      "address": "Caroline Close, London N10",
+      "price": "£1900/month",
+      "candidate_status": "unknown",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [
+        "monthly travel cost is not verified for this listing, destination and attendance"
+      ],
+      "budget_status": "✅ 在预算内",
+      "budget_status_code": "unspecified",
+      "qualification": {
+        "constraints": {
+          "areas": [],
+          "bedrooms": null,
+          "bedrooms_minimum": false,
+          "commute_destination": "Bank station, London",
+          "max_budget_monthly": null,
+          "max_commute_minutes": null,
+          "monthly_total_budget": 2200,
+          "move_in_date": null,
+          "no_commute": false,
+          "office_days_per_week": 5,
+          "property_features": [],
+          "room_type": "whole"
+        },
+        "reason_messages": {
+          "en": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ],
+          "zh": [
+            "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+          ]
+        },
+        "reasons": [],
+        "source": "structured_listing",
+        "status": "unknown",
+        "unknown_reasons": [
+          "monthly travel cost is not verified for this listing, destination and attendance"
+        ]
+      }
+    },
+    {
+      "address": "Fortescue Road, Colliers Wood, Greater London",
+      "price": "£2000/month",
+      "candidate_status": "unknown",
+      "candidate_reasons": [],
+      "candidate_unknown_reasons": [
+        "monthly travel cost is not verified for this listing, destination and attendance"
+      ],
+      "budget_status": "✅ 在预算内",
+      "budget_status_code": "unspecified",
+      "qualification": {
+        "constraints": {
+          "areas": [],
+          "bedrooms": null,
+          "bedrooms_minimum": false,
+          "commute_destination": "Bank station, London",
+          "max_budget_monthly": null,
+          "max_commute_minutes": null,
+          "monthly_total_budget": 2200,
+          "move_in_date": null,
+          "no_commute": false,
+          "office_days_per_week": 5,
+          "property_features": [],
+          "room_type": "whole"
+        },
+        "reason_messages": {
+          "en": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ],
+          "zh": [
+            "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+          ]
+        },
+        "reasons": [],
+        "source": "structured_listing",
+        "status": "unknown",
+        "unknown_reasons": [
+          "monthly travel cost is not verified for this listing, destination and attendance"
+        ]
+      }
+    }
+  ]
+}

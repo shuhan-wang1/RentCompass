@@ -1,0 +1,42 @@
+[
+  {
+    "url": "/api/alex",
+    "status": 200,
+    "request_id": "6d4c7f545d074874883d7ba8b9228327",
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "access-control-allow-origin": "http://127.0.0.1:15009",
+      "cache-control": "no-cache",
+      "content-type": "text/event-stream; charset=utf-8",
+      "date": "Mon, 19 Oct 2026 11:01:23 GMT",
+      "server": "uvicorn",
+      "transfer-encoding": "chunked",
+      "vary": "Cookie",
+      "x-accel-buffering": "no",
+      "x-agent-arch": "fc_loop",
+      "x-agent-specialists": "0",
+      "x-agent-version": "live-test-frozen-working-tree",
+      "x-request-id": "6d4c7f545d074874883d7ba8b9228327"
+    }
+  },
+  {
+    "url": "/api/alex",
+    "status": 200,
+    "request_id": "6b0963c03f074905b5bbb1fbcd8d32d8",
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "access-control-allow-origin": "http://127.0.0.1:15009",
+      "cache-control": "no-cache",
+      "content-type": "text/event-stream; charset=utf-8",
+      "date": "Mon, 19 Oct 2026 11:02:43 GMT",
+      "server": "uvicorn",
+      "transfer-encoding": "chunked",
+      "vary": "Cookie",
+      "x-accel-buffering": "no",
+      "x-agent-arch": "fc_loop",
+      "x-agent-specialists": "0",
+      "x-agent-version": "live-test-frozen-working-tree",
+      "x-request-id": "6b0963c03f074905b5bbb1fbcd8d32d8"
+    }
+  }
+]

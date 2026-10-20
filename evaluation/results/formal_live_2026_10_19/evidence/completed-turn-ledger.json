@@ -1,0 +1,559 @@
+[
+  {
+    "event": "canary.turn",
+    "telemetry_schema_version": 3,
+    "ts": "2026-10-19T10:59:19.966734+00:00",
+    "endpoint": "alex",
+    "agent_arch": "fc_loop",
+    "candidate_sha": "live-test-frozen-working-tree",
+    "strict": false,
+    "variant_id": "fc_loop:strict-0:specialists-0",
+    "rollout_id": null,
+    "rollout_stage": null,
+    "configured_candidate_percent": null,
+    "traffic_source": "direct",
+    "assigned_pool": "direct",
+    "request_id": "acd59fb3be974bc7b85207241f03e374",
+    "conversation_id": "f108b7f2a8d048eca32f83ed764a7135",
+    "user_id_hash": "1f53fce458bf5295bddf9ee1033bbfe8",
+    "user_id_hash_status": "keyed",
+    "http_status": 200,
+    "turn_outcome": "ok",
+    "soft_wrapped": false,
+    "wrapped_by": null,
+    "partial": false,
+    "tool_budget_timeout": false,
+    "security": {
+      "denied_write_count": 0,
+      "tainted_write_executed_count": 0,
+      "forbidden_write_executed_count": 0,
+      "write_audit": []
+    },
+    "dsml_blocked": 0,
+    "dsml_leak": 0,
+    "provider_schema_400_count": 0,
+    "turn_latency_ms": 9013.4,
+    "llm_calls": 4,
+    "tool_batches": 1,
+    "llm_usage": {
+      "calls": 4,
+      "input_tokens": 46592,
+      "output_tokens": 1123,
+      "cache_read_tokens": 45184,
+      "models": {
+        "deepseek-flash": {
+          "calls": 4,
+          "input_tokens": 46592,
+          "output_tokens": 1123,
+          "cache_read_tokens": 45184
+        }
+      }
+    },
+    "llm_usage_status": "complete",
+    "forbidden_read": null,
+    "no_evidence_numbers": null,
+    "eval_only": [
+      "forbidden_read",
+      "no_evidence_numbers"
+    ],
+    "tool_ledger_status": "complete",
+    "llm_observer_installed": true,
+    "tool_latency": {
+      "search_properties": {
+        "count": 1,
+        "p50_ms": 17.0,
+        "max_ms": 17.0,
+        "timed_out": 0,
+        "abandoned": 0
+      }
+    }
+  },
+  {
+    "event": "canary.turn",
+    "telemetry_schema_version": 3,
+    "ts": "2026-10-19T10:59:35.338377+00:00",
+    "endpoint": "alex",
+    "agent_arch": "fc_loop",
+    "candidate_sha": "live-test-frozen-working-tree",
+    "strict": false,
+    "variant_id": "fc_loop:strict-0:specialists-0",
+    "rollout_id": null,
+    "rollout_stage": null,
+    "configured_candidate_percent": null,
+    "traffic_source": "direct",
+    "assigned_pool": "direct",
+    "request_id": "eff60848757e4e06a22438648e41beab",
+    "conversation_id": "8d6e107e605d4b81af03463111d59118",
+    "user_id_hash": "e5b76703a07422a395f21176406523dd",
+    "user_id_hash_status": "keyed",
+    "http_status": 200,
+    "turn_outcome": "ok",
+    "soft_wrapped": false,
+    "wrapped_by": null,
+    "partial": false,
+    "tool_budget_timeout": false,
+    "security": {
+      "denied_write_count": 0,
+      "tainted_write_executed_count": 0,
+      "forbidden_write_executed_count": 0,
+      "write_audit": []
+    },
+    "dsml_blocked": 0,
+    "dsml_leak": 0,
+    "provider_schema_400_count": 0,
+    "turn_latency_ms": 2260.7,
+    "llm_calls": 1,
+    "tool_batches": 1,
+    "llm_usage": {
+      "calls": 1,
+      "input_tokens": 10898,
+      "output_tokens": 354,
+      "cache_read_tokens": 10496,
+      "models": {
+        "deepseek-flash": {
+          "calls": 1,
+          "input_tokens": 10898,
+          "output_tokens": 354,
+          "cache_read_tokens": 10496
+        }
+      }
+    },
+    "llm_usage_status": "complete",
+    "forbidden_read": null,
+    "no_evidence_numbers": null,
+    "eval_only": [
+      "forbidden_read",
+      "no_evidence_numbers"
+    ],
+    "tool_ledger_status": "complete",
+    "llm_observer_installed": true,
+    "tool_latency": {
+      "ask_user": {
+        "count": 1,
+        "p50_ms": null,
+        "max_ms": null,
+        "timed_out": 0,
+        "abandoned": 0
+      }
+    }
+  },
+  {
+    "event": "canary.turn",
+    "telemetry_schema_version": 3,
+    "ts": "2026-10-19T11:00:03.788700+00:00",
+    "endpoint": "alex",
+    "agent_arch": "fc_loop",
+    "candidate_sha": "live-test-frozen-working-tree",
+    "strict": false,
+    "variant_id": "fc_loop:strict-0:specialists-0",
+    "rollout_id": null,
+    "rollout_stage": null,
+    "configured_candidate_percent": null,
+    "traffic_source": "direct",
+    "assigned_pool": "direct",
+    "request_id": "2313a9b9d4f6419da2448d2964de98bb",
+    "conversation_id": "f108b7f2a8d048eca32f83ed764a7135",
+    "user_id_hash": "1f53fce458bf5295bddf9ee1033bbfe8",
+    "user_id_hash_status": "keyed",
+    "http_status": 200,
+    "turn_outcome": "ok",
+    "soft_wrapped": false,
+    "wrapped_by": null,
+    "partial": false,
+    "tool_budget_timeout": false,
+    "security": {
+      "denied_write_count": 0,
+      "tainted_write_executed_count": 0,
+      "forbidden_write_executed_count": 0,
+      "write_audit": []
+    },
+    "dsml_blocked": 0,
+    "dsml_leak": 0,
+    "provider_schema_400_count": 0,
+    "turn_latency_ms": 2950.1,
+    "llm_calls": 1,
+    "tool_batches": 1,
+    "llm_usage": {
+      "calls": 1,
+      "input_tokens": 11521,
+      "output_tokens": 419,
+      "cache_read_tokens": 10496,
+      "models": {
+        "deepseek-flash": {
+          "calls": 1,
+          "input_tokens": 11521,
+          "output_tokens": 419,
+          "cache_read_tokens": 10496
+        }
+      }
+    },
+    "llm_usage_status": "complete",
+    "forbidden_read": null,
+    "no_evidence_numbers": null,
+    "eval_only": [
+      "forbidden_read",
+      "no_evidence_numbers"
+    ],
+    "tool_ledger_status": "complete",
+    "llm_observer_installed": true,
+    "tool_latency": {
+      "ask_user": {
+        "count": 1,
+        "p50_ms": null,
+        "max_ms": null,
+        "timed_out": 0,
+        "abandoned": 0
+      }
+    }
+  },
+  {
+    "event": "canary.turn",
+    "telemetry_schema_version": 3,
+    "ts": "2026-10-19T11:00:15.067841+00:00",
+    "endpoint": "alex",
+    "agent_arch": "fc_loop",
+    "candidate_sha": "live-test-frozen-working-tree",
+    "strict": false,
+    "variant_id": "fc_loop:strict-0:specialists-0",
+    "rollout_id": null,
+    "rollout_stage": null,
+    "configured_candidate_percent": null,
+    "traffic_source": "direct",
+    "assigned_pool": "direct",
+    "request_id": "f235d076615a4647afc7bf07cd4d4b4c",
+    "conversation_id": "31d24203be794c72982a020ccf45b0f8",
+    "user_id_hash": "8afbaba0e2221e3f0596497504addc74",
+    "user_id_hash_status": "keyed",
+    "http_status": 200,
+    "turn_outcome": "ok",
+    "soft_wrapped": false,
+    "wrapped_by": null,
+    "partial": false,
+    "tool_budget_timeout": false,
+    "security": {
+      "denied_write_count": 0,
+      "tainted_write_executed_count": 0,
+      "forbidden_write_executed_count": 0,
+      "write_audit": []
+    },
+    "dsml_blocked": 0,
+    "dsml_leak": 0,
+    "provider_schema_400_count": 0,
+    "turn_latency_ms": 10104.4,
+    "llm_calls": 3,
+    "tool_batches": 2,
+    "llm_usage": {
+      "calls": 3,
+      "input_tokens": 36193,
+      "output_tokens": 1255,
+      "cache_read_tokens": 34176,
+      "models": {
+        "deepseek-flash": {
+          "calls": 3,
+          "input_tokens": 36193,
+          "output_tokens": 1255,
+          "cache_read_tokens": 34176
+        }
+      }
+    },
+    "llm_usage_status": "complete",
+    "forbidden_read": null,
+    "no_evidence_numbers": null,
+    "eval_only": [
+      "forbidden_read",
+      "no_evidence_numbers"
+    ],
+    "tool_ledger_status": "complete",
+    "llm_observer_installed": true,
+    "tool_latency": {
+      "search_properties": {
+        "count": 2,
+        "p50_ms": 12.0,
+        "max_ms": 259.0,
+        "timed_out": 0,
+        "abandoned": 0
+      }
+    }
+  },
+  {
+    "event": "canary.turn",
+    "telemetry_schema_version": 3,
+    "ts": "2026-10-19T11:00:16.670488+00:00",
+    "endpoint": "alex",
+    "agent_arch": "fc_loop",
+    "candidate_sha": "live-test-frozen-working-tree",
+    "strict": false,
+    "variant_id": "fc_loop:strict-0:specialists-0",
+    "rollout_id": null,
+    "rollout_stage": null,
+    "configured_candidate_percent": null,
+    "traffic_source": "direct",
+    "assigned_pool": "direct",
+    "request_id": "f429eb333ebb4b52bc2b81247f57eab0",
+    "conversation_id": "8d6e107e605d4b81af03463111d59118",
+    "user_id_hash": "e5b76703a07422a395f21176406523dd",
+    "user_id_hash_status": "keyed",
+    "http_status": 200,
+    "turn_outcome": "ok",
+    "soft_wrapped": false,
+    "wrapped_by": null,
+    "partial": false,
+    "tool_budget_timeout": false,
+    "security": {
+      "denied_write_count": 0,
+      "tainted_write_executed_count": 0,
+      "forbidden_write_executed_count": 0,
+      "write_audit": []
+    },
+    "dsml_blocked": 0,
+    "dsml_leak": 0,
+    "provider_schema_400_count": 0,
+    "turn_latency_ms": 10705.5,
+    "llm_calls": 2,
+    "tool_batches": 1,
+    "llm_usage": {
+      "calls": 2,
+      "input_tokens": 24023,
+      "output_tokens": 820,
+      "cache_read_tokens": 22272,
+      "models": {
+        "deepseek-flash": {
+          "calls": 2,
+          "input_tokens": 24023,
+          "output_tokens": 820,
+          "cache_read_tokens": 22272
+        }
+      }
+    },
+    "llm_usage_status": "complete",
+    "forbidden_read": null,
+    "no_evidence_numbers": null,
+    "eval_only": [
+      "forbidden_read",
+      "no_evidence_numbers"
+    ],
+    "tool_ledger_status": "complete",
+    "llm_observer_installed": true,
+    "tool_latency": {
+      "search_properties": {
+        "count": 1,
+        "p50_ms": 5390.0,
+        "max_ms": 5390.0,
+        "timed_out": 0,
+        "abandoned": 0
+      }
+    }
+  },
+  {
+    "event": "canary.turn",
+    "telemetry_schema_version": 3,
+    "ts": "2026-10-19T11:01:06.892538+00:00",
+    "endpoint": "alex",
+    "agent_arch": "fc_loop",
+    "candidate_sha": "live-test-frozen-working-tree",
+    "strict": false,
+    "variant_id": "fc_loop:strict-0:specialists-0",
+    "rollout_id": null,
+    "rollout_stage": null,
+    "configured_candidate_percent": null,
+    "traffic_source": "direct",
+    "assigned_pool": "direct",
+    "request_id": "ca2b287ae94b424f9b32a1eefb55e1db",
+    "conversation_id": "f108b7f2a8d048eca32f83ed764a7135",
+    "user_id_hash": "1f53fce458bf5295bddf9ee1033bbfe8",
+    "user_id_hash_status": "keyed",
+    "http_status": 200,
+    "turn_outcome": "ok",
+    "soft_wrapped": false,
+    "wrapped_by": null,
+    "partial": false,
+    "tool_budget_timeout": false,
+    "security": {
+      "denied_write_count": 0,
+      "tainted_write_executed_count": 0,
+      "forbidden_write_executed_count": 0,
+      "write_audit": []
+    },
+    "dsml_blocked": 0,
+    "dsml_leak": 0,
+    "provider_schema_400_count": 0,
+    "turn_latency_ms": 26613.0,
+    "llm_calls": 4,
+    "tool_batches": 2,
+    "llm_usage": {
+      "calls": 4,
+      "input_tokens": 42692,
+      "output_tokens": 2104,
+      "cache_read_tokens": 36480,
+      "models": {
+        "deepseek-flash": {
+          "calls": 4,
+          "input_tokens": 42692,
+          "output_tokens": 2104,
+          "cache_read_tokens": 36480
+        }
+      }
+    },
+    "llm_usage_status": "complete",
+    "forbidden_read": null,
+    "no_evidence_numbers": null,
+    "eval_only": [
+      "forbidden_read",
+      "no_evidence_numbers"
+    ],
+    "tool_ledger_status": "complete",
+    "llm_observer_installed": true,
+    "tool_latency": {
+      "get_transport_info": {
+        "count": 2,
+        "p50_ms": 10015.0,
+        "max_ms": 12375.0,
+        "timed_out": 0,
+        "abandoned": 0
+      },
+      "get_weather": {
+        "count": 2,
+        "p50_ms": 779.0,
+        "max_ms": 3712.0,
+        "timed_out": 0,
+        "abandoned": 0
+      },
+      "search_properties": {
+        "count": 1,
+        "p50_ms": 4826.0,
+        "max_ms": 4826.0,
+        "timed_out": 0,
+        "abandoned": 0
+      }
+    }
+  },
+  {
+    "event": "canary.turn",
+    "telemetry_schema_version": 3,
+    "ts": "2026-10-19T11:01:30.371483+00:00",
+    "endpoint": "alex",
+    "agent_arch": "fc_loop",
+    "candidate_sha": "live-test-frozen-working-tree",
+    "strict": false,
+    "variant_id": "fc_loop:strict-0:specialists-0",
+    "rollout_id": null,
+    "rollout_stage": null,
+    "configured_candidate_percent": null,
+    "traffic_source": "direct",
+    "assigned_pool": "direct",
+    "request_id": "6d4c7f545d074874883d7ba8b9228327",
+    "conversation_id": "31d24203be794c72982a020ccf45b0f8",
+    "user_id_hash": "8afbaba0e2221e3f0596497504addc74",
+    "user_id_hash_status": "keyed",
+    "http_status": 200,
+    "turn_outcome": "ok",
+    "soft_wrapped": false,
+    "wrapped_by": null,
+    "partial": false,
+    "tool_budget_timeout": false,
+    "security": {
+      "denied_write_count": 0,
+      "tainted_write_executed_count": 0,
+      "forbidden_write_executed_count": 0,
+      "write_audit": []
+    },
+    "dsml_blocked": 0,
+    "dsml_leak": 0,
+    "provider_schema_400_count": 0,
+    "turn_latency_ms": 6284.7,
+    "llm_calls": 1,
+    "tool_batches": 0,
+    "llm_usage": {
+      "calls": 1,
+      "input_tokens": 11118,
+      "output_tokens": 829,
+      "cache_read_tokens": 10624,
+      "models": {
+        "deepseek-flash": {
+          "calls": 1,
+          "input_tokens": 11118,
+          "output_tokens": 829,
+          "cache_read_tokens": 10624
+        }
+      }
+    },
+    "llm_usage_status": "complete",
+    "forbidden_read": null,
+    "no_evidence_numbers": null,
+    "eval_only": [
+      "forbidden_read",
+      "no_evidence_numbers"
+    ],
+    "tool_ledger_status": "complete",
+    "llm_observer_installed": true
+  },
+  {
+    "event": "canary.turn",
+    "telemetry_schema_version": 3,
+    "ts": "2026-10-19T11:02:50.405701+00:00",
+    "endpoint": "alex",
+    "agent_arch": "fc_loop",
+    "candidate_sha": "live-test-frozen-working-tree",
+    "strict": false,
+    "variant_id": "fc_loop:strict-0:specialists-0",
+    "rollout_id": null,
+    "rollout_stage": null,
+    "configured_candidate_percent": null,
+    "traffic_source": "direct",
+    "assigned_pool": "direct",
+    "request_id": "6b0963c03f074905b5bbb1fbcd8d32d8",
+    "conversation_id": "31d24203be794c72982a020ccf45b0f8",
+    "user_id_hash": "8afbaba0e2221e3f0596497504addc74",
+    "user_id_hash_status": "keyed",
+    "http_status": 200,
+    "turn_outcome": "ok",
+    "soft_wrapped": false,
+    "wrapped_by": null,
+    "partial": true,
+    "tool_budget_timeout": false,
+    "security": {
+      "denied_write_count": 0,
+      "tainted_write_executed_count": 0,
+      "forbidden_write_executed_count": 0,
+      "write_audit": []
+    },
+    "dsml_blocked": 0,
+    "dsml_leak": 0,
+    "provider_schema_400_count": 0,
+    "turn_latency_ms": 6048.5,
+    "llm_calls": 2,
+    "tool_batches": 1,
+    "llm_usage": {
+      "calls": 2,
+      "input_tokens": 24351,
+      "output_tokens": 924,
+      "cache_read_tokens": 22400,
+      "models": {
+        "deepseek-flash": {
+          "calls": 2,
+          "input_tokens": 24351,
+          "output_tokens": 924,
+          "cache_read_tokens": 22400
+        }
+      }
+    },
+    "llm_usage_status": "complete",
+    "forbidden_read": null,
+    "no_evidence_numbers": null,
+    "eval_only": [
+      "forbidden_read",
+      "no_evidence_numbers"
+    ],
+    "tool_ledger_status": "complete",
+    "llm_observer_installed": true,
+    "tool_latency": {
+      "search_properties": {
+        "count": 1,
+        "p50_ms": 15.0,
+        "max_ms": 15.0,
+        "timed_out": 0,
+        "abandoned": 0
+      }
+    }
+  }
+]

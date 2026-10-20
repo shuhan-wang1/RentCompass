@@ -1,0 +1,124 @@
+RentCompass 独立中文留学生端到端审计
+日期：2026-10-19；本地服务：http://127.0.0.1:15006
+身份：独立Guest；桌面1440×960；仅使用自己的browser storage。
+范围：14次真实UI聊天请求，13次HTTP200、1次HTTP429；成功请求中位响应5.432秒、最长11.929秒。没有通过API额外发送聊天，没有访问外部网站或直接调用模型API。
+隔离：仅阅读公共BRIEF/驱动和根测试员提供的本人dispatch摘录；未查看旧报告、其他persona证据、修复记录或产品代码。只在student目录写入脚本/证据/报告。
+
+结果判断：核心搜索约束与记忆应用仍不可靠。三个P1分别涉及地点/房型丢失、总预算误读和长期偏好未应用；收藏与导出路径可用。
+
+逐轮记录：
+01. HTTP 200，2.544秒；首次进入、中文切换、缺条件澄清：自然语言问学校/预算/房型/通勤；无搜索。
+    turn_id=ed093922903d4b23b8597e218aeadb5f；conversation_id=ff641daa5acc4294925475c579c8ed14
+02. HTTP 200，7.596秒；Watford整租1卧1800搜索：错误变成London且房型未知，STU-01。
+    turn_id=b698968d84c34f6f85eb95a09ad85a23；conversation_id=ff641daa5acc4294925475c579c8ed14
+03. HTTP 200，5.918秒；纠正范围/房型：5套Watford整租1卧，正确。
+    turn_id=1a8a245614ca4dda8fc1d80c848ade0b；conversation_id=ff641daa5acc4294925475c579c8ed14
+04. HTTP 200，6.137秒；第二套Flanders Court详情+附近超市：指代正确，家具/账单/押金未知，OSM为合成夹具。
+    turn_id=3df16ecb71a34f11a13c146f4cb092f7；conversation_id=ff641daa5acc4294925475c579c8ed14
+05. HTTP 200，4.611秒；预算降到1300：仅1100的North Approach符合，1350备选明确排除。
+    turn_id=9c574c81a04e4cab97606acbbd1a59be；conversation_id=ff641daa5acc4294925475c579c8ed14
+06. HTTP 200，4.71秒；改2卧整租，总2400/每人1200：上限错误设1200，无结果，STU-02。
+    turn_id=7f8d9489a6af4661ac950b086c57ee7d；conversation_id=ff641daa5acc4294925475c579c8ed14
+07. HTTP 429，0.322秒；纠正总预算：HTTP429；计入请求预算；错误提示STU-06。
+    turn_id=none；conversation_id=none
+08. HTTP 200，5.432秒；等待窗口后纠正总2400：10套2卧整租1600–2250；上限恢复正确。
+    turn_id=dc2aaa3dc7324ad9a6f9ac9b81257fa4；conversation_id=ff641daa5acc4294925475c579c8ed14
+09. HTTP 200，5.869秒；改个人合租单间1200：bedrooms清空、room_type=shared，4套625–825，正确。
+    turn_id=e7be9c66965743119f683ee46d5f5da4；conversation_id=ff641daa5acc4294925475c579c8ed14
+10. HTTP 200，10.704秒；纯指代“第二套和最便宜”详情比较：Harwoods与Cassio正确，695-625=70/月，未知项明确。
+    turn_id=a08a64a26435457e976b6bf145c11670；conversation_id=ff641daa5acc4294925475c579c8ed14
+11. HTTP 200，4.671秒；要求长期记住Watford1800整租1卧，区分临时方案：口头确认正确；额外给交通与超市夹具参考。
+    turn_id=018d05e6f8d0470a8f46f257f2773989；conversation_id=ff641daa5acc4294925475c579c8ed14
+12. HTTP 200，2.199秒；新会话复述长期偏好：正确，未搜索。
+    turn_id=1b9fc9e05d694c2c99a1f4133edb3dd2；conversation_id=acf1c542c2e24ca998ed173922c318a1
+13. HTTP 200，11.929秒；按刚复述记忆搜索3套并查最便宜详情：预算/卧室/整租全丢，混入合租与studio，STU-03。
+    turn_id=7698991fd2e34b7d8a0979c9c547de45；conversation_id=acf1c542c2e24ca998ed173922c318a1
+14. HTTP 200，2.331秒；新同学缺条件、请求可点选项：有文字澄清，无选择控件，且提前保存shared，STU-04/05。
+    turn_id=cda117ec3d424d3eae968b4e3ef5c3fa；conversation_id=acf1c542c2e24ca998ed173922c318a1
+
+浏览器流程及正向证据：
+1. 首次默认英文，可点击中文切换；DOM中文正常。测试浏览器缺少可用CJK字形，截图中部分汉字为方框；字体和外部资源限制属于审计环境，不单列为产品缺陷。
+2. 第4轮后点击Flanders Court收藏，收藏数0→1；收藏夹显示地址、1350/月、来源会话与收藏时预算1800。刷新后仍为1。关闭浏览器、保存storage并重开后原会话与1个收藏恢复；后来创建第2个新会话，收藏始终1。
+3. 新会话聊天为空，收藏仍可见，含原来源会话；切回原会话后聊天和搜索恢复。
+4. 登录/注册框中的“下载访客研究备份”真实触发下载。export-rentcompass-guest-research.json可解析，顶层exported_at/conversations/favorites；下载时有2个会话（一个空、一个12条消息）和1个收藏，含Flanders Court及第一条用户消息；顶层无cookie/password/token字段。未注册或登录，未验证访客迁移。
+5. 详情链接指向OnTheMarket，为遵守约束未点击；详情核验通过本地聊天工具完成。外部图片/字体请求全部由浏览器路由阻断，不将加载失败归为生产故障。
+6. 两次浏览器运行没有pageerror。已保存storage；第一次真实进程重启后的无模型恢复检查已通过。
+
+问题明细（P1=影响核心找房结果；P2=重要交互/状态问题；P3=文案/一致性；candidate=未验证执行层）：
+STU-01 [P1] 明确的Watford范围和整租约束在首次搜索中丢失
+  复现：新会话说明在伦敦UCL读研、先看Watford、1800/月、整套一卧、不要合租。
+  预期：按Watford、整租、恰好1卧、1800/月搜索；若存在歧义先澄清。
+  实际：第2轮search_properties.area=London，未传room_type；推荐Chigwell与London E6并宣称满足全部已声明条件。第3轮用户纠正后才返回5套Watford整租。
+  证据：transcript-sanitized.json:turn2/3, dispatch-excerpt.json:turn2/3, 02-watford-lost.png；轮次[2, 3]；置信度confirmed
+STU-02 [P1] 将明确的整套总预算2400误读成每人预算1200
+  复现：先设Watford一卧，再输入“整套恰好两卧室，总租金最高£2400/月，也就是每人最多£1200”。
+  预期：两人租整套恰好2卧，总预算2400/月，每人1200；搜索上限应为2400。
+  实际：第6轮max_budget=1200，返回无匹配；第8轮只重申整套总预算2400后返回10套1600–2250/月的2卧整租。
+  证据：transcript-sanitized.json:turn6/8, 06-total-budget-misread.png；轮次[6, 8]；置信度confirmed
+STU-03 [P1] 跨会话能复述长期记忆，却未把它应用为搜索条件
+  复现：第11轮保存长期偏好并明确之前合租/两卧只是临时方案，新会话先复述再要求按该偏好找三套并查最便宜详情。
+  预期：按已复述Watford、最高1800/月、整租、恰好1卧搜索；合租与studio应排除。
+  实际：第12轮正确复述；第13轮“按你刚复述的长期默认条件”实际max_budget=null、bedrooms=null、room_type=null。返回Cassio合租625、Upton Studio850与North Approach一卧1100，全部eligible；回答先称三套符合，后承认Cassio不符，却把Studio称为真正符合。最便宜详情因此选到不符合偏好的合租。
+  证据：transcript-sanitized.json:turn11/12/13, 13-memory-ignored-search.png；轮次[11, 12, 13]；置信度confirmed
+STU-04 [P2] 澄清整租还是合租前，结构化条件已经替用户选择合租
+  复现：要求为偏好不同的新同学先别搜，一次问一题，先确认整租还是合租。
+  预期：新同学的房型尚未确认，先问问题；room_type保持未知。
+  实际：回答确实询问A整套/B合租/C不确定，但同一响应的view_state.criteria.room_type已为shared，右侧房型也选中合租；constraint_sources把询问本身当作用户选择。没有后续请求，未验证其下游影响。
+  证据：transcript-sanitized.json:turn14, student-ui-actions.jsonl:final criteriaFields observation, 14-clarification-options.png；轮次[14]；置信度confirmed
+STU-05 [P2] 请求可点击选项，回答只有纯文本A/B/C
+  复现：同STU-04，明确请求“给出可以点击选择的选项”。
+  预期：用户明确请求可以点击选择的选项，应提供可交互选择控件。
+  实际：聊天只渲染一段A/B/C文字；聊天DOM中只有编辑消息和分支按钮，没有选择按钮。ask_user确实经执行器终止路径触发，canary count=1；缺陷位于选项展示，详见工具证据摘要。
+  证据：transcript-sanitized.json:turn14, student-ui-actions.jsonl:optionButtons, 14-clarification-options.png；轮次[14]；置信度confirmed
+STU-06 [P2] HTTP429被错误提示成连接错误
+  复现：限流窗口内触发429，观察前端错误提示。
+  预期：明确提示请求频繁并给出稍后重试说明，保留服务可用状态。
+  实际：服务0.322秒返回429及too many requests，中文UI同时显示“连接错误，请检查服务器。”与重试。触发来自同IP的根测试探针与访客共享限流桶，不能据此声称单用户7轮就被限流。等待窗口后第8轮成功。
+  证据：transcript-sanitized.json:turn7, 07-rate-limit-error.png；轮次[7]；置信度confirmed
+STU-07 [P3] 中文答复混入内部英文判定文本与不相关通勤核验脚注
+  复现：使用中文进行缺条件澄清、预算变更和详情比较。
+  预期：中文界面提供用户可理解且与本轮相关的说明。
+  实际：第1轮没有房源仍称部分房源通勤未核实；第2/5/8轮出现alternative is outside the declared hard result set及monthly price...；第10轮末尾出现英文价格复核提示；第11轮给通勤参考后又出现移除通勤数据说明。
+  证据：transcript-sanitized.json:turn1/2/5/8/10/11；轮次[1, 2, 5, 8, 10, 11]；置信度confirmed
+STU-08 [P2 candidate] 联系中介的能力表述前后不一致
+  复现：先问房源详情，之后跨会话按偏好搜索并查最便宜房源。
+  预期：明确说明能否实际联系中介，避免在无执行入口时承诺外部动作。
+  实际：第4轮称无法替用户联系或预订；第13轮却主动说可以帮你联系中介核实。测试未请求执行联系，也未观察到联系工具，因此这是承诺一致性问题，不能据此证明真实发送失败。
+  证据：transcript-sanitized.json:turn4/13；轮次[4, 13]；置信度observed wording; execution untested
+
+建议的修复验收重点：
+STU-01：区分学校所在城市与用户指定找房区域；搜索前把明确地点、整租/合租和卧室数统一到结构化条件，最终资格核验应覆盖这些字段。
+STU-02：分别识别整套总额与每人分摊额，给预算保留口径；明确“总租金”应优先成为整套搜索上限，不可取最后出现的数字。
+STU-03：“按长期默认条件”应把已召回偏好完整投射到本轮搜索参数；最终资格标签与答复须按相同条件核验，不能把合租或studio标成符合恰好一卧。
+STU-04：询问、举例与尚未选择的候选项不能写成已确认约束；在用户选择前保持room_type未知。
+STU-05：将ask_user的结构化选项渲染为可点击控件，选择后才提交答案并更新对应条件。
+STU-06：按HTTP429单独呈现本地化限流提示及稍后重试信息，避免称为服务器连接错误；保留用户输入便于恢复。
+STU-07：把内部资格拒绝原因转换为简洁中文；只在本轮确实有房源及未核实的通勤数据时附相关说明。
+STU-08：统一产品对联系中介能力的表述；没有真实执行能力时，明确提供联系问题草稿，避免承诺代为联系。
+
+合成数据与长期模拟的限制：
+房源来自固定历史快照；只验证固定数据下的工具调用、约束传递、计算和UI状态，不代表2026年真实在租或可入住。OSM/TfL/天气/警方/网页检索为HTTP边界合成夹具，本人只实际使用OSM/TfL相关路径。Tesco130米、营业时间、32分钟路线都不能当真实实况。原工具结果中的[audit fixture]/SYNTHETIC文字未在最终答复保留，作为夹具溯源观察，不单独归类为生产数据准确性缺陷。
+本次只模拟同一访客、同一机器、约数分钟到十几分钟内的两会话、刷新和浏览器重开。服务重启检查另附。未验证数周后的记忆保留、跨设备、账户迁移、登录/退出、实际中介联系、真实TfL/警方/OSM准确率、真实看房/租赁、外部图片呈现、收藏取消与冲突同步。
+14请求限制已用满，不能再通过真实聊天复验失败修复或重启后的recall工具；恢复阶段仅做浏览器UI/本地读操作。
+
+证据安全：
+对外分享优先REPORT.txt、findings.json、transcript-sanitized.json、dispatch摘录与指定截图。student-storage.json与原始student-turns.jsonl可能含浏览器身份/请求头，保留为私有恢复证据，不放入公开报告包。
+
+实际工具触发（匹配本人响应conversation_id的13个完成executor账本与Tool.execute，非助手自述；429无执行账本）：
+search_properties: 7次
+calculate_commute: 2次
+get_property_details: 4次
+search_nearby_pois: 3次
+remember: 1次
+ask_user: 1次
+ask_user第14轮确实由执行器终止路径触发，不经过Tool.execute；ledger.tool_latency.ask_user.count=1。第1轮只有自然语言澄清。可点选项仍未渲染，见STU-05。
+remember第11轮真实成功存储。第12轮复述正确，但Tool.execute及完整executor账本均无recall_memory，机制不能由本次黑盒证据确认。
+第13轮实际组合链：search_nearby_pois + search_properties(area=Watford, commute_destination=UCL, limit=3，预算/卧室/room_type未传)后get_property_details(Cassio URL)。工具调用成功，但错误条件导致选择不合偏好的房源。第4轮details+POI、第10轮两次details也确实执行。
+详细工具args/输出：dispatch-excerpt.json；匹配后的本人账本：completed-turn-ledger-matched.json；摘要：tool-coverage.json。
+无聊天恢复脚本：recovery_check.py，待服务重启通知后执行，阻断任何/api/alex请求。
+重启恢复：第一次真实进程重启后检查已通过，详见追加记录。
+
+第一次真实进程重启后的恢复检查（2026-10-19T07:53:42.939793+00:00）：
+使用原student私有storage，服务保留数据库；无聊天/API模型请求，外链继续由浏览器路由阻断。8项检查全部通过：2个会话恢复、最新澄清聊天恢复、此前复述偏好的答复文本恢复、1个收藏恢复、Flanders Court身份及1350/月报价恢复、收藏时1800月预算快照恢复、刷新后收藏仍在、无聊天请求尝试。浏览器pageerror为0。进程已正常退出，原storage继续私有保留。
+这证明本次进程重启后的会话与收藏持久化恢复，不证明重启后重新调用recall_memory或长期记忆检索成功；14请求预算保持不变。
+详细证据：recovery-results-restart-1.json；连续记录：recovery-history.jsonl；截图：restart-1-15-after-server-restart-favorites.png、restart-1-15-after-server-restart-refreshed.png。

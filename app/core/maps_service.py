@@ -19,7 +19,7 @@ from .cache_service import get_from_cache, set_to_cache, create_cache_key
 GEOCODE_CACHE_TTL_SECONDS = 30 * 24 * 60 * 60
 CRIME_CACHE_TTL_SECONDS = 24 * 60 * 60
 _GEOCODE_CACHE_VERSION = "geocode-v3"
-_CRIME_CACHE_VERSION = "crime-radius-v2"
+_CRIME_CACHE_VERSION = "crime-radius-v3"
 
 
 def _read_versioned_cache(
@@ -72,6 +72,7 @@ def _label_stale(value: object, warning: str) -> object:
     labelled = dict(value)
     labelled.update({
         "cache_status": "stale",
+        "from_cache": True,
         "possibly_outdated": True,
         "warning": warning,
     })
@@ -106,6 +107,11 @@ class OverpassError(RuntimeError):
     Callers that show maps must catch this and degrade honestly (visible banner)
     rather than silently presenting a marker-only / empty result.
     """
+
+    def __init__(self, message: str, *, service_status: str = 'unavailable', attempts: int = 0):
+        super().__init__(message)
+        self.service_status = service_status
+        self.attempts = attempts
 
 
 class OverpassEmpty(OverpassError):
@@ -159,19 +165,19 @@ def overpass_mirror_state_reset() -> None:
         _last_request_at[0] = 0.0
 
 
-def _mirrors_to_try() -> list:
-    """Mirrors in the order worth trying: last-good first, then untried, then those whose
-    cooldown has expired. A mirror still inside its cooldown is skipped entirely — unless
-    that would leave nothing to try, in which case the whole (penalised) pool is returned,
-    because refusing to ask at all is worse than asking a mirror that failed five minutes
-    ago."""
+def _mirrors_to_try(*, allow_penalized: bool = True) -> list:
+    """Return last-good/untried/recovered mirrors in order.
+
+    ``allow_penalized`` permits an explicit retry round when all mirrors are
+    cooling down. New calls pass False and fail promptly with cooldown status.
+    """
     now = time.monotonic()
     with _mirror_lock:
         penalty = dict(_mirror_penalty)
         preferred = [u for u in _mirror_preferred if u in OVERPASS_MIRRORS]
     ordered = preferred + [u for u in OVERPASS_MIRRORS if u not in preferred]
     live = [u for u in ordered if penalty.get(u, 0.0) <= now]
-    return live or ordered
+    return live or (ordered if allow_penalized else [])
 
 
 def _penalise_mirror(url: str, reason: str) -> None:
@@ -193,15 +199,28 @@ def _reward_mirror(url: str) -> None:
         _mirror_preferred.insert(0, url)
 
 
-def _pace_request() -> None:
-    """Block until at least OVERPASS_MIN_INTERVAL_S has passed since the last request."""
+def _pace_request(deadline: Optional[float] = None) -> bool:
+    """Pace inside the same deadline, including time spent waiting for the lock."""
     if OVERPASS_MIN_INTERVAL_S <= 0:
-        return
-    with _pace_lock:
+        return deadline is None or time.monotonic() < deadline
+    if deadline is None:
+        acquired = _pace_lock.acquire()
+    else:
+        acquired = _pace_lock.acquire(timeout=max(0.0, deadline - time.monotonic()))
+    if not acquired:
+        return False
+    try:
         wait = _last_request_at[0] + OVERPASS_MIN_INTERVAL_S - time.monotonic()
         if wait > 0:
+            if deadline is not None and wait >= deadline - time.monotonic():
+                return False
             time.sleep(wait)
+        if deadline is not None and time.monotonic() >= deadline:
+            return False
         _last_request_at[0] = time.monotonic()
+        return True
+    finally:
+        _pace_lock.release()
 
 
 def overpass_request(query: str, timeout: int = 30, max_rounds: int = 2,
@@ -212,8 +231,8 @@ def overpass_request(query: str, timeout: int = 30, max_rounds: int = 2,
     Sends the descriptive ``_OSM_HEADERS`` User-Agent on every request (the
     reference server rejects the default python-requests UA with HTTP 406) and
     rotates through ``OVERPASS_MIRRORS`` on any non-200 / invalid-body / network
-    error / server-side ``remark``, with exponential backoff between full rounds.
-    Raises ``OverpassError`` only after every mirror has failed across all rounds.
+    error / server-side ``remark``, with bounded backoff between full rounds.
+    Raises ``OverpassError`` when the pool fails, cools down or exhausts its budget.
 
     ``expect_nonempty`` controls how a HTTP 200 with an EMPTY ``elements`` list
     (and no remark) is classified. Overpass mirrors under load (observed on
@@ -234,8 +253,16 @@ def overpass_request(query: str, timeout: int = 30, max_rounds: int = 2,
     30s read timeout on any of them, is the shape that turned a rate-limited pool into an
     85-second tool call.
     """
+    # Even callers without their own outer deadline must not leave a worker
+    # walking five mirrors for minutes after the user has received a timeout.
+    if deadline is None:
+        deadline = time.monotonic() + max(0.0, min(float(timeout), 30.0))
     last_err = None
     clean_empty = None            # first clean empty 200 seen, if expect_nonempty
+    empty_mirrors = set()
+    failed_attempts = attempts = 0
+    circuit_open = False
+    budget_blocked = False
 
     def _expired() -> bool:
         return deadline is not None and time.monotonic() >= deadline
@@ -243,31 +270,48 @@ def overpass_request(query: str, timeout: int = 30, max_rounds: int = 2,
     for round_idx in range(max_rounds):
         if _expired():
             break
-        for url in _mirrors_to_try():
+        # An explicitly requested second round belongs to this same bounded
+        # call. A new category/call must respect the shared cooldown instead.
+        mirrors = _mirrors_to_try(allow_penalized=round_idx > 0)
+        if not mirrors:
+            circuit_open = True
+            break
+        for url in mirrors:
             if _expired():
                 last_err = f"{last_err or 'no mirror answered'} (deadline reached)"
                 break
             try:
-                _pace_request()
+                if not _pace_request(deadline):
+                    budget_blocked = True
+                    break
                 # Each ATTEMPT is clamped to what is left, not just the walk. A 30s read
                 # timeout on two slow mirrors otherwise overshoots the deadline by minutes
                 # even though no request was ISSUED late — measured at 29s against a 17s
                 # budget before this clamp.
-                attempt_timeout = timeout
-                if deadline is not None:
-                    attempt_timeout = max(1.0, min(float(timeout),
-                                                   deadline - time.monotonic()))
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                # requests applies a scalar independently to connect AND read.
+                # Reserve both phases, and cap a slow mirror so failover gets a
+                # chance inside the shared budget. No detached retry threads.
+                attempt_timeout = min(float(timeout), 3.0, remaining / 2)
+                attempts += 1
                 resp = requests.post(
                     url, data={"data": query}, headers=_OSM_HEADERS,
                     timeout=attempt_timeout
                 )
+                if _expired():
+                    budget_blocked = True
+                    break
                 if resp.status_code != 200:
+                    failed_attempts += 1
                     last_err = f"{url} -> HTTP {resp.status_code}"
                     _penalise_mirror(url, f"HTTP {resp.status_code}")
                     continue
                 try:
                     payload = resp.json()
                 except ValueError as e:
+                    failed_attempts += 1
                     # 200 with an HTML/text error body (Overpass sometimes does this)
                     last_err = f"{url} -> invalid JSON body: {e}"
                     _penalise_mirror(url, "invalid JSON body")
@@ -280,8 +324,13 @@ def overpass_request(query: str, timeout: int = 30, max_rounds: int = 2,
                 # no remark, so treat any remark as a retryable failure and rotate
                 # to the next mirror -- otherwise a busy-server body gets cached
                 # and silently degrades every future map for that cell.
-                remark = payload.get("remark") if isinstance(payload, dict) else None
+                if not isinstance(payload, dict) or not isinstance(payload.get('elements'), list):
+                    failed_attempts += 1
+                    _penalise_mirror(url, 'invalid response schema')
+                    continue
+                remark = payload.get("remark")
                 if remark:
+                    failed_attempts += 1
                     last_err = f"{url} -> Overpass remark: {str(remark).strip()[:200]}"
                     _penalise_mirror(url, "remark")
                     continue
@@ -292,21 +341,35 @@ def overpass_request(query: str, timeout: int = 30, max_rounds: int = 2,
                     last_err = f"{url} -> HTTP 200 but empty elements (expected results)"
                     if clean_empty is None:
                         clean_empty = payload
+                    empty_mirrors.add(url)
                     _penalise_mirror(url, "empty 200 where results were expected")
                     continue
                 _reward_mirror(url)
                 return payload
             except requests.exceptions.RequestException as e:
+                failed_attempts += 1
                 last_err = f"{url} -> {e}"
                 _penalise_mirror(url, type(e).__name__)
                 continue
         # Exponential backoff before retrying the whole mirror pool.
         if round_idx < max_rounds - 1 and not _expired():
-            time.sleep(1.0 * (2 ** round_idx))
-    if clean_empty is not None:
+            backoff = 1.0 * (2 ** round_idx)
+            if backoff >= deadline - time.monotonic():
+                budget_blocked = True
+                break
+            time.sleep(backoff)
+    if clean_empty is not None and not failed_attempts and not budget_blocked and not _expired():
+        # Agreement on a clean empty query is a completed lookup, not a
+        # provider outage. Keep it uncached at the POI layer while allowing a
+        # later lookup to verify the empty cell again.
+        for url in empty_mirrors:
+            _reward_mirror(url)
         raise OverpassEmpty(
             "Every reachable Overpass mirror answered an empty 200", clean_empty)
-    raise OverpassError("All Overpass mirrors failed")
+    raise OverpassError("Overpass lookup could not be completed",
+                        service_status='time_budget' if _expired() or budget_blocked else
+                                       'cooldown' if circuit_open and not attempts else 'unavailable',
+                        attempts=attempts)
 
 # Map common landmarks to specific addresses that Google Maps API can route to
 LANDMARK_TO_ADDRESS = {
@@ -325,6 +388,11 @@ def _normalize_address_for_routing(address: str) -> str:
         return address
     
     address_lower = address.lower().strip()
+    # The property-search area resolver maps the bare product area Stratford
+    # to east London. Use the same query before constructing the geocode cache
+    # key, so a legacy bare-name Stratford-upon-Avon hit cannot be reused.
+    if address_lower == 'stratford':
+        return 'Stratford, London'
     
     # Check if it's a known landmark
     for landmark, specific_address in LANDMARK_TO_ADDRESS.items():
@@ -337,7 +405,7 @@ def _normalize_address_for_routing(address: str) -> str:
     
     return address
 
-def _free_geocode(address: str) -> dict | None:
+def _free_geocode(address: str, *, deadline: Optional[float] = None) -> dict | None:
     """Free geocoder: Postcodes.io for UK postcodes, else OSM Nominatim.
 
     Returns ``{'lat','lng','postcode'(optional),'geocoder','resolved_name','match_type',
@@ -350,6 +418,16 @@ def _free_geocode(address: str) -> dict | None:
     """
     if not address or not isinstance(address, str):
         return None
+
+    def request_timeout(ceiling):
+        if deadline is None:
+            return ceiling
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise requests.exceptions.Timeout('Geocoding time budget exhausted')
+        # requests applies the scalar separately to connect and read.
+        return min(float(ceiling), remaining / 2)
+
     address = _normalize_address_for_routing(address)
     # v2: entries cached under the old key carry no precision metadata, and silently
     # serving those would make reference_point() report "unknown" forever.
@@ -368,7 +446,7 @@ def _free_geocode(address: str) -> dict | None:
     if m:
         pc = m.group(1).upper().replace(' ', '')
         try:
-            r = requests.get(f"https://api.postcodes.io/postcodes/{pc}", timeout=8)
+            r = requests.get(f"https://api.postcodes.io/postcodes/{pc}", timeout=request_timeout(8))
             if r.status_code == 200:
                 d = (r.json() or {}).get('result') or {}
                 if d.get('latitude') is not None:
@@ -388,7 +466,7 @@ def _free_geocode(address: str) -> dict | None:
                 "https://nominatim.openstreetmap.org/search",
                 params={'q': address, 'format': 'json', 'countrycodes': 'gb',
                         'limit': 1, 'addressdetails': 1},
-                headers=_OSM_HEADERS, timeout=10,
+                headers=_OSM_HEADERS, timeout=request_timeout(10),
             )
             if r.status_code == 200:
                 arr = r.json()
@@ -422,18 +500,44 @@ def _free_geocode(address: str) -> dict | None:
     return result
 
 
+_OUTCODE_RE = re.compile(r"^[A-Z]{1,2}\d[A-Z\d]?$")
+
+
+def geocode_outcode(outcode: str) -> dict | None:
+    """Centroid of a UK postcode DISTRICT (outward code) from postcodes.io, or None.
+
+    A free-text geocode of "N6, London" resolved to "N6, Airside Road Tunnel … TW6 1PZ" at
+    Heathrow, and Heathrow's crime data shipped as Highgate's (R4-03). The outcode endpoint
+    answers exactly the district asked for."""
+    code = str(outcode or "").strip().upper().replace(" ", "")
+    if not _OUTCODE_RE.match(code):
+        return None
+    try:
+        r = requests.get(f"https://api.postcodes.io/outcodes/{code}", timeout=8)
+        if r.status_code != 200:
+            return None
+        d = (r.json() or {}).get('result') or {}
+        if d.get('latitude') is None or str(d.get('outcode') or '').upper() != code:
+            return None
+        return {'lat': float(d['latitude']), 'lng': float(d['longitude']), 'outcode': code,
+                'geocoder': 'postcodes.io/outcodes'}
+    except Exception as e:
+        print(f"  [geocode] Postcodes.io outcode error exception_type={type(e).__name__}")
+        return None
+
+
 def _get_coordinates(address: str) -> dict | None:
-    """Returns {'lat','lng'} for an address via the free geocoder, or None."""
+    """Return coordinates and the geocoder's precision/provenance, or None."""
     geo = _free_geocode(address)
     if not geo:
         return None
-    return {'lat': geo['lat'], 'lng': geo['lng']}
+    return dict(geo)
 
 
-def geocode_address(address: str) -> dict | None:
+def geocode_address(address: str, *, deadline: Optional[float] = None) -> dict | None:
     """Public geocoder returning {'lat','lng','postcode'} (free providers).
     Used by callers that need the postcode (e.g. Transport Zone lookup)."""
-    return _free_geocode(address)
+    return _free_geocode(address) if deadline is None else _free_geocode(address, deadline=deadline)
 
 
 def _tfl_travel_time(origin: dict, dest: dict, mode: str = "transit") -> int | None:
@@ -511,6 +615,31 @@ def _summarise_tfl_legs(journey: dict):
     return legs_out, " -> ".join(parts)
 
 
+def _tfl_changes_count(journey: dict) -> int | None:
+    """Count changes only from complete, recognised TfL itinerary legs.
+
+    Walking to/from/between vehicles does not count as another boarding.
+    Missing/unknown modes cannot establish a transfer limit.
+    """
+    legs = journey.get('legs')
+    if not isinstance(legs, list) or not legs:
+        return None
+    transit_modes = {'bus', 'coach', 'tube', 'dlr', 'overground', 'elizabeth-line',
+                     'national-rail', 'international-rail', 'tram', 'river-bus',
+                     'river-tour', 'cable-car', 'ferry', 'replacement-bus', 'tflrail'}
+    boardings = 0
+    for leg in legs:
+        if not isinstance(leg, dict) or not isinstance(leg.get('mode'), dict):
+            return None
+        mode = str(leg['mode'].get('id') or leg['mode'].get('name') or '').lower().strip()
+        if mode in ('walking', 'walk'):
+            continue
+        if mode not in transit_modes:
+            return None
+        boardings += 1
+    return max(0, boardings - 1)
+
+
 def calculate_travel_details(origin_address: str, destination_address: str, mode: str = "transit") -> dict | None:
     """Travel time + route, with the BASIS of the number attached to the number.
 
@@ -540,6 +669,7 @@ def calculate_travel_details(origin_address: str, destination_address: str, mode
             'route_summary': summary,
             'source': 'TfL Journey Planner',
             'estimated_duration_minutes': None,
+            'changes_count': _tfl_changes_count(journey),
         }
         out.update(describe_measured(int(journey['duration'])))
         return out
@@ -549,6 +679,7 @@ def calculate_travel_details(origin_address: str, destination_address: str, mode
         return None
     out = {
         'duration_minutes': None,   # explicit: nothing measured this journey
+        'changes_count': None,
         'route_legs': [],
         'route_summary': 'No route available: TfL returned no journey for this pair.',
         'source': 'estimate',
@@ -711,9 +842,31 @@ def find_nearby_places(address: str, amenities_of_interest: list[str], radius: i
 MONTHS_OF_CRIME_DATA = 3
 
 
-def get_crime_data_by_location(address: str) -> dict | None:
-    """Get crime data from UK Police API with trend analysis"""
-    cache_key = create_cache_key('get_crime_data_by_location_v2', address)
+def get_crime_data_by_location(
+    address: str, latitude: Optional[float] = None, longitude: Optional[float] = None,
+) -> dict | None:
+    """Query the police radius endpoint at the supplied point or geocoded address.
+
+    Coordinates are part of both the actual HTTP query and the cache identity.
+    A partial/invalid pair is rejected rather than silently querying somewhere else.
+    """
+    supplied = latitude is not None or longitude is not None
+    if supplied:
+        try:
+            lat, lng = float(latitude), float(longitude)
+            if not (math.isfinite(lat) and math.isfinite(lng)
+                    and -90 <= lat <= 90 and -180 <= lng <= 180):
+                raise ValueError
+        except (TypeError, ValueError):
+            raise ValueError('Provide both valid latitude and longitude coordinates.') from None
+        location = {'lat': lat, 'lng': lng}
+    else:
+        location = None
+    cache_key = create_cache_key(
+        'get_crime_data_by_location_v3', address,
+        location['lat'] if supplied else 'geocode',
+        location['lng'] if supplied else 'geocode',
+    )
     cache_status, cached_result = _read_versioned_cache(
         cache_key,
         ttl_seconds=CRIME_CACHE_TTL_SECONDS,
@@ -721,10 +874,42 @@ def get_crime_data_by_location(address: str) -> dict | None:
     )
     if cache_status == "fresh" and cached_result:
         print(f"  -> [Cache HIT] Crime data address_chars={len(address)}")
-        return cached_result
+        return {**cached_result, 'cache_status': 'fresh', 'from_cache': True}
 
     print(f"  -> [API Call] Getting official crime data address_chars={len(address)}")
-    location = _get_coordinates(address)
+    if not supplied:
+        location = _get_coordinates(address)
+
+    from core.place_reference import _classify_precision, query_reference
+    ref = query_reference(address)
+    ref.update({
+        'lat': location.get('lat') if location else None,
+        'lon': location.get('lng') if location else None,
+        'precision': 'supplied_coordinates' if supplied else _classify_precision(location),
+        'coordinate_source': ('caller_supplied' if supplied else
+                              (location or {}).get('geocoder') or 'address_geocoding'),
+        'is_specific_address': False,
+    })
+    if supplied:
+        ref['measured_from'] = (
+            'the coordinates supplied to this safety query; their association '
+            'with a particular property has not been independently verified')
+    else:
+        ref['resolved_name'] = (location or {}).get('resolved_name')
+        ref['is_specific_address'] = ref['precision'] in ('address', 'street', 'postcode')
+        ref['measured_from'] = (
+            f"the geocoded point for {address!r}, at {ref['precision']} precision; "
+            'not coordinates borrowed from another tool')
+    evidence = {
+        'reference_point': ref,
+        'source': 'data.police.uk',
+        'source_url': 'https://data.police.uk/api/crimes-street/all-crime',
+        'radius_miles': 1.0,
+        'radius_m': 1609.344,
+        'radius_basis': 'provider_default_approximately_one_mile',
+        'cache_status': 'miss',
+        'from_cache': False,
+    }
     
     if not location:
         # Also deliberately uncached, for the same reason as the empty-result branch below.
@@ -735,7 +920,9 @@ def get_crime_data_by_location(address: str) -> dict | None:
                 "Live crime-data refresh could not geocode the address; "
                 "figures are from an expired cache entry.",
             )
-        return {"error": "Could not geocode address.", "total_crimes_6m": "Unknown"}
+        return {**evidence, "error": "Could not geocode address.",
+                "total_crimes_6m": "Unknown", 'queried_months': [],
+                'successful_months': [], 'failed_months': []}
     
     print("     [OK] Coordinates resolved=True")
 
@@ -749,6 +936,9 @@ def get_crime_data_by_location(address: str) -> dict | None:
     dates_to_fetch = [(base_date - pd.DateOffset(months=i)).strftime('%Y-%m') for i in range(MONTHS_OF_CRIME_DATA)]
 
     all_crimes = []
+    successful_months = []
+    failed_months = []
+    month_counts = {}
     for date_str in dates_to_fetch:
         api_url = (f"https://data.police.uk/api/crimes-street/all-crime"
                    f"?date={date_str}&lat={location['lat']}&lng={location['lng']}")
@@ -757,6 +947,11 @@ def get_crime_data_by_location(address: str) -> dict | None:
             response = requests.get(api_url, timeout=15)
             response.raise_for_status()
             crimes = response.json()
+            if not isinstance(crimes, list) or any(not isinstance(c, dict) for c in crimes):
+                failed_months.append(date_str)
+                continue
+            successful_months.append(date_str)
+            month_counts[date_str] = len(crimes)
             
             if crimes:
                 print(f"       [OK] Found {len(crimes)} crimes in {date_str}")
@@ -764,14 +959,24 @@ def get_crime_data_by_location(address: str) -> dict | None:
             else:
                 print(f"       • No crimes in {date_str}")
         except requests.exceptions.Timeout:
+            failed_months.append(date_str)
             print(f"       [WARN]  Timeout for {date_str}")
             continue
         except requests.exceptions.RequestException as e:
+            failed_months.append(date_str)
             print(
                 f"       ❌ API error for month={date_str} "
                 f"exception_type={type(e).__name__}"
             )
             continue
+        except (ValueError, TypeError):
+            failed_months.append(date_str)
+            continue
+
+    evidence.update(queried_months=dates_to_fetch, successful_months=successful_months,
+                    failed_months=failed_months, partial=bool(failed_months),
+                    data_months=sorted(successful_months), months_covered=len(successful_months),
+                    fetched_at=datetime.now().astimezone().isoformat())
 
     if not all_crimes:
         # DO NOT CACHE A FAILURE. data.police.uk returns intermittent 500/502s (observed
@@ -787,17 +992,17 @@ def get_crime_data_by_location(address: str) -> dict | None:
                 "from an expired cache entry.",
             )
         return {
+            **evidence,
             "total_crimes_6m": "Unknown",
             "crime_trend": "unknown",
             "category_breakdown": "Crime data unavailable",
             "error": "No data returned from UK Police API",
         }
 
-    print(f"     [OK] TOTAL: {len(all_crimes)} crimes across 6 months")
+    print(f"     [OK] TOTAL: {len(all_crimes)} crimes across {len(successful_months)} queried months")
     
-    crimes_by_month = Counter(crime['month'] for crime in all_crimes)
-    sorted_months = sorted(crimes_by_month.keys())
-    counts = [crimes_by_month[m] for m in sorted_months]
+    sorted_months = sorted(successful_months)
+    counts = [month_counts[m] for m in sorted_months]
     
     crime_trend = "stable"
     if len(counts) > 3:
@@ -808,10 +1013,12 @@ def get_crime_data_by_location(address: str) -> dict | None:
         elif second_half_avg < first_half_avg * 0.8:
             crime_trend = "decreasing"
 
-    category_counts = Counter(crime['category'].replace('-', ' ').title() for crime in all_crimes)
+    category_counts = Counter(str(crime.get('category') or 'Unknown').replace('-', ' ').title()
+                              for crime in all_crimes)
     
     months_seen = len(sorted_months) or 1
     summary = {
+        **evidence,
         # total_crimes_6m is kept under its historical name for callers, but it is now the
         # total over MONTHS_OF_CRIME_DATA months of RADIUS data, not six months of
         # single-anchor data. months_covered says which, so nothing has to guess.
@@ -824,18 +1031,21 @@ def get_crime_data_by_location(address: str) -> dict | None:
         "data_months": sorted_months,
         "category_breakdown": dict(category_counts.most_common(3))
     }
-    _write_versioned_cache(
-        cache_key,
-        summary,
-        ttl_seconds=CRIME_CACHE_TTL_SECONDS,
-        version=_CRIME_CACHE_VERSION,
-        provenance={
-            "provider": "UK Police API",
-            "endpoint": "crimes-street/all-crime",
-            "data_months": sorted_months,
-            "radius_miles": 1.0,
-        },
-    )
+    if not failed_months:
+        # Partial failures must be retried, rather than freezing missing months for a day.
+        _write_versioned_cache(
+            cache_key,
+            summary,
+            ttl_seconds=CRIME_CACHE_TTL_SECONDS,
+            version=_CRIME_CACHE_VERSION,
+            provenance={
+                "provider": "UK Police API",
+                "endpoint": "crimes-street/all-crime",
+                "data_months": sorted_months,
+                "radius_miles": 1.0,
+                "reference_point": ref,
+            },
+        )
     return summary
 
 

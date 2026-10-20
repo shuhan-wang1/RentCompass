@@ -354,6 +354,8 @@ def standalone_rent_conversion(message: str) -> Optional[tuple[str, float]]:
         return None
     if _NON_DERIVABLE_COST_RE.search(text):
         return None
+    if re.search(r'通勤|交通|往返|车费|总开销|总支出|\b(?:commut\w*|transport|trips?|return journeys?|fare|travelcard|all.in|total cost)\b', text, re.I):
+        return None
     source = _amount_with_period(text)
     if source is None:
         return None
@@ -375,6 +377,12 @@ def read_tool_denial(tool: str, args: dict, *, current_message: str) -> Optional
     ``args`` are the FINAL arguments (post strict-null-stripping and post
     ``_inject_search_params``), so what is judged here is what would actually have run.
     """
+    from core.constraint_updates import commute_query_forbidden
+    if (tool in ('calculate_commute', 'calculate_commute_cost', 'check_transport_cost')
+            or (tool == 'get_transport_info' and args.get('query_type', 'auto') in ('journey', 'auto'))) and commute_query_forbidden(current_message):
+        return ReadDenial(reason='user_disabled_commute_query', guidance=(
+            'The user explicitly asked not to run commute queries this turn. Do not call another '
+            'commute tool or claim a commute was checked. Continue with the other requested tasks.'), reference=None)
     if tool not in RETRIEVAL_TOOLS:
         return None
     rent = self_contained_money_question(current_message)

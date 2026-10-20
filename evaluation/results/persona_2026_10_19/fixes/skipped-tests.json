@@ -1,0 +1,62 @@
+[
+  {
+    "name": "test_live_osm_university_is_destination",
+    "class": "tests.test_classify_place",
+    "reason": "set RUN_LIVE_OSM=1 to hit the real Nominatim service"
+  },
+  {
+    "name": "test_live_osm_suburb_is_area",
+    "class": "tests.test_classify_place",
+    "reason": "set RUN_LIVE_OSM=1 to hit the real Nominatim service"
+  },
+  {
+    "name": "test_release_sh_rehearsal_passes",
+    "class": "tests.test_deploy_release_advances_the_pin",
+    "reason": "the rehearsal builds a throwaway git repo; needs bash + git"
+  },
+  {
+    "name": "test_update_sh_rehearsal_passes",
+    "class": "tests.test_deploy_update_targets_live_pool",
+    "reason": "the rehearsal builds a throwaway git repo; needs bash + git"
+  },
+  {
+    "name": "test_subset_matcher_agrees_with_real_git",
+    "class": "tests.test_env_files_cannot_be_committed",
+    "reason": "no usable git (containerised worktree)"
+  },
+  {
+    "name": "test_the_real_round_of_record_still_reads_when_it_is_present[round_dir0]",
+    "class": "tests.test_eval_writer_commit_identity",
+    "reason": "retained round not mounted here: /home/shuhan/uk_rent_recommendation/.runtime/round-8793c0b-internal-2026-07-25/eval/sweep"
+  },
+  {
+    "name": "test_the_real_paired_round_really_did_record_two_graders[idp98_r1_base-idp98_r1_cand]",
+    "class": "tests.test_grader_provenance_gate",
+    "reason": "retained fp-results round not mounted here"
+  },
+  {
+    "name": "test_the_real_paired_round_really_did_record_two_graders[idp98_r2_base-idp98_r2_cand]",
+    "class": "tests.test_grader_provenance_gate",
+    "reason": "retained fp-results round not mounted here"
+  },
+  {
+    "name": "test_the_real_paired_round_really_did_record_two_graders[idp98_r3_base-idp98_r3_cand]",
+    "class": "tests.test_grader_provenance_gate",
+    "reason": "retained fp-results round not mounted here"
+  },
+  {
+    "name": "test_the_installed_copy_matches_the_committed_script",
+    "class": "tests.test_monitor_install_provenance",
+    "reason": "/usr/local/bin/rentcompass-monitor.sh not present — not the production box (CI/bench container)"
+  },
+  {
+    "name": "test_systemd_runs_the_copy_this_test_just_hashed",
+    "class": "tests.test_monitor_install_provenance",
+    "reason": "/usr/local/bin/rentcompass-monitor.sh not present — not the production box (CI/bench container)"
+  },
+  {
+    "name": "test_live_manchester_is_city_correct",
+    "class": "tests.test_on_demand_listings",
+    "reason": "set RUN_LIVE_SCRAPE=1 to hit the real OnTheMarket site"
+  }
+]

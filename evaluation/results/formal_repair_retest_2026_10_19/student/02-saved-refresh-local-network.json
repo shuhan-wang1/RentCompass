@@ -1,0 +1,1181 @@
+[
+  {
+    "path": "/api/auth/me",
+    "method": "GET",
+    "status": 200,
+    "response": {
+      "authenticated": false
+    }
+  },
+  {
+    "path": "/api/conversations",
+    "method": "GET",
+    "status": 200,
+    "response": {
+      "conversations": [
+        {
+          "agent_arch": "fc_loop",
+          "agent_version": "repair-retest-frozen-working-tree",
+          "branch_depth": 0,
+          "created_at": "2026-10-19T12:01:19.715884+00:00",
+          "edited_slot_turn_id": null,
+          "fork_reason": null,
+          "forked_from_turn_id": null,
+          "id": "bd64dd5d9b12410586b93a31b812a6f0",
+          "message_count": 4,
+          "parent_conversation_id": null,
+          "root_conversation_id": "bd64dd5d9b12410586b93a31b812a6f0",
+          "strict": false,
+          "title": "我下学期要来伦敦读研，想在Camden找个住处。能帮我看看吗？",
+          "updated_at": "2026-10-19T12:03:18.741562+00:00"
+        }
+      ]
+    }
+  },
+  {
+    "path": "/api/conversations/bd64dd5d9b12410586b93a31b812a6f0/messages",
+    "method": "GET",
+    "status": 200,
+    "response": {
+      "messages": [
+        {
+          "content": "我下学期要来伦敦读研，想在Camden找个住处。能帮我看看吗？",
+          "id": 1,
+          "role": "user",
+          "timestamp": "2026-10-19T12:01:19.715884+00:00",
+          "turn_id": "f4346ac693e946098ba7eb8a207015f2"
+        },
+        {
+          "content": "好的，Camden 是很受伦敦研究生欢迎的区域。开始搜索前，我想先确认几个条件，这样结果会更贴合你的需求：\n\n1. 房型：Studio（独立厨卫）、Ensuite（独立卫浴、共用厨房），还是合租 shared？\n2. 每月预算大概多少（英镑）？\n3. 需要通勤吗？如果需要，请告诉我通勤到哪所学校或地点；如果不需要，可以说“不通勤”。\n4. 入住时间（可不填）。\n\n你也可以直接说“继续搜索”，我就先按 Camden 全区、不限房型和预算给你看一批房源，之后再逐步缩小范围。",
+          "id": 2,
+          "response_type": "chat",
+          "role": "assistant",
+          "timestamp": "2026-10-19T12:01:24.826344+00:00",
+          "turn_id": "f4346ac693e946098ba7eb8a207015f2"
+        },
+        {
+          "content": "只在Camden找，不是伦敦全区：整租一居室，整套房租每月最高£2166.67，坐公共交通到UCL Bloomsbury主校区（Gower Street）45分钟以内。入住日暂未确定。请按这些条件找实际房源，明确哪些已核实、哪些仍不确定。",
+          "id": 3,
+          "role": "user",
+          "timestamp": "2026-10-19T12:02:35.176113+00:00",
+          "turn_id": "68c107aaf6cf4f29a9bd0b8a0376ba1c"
+        },
+        {
+          "content": "- 没有同时满足且已核实的房源。\n尚未核实：\n- Apt 108, Castello Court, 309-311 Harrow Road W9：通勤条件尚未核实（查询失败）\n- Fairholme Road, West Kensington, London W14：通勤条件尚未核实（查询失败）\n- Eastern Road, London, N22：通勤条件尚未核实（查询失败）\n- Fairholme Road, London W14：通勤条件尚未核实（查询失败）\n- Fairholme Road, West Kensington, London W14：通勤条件尚未核实（查询失败）\n- Fairholme Road, West Kensington, London W14：通勤条件尚未核实（查询失败）",
+          "id": 4,
+          "recommendations": [
+            {
+              "absent_features": [],
+              "address": "Apt 108, Castello Court, 309-311 Harrow Road W9",
+              "area": "London",
+              "availability_status": "",
+              "available_from": "2026-11-01",
+              "bedrooms": "Studio",
+              "budget_basis": 2166.67,
+              "budget_status": "✅ 在预算内",
+              "budget_status_code": "within",
+              "candidate_reasons": [],
+              "candidate_status": "unknown",
+              "candidate_unknown_reasons": [
+                "commute tool failed"
+              ],
+              "description": "",
+              "distance_miles": 3.21,
+              "explanation": "Studio to rent in Apt 108, Castello Court, 309-311 Harrow Road W9 (estimated from coordinates: ~31 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)",
+              "geo_location": "51.523193, -0.197903",
+              "images": [
+                "https://media.onthemarket.com/properties/14141441/1652518454/image-0-480x320.jpg",
+                "https://media.onthemarket.com/properties/14141441/1652518454/image-1-480x320.jpg",
+                "https://media.onthemarket.com/properties/14141441/1652518454/image-2-480x320.jpg",
+                "https://media.onthemarket.com/properties/14141441/1652518454/image-3-480x320.jpg",
+                "https://media.onthemarket.com/properties/14141441/1652518454/image-4-480x320.jpg"
+              ],
+              "match_type": "perfect",
+              "possibly_outdated": false,
+              "price": "£1439/month",
+              "property_type": "Studio",
+              "qualification": {
+                "constraints": {
+                  "areas": [
+                    "london"
+                  ],
+                  "bedrooms": null,
+                  "bedrooms_minimum": false,
+                  "commute_destination": "UCL Bloomsbury, Gower Street, London",
+                  "max_budget_monthly": 2166.67,
+                  "max_changes": null,
+                  "max_commute_minutes": 45.0,
+                  "monthly_total_budget": null,
+                  "move_in_date": null,
+                  "no_commute": false,
+                  "office_days_per_week": null,
+                  "property_features": [],
+                  "room_type": null
+                },
+                "reason_messages": {
+                  "en": [
+                    "commute tool failed"
+                  ],
+                  "zh": [
+                    "通勤条件尚未核实（查询失败）"
+                  ]
+                },
+                "reasons": [],
+                "source": "structured_listing",
+                "status": "unknown",
+                "unknown_reasons": [
+                  "commute tool failed"
+                ]
+              },
+              "rank": 1,
+              "room_type": null,
+              "score": 56.41,
+              "score_breakdown": {
+                "commute": 14.51,
+                "freshness": 8.75,
+                "price": 26.29,
+                "semantic": 6.86
+              },
+              "source": "OnTheMarket",
+              "status_reason": "required conditions are not fully verified",
+              "travel_time": "~31 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)",
+              "travel_time_source": "estimate",
+              "unverified_features": [],
+              "url": "https://www.onthemarket.com/details/14141441/",
+              "verified_features": []
+            },
+            {
+              "absent_features": [],
+              "address": "Fairholme Road, West Kensington, London W14",
+              "area": "London",
+              "availability_status": "",
+              "available_from": "",
+              "bedrooms": "Studio",
+              "budget_basis": 2166.67,
+              "budget_status": "✅ 在预算内",
+              "budget_status_code": "within",
+              "candidate_reasons": [],
+              "candidate_status": "unknown",
+              "candidate_unknown_reasons": [
+                "commute tool failed"
+              ],
+              "description": "",
+              "distance_miles": 3.68,
+              "explanation": "Studio to rent in Fairholme Road, West Kensington, London W14 (estimated from coordinates: ~38 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)",
+              "geo_location": "51.488187, -0.207561",
+              "images": [
+                "https://media.onthemarket.com/properties/20575320/1652769480/image-0-480x320.jpg",
+                "https://media.onthemarket.com/properties/20575320/1652769480/image-1-480x320.jpg",
+                "https://media.onthemarket.com/properties/20575320/1652769479/image-2-480x320.jpg",
+                "https://media.onthemarket.com/properties/20575320/1652769480/image-3-480x320.jpg",
+                "https://media.onthemarket.com/properties/20575320/1652769480/image-4-480x320.jpg"
+              ],
+              "match_type": "perfect",
+              "possibly_outdated": false,
+              "price": "£1798/month",
+              "property_type": "Studio",
+              "qualification": {
+                "constraints": {
+                  "areas": [
+                    "london"
+                  ],
+                  "bedrooms": null,
+                  "bedrooms_minimum": false,
+                  "commute_destination": "UCL Bloomsbury, Gower Street, London",
+                  "max_budget_monthly": 2166.67,
+                  "max_changes": null,
+                  "max_commute_minutes": 45.0,
+                  "monthly_total_budget": null,
+                  "move_in_date": null,
+                  "no_commute": false,
+                  "office_days_per_week": null,
+                  "property_features": [],
+                  "room_type": null
+                },
+                "reason_messages": {
+                  "en": [
+                    "commute tool failed"
+                  ],
+                  "zh": [
+                    "通勤条件尚未核实（查询失败）"
+                  ]
+                },
+                "reasons": [],
+                "source": "structured_listing",
+                "status": "unknown",
+                "unknown_reasons": [
+                  "commute tool failed"
+                ]
+              },
+              "rank": 2,
+              "room_type": null,
+              "score": 50.77,
+              "score_breakdown": {
+                "commute": 9.88,
+                "freshness": 8.75,
+                "price": 23.5,
+                "semantic": 8.64
+              },
+              "source": "OnTheMarket",
+              "status_reason": "required conditions are not fully verified",
+              "travel_time": "~38 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)",
+              "travel_time_source": "estimate",
+              "unverified_features": [],
+              "url": "https://www.onthemarket.com/details/20575320/",
+              "verified_features": []
+            },
+            {
+              "absent_features": [],
+              "address": "Eastern Road, London, N22",
+              "area": "London",
+              "availability_status": "",
+              "available_from": "",
+              "bedrooms": 2,
+              "budget_basis": 2166.67,
+              "budget_status": "✅ 在预算内",
+              "budget_status_code": "within",
+              "candidate_reasons": [],
+              "candidate_status": "unknown",
+              "candidate_unknown_reasons": [
+                "commute tool failed"
+              ],
+              "description": "",
+              "distance_miles": 6.49,
+              "explanation": "2 bedroom apartment to rent in Eastern Road, London, N22 (estimated from coordinates: ~44 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)",
+              "geo_location": "51.601182, -0.121039",
+              "images": [
+                "https://media.onthemarket.com/properties/20569521/1652554336/image-0-480x320.jpg",
+                "https://media.onthemarket.com/properties/20569521/1652554336/image-1-480x320.jpg",
+                "https://media.onthemarket.com/properties/20569521/1652554336/image-2-480x320.jpg",
+                "https://media.onthemarket.com/properties/20569521/1652554336/image-3-480x320.jpg",
+                "https://media.onthemarket.com/properties/20569521/1652554336/image-4-480x320.jpg"
+              ],
+              "match_type": "perfect",
+              "possibly_outdated": false,
+              "price": "£1700/month",
+              "property_type": "2 bed Apartment",
+              "qualification": {
+                "constraints": {
+                  "areas": [
+                    "london"
+                  ],
+                  "bedrooms": null,
+                  "bedrooms_minimum": false,
+                  "commute_destination": "UCL Bloomsbury, Gower Street, London",
+                  "max_budget_monthly": 2166.67,
+                  "max_changes": null,
+                  "max_commute_minutes": 45.0,
+                  "monthly_total_budget": null,
+                  "move_in_date": null,
+                  "no_commute": false,
+                  "office_days_per_week": null,
+                  "property_features": [],
+                  "room_type": null
+                },
+                "reason_messages": {
+                  "en": [
+                    "commute tool failed"
+                  ],
+                  "zh": [
+                    "通勤条件尚未核实（查询失败）"
+                  ]
+                },
+                "reasons": [],
+                "source": "structured_listing",
+                "status": "unknown",
+                "unknown_reasons": [
+                  "commute tool failed"
+                ]
+              },
+              "rank": 3,
+              "room_type": null,
+              "score": 47.84,
+              "score_breakdown": {
+                "commute": 5.91,
+                "freshness": 8.75,
+                "price": 24.26,
+                "semantic": 8.92
+              },
+              "source": "OnTheMarket",
+              "status_reason": "required conditions are not fully verified",
+              "travel_time": "~44 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)",
+              "travel_time_source": "estimate",
+              "unverified_features": [],
+              "url": "https://www.onthemarket.com/details/20569521/",
+              "verified_features": []
+            },
+            {
+              "absent_features": [],
+              "address": "Fairholme Road, London W14",
+              "area": "London",
+              "availability_status": "",
+              "available_from": "",
+              "bedrooms": "Studio",
+              "budget_basis": 2166.67,
+              "budget_status": "✅ 在预算内",
+              "budget_status_code": "within",
+              "candidate_reasons": [],
+              "candidate_status": "unknown",
+              "candidate_unknown_reasons": [
+                "commute tool failed"
+              ],
+              "description": "",
+              "distance_miles": 3.68,
+              "explanation": "Studio to rent in Fairholme Road, London W14 (estimated from coordinates: ~38 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)",
+              "geo_location": "51.488187, -0.207561",
+              "images": [
+                "https://media.onthemarket.com/properties/15682690/1652769528/image-0-480x320.jpg",
+                "https://media.onthemarket.com/properties/15682690/1652769528/image-1-480x320.jpg",
+                "https://media.onthemarket.com/properties/15682690/1652769528/image-2-480x320.jpg",
+                "https://media.onthemarket.com/properties/15682690/1652769528/image-3-480x320.jpg",
+                "https://media.onthemarket.com/properties/15682690/1652769528/image-4-480x320.jpg"
+              ],
+              "match_type": "perfect",
+              "possibly_outdated": false,
+              "price": "£1885/month",
+              "property_type": "Studio",
+              "qualification": {
+                "constraints": {
+                  "areas": [
+                    "london"
+                  ],
+                  "bedrooms": null,
+                  "bedrooms_minimum": false,
+                  "commute_destination": "UCL Bloomsbury, Gower Street, London",
+                  "max_budget_monthly": 2166.67,
+                  "max_changes": null,
+                  "max_commute_minutes": 45.0,
+                  "monthly_total_budget": null,
+                  "move_in_date": null,
+                  "no_commute": false,
+                  "office_days_per_week": null,
+                  "property_features": [],
+                  "room_type": null
+                },
+                "reason_messages": {
+                  "en": [
+                    "commute tool failed"
+                  ],
+                  "zh": [
+                    "通勤条件尚未核实（查询失败）"
+                  ]
+                },
+                "reasons": [],
+                "source": "structured_listing",
+                "status": "unknown",
+                "unknown_reasons": [
+                  "commute tool failed"
+                ]
+              },
+              "rank": 4,
+              "room_type": null,
+              "score": 49.19,
+              "score_breakdown": {
+                "commute": 9.88,
+                "freshness": 8.75,
+                "price": 22.82,
+                "semantic": 7.74
+              },
+              "source": "OnTheMarket",
+              "status_reason": "required conditions are not fully verified",
+              "travel_time": "~38 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)",
+              "travel_time_source": "estimate",
+              "unverified_features": [],
+              "url": "https://www.onthemarket.com/details/15682690/",
+              "verified_features": []
+            },
+            {
+              "absent_features": [],
+              "address": "Fairholme Road, West Kensington, London W14",
+              "area": "London",
+              "availability_status": "",
+              "available_from": "",
+              "bedrooms": "Studio",
+              "budget_basis": 2166.67,
+              "budget_status": "✅ 在预算内",
+              "budget_status_code": "within",
+              "candidate_reasons": [],
+              "candidate_status": "unknown",
+              "candidate_unknown_reasons": [
+                "commute tool failed"
+              ],
+              "description": "",
+              "distance_miles": 3.68,
+              "explanation": "Studio to rent in Fairholme Road, West Kensington, London W14 (estimated from coordinates: ~38 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)",
+              "geo_location": "51.488187, -0.207561",
+              "images": [
+                "https://media.onthemarket.com/properties/20574086/1652729340/image-0-480x320.jpg",
+                "https://media.onthemarket.com/properties/20574086/1652729340/image-1-480x320.jpg",
+                "https://media.onthemarket.com/properties/20574086/1652729340/image-2-480x320.jpg",
+                "https://media.onthemarket.com/properties/20574086/1652729340/image-3-480x320.jpg",
+                "https://media.onthemarket.com/properties/20574086/1652729340/image-4-480x320.jpg"
+              ],
+              "match_type": "perfect",
+              "possibly_outdated": false,
+              "price": "£1798/month",
+              "property_type": "Studio",
+              "qualification": {
+                "constraints": {
+                  "areas": [
+                    "london"
+                  ],
+                  "bedrooms": null,
+                  "bedrooms_minimum": false,
+                  "commute_destination": "UCL Bloomsbury, Gower Street, London",
+                  "max_budget_monthly": 2166.67,
+                  "max_changes": null,
+                  "max_commute_minutes": 45.0,
+                  "monthly_total_budget": null,
+                  "move_in_date": null,
+                  "no_commute": false,
+                  "office_days_per_week": null,
+                  "property_features": [],
+                  "room_type": null
+                },
+                "reason_messages": {
+                  "en": [
+                    "commute tool failed"
+                  ],
+                  "zh": [
+                    "通勤条件尚未核实（查询失败）"
+                  ]
+                },
+                "reasons": [],
+                "source": "structured_listing",
+                "status": "unknown",
+                "unknown_reasons": [
+                  "commute tool failed"
+                ]
+              },
+              "rank": 5,
+              "room_type": null,
+              "score": 50.67,
+              "score_breakdown": {
+                "commute": 9.88,
+                "freshness": 8.75,
+                "price": 23.5,
+                "semantic": 8.54
+              },
+              "source": "OnTheMarket",
+              "status_reason": "required conditions are not fully verified",
+              "travel_time": "~38 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)",
+              "travel_time_source": "estimate",
+              "unverified_features": [],
+              "url": "https://www.onthemarket.com/details/20574086/",
+              "verified_features": []
+            },
+            {
+              "absent_features": [],
+              "address": "Fairholme Road, West Kensington, London W14",
+              "area": "London",
+              "availability_status": "",
+              "available_from": "",
+              "bedrooms": "Studio",
+              "budget_basis": 2166.67,
+              "budget_status": "✅ 在预算内",
+              "budget_status_code": "within",
+              "candidate_reasons": [],
+              "candidate_status": "unknown",
+              "candidate_unknown_reasons": [
+                "commute tool failed"
+              ],
+              "description": "",
+              "distance_miles": 3.68,
+              "explanation": "Studio to rent in Fairholme Road, West Kensington, London W14 (estimated from coordinates: ~38 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)",
+              "geo_location": "51.488187, -0.207561",
+              "images": [
+                "https://media.onthemarket.com/properties/20575321/1652771044/image-0-480x320.jpg",
+                "https://media.onthemarket.com/properties/20575321/1652771044/image-1-480x320.jpg",
+                "https://media.onthemarket.com/properties/20575321/1652771044/image-2-480x320.jpg",
+                "https://media.onthemarket.com/properties/20575321/1652771044/image-3-480x320.jpg",
+                "https://media.onthemarket.com/properties/20575321/1652771051/image-4-480x320.jpg"
+              ],
+              "match_type": "perfect",
+              "possibly_outdated": false,
+              "price": "£2015/month",
+              "property_type": "Studio",
+              "qualification": {
+                "constraints": {
+                  "areas": [
+                    "london"
+                  ],
+                  "bedrooms": null,
+                  "bedrooms_minimum": false,
+                  "commute_destination": "UCL Bloomsbury, Gower Street, London",
+                  "max_budget_monthly": 2166.67,
+                  "max_changes": null,
+                  "max_commute_minutes": 45.0,
+                  "monthly_total_budget": null,
+                  "move_in_date": null,
+                  "no_commute": false,
+                  "office_days_per_week": null,
+                  "property_features": [],
+                  "room_type": null
+                },
+                "reason_messages": {
+                  "en": [
+                    "commute tool failed"
+                  ],
+                  "zh": [
+                    "通勤条件尚未核实（查询失败）"
+                  ]
+                },
+                "reasons": [],
+                "source": "structured_listing",
+                "status": "unknown",
+                "unknown_reasons": [
+                  "commute tool failed"
+                ]
+              },
+              "rank": 6,
+              "room_type": null,
+              "score": 48.94,
+              "score_breakdown": {
+                "commute": 9.88,
+                "freshness": 8.75,
+                "price": 21.81,
+                "semantic": 8.5
+              },
+              "source": "OnTheMarket",
+              "status_reason": "required conditions are not fully verified",
+              "travel_time": "~38 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)",
+              "travel_time_source": "estimate",
+              "unverified_features": [],
+              "url": "https://www.onthemarket.com/details/20575321/",
+              "verified_features": []
+            }
+          ],
+          "response_type": "search",
+          "role": "assistant",
+          "timestamp": "2026-10-19T12:03:18.741562+00:00",
+          "turn_id": "68c107aaf6cf4f29a9bd0b8a0376ba1c"
+        }
+      ],
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "area": "London",
+          "areas": [
+            "London"
+          ],
+          "budget_period": "month",
+          "constraint_sources": {
+            "area": {
+              "source": "user_message",
+              "text": "我下学期要来伦敦读研，想在Camden找个住处。能帮我看看吗？",
+              "value": "London"
+            },
+            "areas": {
+              "source": "user_message",
+              "text": "我下学期要来伦敦读研，想在Camden找个住处。能帮我看看吗？",
+              "value": [
+                "London"
+              ]
+            },
+            "budget_period": {
+              "source": "user_message",
+              "text": "只在Camden找，不是伦敦全区：整租一居室，整套房租每月最高£2166.67，坐公共交通到UCL Bloomsbury主校区（Gower Street）45分钟以内。入住日暂未确定。请按这些条件找实际房源，明确哪些已核实、哪些仍不确定。",
+              "value": "month"
+            },
+            "max_budget": {
+              "source": "user_message",
+              "text": "只在Camden找，不是伦敦全区：整租一居室，整套房租每月最高£2166.67，坐公共交通到UCL Bloomsbury主校区（Gower Street）45分钟以内。入住日暂未确定。请按这些条件找实际房源，明确哪些已核实、哪些仍不确定。",
+              "value": 2166.67
+            },
+            "max_travel_time": {
+              "source": "user_message",
+              "text": "只在Camden找，不是伦敦全区：整租一居室，整套房租每月最高£2166.67，坐公共交通到UCL Bloomsbury主校区（Gower Street）45分钟以内。入住日暂未确定。请按这些条件找实际房源，明确哪些已核实、哪些仍不确定。",
+              "value": 45
+            },
+            "no_commute": {
+              "source": "user_message",
+              "text": "只在Camden找，不是伦敦全区：整租一居室，整套房租每月最高£2166.67，坐公共交通到UCL Bloomsbury主校区（Gower Street）45分钟以内。入住日暂未确定。请按这些条件找实际房源，明确哪些已核实、哪些仍不确定。",
+              "value": false
+            }
+          },
+          "destination": null,
+          "max_budget": 2166.67,
+          "max_travel_time": 45,
+          "no_commute": false,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [
+          {
+            "absent_features": [],
+            "address": "Apt 108, Castello Court, 309-311 Harrow Road W9",
+            "area": "London",
+            "availability_status": "",
+            "available_from": "2026-11-01",
+            "bedrooms": "Studio",
+            "budget_basis": 2166.67,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "eligible",
+            "candidate_unknown_reasons": [],
+            "description": "",
+            "distance_miles": 3.21,
+            "explanation": "Studio to rent in Apt 108, Castello Court, 309-311 Harrow Road W9 (estimated from coordinates: ~31 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)",
+            "geo_location": "51.523193, -0.197903",
+            "images": [
+              "https://media.onthemarket.com/properties/14141441/1652518454/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/14141441/1652518454/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/14141441/1652518454/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/14141441/1652518454/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/14141441/1652518454/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": false,
+            "price": "£1439/month",
+            "property_type": "Studio",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "london"
+                ],
+                "bedrooms": null,
+                "bedrooms_minimum": false,
+                "commute_destination": null,
+                "max_budget_monthly": 2166.67,
+                "max_changes": null,
+                "max_commute_minutes": 45.0,
+                "monthly_total_budget": null,
+                "move_in_date": null,
+                "no_commute": false,
+                "office_days_per_week": null,
+                "property_features": [],
+                "room_type": null
+              },
+              "reason_messages": {
+                "en": [],
+                "zh": []
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "eligible",
+              "unknown_reasons": []
+            },
+            "rank": 1,
+            "room_type": null,
+            "score": 56.41,
+            "score_breakdown": {
+              "commute": 14.51,
+              "freshness": 8.75,
+              "price": 26.29,
+              "semantic": 6.86
+            },
+            "source": "OnTheMarket",
+            "status_reason": "required conditions are not fully verified",
+            "travel_time": "~31 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)",
+            "travel_time_source": "estimate",
+            "unverified_features": [],
+            "url": "https://www.onthemarket.com/details/14141441/",
+            "verified_features": []
+          },
+          {
+            "absent_features": [],
+            "address": "Fairholme Road, West Kensington, London W14",
+            "area": "London",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": "Studio",
+            "budget_basis": 2166.67,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "eligible",
+            "candidate_unknown_reasons": [],
+            "description": "",
+            "distance_miles": 3.68,
+            "explanation": "Studio to rent in Fairholme Road, West Kensington, London W14 (estimated from coordinates: ~38 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)",
+            "geo_location": "51.488187, -0.207561",
+            "images": [
+              "https://media.onthemarket.com/properties/20575320/1652769480/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/20575320/1652769480/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/20575320/1652769479/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/20575320/1652769480/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/20575320/1652769480/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": false,
+            "price": "£1798/month",
+            "property_type": "Studio",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "london"
+                ],
+                "bedrooms": null,
+                "bedrooms_minimum": false,
+                "commute_destination": null,
+                "max_budget_monthly": 2166.67,
+                "max_changes": null,
+                "max_commute_minutes": 45.0,
+                "monthly_total_budget": null,
+                "move_in_date": null,
+                "no_commute": false,
+                "office_days_per_week": null,
+                "property_features": [],
+                "room_type": null
+              },
+              "reason_messages": {
+                "en": [],
+                "zh": []
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "eligible",
+              "unknown_reasons": []
+            },
+            "rank": 2,
+            "room_type": null,
+            "score": 50.77,
+            "score_breakdown": {
+              "commute": 9.88,
+              "freshness": 8.75,
+              "price": 23.5,
+              "semantic": 8.64
+            },
+            "source": "OnTheMarket",
+            "status_reason": "required conditions are not fully verified",
+            "travel_time": "~38 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)",
+            "travel_time_source": "estimate",
+            "unverified_features": [],
+            "url": "https://www.onthemarket.com/details/20575320/",
+            "verified_features": []
+          },
+          {
+            "absent_features": [],
+            "address": "Eastern Road, London, N22",
+            "area": "London",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": 2,
+            "budget_basis": 2166.67,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "eligible",
+            "candidate_unknown_reasons": [],
+            "description": "",
+            "distance_miles": 6.49,
+            "explanation": "2 bedroom apartment to rent in Eastern Road, London, N22 (estimated from coordinates: ~44 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)",
+            "geo_location": "51.601182, -0.121039",
+            "images": [
+              "https://media.onthemarket.com/properties/20569521/1652554336/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/20569521/1652554336/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/20569521/1652554336/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/20569521/1652554336/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/20569521/1652554336/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": false,
+            "price": "£1700/month",
+            "property_type": "2 bed Apartment",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "london"
+                ],
+                "bedrooms": null,
+                "bedrooms_minimum": false,
+                "commute_destination": null,
+                "max_budget_monthly": 2166.67,
+                "max_changes": null,
+                "max_commute_minutes": 45.0,
+                "monthly_total_budget": null,
+                "move_in_date": null,
+                "no_commute": false,
+                "office_days_per_week": null,
+                "property_features": [],
+                "room_type": null
+              },
+              "reason_messages": {
+                "en": [],
+                "zh": []
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "eligible",
+              "unknown_reasons": []
+            },
+            "rank": 3,
+            "room_type": null,
+            "score": 47.84,
+            "score_breakdown": {
+              "commute": 5.91,
+              "freshness": 8.75,
+              "price": 24.26,
+              "semantic": 8.92
+            },
+            "source": "OnTheMarket",
+            "status_reason": "required conditions are not fully verified",
+            "travel_time": "~44 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)",
+            "travel_time_source": "estimate",
+            "unverified_features": [],
+            "url": "https://www.onthemarket.com/details/20569521/",
+            "verified_features": []
+          },
+          {
+            "absent_features": [],
+            "address": "Fairholme Road, London W14",
+            "area": "London",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": "Studio",
+            "budget_basis": 2166.67,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "eligible",
+            "candidate_unknown_reasons": [],
+            "description": "",
+            "distance_miles": 3.68,
+            "explanation": "Studio to rent in Fairholme Road, London W14 (estimated from coordinates: ~38 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)",
+            "geo_location": "51.488187, -0.207561",
+            "images": [
+              "https://media.onthemarket.com/properties/15682690/1652769528/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/15682690/1652769528/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/15682690/1652769528/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/15682690/1652769528/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/15682690/1652769528/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": false,
+            "price": "£1885/month",
+            "property_type": "Studio",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "london"
+                ],
+                "bedrooms": null,
+                "bedrooms_minimum": false,
+                "commute_destination": null,
+                "max_budget_monthly": 2166.67,
+                "max_changes": null,
+                "max_commute_minutes": 45.0,
+                "monthly_total_budget": null,
+                "move_in_date": null,
+                "no_commute": false,
+                "office_days_per_week": null,
+                "property_features": [],
+                "room_type": null
+              },
+              "reason_messages": {
+                "en": [],
+                "zh": []
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "eligible",
+              "unknown_reasons": []
+            },
+            "rank": 4,
+            "room_type": null,
+            "score": 49.19,
+            "score_breakdown": {
+              "commute": 9.88,
+              "freshness": 8.75,
+              "price": 22.82,
+              "semantic": 7.74
+            },
+            "source": "OnTheMarket",
+            "status_reason": "required conditions are not fully verified",
+            "travel_time": "~38 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)",
+            "travel_time_source": "estimate",
+            "unverified_features": [],
+            "url": "https://www.onthemarket.com/details/15682690/",
+            "verified_features": []
+          },
+          {
+            "absent_features": [],
+            "address": "Fairholme Road, West Kensington, London W14",
+            "area": "London",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": "Studio",
+            "budget_basis": 2166.67,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "eligible",
+            "candidate_unknown_reasons": [],
+            "description": "",
+            "distance_miles": 3.68,
+            "explanation": "Studio to rent in Fairholme Road, West Kensington, London W14 (estimated from coordinates: ~38 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)",
+            "geo_location": "51.488187, -0.207561",
+            "images": [
+              "https://media.onthemarket.com/properties/20574086/1652729340/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/20574086/1652729340/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/20574086/1652729340/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/20574086/1652729340/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/20574086/1652729340/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": false,
+            "price": "£1798/month",
+            "property_type": "Studio",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "london"
+                ],
+                "bedrooms": null,
+                "bedrooms_minimum": false,
+                "commute_destination": null,
+                "max_budget_monthly": 2166.67,
+                "max_changes": null,
+                "max_commute_minutes": 45.0,
+                "monthly_total_budget": null,
+                "move_in_date": null,
+                "no_commute": false,
+                "office_days_per_week": null,
+                "property_features": [],
+                "room_type": null
+              },
+              "reason_messages": {
+                "en": [],
+                "zh": []
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "eligible",
+              "unknown_reasons": []
+            },
+            "rank": 5,
+            "room_type": null,
+            "score": 50.67,
+            "score_breakdown": {
+              "commute": 9.88,
+              "freshness": 8.75,
+              "price": 23.5,
+              "semantic": 8.54
+            },
+            "source": "OnTheMarket",
+            "status_reason": "required conditions are not fully verified",
+            "travel_time": "~38 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)",
+            "travel_time_source": "estimate",
+            "unverified_features": [],
+            "url": "https://www.onthemarket.com/details/20574086/",
+            "verified_features": []
+          },
+          {
+            "absent_features": [],
+            "address": "Fairholme Road, West Kensington, London W14",
+            "area": "London",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": "Studio",
+            "budget_basis": 2166.67,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "eligible",
+            "candidate_unknown_reasons": [],
+            "description": "",
+            "distance_miles": 3.68,
+            "explanation": "Studio to rent in Fairholme Road, West Kensington, London W14 (estimated from coordinates: ~38 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)",
+            "geo_location": "51.488187, -0.207561",
+            "images": [
+              "https://media.onthemarket.com/properties/20575321/1652771044/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/20575321/1652771044/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/20575321/1652771044/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/20575321/1652771044/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/20575321/1652771051/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": false,
+            "price": "£2015/month",
+            "property_type": "Studio",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "london"
+                ],
+                "bedrooms": null,
+                "bedrooms_minimum": false,
+                "commute_destination": null,
+                "max_budget_monthly": 2166.67,
+                "max_changes": null,
+                "max_commute_minutes": 45.0,
+                "monthly_total_budget": null,
+                "move_in_date": null,
+                "no_commute": false,
+                "office_days_per_week": null,
+                "property_features": [],
+                "room_type": null
+              },
+              "reason_messages": {
+                "en": [],
+                "zh": []
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "eligible",
+              "unknown_reasons": []
+            },
+            "rank": 6,
+            "room_type": null,
+            "score": 48.94,
+            "score_breakdown": {
+              "commute": 9.88,
+              "freshness": 8.75,
+              "price": 21.81,
+              "semantic": 8.5
+            },
+            "source": "OnTheMarket",
+            "status_reason": "required conditions are not fully verified",
+            "travel_time": "~38 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)",
+            "travel_time_source": "estimate",
+            "unverified_features": [],
+            "url": "https://www.onthemarket.com/details/20575321/",
+            "verified_features": []
+          }
+        ],
+        "retrieval": {
+          "area_status": {
+            "London": "results"
+          },
+          "data_source": "OnTheMarket",
+          "incomplete_areas": [],
+          "partial": false,
+          "retrieval_outcome": "candidates_returned"
+        },
+        "revision": 2
+      }
+    }
+  },
+  {
+    "path": "/api/conversations/bd64dd5d9b12410586b93a31b812a6f0/version_map",
+    "method": "GET",
+    "status": 200,
+    "response": {
+      "version_groups": {}
+    }
+  },
+  {
+    "path": "/api/favorites",
+    "method": "GET",
+    "status": 200,
+    "response": {
+      "favorites": [
+        {
+          "address": "Apt 108, Castello Court, 309-311 Harrow Road W9",
+          "availability_status": "",
+          "available_from": "2026-11-01",
+          "budget_basis": 2166.67,
+          "budget_status": "✅ 在预算内",
+          "explanation": "Studio to rent in Apt 108, Castello Court, 309-311 Harrow Road W9 (estimated from coordinates: ~31 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)",
+          "geo_location": "51.523193, -0.197903",
+          "images": [
+            "https://media.onthemarket.com/properties/14141441/1652518454/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/14141441/1652518454/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/14141441/1652518454/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/14141441/1652518454/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/14141441/1652518454/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": false,
+          "price": "£1439/month",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "london"
+              ],
+              "bedrooms": null,
+              "bedrooms_minimum": false,
+              "commute_destination": null,
+              "max_budget_monthly": 2166.67,
+              "max_changes": null,
+              "max_commute_minutes": 45,
+              "monthly_total_budget": null,
+              "move_in_date": null,
+              "no_commute": false,
+              "office_days_per_week": null,
+              "property_features": [],
+              "room_type": null
+            },
+            "reason_messages": {
+              "en": [],
+              "zh": []
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "eligible",
+            "unknown_reasons": []
+          },
+          "rank": 1,
+          "saved_at": "2026-10-19T12:04:20.965Z",
+          "source_conversation_title": "我下学期要来伦敦读研，想在Camden找个住处。能帮我看看吗？",
+          "travel_time": "~31 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)",
+          "url": "https://www.onthemarket.com/details/14141441/",
+          "user_id": "88a2593ceb254323b8d340f36a2d06ca"
+        }
+      ]
+    }
+  },
+  {
+    "path": "/api/favorites",
+    "method": "GET",
+    "status": 200,
+    "response": {
+      "favorites": [
+        {
+          "address": "Apt 108, Castello Court, 309-311 Harrow Road W9",
+          "availability_status": "",
+          "available_from": "2026-11-01",
+          "budget_basis": 2166.67,
+          "budget_status": "✅ 在预算内",
+          "explanation": "Studio to rent in Apt 108, Castello Court, 309-311 Harrow Road W9 (estimated from coordinates: ~31 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)",
+          "geo_location": "51.523193, -0.197903",
+          "images": [
+            "https://media.onthemarket.com/properties/14141441/1652518454/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/14141441/1652518454/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/14141441/1652518454/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/14141441/1652518454/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/14141441/1652518454/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": false,
+          "price": "£1439/month",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "london"
+              ],
+              "bedrooms": null,
+              "bedrooms_minimum": false,
+              "commute_destination": null,
+              "max_budget_monthly": 2166.67,
+              "max_changes": null,
+              "max_commute_minutes": 45,
+              "monthly_total_budget": null,
+              "move_in_date": null,
+              "no_commute": false,
+              "office_days_per_week": null,
+              "property_features": [],
+              "room_type": null
+            },
+            "reason_messages": {
+              "en": [],
+              "zh": []
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "eligible",
+            "unknown_reasons": []
+          },
+          "rank": 1,
+          "saved_at": "2026-10-19T12:04:20.965Z",
+          "source_conversation_title": "我下学期要来伦敦读研，想在Camden找个住处。能帮我看看吗？",
+          "travel_time": "~31 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)",
+          "url": "https://www.onthemarket.com/details/14141441/",
+          "user_id": "88a2593ceb254323b8d340f36a2d06ca"
+        }
+      ]
+    }
+  }
+]

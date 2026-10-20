@@ -18,6 +18,7 @@ from core.tool_system import Tool
 from typing import Optional
 import re
 from uk_rent_agent.data.tfl_fares import get_zonal_fare
+from core.tools.check_transport_cost import _commuting_frequency, _payg_commute_estimates
 
 
 def _check_route_uses_transit(route_data: dict, requested_mode: str) -> bool:
@@ -94,6 +95,11 @@ def _get_zone_from_address(address: str) -> Optional[int]:
         int: Zone 编号 (1-6)，如果无法判断则返回 None
     """
     try:
+        # A named Zone 1 station is its own evidence, before any postcode or geocoder
+        # (R1-09: "Euston Station, London NW1 2RT" and geocoded King's Cross read as Zone 2).
+        station_zone = _zone_from_station_name(address)
+        if station_zone is not None:
+            return station_zone
         # 先尝试从地址中提取 postcode (英国邮编格式: XX## #XX)
         postcode_pattern = r'([A-Z]{1,2}\d{1,2}[A-Z]?\s?\d[A-Z]{2})'
         match = re.search(postcode_pattern, address.upper())
@@ -101,9 +107,7 @@ def _get_zone_from_address(address: str) -> Optional[int]:
         if match:
             postcode = match.group(1)
             print("   📮 从地址提取到 postcode postcode_present=True")
-            zone = _get_zone_from_postcode(postcode)
-            if zone:
-                return zone
+            return _get_zone_from_postcode(postcode)
 
         # 如果无法从地址提取，使用免费地理编码（Postcodes.io/Nominatim）获取 postcode
         from core.maps_service import geocode_address
@@ -126,102 +130,111 @@ def _get_zone_from_address(address: str) -> Optional[int]:
         return None
 
 
+# Fare zone by London postcode DISTRICT, from the zone of the district's own stations.
+#
+# The previous rule derived the zone from the district NUMBER ("E 9-12 -> zone 4"), which
+# is not how either system works: postcode districts are numbered alphabetically by post
+# town, not by distance. 11 of 18 tested districts came out 1-3 zones wrong — E14 (Canary
+# Wharf, zone 2) read as zone 5, E17 (Walthamstow, zone 3) as zone 6 — and a Stratford ->
+# Waterloo commute was priced as a Zone 1-5 Travelcard, £293.40 instead of £201.60
+# (2026-10-19 B-03).
+#
+# District granularity is still an approximation (the tool labels it
+# ``zone_basis: postcode_district_estimate``): the table gives the zone of the district's
+# PRINCIPAL station(s), and where that station straddles a boundary (Stratford 2/3, Hendon
+# Central 3/4) the higher zone, so the recommended Travelcard covers it. A minor station in
+# an outer corner of a district can still sit a zone further out (Stamford Hill in N16,
+# Wood Street in E17). A district not listed here returns None and stays unpriced — the
+# honest outcome the tool already reports ("Unable to determine zones"), rather than a
+# number invented from arithmetic.
+#
+# N1, NW1 and W2 hold Zone 1 termini (King's Cross/St Pancras in N1C/N1 9, Euston and
+# Marylebone/Baker Street in NW1, Paddington in W2) beside Zone 2 stations. A district that
+# straddles Zones 1/2 answers 1: a Zone 1-N pass also covers Zone 2, while the Zone 2 pass
+# these districts used to produce does not cover the Zone 1 terminus — King's Cross ->
+# Canary Wharf was recommended a "Zone 2 Monthly Travelcard" (R1-09).
+_DISTRICT_ZONES = {
+    **{d: 1 for d in ("W1", "SW1", "SE1", "SW3", "SW7", "N1", "NW1", "W2")},
+    **{d: 2 for d in (
+        "N4", "N5", "N7", "N16",
+        "NW3", "NW5", "NW6", "NW8",
+        "E1", "E2", "E3", "E5", "E8", "E9", "E14",
+        "SE4", "SE5", "SE8", "SE11", "SE14", "SE15", "SE16", "SE17", "SE22", "SE24",
+        "SW2", "SW4", "SW5", "SW6", "SW8", "SW9", "SW10", "SW11",
+        "W6", "W8", "W9", "W10", "W11", "W12", "W14")},
+    **{d: 3 for d in (
+        "N2", "N6", "N8", "N15", "N17", "N19", "N22",
+        "NW2", "NW10", "NW11",
+        "E7", "E10", "E13", "E15", "E16", "E17", "E20",
+        "SE3", "SE6", "SE10", "SE13", "SE23", "SE26", "SE27",
+        "SW12", "SW13", "SW14", "SW15", "SW16", "SW17", "SW18", "SW19",
+        "W3", "W4", "W5")},
+    **{d: 4 for d in ("N3", "N11", "N12", "N14", "NW4", "NW7", "NW9", "E6", "E11", "E12", "SW20",
+                      "W7")},
+}
+
+
+# Named Zone 1 stations (fare zone 1, or a Zone 1/2 boundary station, where 1 is the zone
+# whose pass covers it). Matched only as a STATION — the whole place ("King's Cross",
+# "Paddington, London") or a name followed by "station" — never as a street name:
+# "Victoria Road, Ilford" and "Euston Road" are not stations.
+_ZONE_ONE_STATIONS = (
+    "king's cross st pancras", "king's cross", "st pancras", "st pancras international",
+    "euston", "euston square", "paddington", "marylebone", "baker street",
+    "liverpool street", "waterloo", "waterloo east", "victoria", "london bridge",
+    "charing cross", "fenchurch street", "cannon street", "blackfriars", "city thameslink",
+    "moorgate", "bank", "monument", "oxford circus", "tottenham court road", "holborn",
+    "angel", "old street", "farringdon", "barbican", "bond street", "green park",
+    "piccadilly circus", "leicester square", "covent garden", "westminster", "embankment",
+    "temple", "aldgate", "aldgate east", "tower hill", "tower gateway", "borough",
+    "lambeth north", "russell square", "goodge street", "warren street",
+    "great portland street", "regent's park", "edgware road", "lancaster gate",
+    "marble arch", "hyde park corner", "knightsbridge", "south kensington", "sloane square",
+    "st james's park", "chancery lane", "st paul's", "mansion house",
+    "elephant and castle", "elephant & castle", "vauxhall", "pimlico", "earl's court",
+    "gloucester road", "high street kensington", "notting hill gate", "queensway",
+    "bayswater", "southwark",
+)
+_STATION_SUFFIX = r"(?:\s+(?:(?:underground|tube|rail|railway|mainline|overground|national rail|dlr)\s+)?(?:station|stn))?"
+
+
+def _zone_from_station_name(address: str) -> Optional[int]:
+    """1 when ``address`` names a Zone 1 station as a station, else None."""
+    text = " ".join(re.sub(r"[\u2019']", "'", str(address or "")).lower().split())
+    if not text:
+        return None
+    text = re.sub(r"\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b", " ", text)          # postcode
+    text = re.sub(r"\bst\.\s*", "st ", text)
+    text = re.sub(r"^(?:london\s+)|[,\s]+(?:london|uk|united kingdom|england)\b", " ", text)
+    text = " ".join(text.replace(",", " ").split()).strip(" .")
+    for name in sorted(_ZONE_ONE_STATIONS, key=len, reverse=True):
+        stem = re.escape(name).replace("'", "'?")
+        if re.fullmatch(stem + _STATION_SUFFIX, text) or re.search(
+                r"(?<![a-z])" + stem + r"\s+(?:(?:underground|tube|rail|railway|mainline|overground|"
+                r"national rail|dlr)\s+)?(?:station|stn)\b", text):
+            return 1
+    return None
+
+
 def _get_zone_from_postcode(postcode: str) -> Optional[int]:
+    """Fare zone for a London postcode, or None when it cannot be established.
+
+    Only the outward district is read ("N7 0EG" -> "N7"; without a space the 3-character
+    inward code is dropped: "N70EG" -> "N7"). EC and WC districts are zone 1 throughout;
+    every other district is looked up in ``_DISTRICT_ZONES``, and an unlisted one (outer
+    London, Watford, anywhere outside TfL zones) is None, never a guess.
     """
-    根据 postcode 判断所在的 Zone
-
-    简化版规则 (基于伦敦主要邮编区域):
-    - Zone 1: WC, EC, SW1, W1, SE1
-    - Zone 2: N1-N7, E1-E3, SE5, SE8, SE10, SW3-SW10, W2-W6, NW1-NW3
-    - Zone 3: N8-N12, E4-E8, SE11-SE16, SW11-SW15, W7-W9, NW4-NW6
-    - Zone 4: N13-N16, E9-E12, SE17-SE22, SW16-SW19, W10-W12, NW7-NW9
-    - Zone 5: N17-N20, E13-E15, SE23-SE26, SW20, W13-W14, NW10-NW11
-    - Zone 6: N21-N22, E16-E18, SE27-SE28, UB (Uxbridge), HA (Harrow), EN (Enfield)
-
-    注意: 这是简化版，实际 Zone 划分非常复杂
-    """
-    # 只取 outward district（空格前部分），避免把内码数字并进区号
-    # 例: "N7 0EG" -> "N7"；无空格时去掉末尾 3 位内码: "N70EG" -> "N7"
-    pc = postcode.upper().strip()
-    postcode = pc.split(' ')[0] if ' ' in pc else (pc[:-3] if len(pc) > 3 else pc)
-
-    # Zone 1 - 伦敦市中心
-    if any(postcode.startswith(prefix) for prefix in ['WC', 'EC', 'SW1', 'W1', 'SE1']):
+    pc = str(postcode or "").upper().strip()
+    if not pc:
+        return None
+    district = pc.split(' ')[0] if ' ' in pc else (pc[:-3] if len(pc) > 3 else pc)
+    if re.fullmatch(r'(?:EC|WC)\d[A-Z]?', district):
         return 1
-
-    # 提取邮编的区域代码和数字
-    match = re.match(r'([A-Z]+)(\d+)', postcode)
+    match = re.fullmatch(r'([A-Z]{1,2}\d{1,2})([A-Z]?)', district)
     if not match:
         return None
-
-    area_code = match.group(1)  # 如: N, E, SE, SW, W, NW
-    area_num = int(match.group(2))  # 如: 1, 7, 12
-
-    # Zone 2
-    zone2_ranges = {
-        'N': (1, 7),
-        'E': (1, 3),
-        'SE': [5, 8, 10],
-        'SW': (3, 10),
-        'W': (2, 6),
-        'NW': (1, 3)
-    }
-
-    # Zone 3
-    zone3_ranges = {
-        'N': (8, 12),
-        'E': (4, 8),
-        'SE': (11, 16),
-        'SW': (11, 15),
-        'W': (7, 9),
-        'NW': (4, 6)
-    }
-
-    # Zone 4
-    zone4_ranges = {
-        'N': (13, 16),
-        'E': (9, 12),
-        'SE': (17, 22),
-        'SW': (16, 19),
-        'W': (10, 12),
-        'NW': (7, 9)
-    }
-
-    # Zone 5
-    zone5_ranges = {
-        'N': (17, 20),
-        'E': (13, 15),
-        'SE': (23, 26),
-        'SW': [20],
-        'W': (13, 14),
-        'NW': (10, 11)
-    }
-
-    # Zone 6
-    zone6_ranges = {
-        'N': (21, 22),
-        'E': (16, 18),
-        'SE': (27, 28),
-    }
-
-    # 特殊邮编区域 (通常在 Zone 5-6)
-    if area_code in ['UB', 'HA', 'EN', 'TW', 'KT', 'CR', 'BR', 'DA', 'RM', 'IG']:
-        return 6
-
-    # 检查每个 Zone
-    for zone_num, ranges in [(2, zone2_ranges), (3, zone3_ranges), (4, zone4_ranges),
-                             (5, zone5_ranges), (6, zone6_ranges)]:
-        if area_code in ranges:
-            zone_range = ranges[area_code]
-            if isinstance(zone_range, list):
-                if area_num in zone_range:
-                    return zone_num
-            elif isinstance(zone_range, tuple):
-                if zone_range[0] <= area_num <= zone_range[1]:
-                    return zone_num
-
-    # 默认: 如果无法判断，假设是外围 Zone 6
-    return 6
+    # A sub-district letter ("W1F", "SW1A", "SE1P") belongs to its district.
+    return _DISTRICT_ZONES.get(match.group(1))
 
 
 def _commute_time_text(measured_minutes: Optional[int], details: dict) -> str:
@@ -243,7 +256,8 @@ def _commute_time_text(measured_minutes: Optional[int], details: dict) -> str:
             "figure is not trustworthy at this distance, so no commute time is given")
 
 
-def _monthly_hours_clause(measured_minutes: Optional[int], details: dict) -> str:
+def _monthly_hours_clause(measured_minutes: Optional[int], details: dict,
+                          commuting_days_per_month: float = 22) -> str:
     """The "~N hours/month commuting" clause, or an honest refusal in its place.
 
     ``minutes x 2 x 22`` inherits every property of the minutes it is built from. Derived from a
@@ -251,14 +265,15 @@ def _monthly_hours_clause(measured_minutes: Optional[int], details: dict) -> str
     lever on it, which is how a 2-minute estimate became "1.5 hours a month" as a stated total.
     """
     if measured_minutes is not None:
-        return (f" + {measured_minutes * 2} min/day × 22 workdays = "
-                f"~{measured_minutes * 44 / 60:.1f} hours/month")
+        return (f" + {measured_minutes * 2} min/day × {commuting_days_per_month:g} workdays = "
+                f"~{measured_minutes * 2 * commuting_days_per_month / 60:.1f} hours/month")
     low = details.get('estimate_low_minutes')
     high = details.get('estimate_high_minutes')
     if low is not None and high is not None:
         return (f". Commuting HOURS are not stated as a fact: no journey plan exists for this "
                 f"pair, so the time is an estimated {low}-{high} min each way "
-                f"(~{low * 44 / 60:.1f}-{high * 44 / 60:.1f} hours/month if that estimate holds)")
+                f"(~{low * 2 * commuting_days_per_month / 60:.1f}-"
+                f"{high * 2 * commuting_days_per_month / 60:.1f} hours/month if that estimate holds)")
     return (". Commuting HOURS are not stated: no commute time could be established for this "
             "pair, and the fare above does not depend on one")
 
@@ -267,7 +282,8 @@ def calculate_commute_cost_impl(
     from_address: str,
     to_address: str,
     travel_type: str = "student",
-    mode: str = "transit"
+    mode: str = "transit",
+    office_days_per_week: Optional[float] = None,
 ) -> dict:
     """
     计算综合通勤成本（时间 + 费用）
@@ -288,6 +304,11 @@ def calculate_commute_cost_impl(
         dict: 包含通勤时间、Zone 信息、月度交通费用等
     """
     try:
+        try:
+            frequency = _commuting_frequency(office_days_per_week)
+        except (TypeError, ValueError):
+            return {'success': False, 'error': 'office_days_per_week must be between 0 and 7.',
+                    'retryable': False}
         print(
             "\n   🚇 计算综合通勤成本 "
             f"from_chars={len(from_address)} to_chars={len(to_address)} "
@@ -315,7 +336,8 @@ def calculate_commute_cost_impl(
         if not details:
             return {
                 'success': False,
-                'error': '无法计算路线（地址解析失败或路线不可达）'
+                'error': ('Could not calculate a route (an address could not be geocoded '
+                          'or no route was found).')
             }
         # Defence in depth. maps_service now threads `mode` into describe_estimate, so this is
         # a no-op on that path; it still catches a payload produced by anything that does not.
@@ -372,17 +394,20 @@ def calculate_commute_cost_impl(
                         else f"Zone {min_zone}-{max_zone}"
                     )
                     print("   📍 Looking up zonal fares")
-                    payg_monthly_estimate = round(prices['daily_cap'] * 22, 2)
+                    payg = _payg_commute_estimates(prices['daily_cap'], office_days_per_week)
+                    payg_monthly_estimate = payg['payg_monthly_estimate']
                     monthly_travelcard = prices['monthly']
                     recommended_cost = min(payg_monthly_estimate, monthly_travelcard)
                     recommended_product = (
                         "Monthly Travelcard"
                         if monthly_travelcard <= payg_monthly_estimate
-                        else "PAYG daily caps (22-day estimate)"
+                        else ("PAYG daily caps (22-day estimate)" if office_days_per_week is None
+                              else "PAYG daily caps (hybrid-work monthly average)")
                     )
                     is_student = user_type == "student"
 
                     transport_cost_info = {
+                        **payg,
                         "from_zone": from_zone,
                         "to_zone": to_zone,
                         "recommended_pass": f"{zone_label} {recommended_product}",
@@ -393,7 +418,7 @@ def calculate_commute_cost_impl(
                         # of the two published options rather than a PAYG-only guess.
                         "monthly_cost": recommended_cost,
                         "monthly_cost_basis": recommended_product,
-                        "payg_monthly_estimate_22_days": payg_monthly_estimate,
+                        "payg_monthly_estimate_22_days": round(prices['daily_cap'] * 22, 2),
                         "monthly_travelcard": monthly_travelcard,
                         "weekly_travelcard": prices['weekly'],
                         "daily_cap": prices['daily_cap'],
@@ -404,9 +429,15 @@ def calculate_commute_cost_impl(
                         "fare_edition": prices['edition'],
                         "source": prices['source'],
                         "source_url": prices['source_url'],
+                        'zone_basis': 'postcode_district_estimate',
+                        'coverage_verified': False,
+                        'coverage_note': ('Postcode-derived zones are approximate, not verified '
+                                          'station or itinerary coverage. Out-of-zone services '
+                                          'and supplements require separate fare evidence.'),
                         "note": (
                             f"Compared the standard PAYG daily cap (£{prices['daily_cap']:.2f}) "
-                            f"× 22 commuting days (£{payg_monthly_estimate:.2f}) with the "
+                            f"× {payg['commuting_days_per_month']:g} average commuting days/month "
+                            f"(£{payg_monthly_estimate:.2f}) with the "
                             f"{zone_label} monthly Travelcard (£{monthly_travelcard:.2f}). "
                             "18+ Student Oyster discounts apply to Travelcards, not standard PAYG."
                         ),
@@ -415,7 +446,11 @@ def calculate_commute_cost_impl(
                 transport_cost_info = {
                     "error": "Unable to determine zones for one or both addresses. Cannot calculate transport cost.",
                     "from_zone": from_zone,
-                    "to_zone": to_zone
+                    "to_zone": to_zone,
+                    **frequency,
+                    'coverage_verified': False,
+                    'zone_basis': 'not_established',
+                    'coverage_note': 'No zonal price is assigned when either address has an unknown zone.'
                 }
 
         # Step 3: 组装完整结果
@@ -448,12 +483,16 @@ def calculate_commute_cost_impl(
             })
 
         result = {
+            **frequency,
             'success': True,
             'from_address': from_address,
             'to_address': to_address,
             'mode': mode,
             'uses_public_transport': uses_transit,
             'commute': commute_block,
+            'transport_cost_available': bool(transport_cost_info and
+                                             'monthly_cost' in transport_cost_info),
+            'partial': bool(transport_cost_info and transport_cost_info.get('error')),
         }
         if measured_minutes is None:
             # The instruction goes WITH the payload, exactly as in calculate_commute: a basis
@@ -482,7 +521,8 @@ def calculate_commute_cost_impl(
         # it is the same unbacked minute count multiplied by 44, and rendering it as a fact
         # was the loudest form of the defect.
         commute_time_txt = _commute_time_text(measured_minutes, details)
-        hours_clause = _monthly_hours_clause(measured_minutes, details)
+        hours_clause = _monthly_hours_clause(measured_minutes, details,
+                                             frequency['commuting_days_per_month'])
 
         # 添加交通费用信息（如果路线使用公共交通且计算成功）
         if transport_cost_info:
@@ -499,6 +539,22 @@ def calculate_commute_cost_impl(
                         f"£{transport_cost_info['monthly_cost']:.2f} transport"
                         f"{hours_clause}"),
                 }
+        elif not uses_transit and mode == "transit":
+            # A public-transport request whose route the heuristic judged short enough to walk
+            # is NOT a free commute: no fare was established, so the cost is unknown. Whitechapel
+            # Road -> Bank (15 min) showed "£0.00, walking/cycling only" beside
+            # transport_cost_available=false (R3-09).
+            result['uses_public_transport'] = None
+            result['summary'] = {
+                'commute_time': commute_time_txt,
+                'monthly_transport_cost': None,
+                'transport_cost_status': 'unknown',
+                'uses_public_transport': 'Not established',
+                'note': ('The route is short enough that it may be walkable, so no public-'
+                         'transport fare was looked up for it. The monthly transport cost is '
+                         'unknown here, not £0; if you take the tube or bus, check the fare at '
+                         'tfl.gov.uk/fares.'),
+            }
         elif not uses_transit:
             # 如果不使用公共交通，明确说明无交通成本
             result['summary'] = {
@@ -523,7 +579,7 @@ def calculate_commute_cost_impl(
 calculate_commute_cost_tool = Tool(
     name="calculate_commute_cost",
 
-    description="""Calculate commute time plus a monthly fare comparison from a listing to a destination. For public transport, compare TfL's official 2026 PAYG daily cap x 22 commuting days with the exact weekly/monthly Travelcard for the passenger and zones, then report the cheaper monthly option with source and effective date.
+    description="""Calculate commute time plus a monthly zonal fare comparison from a listing to a destination. Pass office_days_per_week for hybrid work: weekly PAYG caps × office days, average monthly × 52/12. Omitted attendance preserves 22 commuting days/month. Caps are upper bounds, not actual single/return fares. Postcode-zone estimates do not verify route coverage; unknown/out-of-zone locations such as Watford Junction must remain unpriced rather than defaulting to zones 1-2 or 6.
 READ THE BASIS FIELD — same contract as calculate_commute: `commute.duration_minutes` is populated ONLY when TfL returned a real journey plan (basis=tfl_journey_plan) and is the only figure you may state as a commute time. When TfL has no journey the block instead carries `estimated_duration_minutes` plus `estimate_low_minutes`/`estimate_high_minutes` (basis=straight_line_estimate) and `duration_category`/`is_acceptable` are null — quote that as an estimated RANGE and say it is derived from the straight-line distance, or, when it is null too, say no commute time is available. The FARE figures are unaffected either way and may always be stated. Never present an estimate as a measured journey time, and never state a monthly commuting-HOURS total derived from one.
 计算房源到目的地的通勤时间与月度交通费用（票价来源 TfL）。""",
 
@@ -551,7 +607,11 @@ READ THE BASIS FIELD — same contract as calculate_commute: `commute.duration_m
                 'enum': ['transit', 'driving', 'walking', 'bicycling'],
                 'description': '通勤方式。注意：只有 transit (公共交通) 才会计算交通费用',
                 'default': 'transit'
-            }
+            },
+            'office_days_per_week': {
+                'type': 'number', 'minimum': 0, 'maximum': 7,
+                'description': 'Return commuting days per week; use the latest user attendance (e.g. 2 or 3). Optional; omitted preserves the legacy 22 commuting days/month.'
+            },
         },
         'required': ['from_address', 'to_address']
     },

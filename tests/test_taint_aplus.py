@@ -311,7 +311,9 @@ def test_tainted_turn_excludes_assistant_from_extraction(memory, monkeypatch):
     assert captured["assistant"] == ""
 
 
-def test_clean_turn_feeds_assistant_to_extraction(memory, monkeypatch):
+def test_clean_turn_no_longer_feeds_assistant_to_extraction(memory, monkeypatch):
+    """R2-06 superseded the clean-turn half of Taint A+: semantic facts come from the USER
+    message on every turn — a recall answer fed to the extractor came back as new facts."""
     captured = {}
 
     def _capture(user_msg, assistant_msg):
@@ -325,7 +327,7 @@ def test_clean_turn_feeds_assistant_to_extraction(memory, monkeypatch):
         context_tainted=False,
     )
     assert captured["user"] == _USER_MSG
-    assert captured["assistant"] == _ASSISTANT_MSG
+    assert captured["assistant"] == ""
 
 
 def test_episodic_written_when_tainted(memory, monkeypatch):

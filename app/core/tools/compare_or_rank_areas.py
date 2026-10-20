@@ -17,6 +17,7 @@ status ``no_data`` (suggesting a search first) instead of scraping in-line.
 from __future__ import annotations
 
 import asyncio
+import re
 from typing import List, Optional
 
 from core.tool_system import Tool
@@ -64,6 +65,15 @@ def _weights(priorities: list, usable: set) -> dict:
     return rounded
 
 
+# Scale-aware normalisation (R3-10). Min-max over the candidate set turned Hackney 24 min vs
+# Stratford 30 min into commute 100 vs 0 and a total of 74 vs 29.8 "wins clearly". The best
+# area still scores 100, but a gap is measured against at least this spread, so a 6-minute
+# difference costs 20 points, not 100. Rent uses a spread of at least 20% of the dearest
+# median for the same reason.
+_MIN_COMMUTE_SPREAD_MIN = 30.0
+_MIN_RENT_SPREAD_FRACTION = 0.20
+
+
 def _value_components(stats_by_slug: dict, budget_present: bool) -> dict:
     """Value component (0-100) per slug: inverse median rent normalised WITHIN the
     candidate set (cheaper -> higher), adjusted by budget_match_rate when a budget is
@@ -75,9 +85,10 @@ def _value_components(stats_by_slug: dict, budget_present: bool) -> dict:
     if not medians:
         return {}
     lo, hi = min(medians.values()), max(medians.values())
+    spread = max(hi - lo, _MIN_RENT_SPREAD_FRACTION * hi)
     comps: dict = {}
     for s, m in medians.items():
-        base = 100.0 if hi == lo else (hi - m) / (hi - lo) * 100.0
+        base = 100.0 if spread <= 0 else (1.0 - (m - lo) / spread) * 100.0
         st = stats_by_slug[s]
         if budget_present and st.get("budget_match_rate") is not None:
             base = 0.6 * base + 0.4 * (st["budget_match_rate"] * 100.0)
@@ -99,8 +110,9 @@ def _commute_components(commute_by_slug: dict, max_commute: Optional[int]) -> di
             comps[s] = round(max(0.0, min(1.0, 1.0 - c / float(max_commute))) * 100.0, 1)
     else:
         lo, hi = min(vals.values()), max(vals.values())
+        spread = max(hi - lo, _MIN_COMMUTE_SPREAD_MIN)
         for s, c in vals.items():
-            comps[s] = round(100.0 if hi == lo else (hi - c) / (hi - lo) * 100.0, 1)
+            comps[s] = round((1.0 - (c - lo) / spread) * 100.0, 1)
     return comps
 
 
@@ -166,7 +178,11 @@ async def compare_or_rank_areas_impl(
     # ---- Normalise inputs ------------------------------------------------
     city = city.strip() if isinstance(city, str) and city.strip() else None
     destination = destination.strip() if isinstance(destination, str) and destination.strip() else None
-    priorities = [p for p in (priorities or []) if p in _PRIORITY_ENUM] or ["value", "commute"]
+    supplied_priorities = [p for p in (priorities or []) if p in _PRIORITY_ENUM]
+    # Who set the priorities: the tool cannot know whether the caller copied them from the
+    # user, so the answer must not narrate them as "your stated priorities" (R3-10).
+    priorities_source = "caller_supplied" if supplied_priorities else "default"
+    priorities = supplied_priorities or ["value", "commute"]
     try:
         max_commute_minutes = int(max_commute_minutes) if max_commute_minutes else None
     except (TypeError, ValueError):
@@ -202,6 +218,21 @@ async def compare_or_rank_areas_impl(
         }
 
     notes: list = []
+    evidence_scope = {
+        'rent_sample': 'mixed_cached_listings',
+        'room_type_filtered': False,
+        'bedrooms_filtered': False,
+        'budget_match_basis': 'rent_only',
+        'freshness_basis': 'cache_fetch_time',
+        'live_verified': False,
+        'commute_scope': 'area_reference_point',
+    }
+    notes.append(_L(is_zh,
+        'Rent statistics cover mixed cached listings without room-type or bedroom filtering. '
+        'Budget match measures rent only. Freshness is the cache age, not verification of '
+        'current price or availability. Area commute times do not verify individual homes.',
+        '租金统计包含混合房型的缓存样本，未按整租/合租或卧室数筛选；预算匹配比例只计算租金。'
+        '新鲜度是缓存年龄，并未核实当前价格或可租状态；区域通勤时间不能证明逐套房源符合要求。'))
 
     # ---- 1) Candidate areas (with commute) -------------------------------
     candidates = await _resolve_candidates(city, destination, max_commute_minutes, candidate_areas)
@@ -210,7 +241,8 @@ async def compare_or_rank_areas_impl(
             "success": True,
             "status": "no_data",
             "areas": [],
-            "explanation_notes": [_L(
+            "evidence_scope": evidence_scope,
+            "explanation_notes": notes + [_L(
                 is_zh,
                 "I couldn't assemble candidate areas to compare. Try naming a city, a "
                 "commute destination, or specific areas.",
@@ -279,11 +311,15 @@ async def compare_or_rank_areas_impl(
 
         # Per-area total: weighted sum over the components PRESENT for this area,
         # renormalised by their weights so a no-data area can still rank on commute.
+        # Such a total is PARTIAL: it answers a different question from a full one, and
+        # sorting the two together put Finsbury Park (no rent data, 85.2 on commute alone)
+        # above Bloomsbury (76.1 on value AND commute) — 2/3 live (2026-10-19 B-07).
         total = None
         present = {k: v for k, v in components.items() if k in weights}
         wsum = sum(weights[k] for k in present)
         if present and wsum > 0:
             total = round(sum(weights[k] * present[k] for k in present) / wsum, 1)
+        partial = total is not None and any(k not in present for k in weights)
 
         sources: list = []
         if rent is not None:
@@ -297,23 +333,42 @@ async def compare_or_rank_areas_impl(
             "rent": rent,
             "commute_minutes": c["commute_minutes"],
             "budget_match_rate": st["budget_match_rate"],
-            "score": {"total": total, "components": components, "weights": weights},
+            "score": {"total": total, "components": components, "weights": weights,
+                      "partial": partial},
             "sources": sources,
             "no_data": rent is None,
         })
 
-    # ---- 6) Sort by total desc (None last), cap at limit -----------------
-    areas.sort(key=lambda a: (a["score"]["total"] is None, -(a["score"]["total"] or 0.0)))
+    # ---- 6) Sort: full scores first, then partial, then unscored; cap ----
+    areas.sort(key=lambda a: (a["score"]["total"] is None, bool(a["score"].get("partial")),
+                              -(a["score"]["total"] or 0.0)))
+    beyond_limit = [a["name"] for a in areas[limit:]]
     areas = areas[:limit]
+    for rank, area in enumerate(areas, start=1):
+        area["rank"] = rank
+    # Requested areas that never reached the ranking are NAMED, never silently dropped:
+    # 8 requested / 5 returned with no word about Euston, Hackney or Stratford (B-07).
+    requested = [str(a).strip() for a in (candidate_areas or []) if str(a or "").strip()]
+    returned_keys = {re.sub(r"[^a-z0-9]+", "", str(v).lower())
+                     for c in candidates for v in (c["name"], c["slug"])}
+    not_evaluated = [name for name in requested
+                     if re.sub(r"[^a-z0-9]+", "", name.lower()) not in returned_keys]
 
     # ---- 7) Explanation notes (formula + weights + caveats) --------------
     notes.insert(0, _L(
         is_zh,
         "Composite score = weighted sum of 0-100 components (value = lower median rent, "
         "adjusted by how many cached listings fall under budget; commute = shorter time). "
-        "Weights come from your priorities and sum to 1: " + _fmt_weights(weights, is_zh) + ".",
+        "Weights come from the ranking priorities ("
+        + ("defaults" if priorities_source == "default" else "as passed to the tool")
+        + ") and sum to 1: " + _fmt_weights(weights, is_zh) + ". The best area on a component "
+        "scores 100; gaps are measured against at least a 30-minute commute spread and a rent "
+        "spread of 20% of the dearest median, so small differences stay small.",
         "综合分 = 各 0-100 分项的加权和（value=更低的中位租金，并按缓存中低于预算的房源占比调整；"
-        "commute=更短的通勤）。权重来自你的优先级、总和为 1：" + _fmt_weights(weights, is_zh) + "。",
+        "commute=更短的通勤）。权重来自排序优先级（"
+        + ("默认值" if priorities_source == "default" else "调用时传入")
+        + "）、总和为 1：" + _fmt_weights(weights, is_zh) + "。各分项最优的区域为 100 分；差距至少按 "
+        "30 分钟通勤跨度和最高中位租金 20% 的租金跨度计算，小差距不会被放大。",
     ))
     if not commute_available:
         notes.append(_L(
@@ -338,6 +393,32 @@ async def compare_or_rank_areas_impl(
             % "、".join(no_data_names),
         ))
 
+    if any(a["score"].get("partial") for a in areas):
+        notes.append(_L(
+            is_zh,
+            "Areas without cached rent data are scored on commute alone and are ranked "
+            "AFTER every fully scored area; their score is not comparable with the others.",
+            "没有缓存租金数据的区域只按通勤计分，排在所有完整计分的区域之后；其分数与其他区域不可直接比较。"))
+    if areas:
+        notes.append(_L(
+            is_zh,
+            "Ranked order (present the areas in this order; #1 is the top recommendation): "
+            + ", ".join(f"#{a['rank']} {a['name']}" for a in areas) + ".",
+            "排名顺序（请按此顺序介绍，第 1 名为首选）："
+            + "、".join(f"第{a['rank']}名 {a['name']}" for a in areas) + "。"))
+    if not_evaluated:
+        notes.append(_L(
+            is_zh,
+            "Requested but NOT evaluated (no commute route or no area match), so not ranked: "
+            + ", ".join(not_evaluated) + ". Say so; do not rank or describe them.",
+            "以下请求的区域未能评估（无法计算通勤或无法匹配区域），因此未参与排名："
+            + "、".join(not_evaluated) + "。请如实说明，不要对其排名或描述。"))
+    if beyond_limit:
+        notes.append(_L(
+            is_zh,
+            "Also evaluated but below the top %d: %s." % (limit, ", ".join(beyond_limit)),
+            "另有评估但未进入前 %d 名的区域：%s。" % (limit, "、".join(beyond_limit))))
+
     status = "ok" if value_available else "no_data"
     if not value_available:
         notes.append(_L(
@@ -353,7 +434,12 @@ async def compare_or_rank_areas_impl(
         "areas": areas,
         "explanation_notes": notes,
         "priorities": priorities,
+        "priorities_source": priorities_source,
+        "priorities_note": ("Do not describe these priorities as the user's own unless the user "
+                            "stated them in this conversation."),
         "weights": weights,
+        "evidence_scope": evidence_scope,
+        "not_evaluated": not_evaluated,
     }
 
 

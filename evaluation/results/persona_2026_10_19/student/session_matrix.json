@@ -1,0 +1,432 @@
+{
+  "sessions": [
+    {
+      "session": "S1",
+      "utc_start": "2026-10-19T04:57:03Z",
+      "utc_end": "2026-10-19T05:00:35Z",
+      "device": "desktop 1440×960",
+      "identity": "original guest",
+      "conversations": "C1",
+      "turns": "T01–T12",
+      "chat_count": 12,
+      "purpose": "首次中文发现、低预算、条件更正、同房追问、未知、收藏、连续12轮",
+      "outcome": "找到1套历史备选并收藏；条件/日期/来源解释多处不一致"
+    },
+    {
+      "session": "S2",
+      "utc_start": "2026-10-19T05:00:43Z",
+      "utc_end": "2026-10-19T05:03:25Z (approx safe idle)",
+      "device": "mobile 390×844; desktop fallback",
+      "identity": "same guest, retained storage",
+      "conversations": "C1 reopened",
+      "turns": "none (mechanical UI only)",
+      "chat_count": 0,
+      "purpose": "关闭重开、中文偏好、历史/收藏恢复、手机账号入口；测试脚本选择器恢复",
+      "outcome": "历史与收藏恢复；语言重置；手机账号入口越界；错误选择器属于驱动而非产品"
+    },
+    {
+      "session": "S3",
+      "utc_start": "2026-10-19T05:04:15Z",
+      "utc_end": "2026-10-19T05:08:50Z",
+      "device": "desktop 1440×960",
+      "identity": "same guest then fictional registered account",
+      "conversations": "C1 restore; C2 T13–20; C3 T21–25",
+      "turns": "T13–T25",
+      "chat_count": 13,
+      "purpose": "真实服务重启恢复、注册、换城市、pw/pcm、两房比较、房源身份、偏好跨对话/更改",
+      "outcome": "访客12轮和收藏恢复；账号注册后另起空数据；找到2套合租及1套studio；记忆失败重试后恢复"
+    },
+    {
+      "session": "S4",
+      "utc_start": "2026-10-19T05:08:51Z",
+      "utc_end": "2026-10-19T05:09:17Z",
+      "device": "mobile 390×844",
+      "identity": "same registered account, retained storage",
+      "conversations": "C3 restore; C4 new",
+      "turns": "T26",
+      "chat_count": 1,
+      "purpose": "再次关闭重开、最新偏好、账号会话与2套收藏恢复",
+      "outcome": "正确回忆£1000整套studio；不能直接识别收藏身份但没有声称都匹配"
+    },
+    {
+      "session": "S5",
+      "utc_start": "2026-10-19T05:09:18Z",
+      "utc_end": "2026-10-19T05:10:00Z",
+      "device": "desktop 1440×960",
+      "identity": "fresh guest then login to own test account",
+      "conversations": "C5; account C2/C3/C4 restored",
+      "turns": "T27",
+      "chat_count": 1,
+      "purpose": "新访客隔离、账号登录恢复、手动会话重命名/打开",
+      "outcome": "新访客空历史/收藏且不知道偏好；登录恢复3条账号会话2套收藏；重命名成功"
+    }
+  ],
+  "conversations": [
+    {
+      "label": "C1",
+      "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+      "turn_numbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "turn_count": 12,
+      "identity": "original guest"
+    },
+    {
+      "label": "C2",
+      "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+      "turn_numbers": [
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "turn_count": 8,
+      "identity": "fictional registered account"
+    },
+    {
+      "label": "C3",
+      "conversation_id": "dc804b1d2f55446b8df238fd8c0a641a",
+      "turn_numbers": [
+        21,
+        22,
+        23,
+        24,
+        25
+      ],
+      "turn_count": 5,
+      "identity": "fictional registered account"
+    },
+    {
+      "label": "C4",
+      "conversation_id": "6c8b6c1ae42e411fbf2564f714b1d8e8",
+      "turn_numbers": [
+        26
+      ],
+      "turn_count": 1,
+      "identity": "fictional registered account"
+    },
+    {
+      "label": "C5",
+      "conversation_id": "c68a0e50ea594345b95712a239d7d89b",
+      "turn_numbers": [
+        27
+      ],
+      "turn_count": 1,
+      "identity": "fresh guest"
+    }
+  ],
+  "turns": [
+    {
+      "turn": 1,
+      "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+      "turn_id": "973bf3384b44481bb021645dc629ab20",
+      "utc": "2026-10-19T04:57:20.688750+00:00",
+      "seconds": 7.142,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 1,
+      "input": "你好，我第一次去英国留学，主要看中文。我在 UCL Bloomsbury 上课，一个人住，全部住房开支每月最多 £900，可以合租但想要自己的卧室，通勤不超过45分钟。计划10月25日入住，至少住一年。我没有英国担保人。请先帮我找真实房源，并说明哪些条件还没核实。"
+    },
+    {
+      "turn": 2,
+      "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+      "turn_id": "be1cc516ebb94559b6a55a89dfcd1cc4",
+      "utc": "2026-10-19T04:57:38.107097+00:00",
+      "seconds": 6.398,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 2,
+      "input": "这是新会话，我没有说过2027年10月1日。入住是2026年10月25日；£900是全部开支，房租上限先设£800/月。可否帮我查 Camden、Holloway、Bloomsbury 的单人房？我不懂伦敦区域，请不要让我自己猜街区。"
+    },
+    {
+      "turn": 3,
+      "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+      "turn_id": "b40bf3489483498999f98e932413ce16",
+      "utc": "2026-10-19T04:57:55.235138+00:00",
+      "seconds": 8.941,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 3,
+      "input": "先不扩大预算。请你直接选出3个适合£800房租、到UCL 45分钟内的区域，实际查一下；没有实测通勤就标为未知。特别说明是预算筛选后无结果，还是整个区域没有数据。"
+    },
+    {
+      "turn": 4,
+      "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+      "turn_id": "3662f98b31234a03b0f04a1f7173ef96",
+      "utc": "2026-10-19T04:58:16.479554+00:00",
+      "seconds": 10.38,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 4,
+      "input": "那就查 Stratford 和 Islington；家里同意把房租提高到£1000/月，账单另算。先取消通勤时间硬筛选，只显示通勤未知也可以。仍然要独立卧室，合租可以，日期2026-10-25。请给实际匹配的价格、房型、链接，不要超预算凑数。"
+    },
+    {
+      "turn": 5,
+      "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+      "turn_id": "bdf49edf967143d0986bbf8485e1f708",
+      "utc": "2026-10-19T04:58:27.834503+00:00",
+      "seconds": 3.762,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 5,
+      "input": "房源卡片出现了£1100的 Otter Close，但我说过£1000是硬上限。它只是被排除的备选对吗？另外我已要求取消通勤硬筛选，右边仍显示45分钟。请取消这个限制，预算维持£1000，不要把超预算算匹配。"
+    },
+    {
+      "turn": 6,
+      "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+      "turn_id": "fd3141b29790464880bcb87292fcc352",
+      "utc": "2026-10-19T04:58:40.629880+00:00",
+      "seconds": 5.304,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 6,
+      "input": "我先研究一下 Otter Close 这个备选，允许临时放宽到£1200/月房租，还是 Stratford 和 Islington，合租独立卧室。请重新搜索；这次明确设为“我不通勤”，不要筛掉通勤未知的房源。"
+    },
+    {
+      "turn": 7,
+      "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+      "turn_id": "be3139c68d77488fb0753fd6073656a7",
+      "utc": "2026-10-19T04:58:49.951939+00:00",
+      "seconds": 2.9,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 7,
+      "input": "请只针对 Otter Close（链接编号20037182）解释：£1100/month 相当于每周多少？一年租金多少？水电网、押金、是否接受没有英国担保人的学生，哪些真的有证据？我需要做总预算，不要把未知当已包含。"
+    },
+    {
+      "turn": 8,
+      "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+      "turn_id": "99f1e2672795421bb6d0777a9ec12f8a",
+      "utc": "2026-10-19T04:59:03.750192+00:00",
+      "seconds": 4.055,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 8,
+      "input": "20037182是房源编号，绝不是预算。现在唯一有效的房租上限是£1200/月，账单另算；最早£900已放宽了。请更正记录，并用中文确认你记住的当前预算、地区、日期和通勤要求。"
+    },
+    {
+      "turn": 9,
+      "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+      "turn_id": "5347a81dcfeb401fbdb151634d9e1627",
+      "utc": "2026-10-19T04:59:36.896787+00:00",
+      "seconds": 25.04,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 9,
+      "input": "Otter Close 是不是适合刚到英国、晚下课的女生？我更在意夜间回家和附近买菜方便。请给中文解释，治安数据、路线和商店如果没有当前来源就明确说不知道，不要保证安全。"
+    },
+    {
+      "turn": 10,
+      "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+      "turn_id": "152ef572b55e4206b6404a3c92b5e3d3",
+      "utc": "2026-10-19T04:59:56.428308+00:00",
+      "seconds": 3.609,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 10,
+      "input": "请再查 Holloway 和 Camden 的合租单人房，房租上限£1200/月，不通勤筛选；如果有候选，和已收藏的 Otter Close 比较房租及待核实事项。若没有第二套，请明确说无法比较，不要拿整套两居室的总价当每人房租。"
+    },
+    {
+      "turn": 11,
+      "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+      "turn_id": "25eb37c1de7f4f7bb800595fb10c2d47",
+      "utc": "2026-10-19T05:00:11.431651+00:00",
+      "seconds": 3.657,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 11,
+      "input": "这些房源是今天仍然可租的吗？你刚说 Stratford 和 Islington 是空的，但我能看到 Otter Close，Camden 也真的完全没数据吗？请澄清“缓存里没有”和“按我的条件没匹配”，以及这些结果的新鲜程度。"
+    },
+    {
+      "turn": 12,
+      "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+      "turn_id": "1f0b22485670466f804ca4e0308f0a86",
+      "utc": "2026-10-19T05:00:27.147278+00:00",
+      "seconds": 6.999,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 12,
+      "input": "今天先停在这里。以后请记住我主要用中文、没有英国担保人、需要自己的卧室；伦敦研究预算现为£1200/月房租，账单另算，不设通勤硬筛选，入住2026-10-25。请列一份下次继续找房的简短摘要，并告诉我关闭网页后如何找回这次对话和收藏。"
+    },
+    {
+      "turn": 13,
+      "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+      "turn_id": "068c4d771b2a428c988aadda97682896",
+      "utc": "2026-10-19T05:05:34.656465+00:00",
+      "seconds": 14.407,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 13,
+      "input": "我回来了，另开一个会话研究备选城市。我可能改去 Manchester 读书，想查 Fallowfield 的房子：自己的卧室，合租可以，最多£180每周，账单另算；2026年11月1日入住，不设通勤硬筛选。请给实际房源，同时不要覆盖我之前伦敦方案的收藏。"
+    },
+    {
+      "turn": 14,
+      "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+      "turn_id": "23944698c2544bb39c7ef8eebc4bec5e",
+      "utc": "2026-10-19T05:05:52.532605+00:00",
+      "seconds": 6.099,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 14,
+      "input": "£180每周按52周除12个月，应该是£780/月吧？请改用房租上限£780/月，只查 Fallowfield，暂时取消入住日期筛选，合租自己的卧室，不通勤筛选。我只想研究历史价格也可以，不要说成实时可租。"
+    },
+    {
+      "turn": 15,
+      "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+      "turn_id": "67373708b9144bff9d32ebdc75a58458",
+      "utc": "2026-10-19T05:06:07.866518+00:00",
+      "seconds": 7.21,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 15,
+      "input": "现在是2026年10月19日，11月1日只有13天，不是半年后。请不要任何入住日期，城市只用 Fallowfield；为了了解缓存覆盖，先不限房型，但严格£780/月总租金。请告诉我每套究竟是整套还是每人价格，不能分摊推定。"
+    },
+    {
+      "turn": 16,
+      "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+      "turn_id": "288599aaa3a543138a493076f0a60485",
+      "utc": "2026-10-19T05:06:21.617228+00:00",
+      "seconds": 4.171,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 16,
+      "input": "请对比刚显示的 Parrs Wood Road £650/月 和 Beverly Road £715/月：分别换算每周和一年租金，哪套更适合预算紧张的我？账单、共住人数、独立卫浴、最短租期和无担保人政策有证据吗？只有未知就写未知。"
+    },
+    {
+      "turn": 17,
+      "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+      "turn_id": "005615fdc18846dca45dab906226eb7b",
+      "utc": "2026-10-19T05:06:36.471620+00:00",
+      "seconds": 5.474,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 17,
+      "input": "第一套（Parrs Wood Road）请保持同一房源身份。我想要自己的独立卫浴，这是必须条件，预算仍£780/月。它是否符合？如果不确定，请别把它当成满足条件，并解释右侧搜索条件为什么在刚才比较后变空了。"
+    },
+    {
+      "turn": 18,
+      "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+      "turn_id": "8d0e628a6dae47b2b11ab4a8d8f0bd83",
+      "utc": "2026-10-19T05:06:48.609170+00:00",
+      "seconds": 3.586,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 18,
+      "input": "右边这两张卡都标了 Fallowfield，你却说“不在Fallowfield、是更早Manchester检索留下的”。它们是我刚才搜索得到的，不是更早的。请只按这次会话可见事实核对，告诉我具体地址、链接和区域标注之间是否矛盾；不要猜测内部原因。"
+    },
+    {
+      "turn": 19,
+      "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+      "turn_id": "dd87dc425f964874be207ef2079a0741",
+      "utc": "2026-10-19T05:07:00.399434+00:00",
+      "seconds": 3.366,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 19,
+      "input": "Beverly Road 卡片的查看详情链接是 details/19909957/，你刚写的却是19643971。请核对并给我正确链接，同时确认没有把第二套的资料串到第一套。不要访问外部页面。"
+    },
+    {
+      "turn": 20,
+      "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+      "turn_id": "ad43b7e38a3b433592a3b548d42854cf",
+      "utc": "2026-10-19T05:07:16.791824+00:00",
+      "seconds": 5.043,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 20,
+      "input": "请把我的长期偏好保存为：中文回答；无英国担保人；自己卧室和独立卫浴必须；曼彻斯特方案房租上限£780/月，账单另算；暂不设入住日期和通勤时间硬筛选。伦敦只是备选研究。保存后请逐项复述，不要只说记住了。"
+    },
+    {
+      "turn": 21,
+      "conversation_id": "dc804b1d2f55446b8df238fd8c0a641a",
+      "turn_id": "35cd1ff9056049cdb464bf9f8b9f8640",
+      "utc": "2026-10-19T05:07:28.774128+00:00",
+      "seconds": 2.746,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 21,
+      "input": "新开会话继续。你记得我找房的长期偏好吗？请说出语言、主要城市、房租上限、房间和担保人要求，以及哪些筛选已取消。先不要搜房，也不要沿用旧的伦敦预算。"
+    },
+    {
+      "turn": 22,
+      "conversation_id": "dc804b1d2f55446b8df238fd8c0a641a",
+      "turn_id": "9f8b82404a664ff1add5995d76eaf215",
+      "utc": "2026-10-19T05:07:47.331550+00:00",
+      "seconds": 8.332,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 22,
+      "input": "计划又变了：曼彻斯特学校已确定，家人把房租预算提高到£1000/月，账单另算。我现在只接受整套 studio，有自己的厨房和卫浴，不合租。请在 Manchester 查找，把旧£780合租方案停用，不设入住日期和通勤限制。"
+    },
+    {
+      "turn": 23,
+      "conversation_id": "dc804b1d2f55446b8df238fd8c0a641a",
+      "turn_id": "e2319262c61949a19e5c39b190058aa6",
+      "utc": "2026-10-19T05:08:08.709384+00:00",
+      "seconds": 3.084,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 23,
+      "input": "Albany Road 这套先加入我的研究候选。请帮我写一段简短英文询问稿，只给草稿、不发送：确认整套studio、独立厨房卫浴、账单、押金、2026年11月1日能否入住，以及接受没有英国担保人的国际学生吗？不要编造我的姓名、证件或联系方式。"
+    },
+    {
+      "turn": 24,
+      "conversation_id": "dc804b1d2f55446b8df238fd8c0a641a",
+      "turn_id": "9cf4d336eea94f4ca9f99573d3700a4c",
+      "utc": "2026-10-19T05:08:21.349735+00:00",
+      "seconds": 3.619,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 24,
+      "input": "我以后会反复回来找房。网站能每天自动检查新房并提醒我吗，还是需要我手动回来搜索？请只说明实际可用能力，先不要创建提醒或联系任何人。以及刚才提示“记忆保存失败”，怎样确认我下次不会被按旧£780合租条件搜索？"
+    },
+    {
+      "turn": 25,
+      "conversation_id": "dc804b1d2f55446b8df238fd8c0a641a",
+      "turn_id": "115b0b2839c9449aac261918f3691f5c",
+      "utc": "2026-10-19T05:08:37.855988+00:00",
+      "seconds": 4.277,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 25,
+      "input": "确认，就按这段保存为最新偏好，并保留中文回答和无英国担保人的要求。请明确告诉我这次保存成功还是失败。"
+    },
+    {
+      "turn": 26,
+      "conversation_id": "6c8b6c1ae42e411fbf2564f714b1d8e8",
+      "turn_id": "c66944a4ae9a4f368dc95568f365a463",
+      "utc": "2026-10-19T05:09:06.956201+00:00",
+      "seconds": 3.764,
+      "status": 200,
+      "raw_file": "student-turns.jsonl",
+      "raw_line": 26,
+      "input": "我又回来了，这是新的会话。上次最后一次确认保存后，我现在的主要城市、房租上限、房型、担保人和账单口径是什么？我收藏的两套研究候选还应该直接当作匹配吗？先别搜索。"
+    },
+    {
+      "turn": 27,
+      "conversation_id": "c68a0e50ea594345b95712a239d7d89b",
+      "turn_id": "26b088e183b54335b6ff2c823dfab7ae",
+      "utc": "2026-10-19T05:09:21.014102+00:00",
+      "seconds": 2.026,
+      "status": 200,
+      "raw_file": "fresh_student-turns.jsonl",
+      "raw_line": 1,
+      "input": "这是我第一次打开网站。你已经知道我的学校、预算、房型偏好或以前收藏了什么吗？如果我没有提供过，请明确说不知道，不要猜测。"
+    }
+  ]
+}

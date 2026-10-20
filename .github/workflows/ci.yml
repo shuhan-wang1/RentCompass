@@ -169,6 +169,8 @@ jobs:
         run: |
           python -m evaluation.run_benchmark --offline --arch fc_loop --smoke --limit 2 \
             --out "${{ runner.temp }}/eval-smoke"
+      - name: Verify offline fault handling
+        run: python -m evaluation.fault_injection.run --out "${{ runner.temp }}/fault-smoke"
 
   supply-chain:
     name: Supply chain gates

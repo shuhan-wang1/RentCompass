@@ -1,0 +1,43 @@
+{
+  "test_processes_stopped": [
+    "app",
+    "relay"
+  ],
+  "test_port_15009_closed": true,
+  "test_secret_and_session_files_removed": [
+    "private/env.json",
+    "runtime/auth.sqlite3",
+    "runtime/unit/auth.sqlite3",
+    "runtime/pytest/test_credential_failure_is_par0/auth.sqlite3",
+    "runtime/pytest/test_memory_failure_returns_pa0/auth.sqlite3",
+    "runtime/pytest/test_active_turn_blocks_erasur0/auth.sqlite3",
+    "runtime/pytest/test_checkpoint_residual_never0/auth.sqlite3",
+    "runtime/pytest/test_forget_me_verifies_all_la0/auth.sqlite3",
+    "runtime/pytest/test_sessions_survive_restart_0/auth.sqlite3",
+    "runtime/pytest/test_successful_erasure_remove0/auth.sqlite3",
+    "runtime/pytest/test_copied_cookie_denied_on_h1/auth.sqlite3",
+    "runtime/pytest/test_copied_cookie_denied_on_h0/auth.sqlite3",
+    "student/student_ucl-storage.json",
+    "professional/professional-storage.json",
+    "family/family-storage.json"
+  ],
+  "existing_services": [
+    {
+      "name": "uk-rent-app-fc",
+      "same_id_and_start_time": true
+    },
+    {
+      "name": "uk-rent-app",
+      "same_id_and_start_time": true
+    },
+    {
+      "name": "uk-rent-searxng",
+      "same_id_and_start_time": true
+    },
+    {
+      "name": "uk-rent-valkey",
+      "same_id_and_start_time": true
+    }
+  ],
+  "existing_services_not_restarted": true
+}

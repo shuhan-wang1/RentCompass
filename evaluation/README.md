@@ -74,6 +74,21 @@ Common flags (benchmark + ablation): `--smoke`, `--limit N`, `--category A_retri
 `--repeat K`, `--offline` / `--live`, `--max-cost-usd F`, `--resume`, `--out DIR`,
 `--timestamp TS`.
 
+The benchmark CLI exits nonzero for an incomplete run, a guard/SLO/cold-resilience
+failure, or a scored pass fraction below `--min-pass-rate` (default `1.0`).
+`summary.json.assessment` records each result separately; the historical
+`gate_passed` field remains the guard gate only. Offline scores use a fake model
+and report `quality_evidence=not_measurable_offline`. A successful diagnostic run
+does not satisfy the sealed production evidence gate. Use an explicit lower
+`--min-pass-rate` only when collecting diagnostics, and retain that threshold
+with the results.
+
+Fault injection exits nonzero on harness errors, unsurfaced faults, unsupported
+final answers, duplicate writes, failed idempotency or failed fallback. Expected
+failure to complete a request after persistent upstream errors is reported
+separately. The batch and critic scenarios exercise the current FC executor and
+the final production critic node; CI runs all fifteen scenarios.
+
 ### manager_v1 paired promotion gate
 
 Run the complete frozen set from a **new, empty** output directory:

@@ -1,0 +1,7 @@
+{
+  "phase": "strict",
+  "requests": 36,
+  "checks": 35,
+  "passed": 35,
+  "failed": []
+}

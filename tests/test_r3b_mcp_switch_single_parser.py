@@ -66,6 +66,20 @@ def _probe(tmp_path: Path, **env_overrides):
         "ALLOW_LEGACY_CLIENT_USER_ID": "1",
         "CANARY_LOG_PATH": "off",
         "PYTHONIOENCODING": "utf-8",
+        # Every runtime state file whose default lives under the checkout's .runtime/
+        # (bind-mounted into the live pools on the production box). With only the
+        # conversation DB redirected, each probe's `import app` opened the LIVE
+        # .runtime/auth.sqlite3 and rate_limits.sqlite3 (round r01 watcher: transient
+        # -wal/-shm files appeared beside them during the suite).
+        "TMPDIR": str(tmp_path),
+        "ENABLE_CHECKPOINTER": "0",
+        "BACKGROUND_JOBS_ENABLED": "0",
+        "AGENT_MEMORY_DB_PATH": str(tmp_path / "agent-memory"),
+        **{name: str(tmp_path / f"{name.lower()}.sqlite3") for name in (
+            "AUTH_DB_PATH", "RATE_LIMIT_DB_PATH", "CHECKPOINT_DB_PATH", "RUNTIME_CACHE_PATH",
+            "SEARCH_LISTING_CACHE_PATH", "SEARCH_CACHE_DB_PATH", "MEMORY_GATE_DB",
+            "OTM_ACCESS_STATE_PATH", "AREA_RECO_CACHE_PATH", "OTM_DESC_CACHE_PATH",
+            "IDEMPOTENCY_DB")},
     }
     env.update(env_overrides)
     result = subprocess.run([sys.executable, "-c", _PROBE], env=env, text=True,

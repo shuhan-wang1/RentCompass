@@ -52,6 +52,17 @@ DEGRADED_RATE_LIMIT = 0.10   # (partial OR soft_wrapped) rate stage-pause ceilin
 RELATIVE_PP = 1.0            # relative-to-legacy tolerance in percentage points
 SPECIALIST_FAILURE_RATE_LIMIT = 0.05
 
+# MEASUREMENT VALIDITY — the fraction of the window's records that may violate the
+# record-level contract before the window stops describing anything at all.
+#
+# This is not an SLO. It is the point past which no number in the report — including
+# the zero-tolerance counters — can be attributed to the build under test, because the
+# population they were computed over is partly unreadable. Above it the verdict is
+# INSTRUMENTATION-HOLD and the breach facts are printed as NOT ACTIONABLE, so an
+# invalid measurement can never drive `set_canary_weight.sh --weight 0`. See
+# `evaluate_measurement_validity`.
+MEASUREMENT_INVALID_VIOLATION_RATE = 0.05
+
 # Exit codes. 0 / 2 / 3 are GATE VERDICT codes — they mean something about the release
 # under test and a rollout driver branches on them (see build_verdict). Everything that
 # is NOT a verdict must live outside this set, or the operator cannot tell "the gate
@@ -125,6 +136,26 @@ CURRENT_SCHEMA_VERSION = max(SUPPORTED_SCHEMA_VERSIONS)
 #   2. A window that MIXES v2 and v3 cannot be compared on those two fields at all,
 #      so it holds rather than averaging two different measurements into one mean.
 SCHEMA_V3_FIELDS = ("llm_calls", "tool_batches")
+
+# `tool_latency` — DELIBERATELY UNVALIDATED AND UNGATED, both directions.
+#
+# The consumer requires neither its presence nor its timings, and that tolerance
+# is the contract, not an oversight:
+#
+#   * `tool_batches > 0` does NOT imply a `tool_latency` entry. On legacy an
+#     execution-plan wave counts as a batch with no per-tool artifact ledger behind
+#     it, so there is nothing to key an entry on (`agenttest-t1-e2-legacy`:
+#     tool_batches 1, tool_ledger_status "complete", no tool_latency key).
+#   * `count` with `p50_ms`/`max_ms` null is legal and means UNMEASURED, never
+#     "instant". Today that is the whole legacy arm — 9 of 9 post-deploy legacy
+#     tool entries are null-timed — so the fc-vs-legacy tool-overhead comparison
+#     this field was added for cannot yet be made, and an empty comparison must
+#     never be read as "legacy is faster". A null folded into a percentile as a
+#     zero would produce exactly that false reading.
+#
+# When the legacy arm grows real timings it fills the SAME five fields with the
+# same meaning. Nothing here changes and no schema bump is needed, so a window
+# spanning that change stays readable.
 
 # Gate default: only the agent endpoint decides the A/B. The deterministic form
 # path (search_direct) is aggregated separately so it cannot dilute agent metrics.
@@ -287,6 +318,46 @@ def specialist_block(rec: dict) -> tuple:
 _MACHINE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
 _ERROR_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _TOOL_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,127}$")
+_FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+_ABBREV_SHA_RE = re.compile(r"^[0-9a-f]{7,39}$")
+
+# Answer-contract block (additive, non-gating). Producers that state an answer
+# contract emit `{"valid": bool, "limitations": [str], "final_response_truncated":
+# bool}`; every other producer omits the key entirely and keeps its historical
+# shape. The consumer validates the SHAPE when present and never requires it.
+ANSWER_CONTRACT_KEY = "answer_contract"
+ANSWER_CONTRACT_MAX_LIMITATIONS = 8
+ANSWER_CONTRACT_MAX_LIMITATION_CHARS = 200
+
+
+def normalise_candidate_shas(shas: Iterable[object]) -> Tuple[List[str], Dict[str, str]]:
+    """Collapse abbreviated git shas onto the full 40-hex sha they identify.
+
+    The producer has written both forms of the SAME commit into the same stream —
+    ``4171d84`` from a pool started with a short ``APP_CANDIDATE_SHA`` and
+    ``4171d84778be…`` from one started with the full value — and counting them as
+    two builds made every window that spans such a restart "mix two candidate
+    shas", i.e. an instrumentation hold nothing could clear.
+
+    An abbreviation is folded onto a full sha only when EXACTLY ONE full sha in the
+    window starts with it. Two matches is a real ambiguity (the abbreviation names
+    no single build here), and zero matches means the full form is simply not in
+    this window — both keep the raw value as its own group rather than guessing.
+    Non-sha labels (``unknown``, fixture names) are passed through untouched.
+
+    Returns ``(canonical sorted list, {raw: canonical})``.
+    """
+    raw_values = [str(s) for s in shas if s is not None]
+    full = sorted({v for v in raw_values if _FULL_SHA_RE.fullmatch(v)})
+    mapping: Dict[str, str] = {}
+    for value in raw_values:
+        canonical = value
+        if not _FULL_SHA_RE.fullmatch(value) and _ABBREV_SHA_RE.fullmatch(value):
+            matches = [f for f in full if f.startswith(value)]
+            if len(matches) == 1:
+                canonical = matches[0]
+        mapping[value] = canonical
+    return sorted(set(mapping.values())), mapping
 
 
 def _check_count(name: str, v) -> List[str]:
@@ -496,6 +567,58 @@ def _validate_specialist(value: object, *, crashed: bool = False) -> List[str]:
                 f"contain {denied_events}"
             )
     return problems
+
+
+def _validate_answer_contract(rec: dict) -> List[str]:
+    """Validate the optional ``answer_contract`` block. Absent is always fine.
+
+    The block is ADDITIVE and NON-GATING: it reports whether the answer the user
+    actually received satisfied the contract the runtime built for it, plus the
+    limitations the runtime knew about. A turn that states no contract omits the
+    key, and every record written before the field existed keeps its historical
+    shape — so a missing key can never be a violation. What IS a violation is a
+    block that is present and malformed: a shape nobody can read is worse than no
+    block at all, because a rate computed over it would be silently wrong.
+
+    The size caps mirror the producer's own: at most
+    ``ANSWER_CONTRACT_MAX_LIMITATIONS`` limitation strings of at most
+    ``ANSWER_CONTRACT_MAX_LIMITATION_CHARS`` characters each. They are a PRIVACY
+    bound as much as a size one — a limitation is model-written prose, and an
+    unbounded list of it in an ops log is a channel for user content to leak into
+    telemetry that is read by humans and shipped off-box.
+    """
+    if ANSWER_CONTRACT_KEY not in rec:
+        return []
+    block = rec.get(ANSWER_CONTRACT_KEY)
+    if not isinstance(block, dict):
+        return [f"{ANSWER_CONTRACT_KEY} is present but is not an object"]
+    problems: List[str] = []
+    for field in ("valid", "final_response_truncated"):
+        value = block.get(field)
+        if not isinstance(value, bool):
+            problems.append(
+                f"{ANSWER_CONTRACT_KEY}.{field} is missing/null or not a boolean")
+    limitations = block.get("limitations")
+    if not isinstance(limitations, list):
+        problems.append(f"{ANSWER_CONTRACT_KEY}.limitations is missing/null or not a list")
+    else:
+        if len(limitations) > ANSWER_CONTRACT_MAX_LIMITATIONS:
+            problems.append(
+                f"{ANSWER_CONTRACT_KEY}.limitations has {len(limitations)} entries "
+                f"> {ANSWER_CONTRACT_MAX_LIMITATIONS}")
+        if any(not isinstance(item, str) for item in limitations):
+            problems.append(f"{ANSWER_CONTRACT_KEY}.limitations contains a non-string entry")
+        elif any(len(item) > ANSWER_CONTRACT_MAX_LIMITATION_CHARS for item in limitations):
+            problems.append(
+                f"{ANSWER_CONTRACT_KEY}.limitations contains an entry longer than "
+                f"{ANSWER_CONTRACT_MAX_LIMITATION_CHARS} characters")
+    return problems
+
+
+def answer_contract_block(rec: dict) -> Optional[dict]:
+    """The record's well-formed answer contract, or None when it states none."""
+    block = rec.get(ANSWER_CONTRACT_KEY)
+    return block if isinstance(block, dict) else None
 
 
 def validate_record(rec: dict) -> List[str]:
@@ -769,6 +892,7 @@ def validate_record(rec: dict) -> List[str]:
                 problems.append(f"{f!r} is declared eval_only but carries a non-null value")
             else:
                 problems.append(f"{f!r} carries a prod value but is not declared eval_only")
+    problems.extend(_validate_answer_contract(rec))
     # No stable HMAC secret => user_id_hash is not comparable across restarts, so
     # every per-user statistic in this window is unreliable. Hold, don't continue.
     if rec.get("user_id_hash_status") == HASH_STATUS_UNKEYED:
@@ -804,11 +928,16 @@ def validate_records(records: Sequence[dict], *, candidate_arch: str = "fc_loop"
 
     # Cross-record: the candidate pool must be ONE build. A window mixing two
     # candidate shas is not a measurement of either of them.
-    shas = {r.get("candidate_sha") for r in records
-            if r.get("agent_arch") == candidate_arch and r.get("candidate_sha") is not None}
+    #
+    # Compared on the NORMALISED sha: the same commit written once as `4171d84`
+    # and once as `4171d84778be…` is one build, and reporting it as two was a
+    # self-inflicted hold (see normalise_candidate_shas).
+    raw_shas = {r.get("candidate_sha") for r in records
+                if r.get("agent_arch") == candidate_arch and r.get("candidate_sha") is not None}
+    shas, sha_aliases = normalise_candidate_shas(raw_shas)
     if len(shas) > 1:
         offenders[f"window mixes {len(shas)} candidate_sha values on {candidate_arch}: "
-                  f"{sorted(str(s) for s in shas)}"] = len(shas)
+                  f"{shas}"] = len(shas)
         bad = max(bad, 1)
     # Cross-record: `llm_calls` and `tool_batches` mean different things either
     # side of v3, so a window spanning the upgrade cannot be summed or compared on
@@ -837,10 +966,27 @@ def validate_records(records: Sequence[dict], *, candidate_arch: str = "fc_loop"
         "records": len(records),
         "conformant": len(records) - bad,
         "violating": bad,
+        # The same number, but FROZEN here. `violating` is added to afterwards by
+        # `build_report._hold_instrumentation` for WINDOW-level holds ("the control
+        # arm has zero turns", an unparseable line, a record with no ts) — none of
+        # which is a record in this population failing its contract, and some of
+        # which are not in this population at all. Measurement validity is a
+        # property of the records that ARE here, so it reads this field and never
+        # the running total. See evaluate_measurement_validity.
+        "record_violating": bad,
         "violations": dict(sorted(offenders.items(), key=lambda kv: -kv[1])),
-        "candidate_shas": sorted(str(s) for s in shas),
+        "candidate_shas": shas,
+        # The forms as WRITTEN, so an operator can see that `4171d84` and
+        # `4171d84778be…` were folded rather than wonder where one of them went.
+        "candidate_shas_raw": sorted(str(s) for s in raw_shas),
+        "candidate_sha_aliases": {k: v for k, v in sorted(sha_aliases.items()) if k != v},
         "schema_versions": sorted(versions),
         "manager_v1_specialist_variants": sorted(variants),
+        # STRUCTURED invalidity flags. `violations` is free text for humans; the
+        # verdict must not have to regex-match a sentence to decide whether the
+        # measurement itself is readable (see evaluate_measurement_validity).
+        "mixed_candidate_shas": len(shas) > 1,
+        "mixed_schema_versions": len(versions) > 1,
         "ok": bad == 0 and len(records) > 0,
     }
 
@@ -1264,13 +1410,51 @@ def _rate(count: int, total: int) -> float:
     return (count / total) if total else 0.0
 
 
+def zero_tolerance_arm(records: Sequence[dict], *, arch: str,
+                       candidate_sha: Optional[str] = None) -> Tuple[List[dict], List[dict]]:
+    """Split ``records`` into (this arm's rows, the rows this arm does NOT answer for).
+
+    ARM = one architecture, and — when the caller pins one — one BUILD of it. The
+    zero-tolerance gate rolls back *a release*, so the rows it counts have to be
+    rows that release produced. On this host the same stream holds 286 rows written
+    by earlier `fc_loop` builds (`4171d84`, `9129280`, `unknown`), and counting them
+    against the candidate meant the candidate could never clear the gate no matter
+    how clean it was: history is not evidence about a build that did not exist yet.
+
+    A pinned sha is matched by normalised identity OR by prefix, so ``1df0d4f``
+    selects the rows written as ``1df0d4f7140f…`` and vice versa.
+    """
+    mine: List[dict] = []
+    others: List[dict] = []
+    pin = str(candidate_sha).strip().lower() if candidate_sha else None
+    for rec in records:
+        if record_arch(rec) != arch:
+            continue
+        if pin is None:
+            mine.append(rec)
+            continue
+        value = str(rec.get("candidate_sha") or "").strip().lower()
+        if value and (value == pin or value.startswith(pin) or pin.startswith(value)):
+            mine.append(rec)
+        else:
+            others.append(rec)
+    return mine, others
+
+
 def aggregate_zero_tolerance(records: Sequence[dict]) -> dict:
     """Aggregate the SECURITY / correctness zero-tolerance signals across ALL public
-    endpoints for one arch.
+    endpoints for ONE ARM.
 
-    Deliberately separate from :func:`aggregate_arch`, which is endpoint-scoped for
-    the A/B: latency and degradation are only comparable on the agent endpoint, but
-    "a forbidden write executed" is a breach wherever it happened.
+    Endpoint-blind on purpose, and arm-scoped on purpose — two different things:
+
+    * Across endpoints, because "a forbidden write executed" is a breach wherever it
+      happened; :func:`aggregate_arch` stays endpoint-scoped because latency and
+      degradation are only comparable on the agent endpoint.
+    * Within one arm, because the counters answer "did THIS release breach?". The
+      caller selects the population with :func:`zero_tolerance_arm`; this function
+      never filters. Handing it the whole window makes it report the control arm's
+      and every previous build's history as the candidate's breach, which is the
+      shape that auto-rolled a clean candidate back on 2026-09-03.
     """
     flags = [classify(r) for r in records]
     by_ep: Dict[str, dict] = {}
@@ -1386,8 +1570,31 @@ def aggregate_arch(records: Sequence[dict]) -> dict:
         and r.get("llm_usage_status") in USAGE_STATUS_UNOBSERVABLE_OK
     )
 
+    # Answer contract — INFORMATIONAL, never gating. The rates are computed over the
+    # turns that STATED a contract, not over every turn: a producer that emits no
+    # block asserts nothing, and folding it in as "valid, no limitations" would
+    # invent a clean reading out of missing data (the same fail-open the eval-only
+    # metrics above are careful to avoid).
+    contracts = [c for c in (answer_contract_block(r) for r in records) if c is not None]
+    contract_valid = sum(1 for c in contracts if c.get("valid") is True)
+    contract_limited = sum(1 for c in contracts if c.get("limitations"))
+    contract_truncated = sum(1 for c in contracts if c.get("final_response_truncated") is True)
+    contract_limitations_total = sum(
+        len(c["limitations"]) for c in contracts if isinstance(c.get("limitations"), list)
+    )
+
     return {
         "turns": turns,
+        "answer_contract_turns": len(contracts),
+        "answer_contract_valid_count": contract_valid,
+        "answer_contract_valid_rate": (
+            _rate(contract_valid, len(contracts)) if contracts else None),
+        "answer_contract_limited_count": contract_limited,
+        # "how often did the runtime know it was handing back a degraded answer"
+        "answer_contract_limitations_rate": (
+            _rate(contract_limited, len(contracts)) if contracts else None),
+        "answer_contract_limitations_total": contract_limitations_total,
+        "answer_contract_truncated_count": contract_truncated,
         "conversations": len(convos),
         "unmeasured_spend_turns": unmeasured_spend,
         "unobservable_unmeasured_turns": unobservable_unmeasured,
@@ -1698,6 +1905,67 @@ def evaluate_expected_rollout_turns(records: Sequence[dict], expected: int) -> d
 # Verdict                                                                     #
 # --------------------------------------------------------------------------- #
 
+def evaluate_measurement_validity(instrumentation: Optional[dict]) -> dict:
+    """Decide whether this window is a MEASUREMENT at all, before judging it.
+
+    An invalid measurement can never produce an automated rollback. `exit 3` is
+    wired to `set_canary_weight.sh --weight 0` by `deploy/run_canary_gate.sh`, so
+    emitting 3 off a window whose population is unreadable means a *rollback of a
+    healthy candidate caused by a logging problem*. On 2026-09-03 exactly that was
+    live: a window straddling the deploy mixed schema v2/v3 and five candidate
+    labels, and the operator's own documented remedy (`--since <before-the-deploy>`)
+    was the command that would have driven the fc pool to 0%.
+
+    Three facts make a window unreadable, and each of them says the same thing —
+    the rates have no single denominator:
+
+    * mixed ``telemetry_schema_version`` — ``llm_calls`` and ``tool_batches`` were
+      REDEFINED at v3, so summing across the boundary describes no build;
+    * mixed candidate builds (after abbreviation-folding) — two releases averaged;
+    * more than ``MEASUREMENT_INVALID_VIOLATION_RATE`` of the records failing the
+      record-level contract, or an empty window.
+
+    Everything else that sets ``instrumentation.failed`` (an uninstrumented 5xx
+    rate, a specialist runtime that never started, an ``--expect-turns`` mismatch)
+    stays BELOW zero-tolerance where it has always been: those windows are readable,
+    they are just incomplete, and a proven breach inside one is still a breach.
+
+    Returns ``{"invalid": bool, "reasons": [...], "violation_rate": float|None}``.
+    """
+    if not isinstance(instrumentation, dict):
+        return {"invalid": False, "reasons": [], "violation_rate": None,
+                "violation_rate_limit": MEASUREMENT_INVALID_VIOLATION_RATE}
+    reasons: List[str] = []
+    total = instrumentation.get("records") or 0
+    violating = instrumentation.get("record_violating")
+    if violating is None:                      # older/hand-built instrumentation dicts
+        violating = instrumentation.get("violating") or 0
+    rate = (violating / total) if total else None
+    if instrumentation.get("mixed_schema_versions"):
+        reasons.append(
+            f"window mixes telemetry_schema_version "
+            f"{instrumentation.get('schema_versions')}: the v3 redefinition of "
+            f"{list(SCHEMA_V3_FIELDS)} means these records cannot be summed together")
+    if instrumentation.get("mixed_candidate_shas"):
+        reasons.append(
+            f"window mixes {len(instrumentation.get('candidate_shas') or [])} candidate "
+            f"builds {instrumentation.get('candidate_shas')}: this is a measurement of "
+            f"no single release")
+    if not total:
+        reasons.append("window contains zero records: there is nothing to measure")
+    elif rate is not None and rate > MEASUREMENT_INVALID_VIOLATION_RATE:
+        reasons.append(
+            f"{violating}/{total} records ({rate*100:.1f}%) violate the telemetry "
+            f"contract, above the {MEASUREMENT_INVALID_VIOLATION_RATE*100:.0f}% "
+            f"measurement-validity limit: the population is partly unreadable")
+    return {
+        "invalid": bool(reasons),
+        "reasons": reasons,
+        "violation_rate": rate,
+        "violation_rate_limit": MEASUREMENT_INVALID_VIOLATION_RATE,
+    }
+
+
 def build_verdict(fc: dict, legacy: dict, deltas: dict,
                   stage_eval: Optional[dict],
                   instrumentation: Optional[dict] = None,
@@ -1709,9 +1977,19 @@ def build_verdict(fc: dict, legacy: dict, deltas: dict,
                   require_specialists: bool = False) -> dict:
     """Evaluate shuhan's zero-tolerance and stage-pause rules against the fc pool.
 
-    Precedence for the exit code: zero-tolerance (3) beats stage-pause/HOLD (2) beats
-    proceed (0).  An observation window that has not met its preregistered minima is not
-    permission to advance, so HOLD is deliberately non-zero.
+    Precedence for the exit code: an INVALID MEASUREMENT (2) beats zero-tolerance
+    (3), which beats stage-pause/HOLD (2), which beats proceed (0).  An observation
+    window that has not met its preregistered minima is not permission to advance,
+    so HOLD is deliberately non-zero.
+
+    Measurement validity sits on top because exit 3 is not a report, it is an
+    ACTION: `deploy/run_canary_gate.sh` turns it into `set_canary_weight.sh
+    --weight 0`. A number computed over an unreadable population must never move
+    production traffic. The breach facts are still computed and still printed —
+    marked "NOT ACTIONABLE until instrumentation is valid" — and the exit stays
+    non-zero, so nothing is promoted either. Fix the instrumentation, re-run, and
+    if the breach is real the gate will roll back then. See
+    :func:`evaluate_measurement_validity`.
     """
     zt_reasons: List[str] = []
     zt_notes: List[str] = []
@@ -1869,12 +2147,23 @@ def build_verdict(fc: dict, legacy: dict, deltas: dict,
         instr_reasons.extend(expected_turns["reasons"])
     if expected_rollout_turns is not None and not expected_rollout_turns["matched"]:
         instr_reasons.extend(expected_rollout_turns["reasons"])
+    measurement = evaluate_measurement_validity(instrumentation)
+    if measurement["invalid"]:
+        # Put the invalidity at the TOP of the instrumentation reasons: it is the
+        # thing to fix first, and every other reason below it may be an artefact.
+        instr_reasons = list(measurement["reasons"]) + instr_reasons
     instr_failed = bool(instr_reasons)
 
     # --- decision / exit code ---
-    # Precedence: a PROVEN breach (3) outranks an unprovable gate (2), which
-    # outranks an SLO pause (2). Never fall through to 0 with an unobserved metric.
-    if zt_breached:
+    # Precedence: an INVALID MEASUREMENT (2) outranks everything, because exit 3 is
+    # an automated rollback and no automated action may be driven by a number whose
+    # denominator is unknown. Then a PROVEN breach (3) outranks an unprovable gate
+    # (2), which outranks an SLO pause (2). Never fall through to 0 with an
+    # unobserved metric.
+    zt_actionable = not measurement["invalid"]
+    if measurement["invalid"]:
+        decision, exit_code = "INSTRUMENTATION-HOLD", 2
+    elif zt_breached:
         decision, exit_code = "CANARY-BLOCK", 3
     elif instr_failed:
         decision, exit_code = "INSTRUMENTATION-HOLD", 2
@@ -1888,13 +2177,25 @@ def build_verdict(fc: dict, legacy: dict, deltas: dict,
         else:
             decision, exit_code = "PROCEED", 0
 
+    if zt_breached and not zt_actionable:
+        zt_notes = list(zt_notes) + [
+            "the zero-tolerance and regression facts above are NOT ACTIONABLE until "
+            "instrumentation is valid: they were computed over a population that "
+            "does not describe one build, so they trigger no automated rollback. "
+            "Fix the instrumentation, re-run the window, and act on the result."
+        ]
+
     return {
         "decision": decision,
         "exit_code": exit_code,
-        "zero_tolerance": {"breached": zt_breached, "reasons": zt_reasons, "notes": zt_notes},
+        "zero_tolerance": {"breached": zt_breached, "reasons": zt_reasons,
+                           "notes": zt_notes, "actionable": zt_actionable},
+        "measurement_valid": not measurement["invalid"],
+        "measurement_validity": measurement,
         "instrumentation": {"failed": instr_failed, "reasons": instr_reasons,
                             "contract": instrumentation},
-        "stage_pause": {"breached": sp_breached, "reasons": sp_reasons, "notes": sp_notes},
+        "stage_pause": {"breached": sp_breached, "reasons": sp_reasons,
+                        "notes": sp_notes, "actionable": zt_actionable},
         "stage_progress": stage_eval,
         "expected_turns": expected_turns,
         "expected_rollout_turns": expected_rollout_turns,
@@ -1911,6 +2212,7 @@ def build_report(records: Sequence[dict], *, window_hours: Optional[float] = Non
                  inputs: Optional[Sequence[str]] = None,
                  expect_turns: Optional[int] = None,
                  candidate_arch: str = "fc_loop",
+                 candidate_sha: Optional[str] = None,
                  control_arch: str = "legacy",
                  require_specialists: bool = False,
                  rollout_id: Optional[str] = None,
@@ -2047,12 +2349,37 @@ def build_report(records: Sequence[dict], *, window_hours: Optional[float] = Non
     instrumentation["undated_records"] = len(undated)
     instrumentation["unparseable_lines"] = skipped
 
-    # SECURITY zero-tolerance is aggregated GLOBALLY, across every public endpoint
-    # of the candidate arch. Restricting it to the gate endpoint would mean a real
-    # forbidden write or markup leak on search_direct still shipped.
-    global_zt = aggregate_zero_tolerance(
-        [r for r in windowed if record_arch(r) == candidate_arch]
-    )
+    # SECURITY zero-tolerance is aggregated across every public endpoint of the
+    # CANDIDATE ARM. Restricting it to the gate endpoint would mean a real
+    # forbidden write or markup leak on search_direct still shipped; NOT
+    # restricting it to the arm under test means the candidate is rolled back for
+    # rows another arch — or an earlier build of its own arch — wrote.
+    candidate_zt_records, other_build_records = zero_tolerance_arm(
+        windowed, arch=candidate_arch, candidate_sha=candidate_sha)
+    if candidate_sha is not None and not candidate_zt_records:
+        _hold_instrumentation(
+            f"--candidate-sha {candidate_sha!r} selects zero {candidate_arch} records "
+            f"in this window"
+        )
+    global_zt = aggregate_zero_tolerance(candidate_zt_records)
+    # INFORMATIONAL ONLY, both of them. The control arm's breaches say nothing about
+    # whether this release may ship — they are the baseline it is being compared
+    # against — and an earlier build's breaches are history. Printed so an operator
+    # is never left wondering where the counters they can see in the raw log went.
+    control_zt = aggregate_zero_tolerance(
+        [r for r in windowed if record_arch(r) == control_arch])
+    zt_by_sha: Dict[str, dict] = {}
+    _sha_groups: Dict[str, List[dict]] = {}
+    _, _sha_aliases = normalise_candidate_shas(
+        r.get("candidate_sha") for r in windowed if record_arch(r) == candidate_arch)
+    for rec in windowed:
+        if record_arch(rec) != candidate_arch:
+            continue
+        raw = rec.get("candidate_sha")
+        key = _sha_aliases.get(str(raw), str(raw)) if raw is not None else "<absent>"
+        _sha_groups.setdefault(key, []).append(rec)
+    for key, items in sorted(_sha_groups.items()):
+        zt_by_sha[key] = aggregate_zero_tolerance(items)
 
     candidate_records = [r for r in gate_records if record_arch(r) == candidate_arch]
     control_records = [r for r in gate_records if record_arch(r) == control_arch]
@@ -2146,7 +2473,14 @@ def build_report(records: Sequence[dict], *, window_hours: Optional[float] = Non
         "observed_rollout_weights": observed_rollout_weights,
         "expect_rollout_turns": expect_rollout_turns,
         "instrumentation": instrumentation,
+        "candidate_sha": candidate_sha,
         "zero_tolerance_global": global_zt,
+        # Informational companions to the gating aggregate above. Never summed into it.
+        "zero_tolerance_control": control_zt,
+        "zero_tolerance_by_candidate_sha": zt_by_sha,
+        "zero_tolerance_other_builds": (
+            aggregate_zero_tolerance(other_build_records) if other_build_records else None
+        ),
         "arches": arches,
         "unselected_gate_arches": {
             name: aggregate_arch(items) for name, items in unselected_arches.items()
@@ -2243,6 +2577,14 @@ def render_text(report: dict) -> str:
          str(lg.get("unmeasured_spend_turns", 0)), ""),
         ("  of which unobservable", str(fc.get("unobservable_unmeasured_turns", 0)),
          str(lg.get("unobservable_unmeasured_turns", 0)), ""),
+        # Informational, never gating: how often the runtime itself said the answer
+        # it returned was incomplete. n/a means the arch states no contract at all.
+        ("answer_contract turns", str(fc.get("answer_contract_turns", 0)),
+         str(lg.get("answer_contract_turns", 0)), ""),
+        ("  contract valid rate", _fmt(fc.get("answer_contract_valid_rate"), "pct"),
+         _fmt(lg.get("answer_contract_valid_rate"), "pct"), ""),
+        ("  limitations rate", _fmt(fc.get("answer_contract_limitations_rate"), "pct"),
+         _fmt(lg.get("answer_contract_limitations_rate"), "pct"), ""),
         ("specialist planned", str(fc["specialist"]["planned"]), "n/a", ""),
         ("specialist started", str(fc["specialist"]["started"]), "n/a", ""),
         ("specialist skipped", str(fc["specialist"]["skipped"]), "n/a", ""),
@@ -2275,21 +2617,72 @@ def render_text(report: dict) -> str:
     a("-" * 74)
     a(f"decision : {v['decision']}  (exit {v['exit_code']})")
 
+    # INSTRUMENTATION comes FIRST and is printed on every run, clean or not. It used
+    # to exist only in --json, so an operator reading the console saw a confident
+    # BLOCK/PROCEED with no hint that the window mixed two schemas, two builds and
+    # 625 unreadable records. The verdict is only as good as this block.
+    instr = v.get("instrumentation") or {}
+    contract = instr.get("contract") or {}
+    validity = v.get("measurement_validity") or {}
     a("")
-    a("[ZERO-TOLERANCE] (instant rollback if any):")
+    valid = v.get("measurement_valid", True)
+    a(f"[INSTRUMENTATION] measurement_valid={valid}"
+      + ("" if valid else "  <-- THE MEASUREMENT IS INVALID; every number below is "
+                          "descriptive only"))
+    a(f"  records validated   : {contract.get('records', 'n/a')}  "
+      f"conformant={contract.get('conformant', 'n/a')}  "
+      f"violating={contract.get('violating', 'n/a')}")
+    _rate_v = validity.get("violation_rate")
+    a(f"  violation rate      : {'n/a' if _rate_v is None else f'{_rate_v*100:.1f}%'}"
+      f"  (measurement-invalid above "
+      f"{validity.get('violation_rate_limit', MEASUREMENT_INVALID_VIOLATION_RATE)*100:.0f}%)")
+    a(f"  schema versions     : {contract.get('schema_versions', [])}"
+      + ("  MIXED" if contract.get("mixed_schema_versions") else ""))
+    a(f"  candidate builds    : {contract.get('candidate_shas', [])}"
+      + ("  MIXED" if contract.get("mixed_candidate_shas") else ""))
+    if contract.get("candidate_sha_aliases"):
+        a(f"  sha aliases folded  : {contract['candidate_sha_aliases']}")
+    a(f"  undated / unparseable / unattributable : "
+      f"{contract.get('undated_records', 0)} / {contract.get('unparseable_lines', 0)}"
+      f" / {contract.get('unattributable_records', 0)}")
+    for reason, n in list((contract.get("violations") or {}).items())[:5]:
+        a(f"    x{n}  {reason}")
+    if not valid:
+        for reason in validity.get("reasons", []):
+            a(f"  INVALID: {reason}")
+
+    a("")
+    zt_actionable = v["zero_tolerance"].get("actionable", True)
+    a("[ZERO-TOLERANCE] (instant rollback if any"
+      + ("" if zt_actionable else "; NOT ACTIONABLE — see [INSTRUMENTATION]") + "):")
     if v["zero_tolerance"]["reasons"]:
+        _label = "BREACH" if zt_actionable else "BREACH (not actionable)"
         for r in v["zero_tolerance"]["reasons"]:
-            a(f"  BREACH: {r}")
+            a(f"  {_label}: {r}")
     else:
         a("  clean")
     for n in v["zero_tolerance"]["notes"]:
         a(f"  note: {n}")
+    _ctrl = report.get("zero_tolerance_control")
+    if isinstance(_ctrl, dict) and _ctrl.get("turns"):
+        a(f"  control arm ({control_arch}, informational, never gating): "
+          f"turns={_ctrl['turns']} tainted={_ctrl['tainted_unauth_write_count']} "
+          f"forbidden={_ctrl['forbidden_write_count']} "
+          f"dsml_leak={_ctrl['dsml_leak_count']} api400={_ctrl['api_400_count']}")
+    _others = report.get("zero_tolerance_other_builds")
+    if isinstance(_others, dict) and _others.get("turns"):
+        a(f"  other {candidate_arch} builds in window (informational): "
+          f"turns={_others['turns']} tainted={_others['tainted_unauth_write_count']} "
+          f"forbidden={_others['forbidden_write_count']} "
+          f"dsml_leak={_others['dsml_leak_count']} api400={_others['api_400_count']}")
 
     a("")
-    a("[STAGE-PAUSE] (pause rollout if any):")
+    a("[STAGE-PAUSE] (pause rollout if any"
+      + ("" if zt_actionable else "; NOT ACTIONABLE — see [INSTRUMENTATION]") + "):")
     if v["stage_pause"]["reasons"]:
+        _sp_label = "BREACH" if zt_actionable else "BREACH (not actionable)"
         for r in v["stage_pause"]["reasons"]:
-            a(f"  BREACH: {r}")
+            a(f"  {_sp_label}: {r}")
     else:
         a("  clean")
     for n in v["stage_pause"]["notes"]:
@@ -2392,6 +2785,13 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="Evaluate stage-progress minima for this stage.")
     p.add_argument("--candidate-arch", choices=VALID_ARCHES, default="fc_loop",
                    help="Exact candidate architecture (default: fc_loop).")
+    p.add_argument("--candidate-sha", default=None, metavar="SHA",
+                   help="Pin the candidate BUILD under test (full or abbreviated git "
+                        "sha). Zero-tolerance is then counted only over records that "
+                        "build wrote; the candidate arch's other builds are reported "
+                        "separately as informational. Without it, zero-tolerance covers "
+                        "every build of --candidate-arch in the window (and a window "
+                        "holding more than one is an invalid measurement anyway).")
     p.add_argument("--control-arch", choices=VALID_ARCHES, default="legacy",
                    help="Exact live control architecture (default: legacy).")
     p.add_argument("--require-specialists", action="store_true",
@@ -2482,11 +2882,17 @@ def run(argv: Optional[Sequence[str]] = None) -> int:
             "error: --require-specialists requires --candidate-arch manager_v1\n"
         )
         return EXIT_INPUT_ERROR
+    if args.candidate_sha is not None and not _MACHINE_ID_RE.fullmatch(args.candidate_sha):
+        sys.stderr.write(
+            "error: --candidate-sha must be a machine identifier (a git sha)\n"
+        )
+        return EXIT_INPUT_ERROR
 
     report = build_report(records, window_hours=args.window, now_override=now_override,
                           stage=args.stage, since=since, skipped=skipped,
                           inputs=args.input, expect_turns=args.expect_turns,
                           candidate_arch=args.candidate_arch,
+                          candidate_sha=args.candidate_sha,
                           control_arch=args.control_arch,
                           require_specialists=args.require_specialists,
                           rollout_id=args.rollout_id,

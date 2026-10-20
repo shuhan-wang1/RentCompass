@@ -1,0 +1,12 @@
+{
+  "candidate": 4,
+  "checked_prefixes": [
+    "app/",
+    "src/",
+    "tests/",
+    "tests_refactor/",
+    "scripts/"
+  ],
+  "changed": [],
+  "passed": true
+}

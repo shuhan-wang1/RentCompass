@@ -1,0 +1,1015 @@
+[
+  {
+    "turn": 1,
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:29:25.057596+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "8ef9bb3864e045a2bc2a2e4c8c6bb081",
+        "conversation_id": "ff641daa5acc4294925475c579c8ed14",
+        "user_id_hash": "e55e192dd03e4a26af847e2566c445ae",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 2185.6,
+        "llm_calls": 1,
+        "tool_batches": 0,
+        "llm_usage": {
+          "calls": 1,
+          "input_tokens": 9762,
+          "output_tokens": 215,
+          "cache_read_tokens": 2688,
+          "models": {
+            "deepseek-flash": {
+              "calls": 1,
+              "input_tokens": 9762,
+              "output_tokens": 215,
+              "cache_read_tokens": 2688
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "_epoch": 1792394965.057596
+      }
+    ]
+  },
+  {
+    "turn": 2,
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:29:51.747737+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "d6c480f04f164401a8657d67b90880de",
+        "conversation_id": "ff641daa5acc4294925475c579c8ed14",
+        "user_id_hash": "e55e192dd03e4a26af847e2566c445ae",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 7237.0,
+        "llm_calls": 2,
+        "tool_batches": 1,
+        "llm_usage": {
+          "calls": 2,
+          "input_tokens": 23560,
+          "output_tokens": 693,
+          "cache_read_tokens": 20224,
+          "models": {
+            "deepseek-flash": {
+              "calls": 2,
+              "input_tokens": 23560,
+              "output_tokens": 693,
+              "cache_read_tokens": 20224
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "tool_latency": {
+          "search_properties": {
+            "count": 1,
+            "p50_ms": 1113.0,
+            "max_ms": 1113.0,
+            "timed_out": 0,
+            "abandoned": 0
+          },
+          "calculate_commute": {
+            "count": 1,
+            "p50_ms": 29.0,
+            "max_ms": 29.0,
+            "timed_out": 0,
+            "abandoned": 0
+          }
+        },
+        "_epoch": 1792394991.747737
+      }
+    ]
+  },
+  {
+    "turn": 3,
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:30:09.557310+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "f944f752ae2e4972959156373c19edeb",
+        "conversation_id": "ff641daa5acc4294925475c579c8ed14",
+        "user_id_hash": "e55e192dd03e4a26af847e2566c445ae",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 5471.2,
+        "llm_calls": 2,
+        "tool_batches": 1,
+        "llm_usage": {
+          "calls": 2,
+          "input_tokens": 24657,
+          "output_tokens": 670,
+          "cache_read_tokens": 21376,
+          "models": {
+            "deepseek-flash": {
+              "calls": 2,
+              "input_tokens": 24657,
+              "output_tokens": 670,
+              "cache_read_tokens": 21376
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "tool_latency": {
+          "search_properties": {
+            "count": 1,
+            "p50_ms": 56.0,
+            "max_ms": 56.0,
+            "timed_out": 0,
+            "abandoned": 0
+          }
+        },
+        "_epoch": 1792395009.55731
+      }
+    ]
+  },
+  {
+    "turn": 4,
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:30:31.650733+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "ea301ef4e0cc4c40966d0463f26f7ac5",
+        "conversation_id": "ff641daa5acc4294925475c579c8ed14",
+        "user_id_hash": "e55e192dd03e4a26af847e2566c445ae",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 5762.8,
+        "llm_calls": 2,
+        "tool_batches": 1,
+        "llm_usage": {
+          "calls": 2,
+          "input_tokens": 25254,
+          "output_tokens": 493,
+          "cache_read_tokens": 22016,
+          "models": {
+            "deepseek-flash": {
+              "calls": 2,
+              "input_tokens": 25254,
+              "output_tokens": 493,
+              "cache_read_tokens": 22016
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "tool_latency": {
+          "get_property_details": {
+            "count": 1,
+            "p50_ms": 61.0,
+            "max_ms": 61.0,
+            "timed_out": 0,
+            "abandoned": 0
+          },
+          "search_nearby_pois": {
+            "count": 1,
+            "p50_ms": 1020.0,
+            "max_ms": 1020.0,
+            "timed_out": 0,
+            "abandoned": 0
+          }
+        },
+        "_epoch": 1792395031.650733
+      }
+    ]
+  },
+  {
+    "turn": 5,
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:32:07.498145+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "43de9ced53a1414080ac92adc3bec803",
+        "conversation_id": "ff641daa5acc4294925475c579c8ed14",
+        "user_id_hash": "e55e192dd03e4a26af847e2566c445ae",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 4267.4,
+        "llm_calls": 2,
+        "tool_batches": 1,
+        "llm_usage": {
+          "calls": 2,
+          "input_tokens": 26883,
+          "output_tokens": 608,
+          "cache_read_tokens": 22144,
+          "models": {
+            "deepseek-flash": {
+              "calls": 2,
+              "input_tokens": 26883,
+              "output_tokens": 608,
+              "cache_read_tokens": 22144
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "tool_latency": {
+          "search_properties": {
+            "count": 1,
+            "p50_ms": 9.0,
+            "max_ms": 9.0,
+            "timed_out": 0,
+            "abandoned": 0
+          }
+        },
+        "_epoch": 1792395127.498145
+      }
+    ]
+  },
+  {
+    "turn": 6,
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:32:22.905864+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "f73fe3cf0d7c480aaac97acd2d3f46e9",
+        "conversation_id": "ff641daa5acc4294925475c579c8ed14",
+        "user_id_hash": "e55e192dd03e4a26af847e2566c445ae",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 4366.0,
+        "llm_calls": 2,
+        "tool_batches": 1,
+        "llm_usage": {
+          "calls": 2,
+          "input_tokens": 25529,
+          "output_tokens": 482,
+          "cache_read_tokens": 22144,
+          "models": {
+            "deepseek-flash": {
+              "calls": 2,
+              "input_tokens": 25529,
+              "output_tokens": 482,
+              "cache_read_tokens": 22144
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "tool_latency": {
+          "search_properties": {
+            "count": 1,
+            "p50_ms": 10.0,
+            "max_ms": 10.0,
+            "timed_out": 0,
+            "abandoned": 0
+          }
+        },
+        "_epoch": 1792395142.905864
+      }
+    ]
+  },
+  {
+    "turn": 7,
+    "completed_turn_ledger": []
+  },
+  {
+    "turn": 8,
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:33:57.168966+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "5adcc97f07ac4f38a10ee9d699431aa4",
+        "conversation_id": "ff641daa5acc4294925475c579c8ed14",
+        "user_id_hash": "e55e192dd03e4a26af847e2566c445ae",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 5092.3,
+        "llm_calls": 2,
+        "tool_batches": 1,
+        "llm_usage": {
+          "calls": 2,
+          "input_tokens": 26712,
+          "output_tokens": 679,
+          "cache_read_tokens": 22144,
+          "models": {
+            "deepseek-flash": {
+              "calls": 2,
+              "input_tokens": 26712,
+              "output_tokens": 679,
+              "cache_read_tokens": 22144
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "tool_latency": {
+          "search_properties": {
+            "count": 1,
+            "p50_ms": 5.0,
+            "max_ms": 5.0,
+            "timed_out": 0,
+            "abandoned": 0
+          }
+        },
+        "_epoch": 1792395237.168966
+      }
+    ]
+  },
+  {
+    "turn": 9,
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:34:25.831144+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "a4e12e0077294b188299c1055cea4c17",
+        "conversation_id": "ff641daa5acc4294925475c579c8ed14",
+        "user_id_hash": "e55e192dd03e4a26af847e2566c445ae",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 5491.9,
+        "llm_calls": 2,
+        "tool_batches": 1,
+        "llm_usage": {
+          "calls": 2,
+          "input_tokens": 28573,
+          "output_tokens": 734,
+          "cache_read_tokens": 23040,
+          "models": {
+            "deepseek-flash": {
+              "calls": 2,
+              "input_tokens": 28573,
+              "output_tokens": 734,
+              "cache_read_tokens": 23040
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "tool_latency": {
+          "search_properties": {
+            "count": 1,
+            "p50_ms": 10.0,
+            "max_ms": 10.0,
+            "timed_out": 0,
+            "abandoned": 0
+          }
+        },
+        "_epoch": 1792395265.831144
+      }
+    ]
+  },
+  {
+    "turn": 10,
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:34:53.298006+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "379c543b8d47441ebe62680f2d1da4b3",
+        "conversation_id": "ff641daa5acc4294925475c579c8ed14",
+        "user_id_hash": "e55e192dd03e4a26af847e2566c445ae",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 10357.3,
+        "llm_calls": 3,
+        "tool_batches": 1,
+        "llm_usage": {
+          "calls": 3,
+          "input_tokens": 31616,
+          "output_tokens": 1373,
+          "cache_read_tokens": 24192,
+          "models": {
+            "deepseek-flash": {
+              "calls": 3,
+              "input_tokens": 31616,
+              "output_tokens": 1373,
+              "cache_read_tokens": 24192
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "tool_latency": {
+          "get_property_details": {
+            "count": 2,
+            "p50_ms": 66.0,
+            "max_ms": 79.0,
+            "timed_out": 0,
+            "abandoned": 0
+          }
+        },
+        "_epoch": 1792395293.298006
+      }
+    ]
+  },
+  {
+    "turn": 11,
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:35:19.861626+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "f4241d0056ad4ceb8fb7e90855b41fea",
+        "conversation_id": "ff641daa5acc4294925475c579c8ed14",
+        "user_id_hash": "e55e192dd03e4a26af847e2566c445ae",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": [
+            {
+              "tool": "remember",
+              "security_decision": "allowed",
+              "context_tainted": false,
+              "user_authorized": true,
+              "dispatch_started": true,
+              "gate_bypassed": false,
+              "reason": null
+            }
+          ]
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 4318.7,
+        "llm_calls": 2,
+        "tool_batches": 1,
+        "llm_usage": {
+          "calls": 2,
+          "input_tokens": 27663,
+          "output_tokens": 414,
+          "cache_read_tokens": 22912,
+          "models": {
+            "deepseek-flash": {
+              "calls": 2,
+              "input_tokens": 27663,
+              "output_tokens": 414,
+              "cache_read_tokens": 22912
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "tool_latency": {
+          "remember": {
+            "count": 1,
+            "p50_ms": 33.0,
+            "max_ms": 33.0,
+            "timed_out": 0,
+            "abandoned": 0
+          },
+          "calculate_commute": {
+            "count": 1,
+            "p50_ms": 25.0,
+            "max_ms": 25.0,
+            "timed_out": 0,
+            "abandoned": 0
+          },
+          "search_nearby_pois": {
+            "count": 1,
+            "p50_ms": 30.0,
+            "max_ms": 30.0,
+            "timed_out": 0,
+            "abandoned": 0
+          }
+        },
+        "_epoch": 1792395319.861626
+      }
+    ]
+  },
+  {
+    "turn": 12,
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:35:38.309865+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "f4b3086d2de64d50b908d0091176394c",
+        "conversation_id": "acf1c542c2e24ca998ed173922c318a1",
+        "user_id_hash": "e55e192dd03e4a26af847e2566c445ae",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 1873.5,
+        "llm_calls": 1,
+        "tool_batches": 0,
+        "llm_usage": {
+          "calls": 1,
+          "input_tokens": 10228,
+          "output_tokens": 166,
+          "cache_read_tokens": 9472,
+          "models": {
+            "deepseek-flash": {
+              "calls": 1,
+              "input_tokens": 10228,
+              "output_tokens": 166,
+              "cache_read_tokens": 9472
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "_epoch": 1792395338.309865
+      }
+    ]
+  },
+  {
+    "turn": 13,
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:36:13.579203+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "ed2642859c2243c3b310a36729e773e6",
+        "conversation_id": "acf1c542c2e24ca998ed173922c318a1",
+        "user_id_hash": "e55e192dd03e4a26af847e2566c445ae",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 11538.3,
+        "llm_calls": 4,
+        "tool_batches": 2,
+        "llm_usage": {
+          "calls": 4,
+          "input_tokens": 44746,
+          "output_tokens": 1398,
+          "cache_read_tokens": 33408,
+          "models": {
+            "deepseek-flash": {
+              "calls": 4,
+              "input_tokens": 44746,
+              "output_tokens": 1398,
+              "cache_read_tokens": 33408
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "tool_latency": {
+          "search_properties": {
+            "count": 1,
+            "p50_ms": 830.0,
+            "max_ms": 830.0,
+            "timed_out": 0,
+            "abandoned": 0
+          },
+          "search_nearby_pois": {
+            "count": 1,
+            "p50_ms": 47.0,
+            "max_ms": 47.0,
+            "timed_out": 0,
+            "abandoned": 0
+          },
+          "get_property_details": {
+            "count": 1,
+            "p50_ms": 39.0,
+            "max_ms": 39.0,
+            "timed_out": 0,
+            "abandoned": 0
+          }
+        },
+        "_epoch": 1792395373.579203
+      }
+    ]
+  },
+  {
+    "turn": 14,
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:36:50.469578+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "17efa7647df74ecc870ded3a1da1093e",
+        "conversation_id": "acf1c542c2e24ca998ed173922c318a1",
+        "user_id_hash": "e55e192dd03e4a26af847e2566c445ae",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 1988.0,
+        "llm_calls": 1,
+        "tool_batches": 1,
+        "llm_usage": {
+          "calls": 1,
+          "input_tokens": 11312,
+          "output_tokens": 174,
+          "cache_read_tokens": 9600,
+          "models": {
+            "deepseek-flash": {
+              "calls": 1,
+              "input_tokens": 11312,
+              "output_tokens": 174,
+              "cache_read_tokens": 9600
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "tool_latency": {
+          "ask_user": {
+            "count": 1,
+            "p50_ms": null,
+            "max_ms": null,
+            "timed_out": 0,
+            "abandoned": 0
+          }
+        },
+        "_epoch": 1792395410.469578
+      }
+    ]
+  }
+]

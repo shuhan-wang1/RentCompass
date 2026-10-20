@@ -1,0 +1,67 @@
+{
+  "method": "Explicitly authorized supplement using fresh synthetic data only",
+  "findings": [
+    {
+      "id": "SEC-01",
+      "classification": "product_defect",
+      "severity": "P1",
+      "title": "删除账号未撤销已签发会话，旧Cookie仍可写入且跨服务重启有效",
+      "expected": "忘记我删除账号后所有旧会话立即失效；强制登录API返回401，不能再创建已删除身份的数据。",
+      "actual": "A和公开API新建C均在forgotten=true、账号记录删除和密码登录401之后，旧Cookie仍authenticated=true且POST会话201；C在重启后仍可读新建记录。",
+      "evidence": [
+        {
+          "phase": "strict",
+          "request_seqs": [
+            30,
+            33,
+            34,
+            35,
+            36
+          ]
+        },
+        {
+          "phase": "reproduce",
+          "request_seqs": [
+            3,
+            4,
+            5,
+            6,
+            7
+          ]
+        },
+        {
+          "phase": "after-restart",
+          "request_seqs": [
+            1,
+            2,
+            3
+          ]
+        }
+      ],
+      "reproducibility": "Two independently created synthetic accounts; public-API-only C reproduction and real restart confirmed.",
+      "limits": "Requires possession of an already-issued valid cookie. No cookie signature forgery, no cross-account content disclosure, old messages were deleted.",
+      "recommendation": "Central server-validated identity: account active/existing and session not revoked; delete account revokes all issued sessions."
+    },
+    {
+      "id": "SEC-02",
+      "classification": "design_concern",
+      "severity": "P2",
+      "title": "普通退出清除当前浏览器，但未撤销提前保留的合法Cookie副本",
+      "expected": "Security target: logout revokes the current login session including copies of its token.",
+      "actual": "B当前客户端退出后401；同次登录Cookie副本仍GET会话列表200。",
+      "evidence": [
+        {
+          "phase": "strict",
+          "request_seqs": [
+            25,
+            26,
+            27
+          ]
+        }
+      ],
+      "reproducibility": "One controlled synthetic B login/copy/logout sequence.",
+      "limits": "Classified as a revocation design target, not an undocumented signature bypass or credential-free account takeover.",
+      "recommendation": "Issue revocable session IDs and revoke the current session on logout; use user session version or all-session revocation on deletion."
+    }
+  ]
+}

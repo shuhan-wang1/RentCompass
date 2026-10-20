@@ -10,16 +10,81 @@ All state is keyed by (user_id[, conversation_id]); favorites are per-USER. The 
 is the source of truth — SessionStore is only a hot cache rehydrated from here on miss.
 
 Thread-safety: one connection guarded by an RLock. Every op is short (no LLM calls), so a
-single lock is simpler and correct under Flask's per-request worker threads.
+single lock is simpler and correct under Flask's per-request worker threads. Because that
+one connection is SHARED by every user, the lock also owns the transaction invariant (see
+``_TransactionGuardLock``): no transaction outlives the critical section that opened it.
 """
 from __future__ import annotations
 
 import datetime
 import json
+import logging
+import re
 import sqlite3
 import threading
 import uuid
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+# --------------------------------------------------------------------------- #
+# Bind-parameter text safety                                                   #
+# --------------------------------------------------------------------------- #
+#
+# `json.loads` accepts a `\udXXX` escape and Python holds the resulting LONE
+# SURROGATE in a `str` quite happily. sqlite3 does not: it encodes every TEXT bind
+# parameter as strict UTF-8, so the first INSERT carrying one raises
+# `UnicodeEncodeError` — a 500 raised from inside the durable write, from a body
+# an anonymous caller controls (2026-09-03 T3 高-1).
+#
+# The request boundary now refuses that input outright (`web.identity`), and this is
+# the SECOND layer: no code path into this store may turn attacker-shaped text into
+# an exception. Every parameter passes through `_safe_text`, so a surrogate arriving
+# from anywhere else — a background job, an import, a fork, a future caller — is
+# stored as replacement characters instead of killing the request.
+#
+# The check is a regex search over non-ASCII strings only, so the common case
+# (ASCII, or ordinary UTF-8) costs one `str.isascii()` call and touches nothing.
+
+_SURROGATE_RE = re.compile(r"[\ud800-\udfff]")
+
+
+def _safe_text(value):
+    """Return ``value`` unchanged unless it is a str sqlite3 cannot encode.
+
+    A string containing an unpaired surrogate is re-encoded with ``surrogatepass``
+    and decoded back with ``replace``: every valid part round-trips byte-for-byte
+    and only the unencodable code points become U+FFFD.
+    """
+    if type(value) is not str or value.isascii():
+        return value
+    if _SURROGATE_RE.search(value) is None:
+        return value
+    return value.encode("utf-8", "surrogatepass").decode("utf-8", "replace")
+
+
+def _safe_params(parameters):
+    """Apply ``_safe_text`` across one bind-parameter sequence or mapping."""
+    if isinstance(parameters, dict):
+        return {key: _safe_text(val) for key, val in parameters.items()}
+    if isinstance(parameters, (list, tuple)):
+        return type(parameters)(_safe_text(val) for val in parameters)
+    return parameters
+
+
+class _EncodeSafeConnection(sqlite3.Connection):
+    """A connection whose bind parameters can never raise ``UnicodeEncodeError``.
+
+    Applied at the CONNECTION rather than at each call site on purpose: the store
+    has ~60 statements and the guarantee has to hold for the one somebody adds next.
+    """
+
+    def execute(self, sql, parameters=(), /):
+        return super().execute(sql, _safe_params(parameters))
+
+    def executemany(self, sql, seq_of_parameters, /):
+        return super().executemany(
+            sql, (_safe_params(row) for row in seq_of_parameters))
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS conversations (
@@ -93,6 +158,13 @@ CREATE TABLE IF NOT EXISTS conversation_turn_leases (
     expires_at      TEXT NOT NULL,
     PRIMARY KEY (user_id, conversation_id)
 );
+CREATE TABLE IF NOT EXISTS store_owners (
+    owner_id     TEXT PRIMARY KEY,
+    host         TEXT NOT NULL,
+    pid          INTEGER NOT NULL,
+    started_at   TEXT NOT NULL,
+    heartbeat_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS privacy_erasure_locks (
     user_id    TEXT PRIMARY KEY,
     started_at TEXT NOT NULL
@@ -134,6 +206,7 @@ CREATE TABLE IF NOT EXISTS fork_requests (
     idempotency_key TEXT NOT NULL,
     conversation_id TEXT NOT NULL,
     created_at      TEXT NOT NULL,
+    request_fingerprint TEXT,
     PRIMARY KEY (user_id, idempotency_key)
 );
 CREATE TRIGGER IF NOT EXISTS turns_completed_requires_assistant_insert
@@ -157,6 +230,14 @@ class ForkError(Exception):
 
 class ConversationNotFound(ForkError):
     """Source conversation does not exist for this user."""
+
+
+class IdempotencyKeyReused(ForkError):
+    """The idempotency key already names a branch of a DIFFERENT source or kind.
+
+    The key used to be matched on (user, key) alone, so replaying it against another
+    conversation, or on the other endpoint, silently returned the first child
+    (2026-10-19 C-07)."""
 
 
 class NoCompletedTurn(ForkError):
@@ -188,8 +269,159 @@ class PrivacyErasureInProgress(RuntimeError):
     """New turns are blocked while the user's cross-store deletion is running."""
 
 
+# A title is a label, not a document: a 250 KB title was accepted and then returned by
+# every GET /api/conversations for that user (2026-10-19 C-13).
+TITLE_MAX_CHARS = 200
+
+
+def _bounded_title(value, fallback: str, suffix: str = "") -> str:
+    """``value`` bounded; else ``fallback`` + ``suffix`` with the suffix always kept."""
+    text = " ".join(str(value or "").split())
+    if text:
+        return text[:TITLE_MAX_CHARS].rstrip()
+    room = max(0, TITLE_MAX_CHARS - len(suffix))
+    return (" ".join(str(fallback or "").split())[:room].rstrip() + suffix) or "New chat"
+
+
+def _fork_fingerprint(kind: str, source_cid: str, turn_id) -> str:
+    """The request an idempotency key was first used for: endpoint, source, branch point."""
+    return f"{kind}|{source_cid}|{str(turn_id or '').strip()}"
+
+
+class _TransactionGuardLock:
+    """The store's re-entrant lock, plus the one invariant a SHARED connection needs.
+
+    Python's sqlite3 opens an implicit transaction before the first DML statement. When
+    that statement then fails at bind time (an unencodable string, a list where TEXT was
+    expected) and the method has no rollback of its own, the transaction stays OPEN on the
+    one connection every user shares. The next writer's ``BEGIN IMMEDIATE`` then raised
+    "cannot start a transaction within a transaction" — for every chat turn of every user
+    and every outbox claim — until some unrelated call happened to ``commit()``, which
+    also committed the failed request's partial writes (2026-10-19 C-01: one anonymous
+    request, 40/40 other users' turns failing for 20 s).
+
+    So the OUTERMOST exit of every critical section closes what it opened: a failure rolls
+    back, and a section that returns normally but left a transaction open (a method that
+    forgot its commit) is committed exactly as its author intended, with an error logged.
+    Entry heals a transaction leaked by anything that bypassed this lock. Methods keep
+    their own explicit commit/rollback; this is the backstop that holds for every
+    statement, including the one somebody adds next.
+    """
+
+    def __init__(self, store: "ConversationStore"):
+        self._rlock = threading.RLock()
+        self._store = store
+        self._depth = 0          # mutated only by the thread holding _rlock
+
+    def _connection(self):
+        return getattr(self._store, "_conn", None)
+
+    def _in_transaction(self) -> bool:
+        conn = self._connection()
+        try:
+            return bool(conn is not None and conn.in_transaction)
+        except sqlite3.ProgrammingError:   # closed connection
+            return False
+
+    def __enter__(self):
+        self._rlock.acquire()
+        self._depth += 1
+        if self._depth == 1 and self._in_transaction():
+            logger.error("conversation_store.leaked_transaction_rolled_back at=entry")
+            try:
+                self._connection().rollback()
+            except Exception:
+                self._depth -= 1
+                self._rlock.release()
+                raise
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            if self._depth == 1 and self._in_transaction():
+                conn = self._connection()
+                if exc_type is not None:
+                    conn.rollback()
+                else:
+                    logger.error("conversation_store.open_transaction_committed at=exit")
+                    conn.commit()
+        finally:
+            self._depth -= 1
+            self._rlock.release()
+        return False
+
+
 _NOW_LOCK = threading.Lock()
 _LAST_NOW = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+
+
+# ── Turn-lease ownership (R1-11) ─────────────────────────────────────────────────
+# A process restart during an in-flight turn left turns.status='running' with a 900 s lease,
+# and POST /api/alex, DELETE, clear_history and POST /api/forget_me all answered 409
+# turn_in_progress for ~15 minutes. Every lease now names the process that holds it; a lease
+# whose owner is gone does not block. An owner is gone when its row is missing, when it is a
+# previous process on this host (same pid now ours, or a pid that no longer exists), or when
+# its heartbeat is older than LEASE_OWNER_STALE_SECONDS (another host/container). Leases
+# written before this column existed (owner NULL) keep the old expiry rule.
+_PROCESS_OWNER_ID = uuid.uuid4().hex
+LEASE_OWNER_HEARTBEAT_SECONDS = 20
+LEASE_OWNER_STALE_SECONDS = 90
+_HEARTBEAT_STORES: "weakref.WeakSet" = None  # type: ignore[assignment]
+_HEARTBEAT_LOCK = threading.Lock()
+_HEARTBEAT_THREAD: threading.Thread | None = None
+
+
+def _host_name() -> str:
+    import socket
+    try:
+        return socket.gethostname() or "unknown"
+    except Exception:
+        return "unknown"
+
+
+def _pid_alive(pid: int) -> bool:
+    import os
+    try:
+        os.kill(int(pid), 0)
+    except ProcessLookupError:
+        return False
+    except Exception:
+        return True          # exists but not ours (EPERM), or cannot tell: assume alive
+    # A SIGKILLed process that its parent has not reaped is a zombie: kill(pid, 0) still
+    # succeeds, yet it can never write. Counting it alive kept its lease blocking retries
+    # with 409 "still in progress" until the heartbeat went stale (R3-12).
+    try:
+        with open(f"/proc/{int(pid)}/stat", encoding="ascii", errors="replace") as handle:
+            state = handle.read().rsplit(")", 1)[1].split()[0]
+        if state in ("Z", "X", "x"):
+            return False
+    except (OSError, IndexError, ValueError):
+        pass
+    return True
+
+
+def _heartbeat_loop() -> None:
+    import time
+    while True:
+        time.sleep(LEASE_OWNER_HEARTBEAT_SECONDS)
+        for store in list(_HEARTBEAT_STORES or ()):
+            try:
+                store._heartbeat()
+            except Exception:
+                pass
+
+
+def _register_heartbeat(store) -> None:
+    global _HEARTBEAT_STORES, _HEARTBEAT_THREAD
+    import weakref
+    with _HEARTBEAT_LOCK:
+        if _HEARTBEAT_STORES is None:
+            _HEARTBEAT_STORES = weakref.WeakSet()
+        _HEARTBEAT_STORES.add(store)
+        if _HEARTBEAT_THREAD is None or not _HEARTBEAT_THREAD.is_alive():
+            _HEARTBEAT_THREAD = threading.Thread(
+                target=_heartbeat_loop, name="conversation-lease-heartbeat", daemon=True)
+            _HEARTBEAT_THREAD.start()
 
 
 def _now_iso() -> str:
@@ -210,8 +442,9 @@ class ConversationStore:
     def __init__(self, db_path):
         self.db_path = str(db_path)
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.RLock()
-        self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        self._lock = _TransactionGuardLock(self)
+        self._conn = sqlite3.connect(
+            self.db_path, check_same_thread=False, factory=_EncodeSafeConnection)
         self._conn.row_factory = sqlite3.Row
         with self._lock:
             self._conn.execute("PRAGMA foreign_keys=ON")
@@ -221,6 +454,9 @@ class ConversationStore:
             self._conn.executescript(_SCHEMA)
             self._conn.commit()
             self._migrate()
+            self._owner_id = _PROCESS_OWNER_ID
+            self._register_owner()
+        _register_heartbeat(self)
 
     def _migrate(self) -> None:
         """Bring an existing DB up to the current schema in place. Idempotent:
@@ -245,13 +481,72 @@ class ConversationStore:
         ):
             if name not in conv_cols:
                 self._conn.execute(f"ALTER TABLE conversations ADD COLUMN {name} {decl}")
+        if "request_fingerprint" not in _cols("fork_requests"):
+            # What the idempotency key was used FOR (endpoint, source, fork point), so a
+            # replay of the same key for a different request is refused (C-07).
+            self._conn.execute("ALTER TABLE fork_requests ADD COLUMN request_fingerprint TEXT")
+        if "owner_id" not in _cols("conversation_turn_leases"):
+            self._conn.execute("ALTER TABLE conversation_turn_leases ADD COLUMN owner_id TEXT")
         if "turn_id" not in _cols("messages"):
             self._conn.execute("ALTER TABLE messages ADD COLUMN turn_id TEXT")
+        if 'response_metadata_json' not in _cols('messages'):
+            self._conn.execute('ALTER TABLE messages ADD COLUMN response_metadata_json TEXT')
         # Backfill: pre-fork rows are their own root.
         self._conn.execute(
             "UPDATE conversations SET root_conversation_id=id WHERE root_conversation_id IS NULL"
         )
         self._conn.commit()
+
+    def _register_owner(self) -> None:
+        """Record this process as a lease owner; forget previous processes on this host."""
+        now = _now_iso()
+        host, pid = _host_name(), __import__("os").getpid()
+        try:
+            for row in self._conn.execute(
+                    "SELECT owner_id, pid FROM store_owners WHERE host=? AND owner_id<>?",
+                    (host, self._owner_id)).fetchall():
+                if int(row["pid"]) == pid or not _pid_alive(row["pid"]):
+                    self._conn.execute("DELETE FROM store_owners WHERE owner_id=?",
+                                       (row["owner_id"],))
+            self._conn.execute(
+                """INSERT INTO store_owners (owner_id, host, pid, started_at, heartbeat_at)
+                   VALUES (?,?,?,?,?)
+                   ON CONFLICT(owner_id) DO UPDATE SET heartbeat_at=excluded.heartbeat_at""",
+                (self._owner_id, host, pid, now, now))
+            self._conn.commit()
+        except sqlite3.Error:
+            self._conn.rollback()
+
+    def _heartbeat(self) -> None:
+        with self._lock:
+            try:
+                self._conn.execute("UPDATE store_owners SET heartbeat_at=? WHERE owner_id=?",
+                                   (_now_iso(), self._owner_id))
+                self._conn.commit()
+            except sqlite3.Error:
+                try:
+                    self._conn.rollback()
+                except sqlite3.Error:
+                    pass
+
+    def _lease_blocks(self, lease, now: str) -> bool:
+        """True while ``lease`` belongs to a turn that can still be running somewhere."""
+        if lease["status"] != "running" or lease["expires_at"] <= now:
+            return False
+        owner = lease["owner_id"] if "owner_id" in lease.keys() else None
+        if owner is None or owner == self._owner_id:
+            return True
+        row = self._conn.execute(
+            "SELECT heartbeat_at, host, pid FROM store_owners WHERE owner_id=?",
+            (owner,)).fetchone()
+        if row is None:
+            return False                        # a previous process: its turn cannot write
+        if (row["host"] == _host_name() and row["pid"] is not None
+                and not _pid_alive(row["pid"])):
+            return False                        # dead on this host: no need to wait it out (R3-12)
+        stale = (datetime.datetime.fromisoformat(now)
+                 - datetime.timedelta(seconds=LEASE_OWNER_STALE_SECONDS)).isoformat()
+        return row["heartbeat_at"] > stale
 
     def close(self):
         with self._lock:
@@ -271,7 +566,7 @@ class ConversationStore:
         """
         cid = uuid.uuid4().hex
         now = _now_iso()
-        title = (title or "").strip() or "New chat"
+        title = _bounded_title(title, "New chat")
         with self._lock:
             self._conn.execute(
                 """INSERT INTO conversations
@@ -342,6 +637,7 @@ class ConversationStore:
 
     def rename_conversation(self, user_id: str, cid: str, title: str) -> dict | None:
         now = _now_iso()
+        title = _bounded_title(title, "New chat")
         with self._lock:
             cur = self._conn.execute(
                 "UPDATE conversations SET title=?, updated_at=? WHERE user_id=? AND id=?",
@@ -352,51 +648,81 @@ class ConversationStore:
                 return None
         return self.get_conversation(user_id, cid)
 
+    def _raise_if_turn_running(self, user_id: str, cid: str | None = None) -> None:
+        """Refuse a destructive write while a live turn holds a lease; caller holds the
+        lock inside a ``BEGIN IMMEDIATE`` transaction.
+
+        DELETE and clear_history used to delete the lease, the turn and the transcript out
+        from under a RUNNING turn: the turn burned its model and tool calls, then failed at
+        persistence (TurnNotFound -> 500), and the still-running graph wrote the deleted
+        conversation's checkpoint thread back after ``_delete_checkpoint_thread`` had run —
+        user text surviving a delete (2026-10-19 C-03). ``begin_privacy_erasure`` already
+        refused to race a live lease; this is the same rule for the conversation-scoped
+        deletes. An EXPIRED lease (a killed process) does not block: the turn it named can
+        no longer write, and the delete removes it.
+        """
+        now = _now_iso()
+        query = ("""SELECT l.turn_id, l.expires_at, l.owner_id, t.status
+                    FROM conversation_turn_leases l
+                    LEFT JOIN turns t ON t.id=l.turn_id AND t.user_id=l.user_id
+                    WHERE l.user_id=?""")
+        params: tuple = (user_id,)
+        if cid is not None:
+            query += " AND l.conversation_id=?"
+            params = (user_id, cid)
+        for lease in self._conn.execute(query, params).fetchall():
+            if self._lease_blocks(lease, now):
+                remaining = (
+                    datetime.datetime.fromisoformat(lease["expires_at"])
+                    - datetime.datetime.fromisoformat(now)
+                ).total_seconds()
+                raise ConversationBusy(lease["turn_id"], max(1, int(remaining)))
+
     def delete_conversation(self, user_id: str, cid: str) -> bool:
+        """Delete one conversation and everything keyed by it.
+
+        Raises ``ConversationBusy`` while a turn is running in it (see
+        ``_raise_if_turn_running``)."""
         with self._lock:
-            cur = self._conn.execute(
-                "DELETE FROM conversations WHERE user_id=? AND id=?", (user_id, cid)
-            )
-            self._conn.execute(
-                "DELETE FROM messages WHERE user_id=? AND conversation_id=?", (user_id, cid)
-            )
-            self._conn.execute(
-                "DELETE FROM turn_snapshots WHERE user_id=? AND conversation_id=?", (user_id, cid)
-            )
-            self._conn.execute(
-                "DELETE FROM turns WHERE user_id=? AND conversation_id=?", (user_id, cid)
-            )
-            self._conn.execute(
-                "DELETE FROM turn_requests WHERE user_id=? AND conversation_id=?", (user_id, cid)
-            )
-            self._conn.execute(
-                "DELETE FROM conversation_turn_leases WHERE user_id=? AND conversation_id=?",
-                (user_id, cid),
-            )
-            self._conn.execute(
-                "DELETE FROM background_jobs WHERE user_id=? AND conversation_id=?",
-                (user_id, cid),
-            )
-            self._conn.commit()
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
+                self._raise_if_turn_running(user_id, cid)
+                cur = self._conn.execute(
+                    "DELETE FROM conversations WHERE user_id=? AND id=?", (user_id, cid)
+                )
+                for table in ("messages", "turn_snapshots", "turns", "turn_requests",
+                              "conversation_turn_leases", "background_jobs"):
+                    self._conn.execute(
+                        f"DELETE FROM {table} WHERE user_id=? AND conversation_id=?",
+                        (user_id, cid),
+                    )
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
             # Children of a deleted parent keep their (now dangling) lineage pointers.
             return cur.rowcount > 0
 
     def delete_all_conversations(self, user_id: str) -> list[str]:
         """Delete every conversation + message for a user; return the deleted ids
-        (so the caller can drop the matching LangGraph checkpointer threads)."""
+        (so the caller can drop the matching LangGraph checkpointer threads).
+
+        Raises ``ConversationBusy`` while any of the user's turns is running."""
         with self._lock:
-            rows = self._conn.execute(
-                "SELECT id FROM conversations WHERE user_id=?", (user_id,)
-            ).fetchall()
-            cids = [r["id"] for r in rows]
-            self._conn.execute("DELETE FROM messages WHERE user_id=?", (user_id,))
-            self._conn.execute("DELETE FROM turn_snapshots WHERE user_id=?", (user_id,))
-            self._conn.execute("DELETE FROM turns WHERE user_id=?", (user_id,))
-            self._conn.execute("DELETE FROM turn_requests WHERE user_id=?", (user_id,))
-            self._conn.execute("DELETE FROM conversation_turn_leases WHERE user_id=?", (user_id,))
-            self._conn.execute("DELETE FROM background_jobs WHERE user_id=?", (user_id,))
-            self._conn.execute("DELETE FROM conversations WHERE user_id=?", (user_id,))
-            self._conn.commit()
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
+                self._raise_if_turn_running(user_id)
+                rows = self._conn.execute(
+                    "SELECT id FROM conversations WHERE user_id=?", (user_id,)
+                ).fetchall()
+                cids = [r["id"] for r in rows]
+                for table in ("messages", "turn_snapshots", "turns", "turn_requests",
+                              "conversation_turn_leases", "background_jobs", "conversations"):
+                    self._conn.execute(f"DELETE FROM {table} WHERE user_id=?", (user_id,))
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
         return cids
 
     def _privacy_inventory_unlocked(self, user_id: str) -> dict[str, int]:
@@ -435,8 +761,8 @@ class ConversationStore:
         delete and verify those layers without first querying content.
         """
         with self._lock:
-            self._conn.execute("BEGIN IMMEDIATE")
             try:
+                self._conn.execute("BEGIN IMMEDIATE")
                 before = self._privacy_inventory_unlocked(user_id)
                 rows = self._conn.execute(
                     "SELECT id FROM conversations WHERE user_id=?",
@@ -465,39 +791,34 @@ class ConversationStore:
         return {"conversation_ids": cids, "before": before, "after": after}
 
     def clear_conversation_messages(self, user_id: str, cid: str) -> bool:
-        """Empty a conversation's transcript but keep the (renamed) row."""
+        """Empty a conversation's transcript but keep the (renamed) row.
+
+        Raises ``ConversationBusy`` while a turn is running in it (C-03)."""
         with self._lock:
-            exists = self._conn.execute(
-                "SELECT 1 FROM conversations WHERE user_id=? AND id=?", (user_id, cid)
-            ).fetchone()
-            if not exists:
-                return False
-            self._conn.execute(
-                "DELETE FROM messages WHERE user_id=? AND conversation_id=?", (user_id, cid)
-            )
-            # Resetting the transcript also drops its turns + snapshots.
-            self._conn.execute(
-                "DELETE FROM turn_snapshots WHERE user_id=? AND conversation_id=?", (user_id, cid)
-            )
-            self._conn.execute(
-                "DELETE FROM turns WHERE user_id=? AND conversation_id=?", (user_id, cid)
-            )
-            self._conn.execute(
-                "DELETE FROM turn_requests WHERE user_id=? AND conversation_id=?", (user_id, cid)
-            )
-            self._conn.execute(
-                "DELETE FROM conversation_turn_leases WHERE user_id=? AND conversation_id=?",
-                (user_id, cid),
-            )
-            self._conn.execute(
-                "DELETE FROM background_jobs WHERE user_id=? AND conversation_id=?",
-                (user_id, cid),
-            )
-            self._conn.execute(
-                "UPDATE conversations SET updated_at=? WHERE user_id=? AND id=?",
-                (_now_iso(), user_id, cid),
-            )
-            self._conn.commit()
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
+                exists = self._conn.execute(
+                    "SELECT 1 FROM conversations WHERE user_id=? AND id=?", (user_id, cid)
+                ).fetchone()
+                if not exists:
+                    self._conn.rollback()
+                    return False
+                self._raise_if_turn_running(user_id, cid)
+                # Resetting the transcript also drops its turns + snapshots.
+                for table in ("messages", "turn_snapshots", "turns", "turn_requests",
+                              "conversation_turn_leases", "background_jobs"):
+                    self._conn.execute(
+                        f"DELETE FROM {table} WHERE user_id=? AND conversation_id=?",
+                        (user_id, cid),
+                    )
+                self._conn.execute(
+                    "UPDATE conversations SET updated_at=? WHERE user_id=? AND id=?",
+                    (_now_iso(), user_id, cid),
+                )
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
         return True
 
     # ----------------------------------------------------------------- messages
@@ -539,7 +860,7 @@ class ConversationStore:
     def get_messages(self, user_id: str, cid: str) -> list[dict]:
         with self._lock:
             rows = self._conn.execute(
-                """SELECT id, role, content, response_type, recommendations_json,
+                """SELECT id, role, content, response_type, recommendations_json, response_metadata_json,
                           timestamp, turn_id
                    FROM messages WHERE user_id=? AND conversation_id=? ORDER BY id ASC""",
                 (user_id, cid),
@@ -550,6 +871,13 @@ class ConversationStore:
                    "timestamp": r["timestamp"], "turn_id": r["turn_id"]}
             if r["response_type"]:
                 msg["response_type"] = r["response_type"]
+            if r['response_metadata_json']:
+                try:
+                    msg['metadata'] = json.loads(r['response_metadata_json'])
+                    if 'options' in msg['metadata']:
+                        msg['options'] = msg['metadata']['options']
+                except (TypeError, ValueError):
+                    pass
             if r["recommendations_json"]:
                 try:
                     msg["recommendations"] = json.loads(r["recommendations_json"])
@@ -612,8 +940,8 @@ class ConversationStore:
         conversation_created = False
 
         with self._lock:
-            self._conn.execute("BEGIN IMMEDIATE")
             try:
+                self._conn.execute("BEGIN IMMEDIATE")
                 erasing = self._conn.execute(
                     "SELECT 1 FROM privacy_erasure_locks WHERE user_id=?",
                     (user_id,),
@@ -628,6 +956,44 @@ class ConversationStore:
                     (user_id, request_id),
                 ).fetchone()
                 if replay is not None:
+                    stored = self._conn.execute(
+                        "SELECT content FROM messages WHERE user_id=? AND id=?",
+                        (user_id, replay["user_message_id"]),
+                    ).fetchone()
+                    if stored is not None and (stored["content"] or "") != (user_content or ""):
+                        # The same X-Request-Id with a DIFFERENT message is a new request,
+                        # not a retry: replaying the old answer with 200 answered a question
+                        # the user did not ask (R1-15). Same rule as the fork routes (C-07).
+                        self._conn.rollback()
+                        raise IdempotencyKeyReused(request_id)
+                    if replay["status"] == "running":
+                        # The turn's owner may be gone: after a restart the dead process's turn
+                        # stayed 'running' and every retry got 409 "still in progress" for good
+                        # (R2-22). A turn no live lease protects is marked failed, so the
+                        # replay is terminal.
+                        lease = self._conn.execute(
+                            """SELECT l.turn_id, l.expires_at, l.owner_id, t.status
+                               FROM conversation_turn_leases l
+                               LEFT JOIN turns t ON t.id=l.turn_id
+                               WHERE l.user_id=? AND l.turn_id=?""",
+                            (user_id, replay["id"]),
+                        ).fetchone()
+                        if lease is None or not self._lease_blocks(lease, now):
+                            self._conn.execute(
+                                """UPDATE turns SET status='failed', completed_at=?
+                                   WHERE user_id=? AND id=? AND status='running'""",
+                                (now, user_id, replay["id"]),
+                            )
+                            if lease is not None:
+                                self._conn.execute(
+                                    """DELETE FROM conversation_turn_leases
+                                       WHERE user_id=? AND turn_id=?""",
+                                    (user_id, replay["id"]),
+                                )
+                            replay = self._conn.execute(
+                                "SELECT * FROM turns WHERE user_id=? AND id=?",
+                                (user_id, replay["id"]),
+                            ).fetchone()
                     self._conn.commit()
                     out = self._turn_dict(replay)
                     out["replayed"] = True
@@ -642,7 +1008,7 @@ class ConversationStore:
                         raise ConversationNotFound(cid)
                 else:
                     cid = uuid.uuid4().hex
-                    title = (create_title or "").strip() or "New chat"
+                    title = _bounded_title(create_title, "New chat")
                     self._conn.execute(
                         """INSERT INTO conversations
                            (user_id, id, title, created_at, updated_at,
@@ -665,14 +1031,14 @@ class ConversationStore:
                     conversation_created = True
 
                 lease = self._conn.execute(
-                    """SELECT l.turn_id, l.expires_at, t.status
+                    """SELECT l.turn_id, l.expires_at, l.owner_id, t.status
                        FROM conversation_turn_leases l
                        LEFT JOIN turns t ON t.id=l.turn_id
                        WHERE l.user_id=? AND l.conversation_id=?""",
                     (user_id, cid),
                 ).fetchone()
                 if lease is not None:
-                    active = lease["status"] == "running" and lease["expires_at"] > now
+                    active = self._lease_blocks(lease, now)
                     if active:
                         remaining = (
                             datetime.datetime.fromisoformat(lease["expires_at"])
@@ -689,6 +1055,12 @@ class ConversationStore:
                            WHERE user_id=? AND conversation_id=?""",
                         (user_id, cid),
                     )
+
+                if create_title:
+                    self._conn.execute("""UPDATE conversations SET title=?
+                        WHERE user_id=? AND id=? AND title IN ('New chat','新会话','New conversation')
+                        AND NOT EXISTS (SELECT 1 FROM messages WHERE user_id=? AND conversation_id=?)""",
+                        (_bounded_title(create_title, "New chat"), user_id, cid, user_id, cid))
 
                 cur = self._conn.execute(
                     """INSERT INTO messages
@@ -713,9 +1085,9 @@ class ConversationStore:
                 )
                 self._conn.execute(
                     """INSERT INTO conversation_turn_leases
-                       (user_id, conversation_id, turn_id, acquired_at, expires_at)
-                       VALUES(?,?,?,?,?)""",
-                    (user_id, cid, tid, now, expires),
+                       (user_id, conversation_id, turn_id, acquired_at, expires_at, owner_id)
+                       VALUES(?,?,?,?,?,?)""",
+                    (user_id, cid, tid, now, expires, self._owner_id),
                 )
                 self._conn.execute(
                     "UPDATE conversations SET updated_at=? WHERE user_id=? AND id=?",
@@ -744,8 +1116,8 @@ class ConversationStore:
         """Block new turns after proving no active conversation turn can write back."""
         now = _now_iso()
         with self._lock:
-            self._conn.execute("BEGIN IMMEDIATE")
             try:
+                self._conn.execute("BEGIN IMMEDIATE")
                 existing = self._conn.execute(
                     "SELECT 1 FROM privacy_erasure_locks WHERE user_id=?",
                     (user_id,),
@@ -754,14 +1126,14 @@ class ConversationStore:
                     raise PrivacyErasureInProgress("privacy erasure already in progress")
 
                 leases = self._conn.execute(
-                    """SELECT l.turn_id, l.expires_at, t.status
+                    """SELECT l.turn_id, l.expires_at, l.owner_id, t.status
                        FROM conversation_turn_leases l
                        LEFT JOIN turns t ON t.id=l.turn_id
                        WHERE l.user_id=?""",
                     (user_id,),
                 ).fetchall()
                 for lease in leases:
-                    if lease["status"] == "running" and lease["expires_at"] > now:
+                    if self._lease_blocks(lease, now):
                         remaining = (
                             datetime.datetime.fromisoformat(lease["expires_at"])
                             - datetime.datetime.fromisoformat(now)
@@ -834,17 +1206,35 @@ class ConversationStore:
             ).fetchone()
         return self._turn_dict(row) if row else None
 
+    def request_message_differs(self, user_id: str, turn: dict, user_content: str) -> bool:
+        """True when a replayed request id carries a DIFFERENT user message (R1-15)."""
+        message_id = (turn or {}).get("user_message_id")
+        if message_id is None:
+            return False
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT content FROM messages WHERE user_id=? AND id=?", (user_id, message_id),
+            ).fetchone()
+        return row is not None and (row["content"] or "") != (user_content or "")
+
     def get_turn_response(self, user_id: str, turn_id: str) -> dict | None:
         """Rebuild the persisted HTTP payload for an idempotent completed retry."""
         with self._lock:
             row = self._conn.execute(
                 """SELECT t.status, t.conversation_id, t.id AS turn_id,
-                          m.content, m.response_type, m.recommendations_json
+                          m.content, m.response_type, m.recommendations_json, m.response_metadata_json
                    FROM turns t
                    LEFT JOIN messages m ON m.id=t.assistant_message_id
                    WHERE t.user_id=? AND t.id=?""",
                 (user_id, turn_id),
             ).fetchone()
+        if row is not None and row["content"] is None and row["status"] == "failed":
+            # Interrupted before any answer was stored (a restart mid-turn): the replay is
+            # still terminal, never a 500 or an endless 409 (R2-22).
+            return {"conversation_id": row["conversation_id"], "turn_id": row["turn_id"],
+                    "response_type": "error", "interrupted": True, "replayed": True,
+                    "message": ("This request was interrupted before it finished (the service "
+                                "restarted), so no answer was saved. Please send it again.")}
         if row is None or row["content"] is None:
             return None
         payload = {
@@ -861,6 +1251,15 @@ class ConversationStore:
                 payload["recommendations"] = json.loads(row["recommendations_json"])
             except (TypeError, ValueError, json.JSONDecodeError):
                 pass
+        if row['response_metadata_json']:
+            try:
+                payload.update(json.loads(row['response_metadata_json']))
+            except (TypeError, ValueError):
+                pass
+        from uk_rent_agent.web.view_state import view_state
+        state = view_state(self.get_turn_snapshot(user_id, turn_id))
+        if state is not None:
+            payload['view_state'] = state
         return payload
 
     def finalize_request_turn(
@@ -875,6 +1274,7 @@ class ConversationStore:
         snapshot: dict | None = None,
         snapshot_schema_version: int = 1,
         background_jobs: list[dict] | None = None,
+        response_metadata: dict | None = None,
     ) -> dict:
         """Atomically persist the assistant, terminal state, snapshot and outbox jobs."""
         if status not in {"completed", "failed"}:
@@ -889,8 +1289,8 @@ class ConversationStore:
             else None
         )
         with self._lock:
-            self._conn.execute("BEGIN IMMEDIATE")
             try:
+                self._conn.execute("BEGIN IMMEDIATE")
                 turn = self._conn.execute(
                     "SELECT * FROM turns WHERE user_id=? AND id=?",
                     (user_id, turn_id),
@@ -917,6 +1317,9 @@ class ConversationStore:
                     ),
                 )
                 assistant_id = int(cur.lastrowid)
+                if response_metadata:
+                    self._conn.execute('UPDATE messages SET response_metadata_json=? WHERE id=?',
+                                       (json.dumps(response_metadata, ensure_ascii=False), assistant_id))
                 updated = self._conn.execute(
                     """UPDATE turns SET status=?, completed_at=?, assistant_message_id=?
                        WHERE user_id=? AND id=? AND status='running'""",
@@ -1013,8 +1416,8 @@ class ConversationStore:
             + datetime.timedelta(seconds=max(1, int(lease_seconds)))
         ).isoformat()
         with self._lock:
-            self._conn.execute("BEGIN IMMEDIATE")
             try:
+                self._conn.execute("BEGIN IMMEDIATE")
                 self._conn.execute(
                     """UPDATE background_jobs
                        SET status='pending', claimed_by=NULL, lease_expires=NULL,
@@ -1122,8 +1525,8 @@ class ConversationStore:
     ) -> bool:
         """Idempotently persist an outbox-produced summary into the latest snapshot."""
         with self._lock:
-            self._conn.execute("BEGIN IMMEDIATE")
             try:
+                self._conn.execute("BEGIN IMMEDIATE")
                 row = self._conn.execute(
                     """SELECT s.turn_id, s.snapshot_json FROM turn_snapshots s
                        JOIN turns t ON t.id=s.turn_id AND t.user_id=s.user_id
@@ -1363,13 +1766,19 @@ class ConversationStore:
             # 1. Idempotency replay (race-safe: serialized by the lock, PK backstop).
             if idempotency_key:
                 existing = self._conn.execute(
-                    """SELECT conversation_id FROM fork_requests
+                    """SELECT conversation_id, request_fingerprint FROM fork_requests
                        WHERE user_id=? AND idempotency_key=?""",
                     (user_id, idempotency_key),
                 ).fetchone()
                 if existing:
                     child = self.get_conversation(user_id, existing["conversation_id"])
                     if child is not None:
+                        recorded = existing["request_fingerprint"]
+                        if (child.get("parent_conversation_id") != source_cid
+                                or child.get("fork_reason") == "edit"
+                                or (recorded is not None and recorded != _fork_fingerprint(
+                                    "fork", source_cid, after_turn_id))):
+                            raise IdempotencyKeyReused(idempotency_key)
                         child = dict(child)
                         child["idempotent"] = True
                         return child
@@ -1415,7 +1824,7 @@ class ConversationStore:
                 # 4. Create the child conversation row.
                 child_cid = uuid.uuid4().hex
                 now = _now_iso()
-                child_title = (title or "").strip() or f"{src['title']} (branch)"
+                child_title = _bounded_title(title, src['title'], " (branch)")
                 root = src["root_conversation_id"] or source_cid
                 depth = int(src["branch_depth"] or 0) + 1
                 # A branch starts with the source conversation's architecture provenance;
@@ -1451,9 +1860,11 @@ class ConversationStore:
                 if idempotency_key:
                     self._conn.execute(
                         """INSERT OR REPLACE INTO fork_requests
-                           (user_id, idempotency_key, conversation_id, created_at)
-                           VALUES(?,?,?,?)""",
-                        (user_id, idempotency_key, child_cid, _now_iso()),
+                           (user_id, idempotency_key, conversation_id, created_at,
+                            request_fingerprint)
+                           VALUES(?,?,?,?,?)""",
+                        (user_id, idempotency_key, child_cid, _now_iso(),
+                         _fork_fingerprint("fork", source_cid, after_turn_id)),
                     )
 
                 self._conn.commit()
@@ -1507,7 +1918,7 @@ class ConversationStore:
 
         msg_map: dict[int, int] = {}
         src_msgs = self._conn.execute(
-            """SELECT id, role, content, response_type, recommendations_json,
+            """SELECT id, role, content, response_type, recommendations_json, response_metadata_json,
                       timestamp, turn_id
                FROM messages WHERE user_id=? AND conversation_id=? ORDER BY id ASC""",
             (user_id, source_cid),
@@ -1536,6 +1947,9 @@ class ConversationStore:
                  new_turn),
             )
             msg_map[mid] = cur.lastrowid
+            if m['response_metadata_json']:
+                self._conn.execute('UPDATE messages SET response_metadata_json=? WHERE id=?',
+                                   (m['response_metadata_json'], cur.lastrowid))
 
         for t in src_turns:
             new_umid = msg_map.get(t["user_message_id"]) if t["user_message_id"] is not None else None
@@ -1639,13 +2053,19 @@ class ConversationStore:
             # 1. Idempotency replay (shares the fork_requests table; serialized by the lock).
             if idempotency_key:
                 existing = self._conn.execute(
-                    """SELECT conversation_id FROM fork_requests
+                    """SELECT conversation_id, request_fingerprint FROM fork_requests
                        WHERE user_id=? AND idempotency_key=?""",
                     (user_id, idempotency_key),
                 ).fetchone()
                 if existing:
                     child = self.get_conversation(user_id, existing["conversation_id"])
                     if child is not None:
+                        recorded = existing["request_fingerprint"]
+                        if (child.get("parent_conversation_id") != source_cid
+                                or child.get("fork_reason") != "edit"
+                                or (recorded is not None and recorded != _fork_fingerprint(
+                                    "edit", source_cid, turn_id))):
+                            raise IdempotencyKeyReused(idempotency_key)
                         child = dict(child)
                         child["idempotent"] = True
                         return child
@@ -1701,7 +2121,7 @@ class ConversationStore:
                 self._conn.execute("BEGIN")
                 child_cid = uuid.uuid4().hex
                 now = _now_iso()
-                child_title = (title or "").strip() or f"{src['title']} (edit)"
+                child_title = _bounded_title(title, src['title'], " (edit)")
                 root = src["root_conversation_id"] or source_cid
                 depth = int(src["branch_depth"] or 0) + 1
                 # Edit branches inherit the source's architecture provenance.
@@ -1721,9 +2141,11 @@ class ConversationStore:
                 if idempotency_key:
                     self._conn.execute(
                         """INSERT OR REPLACE INTO fork_requests
-                           (user_id, idempotency_key, conversation_id, created_at)
-                           VALUES(?,?,?,?)""",
-                        (user_id, idempotency_key, child_cid, _now_iso()),
+                           (user_id, idempotency_key, conversation_id, created_at,
+                            request_fingerprint)
+                           VALUES(?,?,?,?,?)""",
+                        (user_id, idempotency_key, child_cid, _now_iso(),
+                         _fork_fingerprint("edit", source_cid, turn_id)),
                     )
                 self._conn.commit()
             except Exception:

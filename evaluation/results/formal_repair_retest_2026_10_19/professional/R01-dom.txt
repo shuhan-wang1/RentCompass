@@ -1,0 +1,97 @@
+RentCompass
+EN
+中文
+CONVERSATIONS
+New
+I'm moving to London for a job near Bank…
+just now
+G
+Guest
+AI Assistant
+
+London Rental Intelligence
+
+ALEX
+Hello! I'm Alex. I can help you find apartments in London.
+
+Try asking me:
+"Find a 1-bed near King's Cross under £2000"
+"What is the vibe like in Hackney?"
+"Show me flats with a 20min commute to UCL"
+I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?
+Edit message
+ALEX
+
+I can help with the commute side of your search, the information provided contains only a commute calculation for Lewisham. It does not contain any actual property listings, so I cannot show you any flats, rents, or addresses — inventing them would be misleading.
+
+What the data does confirm
+
+Commute from Lewisham to Bank station (TfL Journey Planner)
+
+Total journey time: which is within your 45-minute limit.
+Route: walk to Lewisham Clock Tower, bus 129 to Lewisham Station, walk to Lewisham Rail Station, Southeastern national rail to London Cannon Street, walk to 1 Queen Victoria Street.
+Changes: 1 interchange.
+This is the fastest itinerary the TfL Journey Planner returned for these two points, including walking legs and interchanges.
+
+What is missing
+
+No Lewisham property listings were returned, so I cannot confirm whether any self-contained one-bedroom flat there falls within your £1,850 per month rent cap.
+No Stratford commute calculation was returned, so I cannot confirm the journey time from Stratford to Bank.
+No Stratford listings were returned either.
+Because there are no rent figures in the data, I cannot calculate rent plus commuting against your £2,150 per month ceiling. That figure is unavailable from what I have.
+
+How to proceed
+
+Ask me to run the Stratford to Bank commute so we can compare both areas against your 45-minute limit.
+For actual one-bedroom listings in Lewisham and Stratford at up to £1,850 per month, check rightmove.co.uk and zoopla.co.uk directly, or ask me to search again — I will only present real listings that come back.
+Once we have real rents, I can help you work out whether rent plus a monthly travel cost stays within £2,150. For live fares on the Lewisham to Bank route, just ask and I can pull them from TfL.
+
+Would you like me to check the Stratford commute next?
+
+Please double-check the exact prices against the source listing.
+
+Note: some commute claims could not be verified and have been removed from this answer.
+
+Branch from here
+Near UCL
+Safe areas
+Rent stats
+Listings
+Search
+Saved
+0
+Search criteria
+Area
+*
+Lewisham
+×
+Stratford
+×
+Budget
+per month
+per week
+Bedrooms
+Any
+Studio
+1
+2
+3
+4
+5
+6
+At least this many bedrooms
+Room type
+Any
+Whole property
+Studio
+En-suite room
+Shared room
+Commute to
+Max commute (min)
+I don't commute
+Move-in date
+YYYY-MM-DD
+Search
+No properties found
+
+Try adjusting your budget or location.

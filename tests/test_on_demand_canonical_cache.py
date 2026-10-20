@@ -99,7 +99,7 @@ def test_same_slug_two_bands_scrapes_once(fresh_cache, monkeypatch):
 # --------------------------------------------------------------------------
 # 2) Fresh canonical + empty band-filter -> ONE band rescue, then complete-empty
 # --------------------------------------------------------------------------
-def test_fresh_canonical_empty_band_rescues_once_then_complete_empty(fresh_cache,
+def test_fresh_canonical_empty_band_reuses_sample_without_another_request(fresh_cache,
                                                                      monkeypatch):
     """The canonical pool is a CAPPED top-slice, so an empty band-filter is not on its
     own evidence the band is empty (see _band_rescue). It gets ONE band-targeted
@@ -116,20 +116,19 @@ def test_fresh_canonical_empty_band_rescues_once_then_complete_empty(fresh_cache
     empty = on_demand.get_listings("Manchester", 5, 5, 500, 1200)
     assert empty["rows"] == [] and empty["meta"]["count"] == 0
     assert empty["meta"]["source"] == "hit" and empty["meta"]["band_rescue"] is False
-    assert calls["n"] == 2                       # 1 canonical + 1 rescue
-    assert calls["params"][1]["min_bedrooms"] == 5   # rescue used the CALLER's band
-    assert calls["params"][1]["max_price"] == 1200
+    assert calls["n"] == 1
+    assert empty["meta"]["coverage"]["exhaustive"] is False
 
     # Repeat: the empty rescue harvest is cached band-scoped, so no third scrape.
     again = on_demand.get_listings("Manchester", 5, 5, 500, 1200)
     assert again["rows"] == [] and again["meta"]["source"] == "hit"
-    assert calls["n"] == 2
+    assert calls["n"] == 1
 
 
 # --------------------------------------------------------------------------
 # 2b) Band rescue: rows the CAPPED canonical pool could not show
 # --------------------------------------------------------------------------
-def test_band_rescue_returns_rows_missing_from_canonical_pool(fresh_cache, monkeypatch):
+def test_missing_budget_segment_is_reported_as_sample_limitation(fresh_cache, monkeypatch):
     """The production defect (2026-07-28): slug 'london' scraped at the canonical
     £100-5000 returned a top-slice whose cheapest row was £1,800, so a £1,742 cap
     band-filtered to ZERO and the user was told there was nothing in budget — while the
@@ -163,18 +162,17 @@ def test_band_rescue_returns_rows_missing_from_canonical_pool(fresh_cache, monke
     monkeypatch.setattr(om_mod, "find_rich_onthemarket", fake_scrape)
 
     res = on_demand.get_listings("London", 0, 2, 100, 1742)
-    assert [r["URL"] for r in res["rows"]] == [
-        "https://www.onthemarket.com/details/902/",
-        "https://www.onthemarket.com/details/903/",
-    ]
-    assert res["meta"]["band_rescue"] is True
-    assert res["meta"]["count"] == 2
-    assert calls["n"] == 2 and calls["params"][1]["max_price"] == 1742
+    assert res["rows"] == []
+    assert res["meta"]["band_rescue"] is False
+    assert res["meta"]["coverage"]["exhaustive"] is False
+    assert res["meta"]["count"] == 0
+    assert calls["n"] == 1
+    assert "does not establish" in res["meta"]["message"]
 
     # Warm: the band harvest is cached, so the repeat costs no scrape at all.
     warm = on_demand.get_listings("London", 0, 2, 100, 1742)
-    assert len(warm["rows"]) == 2 and warm["meta"]["band_rescue"] is True
-    assert calls["n"] == 2
+    assert warm["rows"] == [] and warm["meta"]["band_rescue"] is False
+    assert calls["n"] == 1
 
 
 def test_band_equal_to_canonical_is_never_rescued(fresh_cache, monkeypatch):
@@ -208,7 +206,7 @@ def test_band_rescue_failure_keeps_the_canonical_answer(fresh_cache, monkeypatch
     res = on_demand.get_listings("Manchester", 5, 5, 500, 1200)    # rescue raises
     assert res["rows"] == [] and res["meta"]["source"] == "hit"
     assert res["meta"]["band_rescue"] is False
-    assert calls["n"] == 2
+    assert calls["n"] == 1
 
 
 # --------------------------------------------------------------------------

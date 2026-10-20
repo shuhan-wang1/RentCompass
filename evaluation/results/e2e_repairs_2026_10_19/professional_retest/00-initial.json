@@ -1,0 +1,15 @@
+{
+  "time": 1792400165.7984452,
+  "url": "http://127.0.0.1:15008/",
+  "title": "RentCompass",
+  "body": "RentCompass\nEN\n中文\nCONVERSATIONS\nNew\nNo conversations yet. Start a new chat.\nG\nGuest\nAI Assistant\n\nLondon Rental Intelligence\n\nALEX\nHello! I'm Alex. I can help you find apartments in London.\n\nTry asking me:\n\"Find a 1-bed near King's Cross under £2000\"\n\"What is the vibe like in Hackney?\"\n\"Show me flats with a 20min commute to UCL\"\nNear UCL\nSafe areas\nRent stats\nListings\nSearch\nSaved\n0\nSearch criteria\nNo properties found\n\nTry adjusting your budget or location.",
+  "localStorage": {
+    "rentcompass.language": "en",
+    "ukra_user_name": "Guest",
+    "ukra_user_id": "06dc55bfc4554339ad34a1e2672f9644"
+  },
+  "errors": [],
+  "external_requests_blocked": [
+    "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+  ]
+}

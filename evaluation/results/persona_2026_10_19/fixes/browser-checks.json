@@ -1,0 +1,66 @@
+{
+  "checks": [
+    {
+      "case": "UI JavaScript initialized",
+      "passed": true
+    },
+    {
+      "case": "390x844 account button inside viewport",
+      "passed": true
+    },
+    {
+      "case": "Guest continuity explanation and export are visible",
+      "passed": true
+    },
+    {
+      "case": "Real register and session established",
+      "passed": true
+    },
+    {
+      "case": "Chinese locale survives reload",
+      "passed": true
+    },
+    {
+      "case": "Whole property and minimum bedrooms are represented",
+      "passed": true
+    },
+    {
+      "case": "Unknown and stale evidence visible",
+      "passed": true
+    },
+    {
+      "case": "Budget badge localized from numeric basis",
+      "passed": true
+    },
+    {
+      "case": "Empty search clears old cards and updates budget",
+      "passed": true
+    },
+    {
+      "case": "Old revision cannot restore stale result",
+      "passed": true
+    },
+    {
+      "case": "Empty criteria object does not clear form",
+      "passed": true
+    },
+    {
+      "case": "Explicit full snapshot can clear criteria",
+      "passed": true
+    },
+    {
+      "case": "Account entry works from keyboard",
+      "passed": true
+    },
+    {
+      "case": "No browser runtime errors",
+      "passed": true
+    },
+    {
+      "case": "No OnTheMarket browser request",
+      "passed": true
+    }
+  ],
+  "errors": [],
+  "blocked_external_requests": 0
+}

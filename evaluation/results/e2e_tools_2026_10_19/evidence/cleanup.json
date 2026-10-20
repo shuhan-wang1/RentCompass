@@ -1,0 +1,17 @@
+{
+  "temporary_container_running": false,
+  "temporary_loopback_port_closed": true,
+  "stopped_own_processes": [
+    "proxy",
+    "relay",
+    "serve"
+  ],
+  "credential_and_storage_files_removed": 12,
+  "production_containers_still_running": [
+    "uk-rent-app-fc",
+    "uk-rent-app",
+    "uk-rent-searxng",
+    "uk-rent-valkey"
+  ],
+  "production_mutation_performed": false
+}

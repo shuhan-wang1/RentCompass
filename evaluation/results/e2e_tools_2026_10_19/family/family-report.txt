@@ -1,0 +1,198 @@
+RentCompass 独立家庭端到端审计（实测结果）
+日期：2026-10-19。身份：两成人、6岁孩子、轮椅使用者、猫。地点起点Watford，整租、至少两卧、£2500/月、UCL 50分钟，强调街道至房门及屋内可达性。
+
+范围与方法
+只读取公共测试驱动/BRIEF、公开页面DOM和本persona导出的真实调度日志；不读其他persona结论或旧报告、不修改产品代码。390×844移动视口为主要操作面，另测320×640和键盘Tab/Enter/Escape。所有浏览器外部路由被阻断；没有点击外部View Deal/Map或直接访问OnTheMarket。服务端房源为历史快照，天气/TfL/警方/OSM/web是HTTP边界固定合成数据；LLM、工具dispatch、筛选及持久化是真实执行。
+
+真实请求与工具覆盖
+{
+  "persona": "轮椅使用者、两成人与6岁孩子、猫的家庭",
+  "chat_endpoint": "POST /api/alex",
+  "chat_requests": 14,
+  "form_search_requests": 0,
+  "conversation_id": "20c727d1949c4efebe5e5891bfa696fd",
+  "http_statuses": {
+    "200": 14
+  },
+  "latency_seconds": {
+    "min": 3.98,
+    "median": 8.39,
+    "max": 17.589,
+    "sum": 129.202
+  },
+  "client_timeout_or_error_count": 0,
+  "page_errors": [],
+  "browser_sessions": 19,
+  "external_browser_requests_blocked": 274,
+  "tool_calls": {
+    "calculate_commute": 28,
+    "search_properties": 4,
+    "get_property_details": 7,
+    "search_nearby_pois": 2,
+    "check_safety": 2,
+    "get_weather": 6
+  },
+  "tool_call_total": 49,
+  "failed_tool_calls": 5,
+  "restart_restored_user_messages": 14,
+  "read_only_final_probe_chat_requests": 0,
+  "evidence_notice": "Never publish family-storage.json contents or browser cookies. No such values are included in this report."
+}
+
+逐轮步骤 / 预期 / 实际 / 真实工具
+R1 家庭原始条件找房
+预期：应返回预算/最少两居整租候选，未知无障碍/猫不能确认。
+实际：返回13套unknown；缓存及需核实标签正确；lift误加硬条件。
+实际工具：search_properties×1; calculate_commute×11; get_property_details×2
+证据：turn01-response.json、turn01-mobile.png、dispatch-excerpt.json对应turn。
+
+R2 移动端首卡Ask AI→具体详情/修正lift
+预期：应精确房源详情、未知入口/尺寸/宠物与缓存当前性区分。
+实际：精确URL命中；三类信息均未确认；误称价格live/current，lift仅口头修正。
+实际工具：get_property_details×1
+证据：turn02-response.json、turn02-mobile.png、dispatch-excerpt.json对应turn。
+
+R3 重开后同房源学校/GP/超市1km
+预期：应沿精确房源与所需类别查询。
+实际：地址查询歧义；POI只800m超市/便利店/药店，未查学校/GP。
+实际工具：get_property_details×1 failed; search_nearby_pois×1
+证据：turn03-response.json、turn03-mobile.png、dispatch-excerpt.json对应turn。
+
+R4 同房源ID的警方安全
+预期：应房源坐标检查或说明精度不足。
+实际：ID未解析；Watford地区安全，最终诚实承认非房源级并指出99分/高犯罪叙述矛盾。
+实际工具：check_safety×1; get_property_details×1 failed
+证据：turn04-response.json、turn04-mobile.png、dispatch-excerpt.json对应turn。
+
+R5 完整URL恢复详情+学校/医疗/超市+安全
+预期：应恢复精确身份及正确证据范围。
+实际：详情恢复；安全仍仅Watford却被称房源坐标；POI只有300m默认超市。
+实际工具：check_safety×1; search_nearby_pois×1; get_property_details×1
+证据：turn05-response.json、turn05-mobile.png、dispatch-excerpt.json对应turn。
+
+R6 天气三天+房源到UCL通勤组合
+预期：应分别输出天气与无障碍通勤未知。
+实际：两工具成功，但最终只有通勤不能验证一句，天气丢失。
+实际工具：get_weather×1; calculate_commute×1
+证据：turn06-response.json、turn06-mobile.png、dispatch-excerpt.json对应turn。
+
+R7 仅天气，不跑通勤、不改条件
+预期：应当前数据据实、无预测不编造。
+实际：正确说明仅当前14.2°C/小雨、无三天预报；但实际仍通勤且声称未跑。
+实际工具：get_weather×1; calculate_commute×1
+证据：turn07-response.json、turn07-mobile.png、dispatch-excerpt.json对应turn。
+
+R8 改Camden/£3000，保留其他家庭条件
+预期：应替换Watford并应用lift修正。
+实际：工具合并Watford+Camden，最终仍Watford10套；lift硬条件未撤销；cat跨层不一致。
+实际工具：search_properties×1; calculate_commute×11
+证据：turn08-response.json、turn08-mobile.png、dispatch-excerpt.json对应turn。
+
+R9 Camden当前天气（固定HTTP503窗口）
+预期：应有界尝试后说明不可用，不复用旧天气伪造。
+实际：三次真实get_weather失败；最终泛化不可用文案，未编造天气。
+实际工具：get_weather×3 failed
+证据：turn09-response.json、turn09-mobile.png、dispatch-excerpt.json对应turn。
+
+R10 同会话天气故障恢复
+预期：应重试成功且不污染房屋条件。
+实际：天气成功14.2°C/小雨；额外Camden→UCL通勤仍被调用，文字自相矛盾。
+实际工具：get_weather×1; calculate_commute×1
+证据：turn10-response.json、turn10-mobile.png、dispatch-excerpt.json对应turn。
+
+R11 Camden仅四居£500严条件空结果
+预期：应按500筛选、无结果清楚且不擅自放宽。
+实际：无候选且不声称全市场空；但实际预算仍3000，故不能认定正确执行500筛选。
+实际工具：search_properties×1; calculate_commute×1
+证据：turn11-response.json、turn11-mobile.png、dispatch-excerpt.json对应turn。
+
+R12 丢弃500/四居实验，恢复原条件
+预期：应理解明确替代并搜索。
+实际：误判预算冲突而要求二次确认；零工具。
+实际工具：none
+证据：turn12-response.json、turn12-mobile.png、dispatch-excerpt.json对应turn。
+
+R13 再次明确撤销，Watford£2500至少两居
+预期：应返回恢复后的正确搜索。
+实际：实际筛Watford精确4居而非至少2；最终UI仍Camden/4居，错误无结果。
+实际工具：search_properties×1; calculate_commute×1
+证据：turn13-response.json、turn13-mobile.png、dispatch-excerpt.json对应turn。
+
+R14 真实服务重启后重开、精确URL详情与条件回顾
+预期：应恢复聊天/来源/状态并连续使用。
+实际：14条用户消息恢复、同会话URL详情成功；入口/尺寸/猫仍诚实未知；口头条件正确但UI仍Camden/4居，且禁止通勤仍执行。
+实际工具：get_property_details×1; calculate_commute×1
+证据：turn14-response.json、turn14-mobile.png、dispatch-excerpt.json对应turn。
+
+问题及复现证据（P1=可能显著误导租房决定/证据归属；P2=功能或访问障碍）
+
+F01 P1 条件修改在模型、工具、返回状态和UI之间不一致，实际按错误条件找房
+预期：明确的地点、预算与卧室替换应同步到工具参数、结果及表单；撤销的条件不应继续筛选。
+实际：R8要求Camden instead of Watford，工具area=Watford、areas=[Camden]，工具合并两区15套，最终只显示Watford10套。R11要求£500，实际search_properties仍max_budget=3000。R13明确撤销4卧并指定至少2，实际搜索仍bedrooms=4、bedrooms_minimum=false，错误地筛成无结果；工具area为Watford，但返回/UI仍Camden。R14口头回顾Watford/至少2正确，实际恢复的表单仍Camden/4卧且至少复选框未选。
+证据：turn08-response.json；turn11-response.json；turn13-response.json；turn14-response.json；dispatch-excerpt.json (turns 8,11,13,14)；ui-after-restart.json；15-restart-restored-settled.png
+
+F02 P1 地区级警方结果被最终答案声称为房源坐标级检查
+预期：要么以房源坐标实际检查，要么清楚说只检查了Watford地区。
+实际：R5最终说“check ran around the listing’s own coordinates”；真实check_safety仅传area=Watford，返回address=Watford，没有房源纬经度。POI调用才有51.646597/-0.423485。用户因而无法区分地区数据与指定房源证据。R4曾正确承认地区范围，R5反而错误升级了证据精度。
+证据：turn05-response.json；dispatch-excerpt.json (turn 5 check_safety versus search_nearby_pois)
+
+F03 P2 天气请求污染房屋地点，并在明确禁止时仍自动执行通勤
+预期：天气地点不修改找房条件；“不要通勤计算”应阻止该额外调用或至少准确披露实际行为。
+实际：R9请求Camden天气且写Leave housing search criteria unchanged；后续payload constraint_sources.area却引用该天气消息作为Camden房屋地点来源。R7、R10、R14均明确禁止commute，真实仍各调用calculate_commute；R14还用旧Camden→UCL。R7/R14最终称未运行，R10一句称未运行、括号又承认调用，自相矛盾。
+证据：turn07-response.json；turn09-response.json；turn10-response.json；turn13-response.json (constraint_sources.area)；turn14-response.json；dispatch-excerpt.json (turns 7,10,14)
+
+F04 P2 学校/GP实际未查询，却以无结果口吻回答；半径也偏离请求
+预期：查询学校、GP和超市的所需类别与1km范围；无法支持的类别应说未查询/不支持，不能据未查作无结果。
+实际：R3 search_nearby_pois仅poi_type=supermarket,convenience,pharmacy、radius=800，未请求school或GP。最终称附近搜索没有学校/医疗中心。R5调用省略poi_type/radius，实际只默认supermarket且300m，最终仍说学校/GP无结果。R5坦白半径不是1km，但未重试完成任务。
+证据：turn03-response.json；turn05-response.json；dispatch-excerpt.json (turns 3,5)
+
+F05 P2 否定与撤销的lift条件仍被作为硬要求，宠物条件跨层丢失
+预期：“不要假设有lift就是无障碍”和“lift optional”不能变成必须有lift；猫许可应作为需要核实的家庭条件保留。
+实际：R1把含否定/警示的lift提及加入property_features；R2/R5口头承诺不再要求lift，R8/R13真实搜索仍硬性lift。猫并非被模型完全忘记：R1/R2详情问题确实询问宠物，R8 accumulated_preferences及工具soft_preferences有cat permitted；但R8最终payload soft_preferences为空，R13实际accumulated_preferences只有Would like lift，未保留猫。R14口头仍正确记得猫并明确许可无证据。
+证据：turn01-response.json；turn02-response.json；turn08-response.json；turn13-response.json；turn14-response.json；dispatch-excerpt.json (turns 1,2,8,13,14)
+
+F06 P2 刷新后所选房源上下文退化，已存在URL仍重新按歧义地址查询
+预期：从Ask AI选定的精确房源应可在重新打开页面后继续使用；已保留的viewed_properties URL应可用于解析。
+实际：R2点击首卡Ask AI后request带property/focus_stack及精确URL，详情精确成功。重开浏览器后的R3仅剩viewed_properties仍含相同URL，模型却按Croxley View地址查询，得到两条同名歧义并让用户重新提供链接。R4仍未利用已有URL，直到R5粘贴完整链接才恢复。
+证据：turn02-response.json (pre.ask_ai_requests=[] and request context)；turn03-response.json；turn04-response.json；dispatch-excerpt.json (turns 2-5)
+
+F07 P2 多工具组合的天气答案被整段吞掉
+预期：即使通勤无法确认为轮椅可用，也应返回已取得的天气，并分项说明通勤限制。
+实际：R6 get_weather成功，calculate_commute也返回32分钟合成路线；最终只有“The commute condition could not be verified for the listing this round.”，完全没有天气、出处或进一步说明。合成路线不应充当真实无障碍证据，但这不应抹去独立天气结果。R7另问才得到当前天气。
+证据：turn06-response.json；dispatch-excerpt.json (turns 6,7)
+
+F08 P2 明确撤销旧预算后仍被不必要的冲突确认阻断
+预期：Discard that £500/four-bedroom experiment + Restore ... £2500应视为明确替换。
+实际：R12零工具调用，助手坚持“尚未明确撤销£500”，要求£500/£2500二选一；用户已清楚表示丢弃旧实验，额外确认消耗一轮并阻断恢复。
+证据：turn12-response.json；dispatch-excerpt.json (turn 12 empty tool_dispatches)
+
+F09 P2 历史缓存价格被描述为live/current asking rent
+预期：历史快照的£1600只能称缓存记录价格，不能宣称当前市场有效。
+实际：卡片原本正确标注cached/possibly_outdated，R2却说“live listing record”“current asking rent as published”。随后建议联系中介核实，减轻风险但并未撤回当前性断言。R14改称cached record更准确。
+证据：turn01-response.json；turn02-response.json；turn14-response.json；dispatch-excerpt.json (get_property_details thin record)
+
+F10 P2 手机侧栏关闭时焦点进入屏外，打开后Escape无效且焦点进入遮罩背景
+预期：关闭的侧栏控件不可Tab访问；打开菜单应有清楚焦点行为和退出方式。
+实际：390×844关闭菜单时Tab落到New x=-88及Guest x=-270，焦点完全看不见；Enter打开后Escape仍保持侧栏和遮罩。320px打开菜单后Tab继续进入聊天输入/搜索等被遮罩背景。Menu按钮无aria-expanded。条件面板则有role=button/tabindex/aria-expanded并可Enter展开。
+证据：ui-initial.json；ui-controls.json；ui-narrow.json；02-menu-open.png；03-menu-escape.png
+
+正确行为与边界
+1. R1卡片全部unknown，显示Conditions need verification及缓存可能变化，未把无障碍/猫视为已证实。R2/R14精确URL详情均明确没有入口、门宽/浴室尺寸和猫许可证据。
+2. 未承诺任何学校学位、机构轮椅入口或街道路由无台阶；距离明确为直线。学校/GP未真正查询仍是缺陷，不能以此正确免责声明替代功能完成。
+3. R4/R5助手识别安全工具99/100/Very Safe与高犯罪/夜间避免步行/低于London平均的矛盾，不给家庭晚间路线安全保证。该保守回答不能修正R5错误的地点归属。
+4. R7对只有当前天气、null雨概率及无警报数据保持诚实，没有编造未来三天。R9三个get_weather失败后无伪造；R10恢复后同一会话成功继续使用。
+5. 空结果没有声称整个现实市场不存在房源，也未将超预算候选标为精确匹配。但R11预算与R13卧室实际错误，所以不算严格条件完整通过。
+6. 390px和320px无整体横向滚动，19次浏览器打开未记录pageerror；条件面板的Enter/Tab基本可用。字体、图片被阻断造成的缺图/字形不计产品缺陷。
+
+真实重启与刷新恢复
+根agent在R13关闭浏览器、保存state后真实重启隔离容器并报告健康200；R14才重开同一family profile。结果仍同conversation_id，完整恢复先前消息并继续使用精确URL详情。R14之后另做零聊天的UI复查，等待最后消息attached再记录，确认14条用户消息全部存在；ui-after-restart.json的chat_requests=[]。恢复后的表单为Camden、2500、4卧、至少复选框false、whole、Gower Street和50分钟。故技术持久化通过，错误语义状态同样被持久化，口头正确回顾未修正UI。页面初开是异步水合；最初瞬时空表单不作为数据丢失证据。
+Ask AI按钮在R2只设置焦点，不自动请求；pre.ask_ai_requests=[]，用户实际输入问题再发送。刷新后focus_stack/property未保留、viewed_properties保留，构成F06具体复现。当前无结果列表使最后收藏流程不适用，本审计没有声称完成收藏保存。
+
+无障碍检查的实际范围
+确实实测：真实Chromium中的Tab顺序、屏外焦点坐标、可见focus outline、Enter触发、Escape关闭、遮罩背景仍可聚焦、390/320布局及表单滚动。观察到聊天区域无role/log或aria-live，聊天输入及Area/预算单位缺显式label/aria-label；仅作为DOM观察，未将其直接等同于已实测屏幕阅读器故障。未运行NVDA/VoiceOver、真实移动系统软键盘、实体触摸/缩放或轮椅路由验证。
+
+长期模拟局限
+这是单个guest会话的14轮、约129秒服务等待时间加UI操作，包含多次浏览器重开和一次在本persona流程中实际发生的服务重启；不代表跨日/跨月记忆、房源价格或可租状态更新、多个设备同步或真实市场可达性。所有外部数据为明确合成夹具，不能将固定32分钟、14.2°C、135宗案或Tesco条目当作真实伦敦/Watford事实。只有weather503在本persona真实聊天中注入并恢复；本persona未用真实聊天单独注入POI/警方失败。工具结果是实际dispatch输出，不是单看模型说自己查过。
+
+公开归档注意
+可归档本报告、family-findings.json、family-summary.json、turn??-response.json、各PNG及dispatch-excerpt.json。family-storage.json是复现用浏览器状态，包含cookie；不要公开其内容。报告没有复制任何cookie、密码或访问令牌。

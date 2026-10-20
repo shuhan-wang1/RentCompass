@@ -1,0 +1,61 @@
+RentCompass
+EN
+中文
+会话
+新建
+我开了一个新会话。请直接按我已经保存的长期默认租房偏好帮我找房，先说清本次实际采…
+刚刚
+我下学期要来伦敦读研，想在Camden找个住处。能帮我看看吗？
+1分钟前
+G
+Guest
+AI 助手
+
+伦敦租赁智能分析
+
+我开了一个新会话。请直接按我已经保存的长期默认租房偏好帮我找房，先说清本次实际采用的条件，再区分满足条件、被排除和仍待核实的候选。不要让我重新填写已经保存过的条件。
+编辑消息
+ALEX
+
+本次检索数据中，在 Camden 附近没有找到符合条件的房源。请检查区域拼写，或调整预算/区域后重试（可使用右侧搜索表单）。 本次候选中没有满足当前筛选的房源；这不代表市场上没有房源。
+
+从此处创建分支
+UCL 附近
+安全区域
+租金统计
+房源列表
+搜索结果
+收藏夹
+2
+5
+#1
+Apt 108, Castello Court, 309-311 Harrow Road W9
+£1439/month
+~31 min to UCL Bloomsbury, Gower Street, London (estimated, unverified)
+预算范围内
+仍有条件待核实
+所在区域尚未核实
+通勤目的地尚未核实，无法判断时长限制
+实时可租状态未核实。
+收藏来源：我下学期要来伦敦读研，想在Camden找个住处。能帮我看看吗？ 2026-10-19T12:04:20.965Z
+收藏时月租预算：£2166.67
+2026-11-01 起可入住
+Studio to rent in Apt 108, Castello Court, 309-311 Harrow Road W9 (estimated from coordinates: ~31 min to UCL Bloomsbury, Gower Street, London, not a verified journey time)
+查看详情
+地图
+AI 咨询
+5
+#1
+Frognal, London NW3
+£1800/month
+38 min to University College London, Gower Street, London WC1E 6BT
+预算范围内
+已验证满足本次条件
+实时可租状态未核实。
+收藏来源：我下学期要来伦敦读研，想在Camden找个住处。能帮我看看吗？ 2026-10-19T12:12:06.763Z
+收藏时月租预算：£2166.67
+入住时间请咨询
+1 bedroom flat to rent in Frognal, London NW3 (TfL transit: 38 min to University College London, Gower Street, London WC1E 6BT)
+查看详情
+地图
+AI 咨询

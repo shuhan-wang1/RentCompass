@@ -1,0 +1,15 @@
+{
+  "r4_precise_hard_features": true,
+  "r4_lift_removed": true,
+  "r4_missing_features_unknown": true,
+  "r5_criteria_unchanged": true,
+  "r5_both_comparison_targets": true,
+  "r6_had_no_tools": true,
+  "r7_independent_tasks_not_refined": true,
+  "r7_criteria_unchanged": true,
+  "r7_correct_forecast_coordinates_present": true,
+  "r7_poi_attempted_failed": true,
+  "r7_current_weather_wrong_location_observed": true,
+  "r7_human_evidence_labels": true,
+  "exactly_seven_api_alex": true
+}

@@ -23,11 +23,21 @@ So this probe drives ONE real turn through ``POST /api/alex`` and asserts:
   4. the answer carries the grounding substring the chosen query can only
      contain when its tool actually returned (default: ``data.police.uk``);
   5. optionally, that the canary record for this exact ``request_id`` reports
-     ``llm_usage_status != "not_instrumented"``.
+     ``llm_usage_status != "not_instrumented"``;
+  6. optionally, that a turn whose answer ANNOUNCES a tool call actually ran
+     one (``tool_batches > 0``).
 
-(5) is opt-in via ``--canary-log`` because the turn endpoint does NOT return the
-canary record: ``app/app.py`` emits it to the ``CANARY_LOG_PATH`` JSONL sink
-only, so it is readable only where that file is mounted.
+(5) and (6) are opt-in via ``--canary-log`` because the turn endpoint does NOT
+return the canary record: ``app/app.py`` emits it to the ``CANARY_LOG_PATH``
+JSONL sink only, so it is readable only where that file is mounted.
+
+(6) exists because of a class this probe used to score as a PASS.  On 2026-09-03
+a live fc follow-up turn ended in a 105-character *"Let me search for actual
+one-bedroom listings…"* stub with ``llm_calls=1`` and ``tool_batches=0``: the
+announced tool call was never made.  It carries NO canned/fallback marker, so
+every marker-based check — this probe and the monitor alike — read it as a real
+answer.  Announcing work and not doing it is a failed turn, and after a weight
+change it is exactly the turn nobody sees.
 
 Stdlib only (Python >= 3.10), so it runs inside the deploy path with no
 dependencies.  Exit codes:
@@ -46,6 +56,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -87,27 +98,100 @@ FALLBACK_MARKERS: tuple[str, ...] = (
     "你好！我是 Alex，帮你在英国找学生房。",
 )
 
+# Openers a turn uses to ANNOUNCE that it is about to call a tool.  Regexes,
+# matched case-insensitively against the answer text with `.search()`, and only
+# ever consulted together with the joined canary record: the string alone is not
+# a defect — the string plus ``tool_batches == 0`` is.  Each pattern requires a
+# lookup VERB, not just the auxiliary, so "let me know" and "I'll be honest" do
+# not match; a false positive here would fail a weight change on a healthy pool.
+#
+# TWIN: copied VERBATIM from ``app/core/agent_loop.py::ANNOUNCED_TOOL_PATTERNS``,
+# where the loop uses the same list to force one more bounded iteration before it
+# ships such a turn.  The two must stay identical;
+# ``tests/test_f5e_announced_tool_patterns.py`` asserts it.  This file stays
+# stdlib-only and imports nothing from the app, so the list is duplicated rather
+# than shared — the probe runs inside the deploy path, under sudo, from arbitrary
+# directories, where the application package is not importable.
+ANNOUNCED_TOOL_PATTERNS: tuple[str, ...] = (
+    # EN
+    r"\blet me\s+(?:just\s+|first\s+|quickly\s+|go\s+(?:ahead\s+)?and\s+)?"
+    r"(?:search|look\s+up|look\s+for|check|find|fetch|pull|run|query|verify|confirm|"
+    r"retrieve|get)\b",
+    r"\bi(?:'|’)?ll\s+(?:just\s+|first\s+|quickly\s+|go\s+(?:ahead\s+)?and\s+|now\s+)?"
+    r"(?:search|look\s+up|look\s+for|check|find|fetch|pull|run|query|verify|confirm|"
+    r"retrieve|get)\b",
+    r"\bi\s+will\s+(?:now\s+)?(?:search|look\s+up|look\s+for|check|find|fetch|pull|run|"
+    r"query|verify|confirm|retrieve)\b",
+    r"\bi(?:'|’)?m\s+going\s+to\s+(?:search|look\s+up|look\s+for|check|find|fetch|pull|"
+    r"run|query|verify)\b",
+    r"\blet me check the context\b",
+    r"\b(?:one\s+moment|give\s+me\s+a\s+(?:moment|second|sec))\s+while\s+i\b",
+    r"\b(?:searching|checking|looking)\s+(?:for\s+\w+|now|that\s+up)\b",
+    r"\bhold\s+on\s+while\s+i\b",
+    # ZH
+    r"(?:让我|我)(?:来|先|现在|这就|马上)?(?:搜索|搜一下|搜下|查询|查一下|查下|查找|"
+    r"检索|核实|确认|看一下|看看)",
+    r"我(?:将|会|要)(?:为(?:您|你)|给(?:您|你))?(?:搜索|查询|查找|检索|核实)",
+    r"(?:稍等|请稍候|请稍等)[，,]?\s*我(?:来|先)?(?:搜索|查询|查找|检索)",
+    r"正在(?:为(?:您|你))?(?:搜索|查询|查找|检索)",
+    r"我需要(?:先)?(?:搜索|查询|查找|检索|核实)",
+)
+
+_ANNOUNCED_TOOL_RE = tuple(re.compile(p, re.IGNORECASE) for p in ANNOUNCED_TOOL_PATTERNS)
+
+# The EXPLICIT marker `agent_loop` appends when its bounded retry ALSO produced no
+# tool call.  It rides in the answer text, so it needs no canary record: an answer
+# carrying it has already admitted the lookup did not happen.  Verbatim from
+# ``app/core/agent_loop.py::ANNOUNCED_TOOL_STUB_MARKER_EN`` / ``_ZH``.
+ANNOUNCED_TOOL_STUB_MARKER_EN = (
+    "I was not able to run that lookup this round, so nothing above is a fresh result.")
+ANNOUNCED_TOOL_STUB_MARKER_ZH = "本轮未能完成上述查询，以上内容并非新的检索结果。"
+ANNOUNCED_TOOL_STUB_MARKERS: tuple[str, ...] = (
+    ANNOUNCED_TOOL_STUB_MARKER_EN,
+    ANNOUNCED_TOOL_STUB_MARKER_ZH,
+)
+
 # app/core/turn_observations.py::USAGE_NOT_INSTRUMENTED — no observer saw the
 # turn, so every rate computed from it has an unknown denominator.
 USAGE_NOT_INSTRUMENTED = "not_instrumented"
 
-# The control pool's arch string.  The DEPLOYED legacy pool predates the
+# app/core/canary_telemetry.py::TOOL_LEDGER_COMPLETE — `tool_batches` is a real
+# observed count.  Anything else (today: "unavailable", the crash path) means the
+# ledger died with the turn, so a 0 there proves nothing and must not convict.
+TOOL_LEDGER_COMPLETE = "complete"
+
+
+def announced_tool(message: str) -> str:
+    """The text that announced a lookup, or "" when the answer announced none."""
+    for pattern in _ANNOUNCED_TOOL_RE:
+        match = pattern.search(message or "")
+        if match:
+            return match.group(0)
+    return ""
+
+
+# The control pool's arch string.  The legacy pool predated the
 # `X-Agent-Specialists` header (`app` is the standing rollback escape hatch and
-# must not be recreated — deploy/switch_pool.sh), so it sends no such header and
-# `header()` returns "".  `set_canary_weight.sh::verify_local` has carried an
-# exemption for exactly that since the header was introduced:
+# was not recreated just to gain it — deploy/switch_pool.sh), so it sent no such
+# header and `header()` returned "".  `set_canary_weight.sh::verify_local` has
+# carried an exemption for exactly that since the header was introduced:
 #
 #     [[ "$label" == legacy && "$specialists" == none && "$want_specialists" == 0 ]]
 #
 # The rule was widened on 2026-09-01 (R3-H1): an absent header counts as 0 for
-# ANY pool whose EXPECTED identity is specialists=0, not only for `legacy`.  The
-# header does not exist in origin/main, so BOTH containers deployed on this host
-# omit it; requiring it for an expected 0 made the emergency rollback and the
-# deploy drain refuse against the very images they exist to protect.  A candidate
-# expected to run specialists=1 must still state it — that is the header the
-# manager_v1 rollout is gated on, and no exemption applies there.
+# ANY pool whose EXPECTED identity is specialists=0, not only for `legacy`.
+# Requiring it for an expected 0 made the emergency rollback and the deploy drain
+# refuse against the very images they exist to protect.
+#
+# CORRECTED 2026-09-06: the 1df0d4f release of 2026-09-03 rebuilt both pools, and
+# :5001 and :5002 now DO send `X-Agent-Specialists: 0`.  The exemption stays —
+# it is the compatibility path for a pool that has not been rebuilt — but it no
+# longer describes this host.  A candidate expected to run specialists=1 must
+# still state it: that is the header the manager_v1 rollout is gated on, and no
+# exemption applies there.
 LEGACY_ARCH = "legacy"
 _ABSENT_SPECIALISTS_OK = frozenset({"0", "none"})
+
 
 EXIT_PASS = 0
 EXIT_FAIL = 1
@@ -209,7 +293,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--canary-log", default="",
                         help="optional canary JSONL sink; when readable, the record for "
                              "this request_id must not be llm_usage_status="
-                             f"{USAGE_NOT_INSTRUMENTED}")
+                             f"{USAGE_NOT_INSTRUMENTED}, and a turn whose answer "
+                             "announces a tool call must report tool_batches > 0")
     args = parser.parse_args(argv)
 
     request_id = f"answer-probe-{uuid.uuid4()}"
@@ -257,6 +342,17 @@ def main(argv: list[str] | None = None) -> int:
                 f"answer came from a canned/fallback renderer (marker {marker[:48]!r}); "
                 "the pool is reachable but not answering",
             )
+    # The runtime's own admission that an announced lookup did not run
+    # (`agent_loop._mark_announced_stub`).  Unlike the heuristic further down this
+    # needs no canary record: the answer has already said it.
+    for marker in ANNOUNCED_TOOL_STUB_MARKERS:
+        if marker in message:
+            return verdict(
+                False,
+                f"the answer carries the announced-but-unexecuted marker "
+                f"({marker[:48]!r}): the pool told the user it could not run the "
+                "lookup it had announced",
+            )
     # `app/app.py` returns response_type "clarification" when the graph asked a
     # follow-up question instead of answering (the missing-area / soft-criteria
     # gates, `response_type in {"question", "clarification"}`).  Such a turn CAN
@@ -279,6 +375,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     usage = ""
+    tool_batches_seen = None
     if args.canary_log:
         record = canary_record(args.canary_log, request_id)
         if record is None:
@@ -287,6 +384,9 @@ def main(argv: list[str] | None = None) -> int:
                 f"no canary record for request_id={request_id} in {args.canary_log}; "
                 "the turn ran but is not instrumented",
             )
+        _batches_seen = record.get("tool_batches")
+        if isinstance(_batches_seen, int) and not isinstance(_batches_seen, bool):
+            tool_batches_seen = _batches_seen
         usage = str(record.get("llm_usage_status", USAGE_NOT_INSTRUMENTED))
         if usage == USAGE_NOT_INSTRUMENTED:
             return verdict(
@@ -295,12 +395,34 @@ def main(argv: list[str] | None = None) -> int:
                 "usage was never observed",
             )
 
+        # Only convicts on BOTH halves — an announcement in the
+        # text AND an observed, trustworthy zero in the ledger.
+        announced = announced_tool(message)
+        batches = record.get("tool_batches")
+        ledger = str(record.get("tool_ledger_status", ""))
+        if (
+            announced
+            and ledger == TOOL_LEDGER_COMPLETE
+            and isinstance(batches, int)
+            and not isinstance(batches, bool)
+            and batches == 0
+        ):
+            return verdict(
+                False,
+                f"the answer announces a tool call ({announced!r}) but the canary "
+                f"record reports tool_batches=0 with tool_ledger_status="
+                f"{ledger!r}: the pool said it would look something up and never "
+                "did. This class carries no fallback marker, so nothing else "
+                "catches it",
+            )
+
     return verdict(
         True,
         f"{args.url} answered a real turn (arch={arch or '<unset>'} "
         f"specialists={specialists or '<unset>'} response_type={response_type!r} "
         f"chars={len(message)}"
         + (f" llm_usage_status={usage!r}" if usage else "")
+        + (f" tool_batches={tool_batches_seen}" if tool_batches_seen is not None else "")
         + ")",
     )
 

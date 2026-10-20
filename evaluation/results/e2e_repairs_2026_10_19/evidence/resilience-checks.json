@@ -1,0 +1,89 @@
+[
+  {
+    "case": "health-responsive-during-tool-turn",
+    "passed": true,
+    "seconds": 0.003
+  },
+  {
+    "case": "independent-conversation-remains-usable",
+    "passed": true,
+    "status": 200
+  },
+  {
+    "case": "same-conversation-single-flight",
+    "passed": true,
+    "status": 409,
+    "body": {
+      "conversation_id": "19894a68fe7a4ece85d068cf56833154",
+      "error": "another turn is already running for this conversation",
+      "running_turn_id": "176c6942e77c46d0ac847b86f61d58d5"
+    }
+  },
+  {
+    "case": "inflight-request-retry-no-second-execution",
+    "passed": true,
+    "status": 409,
+    "body": {
+      "conversation_id": "19894a68fe7a4ece85d068cf56833154",
+      "error": "request is still in progress",
+      "replayed": true,
+      "request_id": "resilience-4d94f4e1a15746959730ad97f84a8c8b",
+      "turn_id": "176c6942e77c46d0ac847b86f61d58d5"
+    }
+  },
+  {
+    "case": "one-sse-final",
+    "passed": true
+  },
+  {
+    "case": "completed-request-replay",
+    "passed": true,
+    "status": 200
+  },
+  {
+    "case": "duplicate-requests-do-not-append-turns",
+    "passed": true,
+    "actual_turns": 1
+  },
+  {
+    "case": "disconnect-releases-conversation-lease",
+    "passed": true,
+    "status": 200,
+    "body": {
+      "conversation_id": "19894a68fe7a4ece85d068cf56833154",
+      "message": "Hello. I can help with UK student housing — comparing areas, checking listings, safety data, nearby amenities, weather, and London transport.\n\nWant me to pick that back up, or is there something else you need?\n\nNote: some commute claims could not be verified and have been removed from this answer.",
+      "response_type": "chat",
+      "turn_id": "18c17c169c39455c950334f69060d71b",
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "area": "London",
+          "areas": [
+            "London"
+          ],
+          "commute_destination": "University College London, Gower Street, London WC1E 6BT",
+          "constraint_sources": {
+            "area": {
+              "source": "user_message",
+              "text": "Compare Bloomsbury and Camden in London for value and a commute to UCL under 45 minutes. Use cached rent evidence;  keep missing evidence explicit.",
+              "value": "London"
+            },
+            "max_travel_time": {
+              "source": "user_message",
+              "text": "Compare Bloomsbury and Camden in London for value and a commute to UCL under 45 minutes. Use cached rent evidence;  keep missing evidence explicit.",
+              "value": 45
+            }
+          },
+          "destination": "University College London, Gower Street, London WC1E 6BT",
+          "max_budget": null,
+          "max_travel_time": 45,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 2
+      }
+    }
+  }
+]

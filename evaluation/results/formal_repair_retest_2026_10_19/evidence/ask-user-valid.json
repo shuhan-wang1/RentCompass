@@ -1,0 +1,51 @@
+{
+  "tool": "ask_user",
+  "layer": "direct_tool_integration",
+  "args": {
+    "question": "Which budget basis applies?",
+    "clarification_kind": "other",
+    "missing_fields": [
+      "budget_basis"
+    ],
+    "options": [
+      {
+        "label": "Whole home total",
+        "value": "whole_total"
+      },
+      {
+        "label": "Per person",
+        "value": "per_person"
+      }
+    ]
+  },
+  "result": {
+    "success": true,
+    "data": {
+      "success": true,
+      "status": "ask_user",
+      "question": "Which budget basis applies?",
+      "clarification_kind": "other",
+      "missing_fields": [
+        "budget_basis"
+      ],
+      "missing_optional_fields": [],
+      "options": [
+        {
+          "label": "Whole home total",
+          "value": "whole_total"
+        },
+        {
+          "label": "Per person",
+          "value": "per_person"
+        }
+      ]
+    },
+    "error": null,
+    "execution_time_ms": 0.1342296600341797,
+    "tool_name": "ask_user",
+    "version": "1",
+    "idempotency_key": null,
+    "outcome": "complete"
+  },
+  "note": "Corrected the audit input to the declared clarification_kind enum. Initial invalid-input probe remains archived."
+}

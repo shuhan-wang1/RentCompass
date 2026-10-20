@@ -1,0 +1,190 @@
+{
+  "user_message_count": 12,
+  "focus": "Focusing on 2 properties\nClear all\nCroxley View, Watford, W...\nSt. Augustine's Road, Ca...",
+  "fav_count": "1",
+  "criteria": "Area\n*\nCamden\n×\nBudget\nper month\nper week\nBedrooms\nAny\nStudio\n1\n2\n3\n4\n5\n6\nAt least this many bedrooms\nRoom type\nAny\nWhole property\nStudio\nEn-suite room\nShared room\nCommute to\nMax commute (min)\nI don't commute\nMove-in date\nYYYY-MM-DD\nSearch",
+  "forms": [
+    {
+      "type": "text",
+      "value": "",
+      "checked": false,
+      "aria": "Area"
+    },
+    {
+      "type": "number",
+      "value": "3000",
+      "checked": false,
+      "aria": "Budget"
+    },
+    {
+      "type": "select-one",
+      "value": "month",
+      "checked": null,
+      "aria": "Budget period"
+    },
+    {
+      "type": "select-one",
+      "value": "2",
+      "checked": null,
+      "aria": "Bedrooms"
+    },
+    {
+      "type": "checkbox",
+      "value": "on",
+      "checked": true,
+      "aria": null
+    },
+    {
+      "type": "select-one",
+      "value": "whole",
+      "checked": null,
+      "aria": "Room type"
+    },
+    {
+      "type": "text",
+      "value": "Gower Street, London WC1E 6BT",
+      "checked": false,
+      "aria": "Commute to"
+    },
+    {
+      "type": "number",
+      "value": "50",
+      "checked": false,
+      "aria": "Max commute (min)"
+    },
+    {
+      "type": "checkbox",
+      "value": "on",
+      "checked": false,
+      "aria": null
+    },
+    {
+      "type": "date",
+      "value": "",
+      "checked": false,
+      "aria": "Move-in date"
+    }
+  ],
+  "cards": "5\n#1\nCamden\nSt. Augustine's Road, Camden Square, NW1\n£2400/month\nWithin Budget\nConditions need verification\nrequired features are not verified: wheelchair-accessible, step-free\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom apartment to rent in St. Augustine's Road, Camden Square, NW1\nView Deal\nMap\nAsk AI\n5\n#2\nCamden\nRochester Road, Kentish Town\n£2600/month\nWithin Budget\nConditions need verification\nrequired features are not verified: wheelchair-accessible, step-free\ncommute tool failed\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom flat to rent in Rochester Road, Kentish Town\nView Deal\nMap\nAsk AI\n4\n#3\nCamden\nDartmouth Park Hill, Dartmouth Park, London, NW5\n£2600/month\nWithin Budget\nConditions need verification\nrequired features are not verified: wheelchair-accessible, step-free\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom flat to rent in Dartmouth Park Hill, Dartmouth Park, London, NW5\nView Deal\nMap\nAsk AI\n5\n#4\nCamden\nParkway, London, NW1\n£2650/month\nWithin Budget\nConditions need verification\nrequired features are not verified: wheelchair-accessible, step-free\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom flat to rent in Parkway, London, NW1\nView Deal\nMap\nAsk AI",
+  "view_links": [
+    "https://www.onthemarket.com/details/20262177/",
+    "https://www.onthemarket.com/details/8225050/",
+    "https://www.onthemarket.com/details/20259367/",
+    "https://www.onthemarket.com/details/20259996/"
+  ],
+  "mobile_checks": [
+    {
+      "width": 320,
+      "scroll_width": 320,
+      "tabs": [
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "userMenuBtn",
+          "inside": true
+        },
+        {
+          "id": "menuToggle",
+          "inside": false
+        }
+      ],
+      "expanded_after_escape": "false",
+      "focused_after_escape": "menuToggle"
+    },
+    {
+      "width": 390,
+      "scroll_width": 390,
+      "tabs": [
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "",
+          "inside": true
+        },
+        {
+          "id": "userMenuBtn",
+          "inside": true
+        },
+        {
+          "id": "menuToggle",
+          "inside": false
+        }
+      ],
+      "expanded_after_escape": "false",
+      "focused_after_escape": "menuToggle"
+    }
+  ],
+  "chat_requests": []
+}

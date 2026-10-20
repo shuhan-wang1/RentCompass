@@ -1,0 +1,95 @@
+{
+  "time": 1792411306.7098312,
+  "url": "http://127.0.0.1:15019/",
+  "forms": [
+    {
+      "tag": "TEXTAREA",
+      "type": "textarea",
+      "aria": "Message Alex",
+      "id": "chatInput",
+      "value": "",
+      "checked": null
+    },
+    {
+      "tag": "INPUT",
+      "type": "text",
+      "aria": "Area",
+      "id": "",
+      "value": "",
+      "checked": false
+    },
+    {
+      "tag": "INPUT",
+      "type": "number",
+      "aria": "Budget",
+      "id": "",
+      "value": "",
+      "checked": false
+    },
+    {
+      "tag": "SELECT",
+      "type": "select-one",
+      "aria": "Budget period",
+      "id": "",
+      "value": "month",
+      "checked": null
+    },
+    {
+      "tag": "SELECT",
+      "type": "select-one",
+      "aria": "Bedrooms",
+      "id": "",
+      "value": "",
+      "checked": null
+    },
+    {
+      "tag": "INPUT",
+      "type": "checkbox",
+      "aria": null,
+      "id": "",
+      "value": "on",
+      "checked": false
+    },
+    {
+      "tag": "SELECT",
+      "type": "select-one",
+      "aria": "Room type",
+      "id": "",
+      "value": "",
+      "checked": null
+    },
+    {
+      "tag": "INPUT",
+      "type": "text",
+      "aria": "Commute to",
+      "id": "",
+      "value": "",
+      "checked": false
+    },
+    {
+      "tag": "INPUT",
+      "type": "number",
+      "aria": "Max commute (min)",
+      "id": "",
+      "value": "",
+      "checked": false
+    },
+    {
+      "tag": "INPUT",
+      "type": "checkbox",
+      "aria": null,
+      "id": "",
+      "value": "on",
+      "checked": false
+    },
+    {
+      "tag": "INPUT",
+      "type": "date",
+      "aria": "Move-in date",
+      "id": "",
+      "value": "",
+      "checked": false
+    }
+  ],
+  "chat_requests": 1
+}

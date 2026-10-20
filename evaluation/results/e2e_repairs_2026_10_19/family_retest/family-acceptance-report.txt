@@ -1,0 +1,94 @@
+最新结论（候选3追加R11–12）
+地区搜索、只读天气隔离、禁止通勤与持久化四项定向回归：PASS。
+完整家庭验收：仍有未关闭问题，不宣称全部完成。猫许可硬条件尚未进入实际搜索参数；R12仍有文案残句。下方保留候选2的独立FAIL历史，不追溯改写。
+
+RentCompass 家庭候选验收：FAIL
+2026-10-19；两成人、6岁孩子、轮椅使用者、猫。10次真实POST /api/alex，全部HTTP 200，无客户端超时或页面异常。7轮在冻结候选1，随后统一更新并真实重启，3轮在候选2。延迟3.927–17.724秒，中位9.9135秒，总服务等待102.109秒。所有浏览器已关闭并保存状态，无后续真实请求。
+
+测试背景与证据边界
+本人有本次UI修复背景，并非无上下文盲测。常规验收只读公共驱动、页面DOM及自己的调度文件；在root明确追加任务后，暂停真实聊天并定向检查/修复UI新会话revision和双语原因契约，使用完全拦截网络的离线夹具验证。未读取其他tester文件，也没有把root告知的别组失败当成本人的实测结果。本报告将候选1和候选2分开，不将后续修复追溯计为早期通过。
+房源是历史快照，天气/TfL/警方/OSM等外部provider是合成HTTP夹具，模型与真实工具调用/调度/持久化运行。未访问任何外部站、OnTheMarket或生产5001/5002/8080，没有打开房源外链。
+
+当前阻断问题（候选2）
+P1 / R8 明确Camden搜索回退Watford：用户“Keep Camden only, £3,000 per month ...”，回复search_criteria.area/areas=Watford，10套卡片全Watford。payload criteria_repair_provenance写明area从Camden因read_only_or_ancillary_source修复回Watford，message_id=6。后续真实住宅Camden意图没有保留。请求本身的focus_stack末项仍准确Camden 20262177，因此不是UI焦点丢失。
+复现：turn08.txt → turn08-response.json；turn_id=0822f432a6534291a320d9fa3b01ef6c；turn08-after.png。
+
+P1 / R9 只读天气继续改住房地点：为与R8实际Watford状态区别，独立查Islington天气，明确“Don't run commute”“do not change any housing-search area/budget/bedroom/access/pet”“do not move housing to Islington”。最终口头称条件不变，但search_criteria.area/areas=Islington，UI跟随变化。这证明不仅是旧状态迁移问题，当前天气轮本身仍污染住房状态。
+复现：turn09.txt → turn09-response.json；turn_id=302dc4d290a74ff3b14e849a14fe7c85；turn09-before/after.png。
+
+P1关联表现 / R10 条件与卡片地区不一致：详情+天气+行程后，housing area又从Islington变Camden（用户明确不把天气当搬迁请求），而最后刷新UI筛选Camden、卡片仍10套Watford。不能将它视为R8搜索恢复。ui-final.json记录criteria含Camden和ViewDeal仍20472490等Watford房源，ui-07-final-restored.png可见。
+
+P2 / R10 最终答案仍有处理后残句：三个部分均存在，但行程段“### What ... does NOT verify ...”后直接出现“including walking legs and interchanges. It does not tell you”，缺主句；St. Augustine's在多处被拆成St.换行Augustine's。候选1 R4还存在更严重的“Does this establish a reliable / No. What is established / - which is under...”残片。R10完整性有所改善，仍不能判文本质量通过。
+复现：turn10-response.json，turn_id=717d9ecd1c934e80a9e13c6b96364df9；对比turn04-response.json。
+
+候选1暴露且本轮需区分的缺陷
+R1 lift明确为软偏好却进入硬property_features，soft_preferences在最终payload为空。cat/lift偏好并非被模型完全忘记：真实search_properties.accumulated_preferences及工具soft_preferences包含pet cat、lift preference等，但最终状态没有这些软偏好。
+R5 Camden天气把Watford住房改成Camden，口头却说Watford不变；已核验当轮真正仅执行get_weather，没有违反“不跑通勤”。
+R6预算£500正确应用，但“minimum bedroom count with four”真实search_properties仍bedrooms=2；因此不能称严格四居实验正确执行。此具体说法在候选2没有剩余真实轮次单独重放，保留为待最终验证，不推断已修复。
+
+已实测改善或通过
+1. R7明确撤销£500/四居/mandatory lift，恢复Camden £3000至少2并删除所有lift条件，立即返回四套Camden缓存候选；未再要求旧新预算二选一。硬features不含lift。
+2. 候选2 R8软lift真正不在硬features；soft_preferences含Would like lift，step-free仍硬。该项通过，但同轮地区错误仍使整体失败。
+3. R2与R10精确缓存详情均明确价格/可租状态未经live核验，入口、内部尺寸与猫许可均无证据，未将lift或没有宠物条款等同于access/pet许可。R10当前焦点准确命中St.Augustine's Road URL 20262177，没有回到旧Croxley View。
+4. R2真实POI请求school,gp,pharmacy和radius=1000；实际工具钳为800米，答复明确仅查800米、800–1000未覆盖、调用方坐标未独立验证、距离为直线。所有类别这次确实查询，未把未查当无结果；不承诺小学阶段/学位/GP注册或轮椅入口。1km任务仅部分完成，不能宣称完整1km覆盖。
+5. R3警方工具自己的参考点为Croxley View地址的area精度51.6565/-0.3903（Nominatim），3个月Jun–Aug2026、135案、约1mile，最终明确不是建筑坐标，不用99分保证家庭夜行安全。没有借POI点冒充警方点。
+6. R4/R10天气与行程均保留，只有当前天气时不编未来预报；路线明确为返回最快行程，不证明无台阶、可靠性或其他房源相同时间。合成32分钟不能当真实伦敦事实。
+7. 真实重启前收藏Camden 20262177成功、count=1；Ask AI仅聚焦0模型请求；刷新保留焦点栈，最后一项Camden。新空白会话焦点/条件均空；切回主会话恢复对应条件/焦点，Saved保留缓存与收藏预算3000。
+8. 真实重启后R8请求仍有两个准确focus_stack条目与末项Camden property；最终只读刷新恢复10条用户消息、收藏1和当前焦点。技术持久化通过，错误的搜索语义状态也被持久化。
+9. 320/390px没有横向溢出；关闭侧栏Tab不再进入屏外New/Guest，打开后Tab只在侧栏+触发器内，Escape关闭并返回Menu焦点；字段有明确名称、聊天区role=log/aria-live=polite。最终候选2再次只读验证通过，chat_requests=[]。
+
+逐轮证据索引
+R1 原始家庭Watford整租至少2/2500/轮椅/猫/软lift搜索：turn01-response.json。
+R2 Ask AI具体详情+小学GP药房1km：turn02-response.json。
+R3 房源安全实际参考点/月/覆盖：turn03-response.json。
+R4 天气+房源起点行程：turn04-response.json。
+R5 Camden只读天气/禁止commute：turn05-response.json。
+R6 Camden £500四卧+硬lift实验：turn06-response.json。
+R7 明确撤销实验与lift、Camden3000至少2：turn07-response.json。
+暂停期间 UI收藏/刷新/换会话：ui-persistence.json，ui-03至06 PNG；无模型请求。
+统一更新及真实重启。
+R8 重启恢复+软lift搜索：turn08-response.json，地点失败。
+R9 Islington只读天气/禁止commute：turn09-response.json，地点污染失败。
+R10 当前Camden焦点详情+天气+行程：turn10-response.json，焦点/证据通过，残句及状态问题未通过。
+最终零模型UI：ui-final.json，ui-07-final-restored.png。
+
+暂停期间的定向UI验证（与真实模型轮次分开）
+ui-revision-before.json与ui-revision-after.json：独立离线模拟旧revision7→新会话首reply revision1/10套；修复前显式New和cid缺省implicit两路径均0卡，修复后均10卡。它们是全拦截mock，并非额外真实模型验收。root明确允许本人修复该UI问题；这增加了本验收者的实现背景。
+ui-reason-messages.json：4项全离线验证后端qualification.reason_messages中英优先、切语言及旧reason兜底；不是额外真实LLM轮次。
+
+实际工具证据
+own-dispatches.json按本persona会话隔离；acceptance-summary.json逐轮列出已存在日志的request_id和工具计数。报告生成时未更新覆盖的轮次不宣称已独立核验，不依据模型说“查过”判断实际调用。最终日志更新后可据该映射继续核对R8/R9/R10。
+
+限制
+只有单一家庭会话10轮和一次本流程中的真实重启，不能代表跨日或跨月记忆、多人并发、真实行情更新、真实设施或轮椅路由。未运行屏幕阅读器、实体软键盘或真实触摸设备；aria属性检查不等同于辅助技术完整认证。本次未注入provider故障，故不把前一轮审计的503结果计入本验收。存在修复背景，不能称盲测。
+请勿公开family_retest-storage.json中的cookie；本报告没有复制cookie、密码或令牌。
+
+
+候选3追加验收（原10轮授权扩至总12轮）
+候选3由root冻结并真实重启后，只追加R11和R12，未修改产品。本人仍是有修复背景的验收者，不称盲测。
+
+R11 PASS（地区、预算、卧室、软lift与即时UI）
+提示词明确“Search Camden only”，£3000/月、whole、至少2卧、轮椅无台阶硬需、lift仅软偏好。真实search_properties.area/areas=Camden、max_budget=3000、bedrooms=2、minimum=true、room_type=whole、max_commute_time=50；硬features为wheelchair-accessible/step-free，软偏好含Would like lift。返回4套Camden缓存候选，立即显示4张对应卡片，筛选与卡片一致，没有再次回退Watford。
+实际工具：search_properties 1次，calculate_commute 5次（含地区及各候选；Rochester地址解析失败，候选明确通勤未知，不视为50分钟已验证）。
+turn_id=8efa0797d2934691a6b31742ccb39d9b
+request_id=9f19f92df5954ca9a14f67f12c319360
+证据：turn11-response.json、turn11-after.png、candidate3-dispatches.json:r11。
+
+R12 PASS（当前住房状态无变化、只天气且零通勤）
+turn12.txt与此前失败的turn09.txt原文完全相同：只问Islington天气，明确Don't run commute及禁止任何住房条件修改。
+已逐字段深度比较R11/R12整个view_state.criteria，包含plans、constraint_sources、repair provenance，完全相等，差异={}。即时4条卡片URL、所有表单值、焦点和收藏数也全部相等；housing仍Camden/3000/月/whole/至少2/轮椅硬需/软lift/UCL50，没有变Islington。
+真实工具账本仅get_weather(location=Islington, London)1次成功；没有calculate_commute、search_properties或其他工具。天气当前14.2°C/light rain，数值来自固定合成夹具，不代表真实Islington天气。
+turn_id=a38b660c80574ffd948a3d8fba41c87c
+request_id=1340227ce73945ce85390e719bf1d084
+证据：turn12-response.json、candidate3-dispatches.json:r12、candidate3-condition-comparison.json。
+
+刷新/持久化 PASS
+R12后关闭并重新打开相同profile，等待消息载入后检查：12条用户消息恢复、Camden筛选和4套Camden卡片保持、focus_stack最后仍是St.Augustine's Road 20262177、收藏数1；320/390px Tab范围/Escape保持正常。辅助刷新没有任何新增/api/alex请求。
+证据：ui-candidate3-final.json、ui-08-candidate3-final-restored.png。没有覆盖候选2的ui-final.json与ui-07截图。
+
+仍开放的家庭问题
+P2 猫许可未真正成为搜索条件：R11明确“our cat needs permission”，但candidate3-dispatches的真实search_properties.property_features只有wheelchair-accessible、step-free，accumulated_preferences仅Would like lift/Would like step-free，均未包含猫许可。因此本次“条件完全不变”只证明已有结构未被天气篡改，不代表所有家庭意图已经成功入库。root已告知将补cats allowed硬条件，并另行复测；本报告不将未实测的后续修复计为通过。
+P2 R12文字仍有残句：“...and the step-free street-to-door access, internal wheelchair space, Islington was used...”以及无通勤却附“some commute claims...removed”。结构与真实调用通过不能替代文案完整性。root已单独安排修复，本人不追加超预算模型请求、不据离线修复承诺改写实测结果。
+R10旧残片/St.拆行没有再次花真实轮次重放；root提到的135项离线修复验证是root证据，不能当作本人最新真实聊天已验证。
+
+总计12次真实模型聊天，均HTTP200、无客户端超时；本轮已结束，浏览器关闭保存。候选3是定向回归通过、完整家庭验收仍有开放项；候选2失败历史保留。完整工具覆盖及12轮延迟由更新后的acceptance-summary.json列出。

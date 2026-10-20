@@ -1,0 +1,68 @@
+[
+  {
+    "case": "restart-deleted-account-not-authenticated",
+    "actor": "C_COPY",
+    "request_seq": 1,
+    "expected_status": [
+      200
+    ],
+    "actual_status": 200,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "restart-deleted-account-gate",
+    "actor": "C_COPY",
+    "request_seq": 2,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "restart-independent-B-still-valid",
+    "actor": "B",
+    "request_seq": 3,
+    "expected_status": [
+      200
+    ],
+    "actual_status": 200,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "restart-intact-revoked-cookie-GET-/api/auth/me",
+    "actor": "C_INTACT_PREDELETE_COOKIE",
+    "request_seq": 4,
+    "expected_status": [
+      200
+    ],
+    "actual_status": 200,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "restart-intact-revoked-cookie-GET-/api/conversations",
+    "actor": "C_INTACT_PREDELETE_COOKIE",
+    "request_seq": 5,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "restart-intact-revoked-cookie-POST-/api/conversations",
+    "actor": "C_INTACT_PREDELETE_COOKIE",
+    "request_seq": 6,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  }
+]

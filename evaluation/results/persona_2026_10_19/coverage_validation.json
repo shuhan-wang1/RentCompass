@@ -1,0 +1,59 @@
+{
+  "evidence": "Independent browser-captured responses, checked against operational canary endpoint totals.",
+  "personas": {
+    "student": {
+      "actual_chat_results": 27,
+      "chat_conversations": 5,
+      "chat_turn_counts_per_conversation": [
+        12,
+        8,
+        5,
+        1,
+        1
+      ],
+      "status_counts": {
+        "200": 27
+      },
+      "unique_turn_ids": 27,
+      "first_12_helper_sends_same_conversation": true,
+      "note": ""
+    },
+    "professional": {
+      "actual_chat_results": 26,
+      "chat_conversations": 4,
+      "chat_turn_counts_per_conversation": [
+        14,
+        5,
+        4,
+        3
+      ],
+      "status_counts": {
+        "200": 26
+      },
+      "unique_turn_ids": 26,
+      "first_12_helper_sends_same_conversation": true,
+      "note": ""
+    },
+    "family": {
+      "actual_chat_results": 26,
+      "chat_conversations": 3,
+      "chat_turn_counts_per_conversation": [
+        12,
+        8,
+        6
+      ],
+      "status_counts": {
+        "200": 26
+      },
+      "unique_turn_ids": 26,
+      "first_12_helper_sends_same_conversation": true,
+      "note": "Family keyboard send is a separately captured response, not a duplicate helper.send record."
+    }
+  },
+  "totals": {
+    "chat_turns": 79,
+    "chat_conversations": 12,
+    "form_searches": 2,
+    "actual_service_restarts": 3
+  }
+}

@@ -1,0 +1,35 @@
+[
+  {
+    "started": 1792403179.2523177,
+    "request_id": "d5a62c4e0edf43748e6e27c9cc9b5c1e",
+    "tool": "get_weather",
+    "args": {
+      "location": "Islington, London",
+      "idempotency_key": "c4eaee4e32050cc0d9ffc26178636067291d89a536e76883eb92e18aa57f764c"
+    },
+    "context": {},
+    "result": {
+      "success": true,
+      "data": {
+        "location": "Islington, London",
+        "latitude": 51.538,
+        "longitude": -0.1027,
+        "current_temp": 14.2,
+        "condition": "Light Rain",
+        "humidity": 72,
+        "wind_speed": 11.5,
+        "uv_index": 1.2,
+        "feels_like": 12.8,
+        "rainfall_chance": null,
+        "recommendation": "可能有雨，看房记得带伞"
+      },
+      "error": null,
+      "execution_time_ms": 6.980180740356445,
+      "tool_name": "get_weather",
+      "version": "1",
+      "idempotency_key": "c4eaee4e32050cc0d9ffc26178636067291d89a536e76883eb92e18aa57f764c",
+      "outcome": "complete"
+    },
+    "elapsed_s": 0.008
+  }
+]

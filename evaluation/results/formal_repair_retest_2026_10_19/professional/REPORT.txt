@@ -1,0 +1,128 @@
+English professional — independent formal UI audit, 19 October 2026
+
+Status: seven authorized model requests, two non-model form searches and two root-controlled restart recovery checks completed. Browser closed and private storage retained. Current recovery at13:15:57Z PASSES20/20 assertions after the source-repair fix; the13:09:21Z budget-preservation failure remains fully recorded below. No product source or old reports were read during this audit; no product code was changed.
+
+Application: http://127.0.0.1:15019
+Conversation: 817bd0754098483997d66252c68b338e
+Recovery expectations: expected-state.json
+Private browser state: professional-private-storage.json (exclude from distributed archive)
+Read-only recovery runner: resume_ui.py (completed; blocks model and direct-search endpoints)
+
+The user journey was partially successful. R5 correctly stored separate rent and total budgets and changed attendance from three to two days. The assistant used cached property details honestly, compared saved homes, calculated attendance-based cap estimates correctly, and verbally remembered the complete brief after New -> return to the original conversation. However R6 silently changed stored max_budget from2000 to2150 while the answer still said2000, and R7/the first final restart retained the wrong value. After root's subsequent fix, a fresh-browser read-only retest restored server/UI rent2000, total2150 and attendance2 correctly (20/20 assertions). This is a successful recovery retest, not a new seven-turn model run. The flow also did not produce a verified complete rent-plus-commute match or the requested actual single-fare-based 26-trip total. The latter is limited by this test's local TfL audit cap, not evidence that TfL itself was down.
+
+The run crossed three application versions, so it is not a clean seven-turn pass on one immutable build:
+- Initial version: R1, R2 and form F1. Registered property searches failed parameter validation.
+- First update: R3-R5. Search parameter contract worked in R5, but R3 exposed a false year/month conflict.
+- Period-word-boundary update: form F2 and R6-R7. No new year/month conflict occurred. Root subsequently reported another fallback-summary text fix; that later wording has not been model-tested by this persona.
+
+User and actual actions
+
+Initial brief: whole self-contained one-bedroom flat, Lewisham or Stratford, rent <= GBP1850/month, rent plus commuting <= GBP2150/month, Bank station, three office days/week, about <=45 minutes by public transport.
+
+R1 12:24:35-12:24:48Z, HTTP200
+Natural first search for the complete brief. No property cards. Final answer said it only had a Lewisham commute. A verified journey duration disappeared from the answer, leaving the literal fragment "Total journey time: which is within your 45-minute limit."
+Request ID: 31a656b2a11d4ddcbb354e83b2dd2ddf
+Actual execution: calculate_commute succeeded (32 minutes); search_properties failed ValidationError before retrieval. Its arguments also incorrectly used max_budget2150 instead of the separate requested rent ceiling1850.
+
+R2 12:25:51-12:26:14Z, HTTP200
+Asked again for actual rentals and compared both areas' commute, PAYG/Travelcard, weekly/monthly cost and separate budgets. No individual cards. The answer gave cached mixed-listing statistics with explicit limitations, Lewisham32 minutes, Stratford38 minutes at area level, and Zone1-3 tariffs. It gave GBP31.50/week for three capped days but omitted the requested monthly PAYG figure; a four-week weekly-card example was not a monthly annual-average calculation.
+Request ID: bb91b5a59d454359a5a28c6c24aa0eaa
+Actual execution: search_properties validation failure; calculate_commute success; compare_or_rank_areas success; get_transport_info(query_type=travelcard) success. Area statistics were mixed-room/bedroom samples, not verified matching one-bedroom offers.
+
+F1 non-model form search
+Clicked Search with the unchanged visible criteria. HTTP200; no /api/alex call. Two alternative cards were displayed: Bonfield Road GBP1875/month and George Hudson Tower GBP2000/month, both explicitly over the GBP1850 cap and not verified against commute/total-cost conditions. Other candidates appeared as unverified names in the answer.
+Request ID: bf39d6babe35410ca89ee6507fb71f49
+Saved Bonfield Road. Two initial heart clicks toggled the same first card on then off because its accessible label stays "Save" when active; this was a test-locator assumption, not a failed save. A third first-card click produced Saved1. Ask AI only focused the property and left an empty message field; this click did not send a model request.
+
+After root's first update, reloaded the same guest/session. Original conversation, Bonfield favorite and focus were retained. Removed focus before replaying the first request.
+
+R3 12:44:53-12:44:56Z, HTTP200
+Replayed R1 verbatim. Expected a search using monthly rent1850 and total2150. Actual answer fabricated a conflict with GBP1850/year and refused to search pending clarification. Every user budget statement in this conversation was monthly. The final structured criteria still correctly recorded budget_period=month, max_budget1850, total2150 and attendance3.
+Request ID: a0d616890bdc4cc29b0d1876dfe71c29
+No Tool.execute dispatch is recorded. This does not prove absence of graph-managed clarification: terminal ask_user is not recorded by this execution observer.
+Root independently traced the real defect to matching the "pa" substring of "separate" as per annum, and applied a word-boundary fix. No product source was inspected by the tester.
+
+R4 12:45:38-12:45:47Z, HTTP200, Ask AI message
+Explicitly corrected monthly rather than yearly and asked for the exact selected Bonfield listing's recorded price/type/bedrooms and suitability.
+Request ID: 114b3f134f834885a64fea8d7b26b9b3
+Actual execution: get_property_details success, matched by listing URL.
+Pass: answer used recorded GBP1875 pcm / 1 bedroom, rejected it as GBP25 over the then-current rent cap, said nothing had been verified current, and explicitly said the cached lookup did not contact or refresh the listing. Whole-flat status was presented as an inference requiring agent confirmation.
+
+R5 12:46:14-12:47:13Z, HTTP200
+Changed office attendance to Tuesday/Thursday (two days/week), increased rent ceiling to GBP2000/month, retained total ceiling2150 and all other housing/commute conditions, and requested updated listings.
+Request ID: 742da48322354fdb8409f87c57202b98
+Actual execution: two search_properties calls succeeded with separate max_budget2000, monthly_total_budget2150, office_days_per_week2; 20 nested calculate_commute calls (18 success, 2 failed). Both searches returned cached data, total_found14; this is not live availability verification. Calls used the same substantive criteria with a later limit14.
+Pass: final state preserved both budgets, attendance2, whole1bed, both areas and Bank45. Origin-specific journey results were identified as belonging to those addresses, not the selected favorite.
+Limitation/friction: only an explicitly excluded GBP2300 Unex Tower alternative remained as a card. No fully verified combined-budget match was presented. Several cheaper candidate journeys were returned, but monthly route cost was unverified. This does not establish that the local sample or market has no suitable homes.
+
+After the period fix, reloaded the same conversation again. Saved Unex Tower for comparison with Bonfield, deliberately including a clearly over-budget alternative. Saved2 confirmed. Saved view labels clearly referred to saved criteria and showed GBP1850 when Bonfield was saved versus GBP2000 when Unex was saved; it did not present the old Bonfield exclusion as a current-budget qualification.
+
+F2 non-model form search, completed 12:49:01Z, HTTP200
+Clicked unchanged Search under current rent2000, total2150, attendance2. No /api/alex call.
+Request ID: f17ede631b4546528d21c25d363b040f
+Pass: the returned card's qualification.constraints retained monthly_total_budget2150 and office_days_per_week2 along with the visible conditions. The form did not silently strip these hidden constraints. It still showed the excluded Unex alternative and explicitly unverified cheaper candidates in the textual summary.
+
+R6 12:49:49-12:50:06Z, HTTP200, two-property Ask AI message
+Naturally compared both saved homes under the two separate ceilings and two-day attendance; asked for an extra-travel what-if of "26 one-way trips per month based on the actual current single fare rather than a daily cap"; asked about Saturday24 October weather and public-transport disruption.
+Request ID: 7398b1f8f4814205a293ceca11465182
+Actual execution: get_property_details twice (cached successes); get_transport_info line_status, fare and journey (failed); get_weather Lewisham and Stratford (failed resolution), then London (success); check_transport_cost (success, office_days_per_week2).
+Passes:
+- Both exact URL identities and recorded rents were used, with cache/current-availability caveats.
+- Bonfield1875 was below rent2000 and left GBP275 before total2150; per-listing monthly travel remained unverified. Unex2300 failed both ceilings on rent alone.
+- Extra 26 trips did not overwrite normal attendance2.
+- No current single fare was invented and no daily cap was substituted for a single fare. The actual26-trip total remained unavailable.
+- Zone1-3 daily cap10.50 -> GBP21/week and GBP91/month was explicitly a cap-based upper bound at 2 days/week and 52/12 weeks/month. Route-zone coverage remained unverified.
+- Weather fell back honestly to London-wide, not area-specific: 24 October11:00 Europe/London, 8.4C, overcast, 12% rain. Temperature/date/timezone were stated; wind15.5 was stated without a unit.
+Failure-boundary evidence: root traced the TfL failures to this run's 60-request local audit cap; this is not verified upstream downtime. The tool wrapper exposes generic TfL errors, and the final answer attributed them to unavailable TfL services. Fare query_type really was attempted. Regional weather geocoders returned no parsed match; London weather succeeded.
+P1 subsequently confirmed from this round's original SSE: despite the correct verbal comparison, structured max_budget became2150, with max_budget_monthly still2000. The new max_budget source text is "Keep my current £2,000/month rent cap separate from the £2,150/month rent-plus-commute ceiling, based on two office days a week" and source.value=2150. This was discovered by the final restart assertions and traced back to R06-payload.json; it was already present before the final restart.
+P2 observed: the appended fallback text nevertheless said "Weather forecast could not be verified this turn; the service did not return a usable result" immediately before the successful London forecast. This blanket failure conflicts with the same turn's usable fallback result. Root reported a subsequent offline-tested partial-lookup wording fix; no further model call was available to this persona to retest it.
+
+R7 12:51:10-12:51:14Z, HTTP200
+Clicked New without sending a message, then returned through the original conversation's sidebar entry. Asked for a recap and first-contact recommendation without changing criteria.
+Request ID: d951bf57d02246949262a840a434099c
+Verbal recap pass: answer remembered rent2000/month, combined2150/month, two office days Tuesday/Thursday, whole one-bedroom, Lewisham/Stratford, Bank about45 minutes and both exact saved homes. Recommended contacting Bonfield first, rejected Unex's price, and retained caveats about current rent, availability, whole-flat status and actual travel cost. Favorites remained2. State failure: R07-payload.json retained max_budget2150 from R6 despite the verbal2000 recap. My initial progress note judged the narrative but did not yet compare this scalar; this report corrects that earlier claim. No Tool.execute call recorded; the recap relied on this conversation's retained evidence, not fresh verification.
+
+Severity and disposition
+
+P1, observed and preserved, patched during this run: search tool contract rejected injected budget/attendance parameters in R1/R2, preventing actual listing retrieval; R1 also conflated rent with total budget in tool arguments. R5 demonstrates the corrected contract and separate values with real successful cached retrieval, not a full market/availability success.
+P1, observed and preserved, patched during this run: false year/month contradiction from the pa substring in separate blocked R3. R6 reused separate with both monthly ceilings without recurrence; original R3 is not overwritten.
+P1, observed in R6/R7 and the13:09 recovery, with read-only recovery retest now passing: R6's GBP2000/month rent cap was silently replaced by the GBP2150/month combined ceiling in structured state and UI, while the answer and legacy max_budget_monthly alias retained2000. R7 and the first final restart persisted the inconsistency. Reproduce the original failure with R6's exact input after R5's correct state, then inspect view_state.criteria and refresh. This can cause a later search to use a more permissive rent cap than the user's stated requirement. The13:15 retest confirms repaired authenticated restoration, without rerunning R6 as a new model turn or claiming the historical raw snapshot was rewritten.
+P2, observed, subsequent fix reported but not independently model-retested: blanket failed-weather summary despite successful London fallback in R6.
+P2, observed, not independently cleared: R1 removed a real32-minute result and left an incomplete time sentence. Later answers are cautious and preserve exact journey scope, but the same original phrase has not been revalidated with successful transport evidence on the final version.
+Incomplete task, environment-limited: current actual single fare and 26-trip monthly figure. The honest refusal is preferable to false arithmetic, but this run does not prove successful end-to-end current-fare pricing. Root's separate diagnostic is outside the seven persona calls and must be reported separately.
+
+Actual coverage, taken from own-tool-ledger.json rather than SSE stage labels
+
+38 Tool.execute records: calculate_commute22; search_properties4; compare_or_rank_areas1; get_transport_info4 (travelcard1, line_status1, fare1, journey1); get_property_details3; get_weather3; check_transport_cost1. These include nested commute calls and failed executions. They are not38 HTTP calls or38 successful/live results. Two direct-form requests are separately recorded in the turn ledger without Tool.execute entries. Terminal ask_user may be graph-managed and absent from this observer. calculate_commute_cost, web_search and POI/safety tools were not dispatched in this seven-turn professional flow; no coverage is claimed for them.
+
+Evidence inventory and limits
+
+request-index.json: exact seven chat inputs, posted context, UTC start/end and HTTP status. All seven HTTP responses were200; application/tool failures occurred inside those responses.
+R02-R07-response.txt and -payload.json: original SSE written directly by the runner, final structured conditions and replies. SSE stages were not treated as proof of execution.
+R01-DOM/screenshot plus ledger: first response's browser CDP body capture failed after streaming consumption, so R1 has no raw SSE body. The prompt, rendered answer and independent tool execution are retained.
+R01-R07-dom.txt / -page.png: per-chat rendered state and screenshots.
+form-search-evidence.json: F1 response and public UI state.
+form-after-fix-evidence.json: F2 UI state, exact request and qualification constraints; the very large copied raw response body contains an audit-output truncation marker ("1166 tokens truncated") introduced by write_stdin transfer. It is not a product JSON defect. Do not treat this body as complete raw HTTP evidence. The small currentResults/qualification portion is intact; root's request/ledger evidence is the independent form corroboration.
+saved-after-criteria-change.json and saved-two-after-criteria-change.png: two saved cards and historical condition labels.
+new-chat-before-return.png / returned-original-before-R07.png: UI conversation switching.
+own-tool-ledger.json: parent-generated, restricted to this authenticated conversation; tool-summary.json is a derived compact index.
+NOTES.txt: chronological audit notes; expected-state.json: final recovery target.
+
+Boundary: this was a same-day, minutes-long workflow with browser restart, UI refresh, conversation switching and root-controlled deployment restarts. It does not simulate days of real availability changes, a new device/browser identity, logout/login recovery, or long-term memory decay. The listing sample was root-fetched finite cache data (30 per Lewisham/Stratford area), not exhaustive supply or live availability confirmation. The browser blocked all requests outside the local application, including property images, external links and map tiles; those visual/external behaviors were intentionally not tested. No external listings were opened and no audit client contacted OnTheMarket. Upstream tool responses may change, and local test caps constrained transport coverage.
+
+Final root-controlled process restart / read-only recovery, 13:09:21Z
+
+Executed resume_ui.py with the retained signed browser storage in a fresh Chromium process. Browser permitted only the local app and blocked model/direct-search endpoints by policy. It made zero model calls, zero searches and zero blocked model/search attempts, then closed successfully.
+Evidence: final-restore-20261019T130921Z.json plus -search.png / -saved.png.
+Explicit assertions: final-restore-20261019T130921Z-assertions.json, 17 pass / 3 fail (one underlying defect): server max_budget2150 vs expected2000; UI max_budget2150 vs expected2000; conflicting max_budget2150 and max_budget_monthly2000.
+The same original conversation was returned by authenticated GET /api/conversations/817bd0754098483997d66252c68b338e/messages (HTTP200). It independently confirms the bad max_budget source, not merely local UI storage.
+Pass: total2150, attendance2, both areas, whole1bed, Bank45, original history, Saved2 with exact Bonfield/Unex addresses and historical GBP1850/GBP2000 conditions. The final saved Unex card now correctly says commute not verified for current criteria; this is a read-only visual fact, not a fresh journey verification.
+Root reported newer mixed-forecast-scope/weather-positioning fixes and separate precise tool probes. They are outside this persona's seven model requests and are not claimed as new UI/model passes here. Old stored answers continue to show their original wording.
+No model requests remain authorized for this persona (7/7 consumed). Final expected values remain in expected-state.json; they have not been changed to make the failed2000 assertion pass.
+
+Recovery retest after root's budget-source fix,13:15:57Z
+
+Executed the same resume_ui.py again after the explicitly announced restart, in another fresh Chromium process with the same retained identity. No model/search endpoints were called or attempted, no external resources were allowed, and the browser closed successfully. The13:09 JSON/screenshots/assertions were not overwritten.
+Evidence: final-restore-20261019T131557Z.json plus -search.png / -saved.png.
+Strict assertions: final-restore-20261019T131557Z-assertions.json, exactly20 assertions,20 pass,0 fail. Both authenticated same-conversation GET and UI now return max_budget2000; server max_budget_monthly2000, monthly_total_budget2150 and office_days_per_week2. The returned max_budget source is criteria_recovery. Whole1bed, both areas, Bank45, Saved2, exact saved card addresses and historical budgets1850/2000 remain correct.
+Root describes this as read-time repair of an evidenced invalid source while retaining the old raw snapshot for audit; this browser check independently confirms the repaired authenticated response and UI, not direct database contents. No new model-level full journey, current-fare calculation, external availability, or latest weather wording is claimed by this retest.

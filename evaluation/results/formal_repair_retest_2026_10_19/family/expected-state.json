@@ -1,0 +1,63 @@
+{
+  "conversation_id": "76e9351df6d1450582bf1576b6e2116f",
+  "criteria": {
+    "amenities_of_interest": [],
+    "area": "Stratford",
+    "areas": [
+      "Stratford",
+      "Leyton"
+    ],
+    "bedrooms": 2,
+    "bedrooms_minimum": true,
+    "budget_period": "month",
+    "commute_destination": "King's Cross",
+    "criteria_repair_provenance": [
+      {
+        "field": "property_features",
+        "message_id": 23,
+        "previous_value": [
+          "cats allowed",
+          "wheelchair-accessible",
+          "lift"
+        ],
+        "reason": "lift_insufficiency_statement_is_not_requirement",
+        "value": [
+          "cats allowed",
+          "wheelchair-accessible"
+        ]
+      }
+    ],
+    "destination": "King's Cross",
+    "max_budget": 2800,
+    "max_travel_time": 45,
+    "no_commute": false,
+    "property_features": [
+      "cats allowed",
+      "wheelchair-accessible",
+      "wheelchair_space_68cm",
+      "cat_written_consent",
+      "step-free"
+    ],
+    "room_type": "whole",
+    "soft_preferences": [
+      "family home",
+      "cat allowed",
+      "accessible bathroom",
+      "balcony or garden preferred"
+    ]
+  },
+  "favorite_count": 2,
+  "focused_addresses": [
+    "Tennyson Road, Stratford"
+  ],
+  "favorite_addresses": [
+    "Tennyson Road, Stratford",
+    "Three Mill Lane, London, E3"
+  ],
+  "favorite_urls": [
+    "https://www.onthemarket.com/details/20489843/",
+    "https://www.onthemarket.com/details/20553936/"
+  ],
+  "card_count": 3,
+  "basis": "Observed state after all 7 real requests and successful no-model refresh/New/return UI checks. Persistence expectation is separate from historical failed result correctness."
+}

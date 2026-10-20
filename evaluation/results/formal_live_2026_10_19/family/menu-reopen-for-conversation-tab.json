@@ -1,0 +1,17 @@
+{
+  "tag": "BUTTON",
+  "id": "newChatBtn",
+  "text": "New",
+  "outline": "rgb(31, 41, 55) solid 3px",
+  "boxShadow": "none",
+  "rect": {
+    "x": -88,
+    "y": 76,
+    "width": 71,
+    "height": 28,
+    "top": 76,
+    "right": -17,
+    "bottom": 104,
+    "left": -88
+  }
+}

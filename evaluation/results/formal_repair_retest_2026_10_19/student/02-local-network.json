@@ -1,0 +1,131 @@
+[
+  {
+    "path": "/api/auth/me",
+    "method": "GET",
+    "status": 200,
+    "response": {
+      "authenticated": false
+    }
+  },
+  {
+    "path": "/api/conversations",
+    "method": "GET",
+    "status": 200,
+    "response": {
+      "conversations": [
+        {
+          "agent_arch": "fc_loop",
+          "agent_version": "repair-retest-frozen-working-tree",
+          "branch_depth": 0,
+          "created_at": "2026-10-19T12:01:19.715884+00:00",
+          "edited_slot_turn_id": null,
+          "fork_reason": null,
+          "forked_from_turn_id": null,
+          "id": "bd64dd5d9b12410586b93a31b812a6f0",
+          "message_count": 2,
+          "parent_conversation_id": null,
+          "root_conversation_id": "bd64dd5d9b12410586b93a31b812a6f0",
+          "strict": false,
+          "title": "我下学期要来伦敦读研，想在Camden找个住处。能帮我看看吗？",
+          "updated_at": "2026-10-19T12:01:24.826344+00:00"
+        }
+      ]
+    }
+  },
+  {
+    "path": "/api/conversations/bd64dd5d9b12410586b93a31b812a6f0/messages",
+    "method": "GET",
+    "status": 200,
+    "response": {
+      "messages": [
+        {
+          "content": "我下学期要来伦敦读研，想在Camden找个住处。能帮我看看吗？",
+          "id": 1,
+          "role": "user",
+          "timestamp": "2026-10-19T12:01:19.715884+00:00",
+          "turn_id": "f4346ac693e946098ba7eb8a207015f2"
+        },
+        {
+          "content": "好的，Camden 是很受伦敦研究生欢迎的区域。开始搜索前，我想先确认几个条件，这样结果会更贴合你的需求：\n\n1. 房型：Studio（独立厨卫）、Ensuite（独立卫浴、共用厨房），还是合租 shared？\n2. 每月预算大概多少（英镑）？\n3. 需要通勤吗？如果需要，请告诉我通勤到哪所学校或地点；如果不需要，可以说“不通勤”。\n4. 入住时间（可不填）。\n\n你也可以直接说“继续搜索”，我就先按 Camden 全区、不限房型和预算给你看一批房源，之后再逐步缩小范围。",
+          "id": 2,
+          "response_type": "chat",
+          "role": "assistant",
+          "timestamp": "2026-10-19T12:01:24.826344+00:00",
+          "turn_id": "f4346ac693e946098ba7eb8a207015f2"
+        }
+      ],
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "area": "London",
+          "areas": [
+            "London"
+          ],
+          "constraint_sources": {
+            "area": {
+              "source": "user_message",
+              "text": "我下学期要来伦敦读研，想在Camden找个住处。能帮我看看吗？",
+              "value": "London"
+            },
+            "areas": {
+              "source": "user_message",
+              "text": "我下学期要来伦敦读研，想在Camden找个住处。能帮我看看吗？",
+              "value": [
+                "London"
+              ]
+            }
+          },
+          "destination": null,
+          "max_budget": null,
+          "max_travel_time": null,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [],
+        "revision": 1
+      }
+    }
+  },
+  {
+    "path": "/api/conversations/bd64dd5d9b12410586b93a31b812a6f0/version_map",
+    "method": "GET",
+    "status": 200,
+    "response": {
+      "version_groups": {}
+    }
+  },
+  {
+    "path": "/api/favorites",
+    "method": "GET",
+    "status": 200,
+    "response": {
+      "favorites": []
+    }
+  },
+  {
+    "path": "/api/conversations",
+    "method": "GET",
+    "status": 200,
+    "response": {
+      "conversations": [
+        {
+          "agent_arch": "fc_loop",
+          "agent_version": "repair-retest-frozen-working-tree",
+          "branch_depth": 0,
+          "created_at": "2026-10-19T12:01:19.715884+00:00",
+          "edited_slot_turn_id": null,
+          "fork_reason": null,
+          "forked_from_turn_id": null,
+          "id": "bd64dd5d9b12410586b93a31b812a6f0",
+          "message_count": 4,
+          "parent_conversation_id": null,
+          "root_conversation_id": "bd64dd5d9b12410586b93a31b812a6f0",
+          "strict": false,
+          "title": "我下学期要来伦敦读研，想在Camden找个住处。能帮我看看吗？",
+          "updated_at": "2026-10-19T12:03:18.741562+00:00"
+        }
+      ]
+    }
+  }
+]

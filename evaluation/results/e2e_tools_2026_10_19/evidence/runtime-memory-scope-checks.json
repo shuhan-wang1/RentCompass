@@ -1,0 +1,10 @@
+[
+  {
+    "case": "forged-model-user-id-overridden",
+    "passed": true,
+    "actual_user_is_current_account": true,
+    "other_account_private_value_returned": false,
+    "request_id": "ef32c21ebb9b4f389797ea6a053b3a56",
+    "source": "controlled model tool_call + actual browser/agent/tool/store"
+  }
+]

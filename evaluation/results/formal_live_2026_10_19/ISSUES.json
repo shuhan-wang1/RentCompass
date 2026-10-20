@@ -1,0 +1,131 @@
+[
+  {
+    "id": "F01",
+    "priority": "P1",
+    "title": "房源数据源失败被归为已搜索但为空，界面引导用户改条件",
+    "observed": "捕获403回放时area_status=empty/partial=false，source无候选；正文与面板建议调整预算或区域。附加的市场非空提示未解释来源失败。",
+    "evidence": [
+      "student/turn-2-response-payload.json",
+      "student/report.txt",
+      "family/own-dispatches.json",
+      "evidence/live-tool-integration.json"
+    ],
+    "suggestion": "贯穿HTTP错误类型和source_status；403、429、超时、schema drift与complete_empty分离。显示来源不可用、保留当前条件，并在源站拒绝时启用共享暂停/冷却。",
+    "verification": "实际403响应回放后不得出现complete_empty/empty或调整预算建议；有效空页面仍可显示真正的零结果。"
+  },
+  {
+    "id": "F02",
+    "priority": "P1",
+    "title": "租金上限与租金加交通总预算被误判冲突，确认后租金仍为空",
+    "observed": "英文上班族分别给出£1900租金与£2100总预算，系统重复澄清；接受第1选项后租金字段仍null。",
+    "evidence": [
+      "professional/turn2_driver_result.json",
+      "professional/turn3_driver_result.json",
+      "professional/report.txt"
+    ],
+    "suggestion": "分别维护rent ceiling和combined budget的带来源字段；同一条输入的两个不同口径不能互相覆盖或触发冲突。",
+    "verification": "原样重放三条英文消息后max_budget=1900、monthly_total_budget=2100，刷新与执行参数一致。"
+  },
+  {
+    "id": "F03",
+    "priority": "P1",
+    "title": "混合办公被设成无需通勤，已确认目的地未贯穿持久化视图",
+    "observed": "Bank、Tue–Thu、35分钟、至多一次换乘的输入出现no_commute=true及空目的地；后续raw commute_destination有Bank但view_state.destination空。",
+    "evidence": [
+      "professional/turn1_driver_result.json",
+      "professional/turn3_driver_result.json",
+      "professional/after_turn3_reload.json"
+    ],
+    "suggestion": "按用户明确的通勤语义更新，不把非每日到岗视为无通勤；统一commute_destination/destination与视图映射，补齐换乘条件的表示或明确不支持。",
+    "verification": "保留Bank/35分钟/需通勤；所有预算/目的地表单字段在同响应、刷新和重启后保持一致。"
+  },
+  {
+    "id": "F04",
+    "priority": "P1",
+    "title": "通勤日期污染入住日期，指定到达时间未发送给TfL",
+    "observed": "用户要求20 October 08:45到达Bank，move_in_date变为2026-10-20；实际JourneyResults请求没有date/time/timeIs查询参数。另一次派生fare查询把目的地截为Bank arriving后失败。",
+    "evidence": [
+      "professional/turn3_driver_result.json",
+      "professional/own-dispatches.json",
+      "evidence/http-requests.jsonl"
+    ],
+    "suggestion": "把入住日期与旅程日期/到达时间设为独立类型化槽位；将时间字段传到实际请求；截取站点名时排除arriving等从句。",
+    "verification": "不改变未声明的move_in_date；实际TfL请求必须带所选日期和08:45到达语义；不能用默认此刻的路线认证指定时段。"
+  },
+  {
+    "id": "F05",
+    "priority": "P1",
+    "title": "双区域意图在同轮执行和持久化视图中不稳定",
+    "observed": "家庭首轮先调用Stratford+Leyton又调用Leyton，最终只回显Leyton；第三轮工具回显双区域，但view_state仍无area/areas，刷新Area为空。",
+    "evidence": [
+      "family/own-dispatches.json",
+      "family/after-turn3-refresh.json",
+      "family/final-persisted-messages-api.json"
+    ],
+    "suggestion": "单一规范化criteria驱动工具、资格、表单和快照；一轮多工具不得把双区域默默缩成最后一个。",
+    "verification": "原样重放中英文两条请求后，工具和持久化视图均保留两区，刷新Area不为空。"
+  },
+  {
+    "id": "F06",
+    "priority": "P1",
+    "title": "自然表达的猫许可和轮椅内部空间未进入可审核硬约束",
+    "observed": "明确中文“允许这只猫也是必需条件”和英语written permission/internal doorway/turning space后，实际hard features仅step-free；未包含cats allowed或wheelchair-accessible，step-free还重复进入soft。",
+    "evidence": [
+      "family/turn1-family-search.json",
+      "family/turn3-family-clarification-search.json",
+      "family/own-dispatches.json"
+    ],
+    "suggestion": "统一需求事件/硬软属性表示，保留猫许可与功能性轮椅需求的自然语言证据；不靠某一句固定短语才能识别。",
+    "verification": "同义中英文表达进入hard constraints；缺少对应证据时必须unknown，不能被lift替代。"
+  },
+  {
+    "id": "F07",
+    "priority": "P2",
+    "title": "组合任务缺项和内部指令直接进入用户回复",
+    "observed": "预算澄清阻断可独立查询的路线/天气；最后未算用户要求的26个单程/月；家庭第三轮直接显示Do not conclude/State only等指令句。",
+    "evidence": [
+      "professional/report.txt",
+      "family/turn3-family-clarification-search.json"
+    ],
+    "suggestion": "把独立子任务和澄清依赖分开；将partial_note的机器约束与用户文案分离；逐项显示已完成/未知/未完成。",
+    "verification": "房源失败或预算待确认不阻断独立天气/交通；用户回复不出现内部命令；未完成任务如实标明。"
+  },
+  {
+    "id": "F08",
+    "priority": "P2",
+    "title": "真实附近设施与网页检索能力退化",
+    "observed": "学校/GP附近设施探针30秒超时，多个Overpass镜像出现502/500/连接错误；SearXNG两次真实查询无可用结果并有4个未响应引擎。",
+    "evidence": [
+      "evidence/live-tool-integration.json",
+      "evidence/http-requests.jsonl",
+      "artifacts/live-tools.log"
+    ],
+    "suggestion": "单独验证并观测外部服务；总预算内有界镜像切换，返回已完成类别和未知类别；搜索引擎健康与空结果分开。",
+    "verification": "服务故障不等于没有学校/GP/网页证据；保留部分结果，健康指标能显示真实能力退化。"
+  },
+  {
+    "id": "F09",
+    "priority": "P2",
+    "title": "窄屏长会话标题裁剪会话操作按钮",
+    "observed": "390px视口内，长中文标题把4个操作初始位置挤出侧栏；键盘Tab会滚至操作，基础焦点环绕/Escape正常。",
+    "evidence": [
+      "family/menu-long-title-stable.png",
+      "family/final-menu-open.png",
+      "family/report.txt"
+    ],
+    "suggestion": "约束标题flex最小宽度、换行/省略与操作列宽度，验证鼠标/触屏和键盘可见性。",
+    "verification": "长中英文标题下四个操作均在视口内可见可点，保留焦点边界。"
+  },
+  {
+    "id": "F10",
+    "priority": "P3",
+    "title": "硬租金上限被向上取整",
+    "observed": "学生给定整套月上限£2166.67，实际保存2167，放宽£0.33；未获得房源，未证明实际发生超限推荐。",
+    "evidence": [
+      "student/turn-2-response-payload.json",
+      "student/report.txt"
+    ],
+    "suggestion": "金额用Decimal/便士整数；筛选硬上限不得向上放宽，展示与搜索精度分离。",
+    "verification": "所有实际搜索上界不高于用户给定值，周月转换精度可解释。"
+  }
+]

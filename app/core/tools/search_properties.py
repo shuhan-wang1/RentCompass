@@ -15,6 +15,7 @@ Tool 1: Search Properties Tool
 """
 
 from core.tool_system import Tool
+from core.tools._argtext import clean_arg_text
 from typing import Optional, List, Dict
 import pandas as pd
 import asyncio
@@ -31,6 +32,11 @@ import json
 import re
 from uk_rent_agent.domain import constants as C
 from core.tenancy_reference import monthly_from_weekly
+from core.source_status import source_failure_summary, FAILED_SOURCE_STATES
+from core.constraint_updates import (
+    scoped_update_text, mention_is_requirement, is_hypothetical, clause_at, date_is_cleared,
+    is_criteria_consultation,
+)
 from core.search_readiness import (
     SEARCH_TOOL_DESCRIPTION,
     assess_search_readiness,
@@ -92,21 +98,40 @@ def _has_cjk(text: str) -> bool:
 # match is intentional (glued/inflected forms should still trip it); the design
 # treats "no commute limit" style phrasing as no-commute-filter too, which is fine.
 _NO_COMMUTE_PHRASES = (
+    "取消通勤", "取消通勤时间", "移除通勤", "去掉通勤", "不限制通勤", "remove the commute", "drop the commute",
     "no commute", "not commuting", "don't commute", "dont commute",
     "i don't need to commute", "just living", "just live",
     "work from home", "working from home", "wfh", "remote work", "fully remote",
     "不通勤", "不用通勤", "不需要通勤", "无需通勤",
     "单纯住", "就是住", "只是住", "不上班", "在家办公", "居家办公", "远程工作",
+    # Retractions (R2-15): "Never mind about commute." kept the destination and the 30-minute
+    # limit, and results were still excluded for "measured commute 41 min exceeds limit 30".
+    "never mind about commute", "never mind about the commute", "never mind the commute",
+    "nevermind the commute", "forget about the commute", "forget the commute",
+    "forget about commute", "cancel the commute", "remove commute", "drop commute",
+    "ignore the commute", "commute doesn't matter", "commute does not matter",
+    "不考虑通勤", "通勤无所谓", "通勤不重要", "别管通勤",
 )
 
 
 def _extract_no_commute(text: str) -> bool:
-    """True when the message explicitly says the user does not commute.
-    Deterministic so "我不通勤我单纯住着" / "I just live there, wfh" disables all
-    commute logic (no computation, no filter, never ask)."""
+    """Read a whole-work-pattern opt-out, keeping hybrid attendance separate.
+
+    WFH alone is an opt-out; WFH on the other days does not cancel office travel.
+    A journey request or a transit time alone is not evidence of office attendance.
+    """
     if not text:
         return False
-    t = text.lower()
+    t = str(text).lower()
+    t = re.sub(r"\b(?:not|isn.t|am not) (?:fully remote|working from home|work from home)\b", '', t)
+    from core.constraint_updates import extract_office_days
+    attendance = extract_office_days(t)
+    positive_t = re.sub(r'不(?:用|需要)|无需', 'NEG', t)
+    explicit_travel = re.search(r"\bi (?:do |still |need to |have to )?commute\b|"
+                                r'\b(?:go|going) (?:in)?to (?:the )?office\b|'
+                                r'每周[^。;；]{0,15}(?:到公司|到岗)|(?:需要|要|仍然)通勤', positive_t, re.I)
+    if attendance or explicit_travel:
+        return False
     return any(p in t for p in _NO_COMMUTE_PHRASES)
 
 
@@ -114,6 +139,7 @@ def _extract_no_commute(text: str) -> bool:
 # match (CJK + EN). 'studio' is a distinct property form (implies 0 bedrooms), so it is
 # checked first and never shadowed by the room-in-a-share types.
 _ROOM_TYPE_SYNONYMS = (
+    ("whole", ("whole", "self-contained", "self contained", "entire flat", "entire house", "整租", "独立整套", "整套")),
     ("studio", ("studio", "单间公寓", "一室户", "开间")),
     ("ensuite", ("ensuite", "en-suite", "en suite", "独立卫浴", "独卫", "套间", "带独卫")),
     ("shared", ("shared room", "flatshare", "flat share", "house share", "houseshare",
@@ -125,13 +151,38 @@ def _extract_room_type(text: str):
     """Canonical room type from a message: 'studio' | 'ensuite' | 'shared' | None.
     Deterministic so a chat answer after the soft gate ("我要ensuite") updates the
     accumulated room_type even without any 'find'/'search' verb."""
-    if not text:
+    if not text or is_criteria_consultation(text):
         return None
-    t = text.lower()
+    t = scoped_update_text(text).lower()
+    if re.search(r'先[^。.!?]{0,12}(?:确认|问)|还没确认|尚未确认|\b(?:first ask|first confirm|not yet decided)\b', t, re.I) and re.search(
+            r'整套|整租|合租|房型|whole|shared|room type', t, re.I):
+        return None
     for canonical, needles in _ROOM_TYPE_SYNONYMS:
-        if any(n in t for n in needles):
-            return canonical
+        for needle in needles:
+            for match in re.finditer(re.escape(needle), t):
+                if mention_is_requirement(t, match.start(), match.end()):
+                    return canonical
+    # "a 1-bed flat" / "two bedroom apartment" asks for a WHOLE home. With no room type a
+    # "1 bed Flat share" room satisfied bedrooms=1 and was presented under "Meets all
+    # declared conditions (verified)" for a 1-bed-flat request (2026-10-19 C-11, 5/5).
+    # A share/room phrasing never reaches here: the "shared" needles above win first.
+    if re.search(r"\b(?:a|one|single|double|twin)\s+room\b|\brooms?\s+in\s+(?:a|an|the)\b", t):
+        return None          # "a room in a 3-bed flat" is a room, not a whole flat
+    for match in _WHOLE_HOME_REQUEST.finditer(t):
+        if mention_is_requirement(t, match.start(), match.end()):
+            return "whole"
     return None
+
+
+# "a 1-bed" / "2 bedrooms" / "一居室" ask for that many bedrooms of one's own, i.e. a whole
+# home: without the word "flat" the room type stayed unknown and a "1 bed Flat share" room
+# was listed under the verified header for "Find a 1-bed in Hackney" (R1-06b).
+_WHOLE_HOME_REQUEST = re.compile(
+    r"\b(?:\d+|one|two|three|four|five)[\s-]*(?:bed(?:room)?s?|br)[\s-]+"
+    r"(?:flat|apartment|house|maisonette|bungalow|home)\b(?![\s-]*(?:share|shares|mate))"
+    r"|\b(?:[1-5]|one|two|three|four|five)[\s-]*(?:bed(?:room)?s?|br)\b"
+    r"(?![\s-]*(?:flat|apartment|house|home)?[\s-]*(?:share|shares|mate|room|in\s+(?:a|an|the)\b|hmo))"
+    r"|[一二三四两1-5][室居](?:室)?(?:公寓|整套|住宅)|[一二三四两1-5]居室(?!.{0,4}合租)", re.I)
 
 
 def _normalize_room_type(value):
@@ -141,13 +192,14 @@ def _normalize_room_type(value):
     if not isinstance(value, str) or not value.strip():
         return None
     v = value.strip().lower()
-    if v in ("studio", "ensuite", "shared"):
+    if v in ("studio", "ensuite", "shared", "whole"):
         return v
     return _extract_room_type(v)
 
 
 # Display labels for room type, localized (en, zh).
 _ROOM_TYPE_LABELS = {
+    "whole": ("Whole property", "整套住宅"),
     "studio": ("Studio", "Studio 单间公寓"),
     "ensuite": ("en-suite room", "独立卫浴房间"),
     "shared": ("shared room", "合租房间"),
@@ -169,6 +221,11 @@ def _matches_room_type(prop: dict, room_type: str) -> bool:
     desc = str(prop.get('Description', '')).lower()
     amen = str(prop.get('Detailed_Amenities', '')).lower()
     blob = f"{rt} {desc} {amen}"
+    if room_type == 'whole':
+        rt = f"{rt} {prop.get('Type', prop.get('property_type', ''))}".lower()
+        if re.search(r'\b(?:rooms?|flat\s*share|house\s*share|shared|hmo)\b', rt):
+            return False
+        return bool(re.search(r'\b(?:flat|apartment|house|bungalow|maisonette|studio|whole|entire)\b', rt))
     if room_type == 'studio':
         return 'studio' in rt or 'studio' in desc
     if room_type == 'ensuite':
@@ -198,7 +255,10 @@ _ACCESSIBILITY_FEATURE_PATTERNS = (
             r"wheelchair[- ]friendly|wheelchair access(?:ible)?|accessible (?:flat|apartment|"
             r"property|home|accommodation|entrance|building))\b"
             r"|轮椅(?:可进入|可通行|通道|友好|无障碍)(?!(?:卫生间|洗手间|浴室|淋浴))"
-            r"|适合轮椅(?:使用者)?|无障碍(?:房|住宅|公寓|出入|入口|通道)",
+            r"|适合轮椅(?:使用者)?|无障碍(?:房|住宅|公寓|出入|入口|通道)"
+            r"|\b(?:enough|sufficient|adequate)\b[^.;。；]{0,85}\b(?:doorway|corridor|turning|turn)\b[^.;。；]{0,65}\bwheelchair\b"
+            r"|\b(?:doors?|doorways?|corridors?)\b[^.;。；]{0,35}\bwide enough\b[^.;。；]{0,35}\bwheelchair\b"
+            r"|(?:室内|内部)[^。；;]{0,25}轮椅[^。；;]{0,20}(?:通行|转身|转弯)[^。；;]{0,15}(?:空间|宽度)" ,
             re.IGNORECASE,
         ),
     ),
@@ -206,7 +266,7 @@ _ACCESSIBILITY_FEATURE_PATTERNS = (
         "step-free",
         re.compile(
             r"\b(?:step[- ]free|no[- ]step|level access|without steps?|zero[- ]step)\b"
-            r"|无(?:台阶|阶梯)|零台阶|平层(?:入口|通道|出入)",
+            r"|(?:无|没有)(?:台阶|阶梯)|零台阶|平层(?:入口|通道|出入)",
             re.IGNORECASE,
         ),
     ),
@@ -217,6 +277,12 @@ _ACCESSIBILITY_FEATURE_PATTERNS = (
 )
 
 _ACCESSIBILITY_FEATURES = frozenset(name for name, _ in _ACCESSIBILITY_FEATURE_PATTERNS)
+_EVIDENCE_ONLY_FEATURES = _ACCESSIBILITY_FEATURES | {'cats allowed', 'pets allowed', 'cat_written_consent',
+                                                     'furnished'}
+
+
+def _requires_explicit_feature_evidence(feature: str) -> bool:
+    return feature in _EVIDENCE_ONLY_FEATURES or bool(re.fullmatch(r'wheelchair_space_\d+(?:\.\d+)?cm', feature))
 
 
 def _accessibility_feature_mentions(text: str) -> list[tuple[str, int, int]]:
@@ -226,6 +292,20 @@ def _accessibility_feature_mentions(text: str) -> list[tuple[str, int, int]]:
     for canonical, pattern in _ACCESSIBILITY_FEATURE_PATTERNS:
         for match in pattern.finditer(source):
             found.append((match.start(), match.end(), canonical))
+    # Functional space wording can refer back to an explicitly mentioned
+    # wheelchair (including its stated width), without saying "accessible".
+    functional_space = re.compile(
+        r"\b(?:usable|enough|sufficient|adequate)\s+(?:internal\s+)?(?:space|room|width|clearance)\b"
+        r"[^.!?;。；]{0,110}\b(?:doors?|doorways?|corridors?|bathroom|turning|turn)\b", re.I)
+    from core.constraint_updates import mention_is_requirement
+    for match in functional_space.finditer(source):
+        context_start = max(0, match.start() - 220)
+        context = source[context_start:match.end()]
+        anchors = list(re.finditer(r'\bwheelchair\b|轮椅', context, re.I))
+        if any(mention_is_requirement(source, context_start + anchor.start(), context_start + anchor.end())
+               and not re.search(r"\b(?:don.t|do not|not|no|without)\b[^.!?;:]{0,25}$",
+                                 context[:anchor.start()], re.I) for anchor in anchors):
+            found.append((match.start(), match.end(), 'wheelchair-accessible'))
     found.sort(key=lambda item: (item[0], -(item[1] - item[0]), item[2]))
     result: list[tuple[str, int, int]] = []
     seen = set()
@@ -323,6 +403,32 @@ def _property_feature_evidence(prop: dict, feature: str) -> str:
         blob = f"{room_type} {amenities}".lower()
         return ("verified" if any(token in blob for token in ("en-suite", "ensuite", "en suite"))
                 else "unverified")
+    if canonical == 'furnished':
+        # Structured furnishing only (R2-16): "Furnished" in the amenities verifies it,
+        # "Unfurnished" denies it; "furnished or unfurnished" / "part furnished" and silence
+        # stay unknown.
+        blob = " ".join(str(v) for v in (amenities, prop.get("Furnishing"), prop.get("Furnished"),
+                                         prop.get("furnish_type")) if v not in (None, "")).lower()
+        if prop.get("Furnished") is True:
+            return 'verified'
+        if prop.get("Furnished") is False:
+            return 'absent'
+        if re.search(r"furnished\s+or\s+unfurnished|unfurnished\s+or\s+furnished|part[\s-]*furnished|"
+                     r"flexible", blob):
+            return 'unverified'
+        if re.search(r"\bunfurnished\b", blob):
+            return 'absent'
+        if re.search(r"\b(?:fully\s+)?furnished\b", blob):
+            return 'verified'
+        return 'unverified'
+    if canonical in {'cats allowed', 'pets allowed'}:
+        keys = ('Cats_Allowed', 'Pets_Allowed') if canonical == 'cats allowed' else ('Pets_Allowed',)
+        for key in keys:
+            if prop.get(key) is True:
+                return 'verified'
+            if prop.get(key) is False:
+                return 'absent'
+        return 'unverified'
     if canonical not in _ACCESSIBILITY_FEATURES:
         return "unverified"
 
@@ -339,35 +445,240 @@ def _property_feature_evidence(prop: dict, feature: str) -> str:
     return "unverified"
 
 
+def _money_value(token: str):
+    """Parse pounds through Decimal; JSON-facing amounts retain exact pennies."""
+    from decimal import Decimal, InvalidOperation
+    try:
+        value = Decimal(str(token).replace(',', '').replace('£', '').strip())
+    except InvalidOperation:
+        return None
+    return int(value) if value == value.to_integral_value() else float(value)
+
+
+def _amount_role(text: str, lo: int, hi: int) -> str:
+    """Bind each amount to its own noun phrase on either side of the number.
+
+    A leading rent ceiling owns its amount even when the next conjoined quantity
+    is a combined cap. Within a side, the latest complete role phrase wins, so
+    "total cap ... and rent ceiling" does not inherit the earlier total role.
+    """
+    punctuation = r'[。!?;；\n，,]|(?<!\d)\.(?!\d)'
+    before = re.split(punctuation, text[:lo])[-1][-110:]
+    before = re.split(r'(?:£\s*)?(?<![\d.])\d[\d,]*(?:\.\d+)?', before)[-1]
+    before = re.split(r'\b(?:separate from|apart from|as distinct from|versus|rather than)\b', before, flags=re.I)[-1]
+    if re.search(r'(?:\b(?:and|but|while|whereas)\b|和|以及|而)\s*£?\s*$', before, re.I):
+        before = ''  # Amount-first phrase after an explicit quantity coordinator.
+    tail = re.split(punctuation, text[hi:])[0]
+    after = re.split(r'£|\b(?:while|whereas)\b', tail, flags=re.I)[0][:110]
+    if '£' in tail:
+        # The last coordinator before the next amount starts that quantity's
+        # phrase. Earlier "rent and transport" can still describe this amount.
+        joins = list(re.finditer(r'\b(?:and|but|while|whereas)\b|以及|而|另(?:外)?|和', after, re.I))
+        if joins:
+            after = after[:joins[-1].start()]
+    if re.search(r'每人|人均|\b(?:each|per person|per head)\b', before, re.I):
+        return 'per_person'
+    total = (r'\brent[\s–—-]*(?:plus|and|&)[\s–—-]*(?:commut(?:e|ing)|travel|transport)\b'
+             r'|(?:租金|房租|rent)[^£\d。;；]{0,35}(?:交通|通勤|travel|transport|commut)'
+             r'|(?:交通|通勤|travel|transport|commut)[^£\d。;；]{0,25}(?:租金|房租|rent)'
+             r'|all.in|combined|overall|总开销|总支出|总花费|总费用|总预算'
+             r'|\btotal\s+(?:(?:monthly|rent.plus.commuting|rent.plus.transport|affordability)\s+)*(?:budget|cap)\b')
+    rent = r'租金|房租|月租|整套(?:合计|总计|总价|共|预算|每月|每周|最多|最高|月租|周租)|\brent\b|rental'
+
+    def role(fragment, *, trailing=False):
+        totals = list(re.finditer(total, fragment, re.I))
+        rent_pattern = r'\brent\b|rental|租金|房租|月租' if trailing else rent
+        rents = list(re.finditer(rent_pattern, fragment, re.I))
+        latest_total = max(totals, key=lambda match: match.end()) if totals else None
+        latest_rent = max(rents, key=lambda match: match.end()) if rents else None
+        if latest_total and (not latest_rent or latest_total.end() >= latest_rent.start()):
+            return 'total'
+        if latest_rent:
+            return 'rent'
+        return None
+
+    return role(before) or role(after, trailing=True) or 'budget'
+
+
+def _extract_total_budget(text: str):
+    if not text or is_criteria_consultation(text):
+        return None
+    t = re.sub(r'(?<=\d),(?=\d{3}\b)', '', scoped_update_text(text).lower())
+    matches = [m for m in re.finditer(r'£\s*(\d{3,5}(?:\.\d{1,2})?)(?![\d.])', t)
+               if _amount_role(t, m.start(), m.end()) == 'total'
+               and not is_hypothetical(clause_at(t, m.start(), m.end()))]
+    if not matches:
+        return None
+    m = matches[-1]
+    value = _money_value(m.group(1))
+    return monthly_from_weekly(value) if _budget_period_near(t, m.start(), m.end()) == 'week' else value
+
+
+# "bills" alone is not here: "budget £1500 including bills" describes the rent.
+_NOT_RENT_MONEY = re.compile(
+    r'\b(?:deposit|salary|earn\w*|income|wages?|after tax|fees?|council tax|'
+    r'holding|admin)\b|押金|工资|收入|月薪|年薪', re.I)
+_RENT_CONTEXT = re.compile(
+    r'\b(?:budget|rent|max(?:imum)?|under|up to|below|pcm|per month|a month|ceiling)\b|'
+    r'预算|租金|月租|上限|以内', re.I)
+
+
+def _corrects_a_budget(t: str, correction) -> bool:
+    """True when ``correction`` (a "no wait / actually / 不对 <amount>" match) retracts an
+    earlier RENT figure in the same clause run, and is itself a rent figure.
+
+    Without this a correction of any number won: "The deposit is £2000, sorry, £2500",
+    "I earn 4000, sorry 4500 after tax" and "1500, actually 1200 sq ft" all replaced
+    the budget (review of the A-05 fix)."""
+    start, end = correction.start(1), correction.end(1)
+    earlier = list(re.finditer(r'(?<![\d.])\d{3,5}(?!\d|\.\d)', t[:correction.start()]))
+    if not earlier:
+        return False
+    prior = earlier[-1]
+    bounds = list(re.finditer(r'[.!?。！？;；\n](?!\d)', t[:prior.start()]))
+    clause = t[(bounds[-1].end() if bounds else 0):min(len(t), end + 16)]
+    if not _RENT_CONTEXT.search(clause[:prior.end() - (bounds[-1].end() if bounds else 0) + 20]):
+        return False
+    if _NOT_RENT_MONEY.search(clause):
+        return False
+    if re.match(r'\s*(?:sq|square|ft|m2|minutes?|mins?|beds?|bedrooms?|people|persons?|%|分钟|平)',
+                t[end:], re.I):
+        return False
+    return not is_hypothetical(clause_at(t, start, end))
+
+
+# A calendar year is not a rent figure (R1-03): "Search web for average rent in Hackney
+# 2026" stored max_budget=2026 and the reply offered listings "within your £2,026 budget".
+# A 19xx/20xx number is money only when the words AT it say so: a £ sign, a period/currency
+# unit or ceiling word after it, or a budget/ceiling word immediately before it.
+_YEAR_TOKEN = re.compile(r'(?<![\d.£])(?:19|20)\d\d(?![\d])(?!\.\d)')
+_YEAR_MONEY_BEFORE = re.compile(
+    r'(?:£|\b(?:budget|ceiling|max(?:imum)?|under|below|up\s+to|no\s+more\s+than|less\s+than|'
+    r'around|about|rent(?:al)?|pay(?:ing)?|afford|spend)\b(?:\s+(?:is|of|at|now|to|around|about|be))*'
+    r'\s*[=:]?|'
+    # 「预算改成2000」 masked 2000 as a calendar year (R4-05): a budget verb between the
+    # budget noun and the figure keeps it money.
+    r'(?:预算|月租|租金|房租|上限)(?:改成|改为|调到|调整为|调整到|提高到|提到|降到|降低到|是|为|设为|设成)?|'
+    r'最多|最高|不超过)\s*$', re.I)
+_YEAR_MONEY_AFTER = re.compile(
+    r'\s*(?:pcm|pm|pw|p/?m|per\b|a\s+(?:month|week)|/|镑|英镑|块|元|以内|以下|左右|'
+    r'max(?:imum)?\b|budget\b|ceiling\b|pounds?\b|gbp\b|or\s+(?:less|under|below)\b)', re.I)
+
+
+def _mask_years(t: str) -> str:
+    """Blank out calendar years (same length, so offsets stay valid)."""
+    def _mask(match):
+        if _YEAR_MONEY_BEFORE.search(t[max(0, match.start() - 40):match.start()]) or (
+                _YEAR_MONEY_AFTER.match(t, match.end())
+                and not re.match(r'\s*年', t[match.end():])):
+            return match.group()
+        return 'y' * len(match.group())
+    return _YEAR_TOKEN.sub(_mask, t)
+
+
 def _extract_budget(text: str):
     """Pull an explicit monthly/weekly budget out of the *current* user message.
-    Returns (amount:int, period:'week'|'month') or (None, None). Deterministic regex
+    Returns (amount:number, period:'week'|'month') or (None, None). Deterministic regex
     so a conversational update ("my budget is now 1800") overrides accumulated state
     without an extra LLM round-trip."""
-    if not text:
+    if not text or is_criteria_consultation(text):
         return None, None
-    t = text.lower().replace(',', '')
+    t = scoped_update_text(text).lower()
+    t = re.sub(r'(?<=\d),(?=\d{3}\b)', '', t)
+    t = _mask_years(t)
+    if (re.search(r'not\s+(?:yet\s+)?(?:chosen|decided)|haven.t (?:yet )?chosen|尚未(?:选择|决定)|还没选|未确定', t, re.I)
+            and re.search(r'\bor\b|还是|或者', t, re.I)
+            and len(re.findall(r'£\s*\d{3,5}', t)) >= 2):
+        return None, None
+    if re.search(r'确认|澄清|口径选项|让我选|不清楚|\b(?:whether|clarify|options)\b|[?？]', t) and re.search(r'每人[^。.!?]{0,30}还是[^。.!?]{0,15}整套|per.person.{0,30}or.{0,15}(?:total|whole)', t, re.I):
+        return None, None
+    def valid_amount(value, period):
+        monthly = monthly_from_weekly(value) if period == 'week' else value
+        return (value, period) if 200 <= monthly <= 20000 else (None, None)
+    if re.search(r'^(?:is (?:it|this|that)|does |how much|what is)|计算|相差|贵多少', t) and not re.search(
+            r'keep|set|change|raise|lower|改为|调整|预算(?:是|为|改)', t):
+        return None, None
+    if re.search(r'房源|\blisting\b|\bproperty\b', t) and re.search(r'[?？]|多少', t) and not re.search(
+            r'\b(?:set|keep|change|ceiling|budget)\b|预算|上限', t):
+        return None, None
+    # A self-correction names the budget twice and retracts the first: "Budget £1,500, no
+    # wait, £1,700" searched at £1,500 (A-05, 2/2). The figure after the LAST correction
+    # marker wins, provided an earlier figure in the same message is what it corrects.
+    correction = None
+    for candidate in re.finditer(
+            r'(?:\bno\s*,?\s*wait\b|\bsorry\b|\bi\s+mean\b|\bmake\s+(?:that|it)\b|\bactually\b|'
+            r'\bcorrection\b|\bor\s+rather\b|\bscratch\s+that\b|不对|说错了|改成|应该是)'
+            r'[\s,，:：]*(?:£\s*)?(?<![\d.])(\d{3,5}(?:\.\d{1,2})?)(?!\d|\.\d)', t, re.I):
+        correction = candidate
+    if correction is not None and _corrects_a_budget(t, correction):
+        return valid_amount(_money_value(correction.group(1)),
+                            _budget_period_near(t, correction.start(1), correction.end(1)))
+    # (?!\d|\.\d): a full stop after the figure ends the sentence, it is not a decimal
+    # point — "…, £1,700." used to be invisible to every amount pattern here.
+    rent_amounts = [m for m in re.finditer(r'(?:£\s*)?(?<![\d.])(\d{3,5}(?:\.\d{1,2})?)(?!\d|\.\d)', t)
+                    if _amount_role(t, m.start(), m.end()) == 'rent'
+                    and not is_hypothetical(clause_at(t, m.start(), m.end()))]
+    if rent_amounts:
+        m = rent_amounts[-1]
+        return valid_amount(_money_value(m.group(1)), _budget_period_near(t, m.start(), m.end()))
+    # A clearly stated household of N with a per-person ceiling can express a
+    # whole-property ceiling. Bedrooms alone never establish occupant count.
+    persons = re.search(r'(?:我们|共|一共)?\s*([2-6二两三四五六])\s*(?:个人|人)|\b([2-6]|two|three|four|five|six)\s+(?:people|persons|tenants|friends)\b', t)
+    per_person = [m for m in re.finditer(r'(?:£\s*)?(?<![\d.])(\d{3,5}(?:\.\d{1,2})?)(?!\d|\.\d)', t)
+                  if _amount_role(t, m.start(), m.end()) == 'per_person']
+    if persons and len(per_person) == 1 and _extract_room_type(t) == 'whole' and not is_hypothetical(t):
+        count_text = persons.group(1) or persons.group(2)
+        counts = {'二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6,
+                  'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6}
+        count = int(count_text) if count_text.isdigit() else counts[count_text]
+        m = per_person[0]
+        return valid_amount(_money_value(m.group(1)) * count, _budget_period_near(t, m.start(), m.end()))
+    # Choose the declared ceiling before any quoted listing prices. Questions,
+    # examples and property details are not changes to the household's budget.
+    explicit = []
+    for pattern in (
+        r'(?:budget\b|ceiling\b|最多|预算|上限)[^£\d。;；]{0,30}£?\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)',
+        r'(?:under|below|up\s+to|no\s+more\s+than|max(?:imum)?)\s*£?\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)',
+        # "What about Camden at £900?" / "3 bedrooms in Edinburgh at £900" names the price
+        # point of the search (R4-05) — only with an area/search/bedroom word before it,
+        # so a listing's "at £2,000" in a question about that listing is not a budget.
+        r'(?:(?:what|how)\s+about|search(?:ing)?|find|show(?:\s+me)?|look(?:ing)?\s+for)\b'
+        r'[^£。;；?？]{0,40}?\bat\s+£\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)',
+        r'£?\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)[^。;；]{0,12}(?:ceiling|budget|以内|以下)',
+    ):
+        for candidate in re.finditer(pattern, t):
+            clause = clause_at(t, candidate.start(), candidate.end())
+            if (_amount_role(t, candidate.start(1), candidate.end(1)) not in ('per_person', 'total')
+                    and not is_hypothetical(clause) and not re.search(r'是否|会怎样|what if|would .*budget', clause)):
+                explicit.append(candidate)
+    if explicit:
+        m = max(explicit, key=lambda item: item.start())
+        val = _money_value(m.group(1))
+        return valid_amount(val, _budget_period_near(t, m.start(1), m.end(1)))
+    if is_hypothetical(t) or re.search(r'比较|房源|\bcompare\b|budget unchanged|listing|property\s*(?:id|#)|\bat £|\bpriced?\b|[?？]', t):
+        return None, None
     amount = None
     # 1) currency-tagged amount: "£1800", "£ 1800"
-    m = re.search(r'£\s?(\d{3,5})\b', t)
+    m = re.search(r'£\s?(\d{3,5}(?:\.\d{1,2})?)\b', t)
     # 2) amount followed by a budget unit: "1800 pcm", "1800 per month", "1800 a week"
     if not m:
-        m = re.search(r'\b(\d{3,5})\s*(?:pcm|pm|pw|/\s*(?:month|week|wk)|per\s+(?:month|week)|a\s+(?:month|week)|pounds?)\b', t)
+        m = re.search(r'\b(\d{3,5}(?:\.\d{1,2})?)\s*(?:pcm|pm|pw|/\s*(?:month|week|wk)|per\s+(?:month|week)|a\s+(?:month|week)|pounds?)\b', t)
     # 3) budget keyword + amount: "budget is now 1800", "budget of 1800", "max budget 1800"
     if not m:
-        m = re.search(r'budget\b[^£\d]{0,20}£?\s?(\d{3,5})\b', t)
+        m = re.search(r'budget\b[^£\d]{0,20}£?\s?(\d{3,5}(?:\.\d{1,2})?)\b', t)
     # 4) budget-INTENT phrasing (esp. clarification answers): "under 1000", "up to 1200",
     #    "max 900", "around 1500", and Chinese "1000以内/以下/左右", "预算1000", "月租1000".
     if not m:
-        m = re.search(r'\b(?:under|below|max(?:imum)?|up\s+to|around|about|no\s+more\s+than|less\s+than)\s*£?\s?(\d{3,5})\b', t)
+        m = re.search(r'\b(?:under|below|max(?:imum)?|up\s+to|around|about|no\s+more\s+than|less\s+than)\s*£?\s?(\d{3,5}(?:\.\d{1,2})?)\b', t)
     if not m:
-        m = re.search(r'(\d{3,5})\s*(?:以内|以下|左右|块|镑|元|英镑)', t)
+        m = re.search(r'(\d{3,5}(?:\.\d{1,2})?)\s*(?:以内|以下|左右|块|镑|元|英镑)', t)
     if not m:
-        m = re.search(r'(?:预算|月租|租金|房租)\s*[^\d]{0,6}(\d{3,5})', t)
+        m = re.search(r'(?:预算|月租|租金|房租)\s*[^\d]{0,6}(\d{3,5}(?:\.\d{1,2})?)', t)
     if m:
-        val = int(m.group(1))
-        if 200 <= val <= 20000:
-            amount = val
+        if _amount_role(t, m.start(1), m.end(1)) in ('per_person', 'total'):
+            return None, None
+        val = _money_value(m.group(1))
+        return valid_amount(val, _budget_period_near(t, m.start(1), m.end(1)))
     if amount is None:
         return None, None
     return amount, _budget_period_near(t, m.start(1), m.end(1))
@@ -401,9 +712,16 @@ def _budget_period_near(text: str, lo: int, hi: int) -> str:
     Distance is measured to the nearest edge of the amount, so a trailing unit ("350镑/周")
     and a leading one ("每周350镑") are treated alike. No marker at all still means monthly.
     """
+    left = max([m.end() for m in re.finditer(r'[。.!?;；\n]', text[:lo])] or [0])
+    stop = re.search(r'[。.!?;；\n]', text[hi:])
+    right = hi + stop.start() if stop else len(text)
     def _nearest(pattern) -> float:
         best = float('inf')
         for mk in pattern.finditer(text):
+            if mk.start() < left or mk.end() > right:
+                continue
+            if pattern is _WEEKLY_MARKER and re.search(r'\b(?:days?|times?|trips?)\s*$|[天次]\s*$', text[max(left, mk.start()-12):mk.start()]):
+                continue
             if mk.end() <= lo:
                 best = min(best, lo - mk.end())      # marker before the amount
             elif mk.start() >= hi:
@@ -470,20 +788,39 @@ def _extract_bedrooms(text: str):
     the spelled-out one..five -> (N, N). Deterministic so a Manchester 1-bed
     query drives an exact min=max=1 filter on the live source (no studios/2-beds
     leaking in, the original demo-data bug)."""
-    if not text:
+    if not text or is_criteria_consultation(text):
         return None
-    t = text.lower()
-    if re.search(r"\bstudio\b", t):
+    t = scoped_update_text(text).lower()
+    nums = {'零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, 'six': 6, **_WORD_NUMS}
+    t = re.sub(r'\bminimum bedroom count\s+(?:with|to|of|is)\s+([0-6]|one|two|three|four|five|six)\b', r'at least \1 bedrooms', t)
+    pattern = r'(?<!\d)([0-6零一二两三四五六]|one|two|three|four|five|six)\s*-?\s*(?:bed(?:room)?s?\b|(?:间)?(?:独立)?卧(?:室)?|居(?:室)?)'
+    candidates = []
+    for m in re.finditer(pattern, t):
+        clause = clause_at(t, m.start(), m.end())
+        if re.search(r'不要改变|不要修改|不变|don.t change|unchanged', clause, re.I):
+            continue
+        if not mention_is_requirement(t, m.start(), m.end()):
+            if not re.search(r'不要改变\s*$', t[:m.start()]):
+                continue
+        before = re.split(r'[。.!?;；\n，,:：]', t[:m.start()])[-1][-55:]
+        after = t[m.end():m.end() + 22]
+        # Allocation per occupant is not the whole home's bedroom count. Never
+        # multiply it by an assumed household size, or let it win over a total.
+        if (re.search(r'(?:各(?:自)?(?:有|住|占|要|需(?:要)?)?|每人(?:有|住|要|需(?:要)?)?|一人(?:有|住|要|需(?:要)?)?)\s*$'
+                      r'|\beach(?:\s+\w+){0,4}\s*$', before, re.I)
+                or re.match(r'\s*(?:each|per (?:person|tenant)|apiece)\b', after, re.I)):
+            continue
+        n = int(m.group(1)) if m.group(1).isdigit() else nums[m.group(1)]
+        minimum = bool(re.search(r'(?:至少|最少|at least|minimum|min\.?)[^，。;；]{0,10}$', before))
+        minimum = minimum or bool(re.match(r'\s*(?:minimum|or more|以上)', after, re.I))
+        total = bool(re.search(r'正好|恰好|总共|总计|合计|整套|整租|\b(?:exactly|total(?: of)?|whole (?:home|property|flat))\b', before, re.I))
+        candidates.append((int(total), m.start(), (n, 6 if minimum else n)))
+    if candidates:
+        # Preserve historical first-mention behavior at equal strength; an
+        # explicitly scoped total outranks an earlier incidental room count.
+        return max(candidates, key=lambda item: (item[0], -item[1]))[2]
+    if _extract_room_type(t) == 'studio':
         return (0, 0)
-    m = re.search(r"\b(\d)\s*(?:-)?\s*bed(?:room)?s?\b", t)
-    if m:
-        n = int(m.group(1))
-        if 0 <= n <= 6:
-            return (n, n)
-    m = re.search(r"\b(one|two|three|four|five)\s*(?:-)?\s*bed(?:room)?s?\b", t)
-    if m:
-        n = _WORD_NUMS[m.group(1)]
-        return (n, n)
     return None
 
 
@@ -559,15 +896,49 @@ def _extract_move_in_date(text: str, *, now: date | None = None) -> Optional[str
     if not text or not str(text).strip():
         return None
     today = now or date.today()
-    t = str(text).strip()
+    t = scoped_update_text(text).strip()
+    if date_is_cleared(t) or is_criteria_consultation(t):
+        return None
+    t = '，'.join(part for part in re.split(r'[。;；!?！？，,]', t) if not is_hypothetical(part))
+    # The housing form has one date field. An explicit correction to that named
+    # field can refer back across a semicolon without repeating "move in".
+    correction = re.search(r'表单(?:入住)?日期[^。!?]{0,90}(?:改回|改为|改成)\s*(\d{4})-(\d{1,2})-(\d{1,2})', t)
+    if correction:
+        return _iso_or_none(*correction.groups())
+    ignored_date = re.compile(r'(?:today|now|今天|现在|当前日期)\s*(?:is|是|为|:|：)?\s*$|没有说过|没要求|不是|不要|never said|didn.t (?:say|ask)', re.I)
+    full_dates = re.compile(r'(?<!\d)\d{4}-\d{1,2}-\d{1,2}(?!\d)|\d{4}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*[日号]|\b\d{1,2}/\d{1,2}/\d{4}\b')
+    t = full_dates.sub(lambda m: ' ' * len(m.group()) if ignored_date.search(
+        re.split(r'[，,。;；]', t[:m.start()])[-1][-25:]) else m.group(), t)
     tl = t.lower()
 
+    # Keep only predicates that declare housing availability/start. "from" and
+    # "start" alone also occur in journeys, so they cannot license arbitrary dates.
+    contexts = []
+    for sentence in re.split(r'[。;；!?！\n]|(?<!\d)\.(?!\d)', t):
+        for clause in re.split(r'\band (?=(?:check|find|show|calculate|verify) (?:the )?(?:route|journey|weather))'
+                               r'|\b(?:and|but|then)\s+(?=(?:(?:i|we)\s+)?(?:(?:want|plan|need|intend)\s+to\s+|will\s+)?mov(?:e|ing)[ -]?in)'
+                               r'|，|,', sentence, flags=re.I):
+            if is_hypothetical(clause) or re.search(r'unchanged|not (?:a |my )?move.in|never said|没有说过|没要求|不变', clause, re.I):
+                continue
+            housing_context = bool(re.search(
+                r'\b(?:mov(?:e|ing)[ -]?in|occupy|tenancy|available|avail)\b|'
+                r'\b(?:move|moving)\s+(?:on|in|by|from)\b|'
+                r'^\s*(?:starting from|from)\s+(?:\d|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))|'
+                r'入住|搬入|搬进|搬家|起租|入伙|开始租', clause, re.I))
+            transit_context = bool(re.search(r'\b(?:journey|train|transport|arriv\w*|depart\w*|weather)\b|天气|到达|出发', clause, re.I))
+            if housing_context and (not transit_context or re.search(r'mov(?:e|ing)[ -]?in|入住|起租|tenancy', clause, re.I)):
+                contexts.append(clause)
+    t = '，'.join(contexts)
+    if not t.strip():
+        return None
+    tl = t.lower()
     has_ctx_en = bool(_MOVE_CTX_EN.search(tl))
     has_ctx_zh = any(w in t for w in _MOVE_CTX_ZH)
 
-    # 1) explicit full dates — strong, unambiguous signal (fire regardless of ctx).
-    m = re.search(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b", t)
-    if m:
+    # 1) explicit full dates within the housing predicate.
+    for m in re.finditer(r"(?<!\d)(\d{4})-(\d{1,2})-(\d{1,2})(?!\d)", t):
+        if re.search(r'(?:today|now|今天|现在|当前日期)\s*(?:is|是|为|:|：)?\s*$', t[max(0, m.start()-20):m.start()], re.I):
+            continue
         iso = _iso_or_none(m.group(1), m.group(2), m.group(3))
         if iso:
             return iso
@@ -584,6 +955,9 @@ def _extract_move_in_date(text: str, *, now: date | None = None) -> Optional[str
 
     # 2) Chinese month-level — requires a ZH move-in context word.
     if has_ctx_zh:
+        m = re.search(r'(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]?', t)
+        if m:
+            return _resolve_move_ymd(None, m.group(1), m.group(2), today)
         if "下个月" in t or "下月" in t:
             nm = today.month % 12 + 1
             ny = today.year + (1 if today.month == 12 else 0)
@@ -715,6 +1089,27 @@ _ZH_AREA_MAP = {
     "雷丁": "Reading", "巴斯": "Bath", "杜伦": "Durham",
     "坎特伯雷": "Canterbury", "格林威治": "Greenwich", "卡姆登": "Camden",
     "肯辛顿": "Kensington", "切尔西": "Chelsea",
+    # London neighbourhoods. Without them "伦敦肖迪奇附近的一居室" matched only 伦敦 and the
+    # search covered all of London (Chigwell, Barking …) under a "verified" header (R1-01).
+    # Every value is a canonical _LONDON_AREA_NAMES spelling, so the London-beats-city
+    # ranking in _extract_area applies.
+    "肖迪奇": "Shoreditch", "肖尔迪奇": "Shoreditch", "国王十字": "King's Cross",
+    "卡姆登镇": "Camden", "哈克尼": "Hackney", "伊斯灵顿": "Islington",
+    "霍克斯顿": "Hoxton", "达尔斯顿": "Dalston", "布里克斯顿": "Brixton",
+    "克拉珀姆": "Clapham", "克拉芬": "Clapham", "佩卡姆": "Peckham",
+    "斯特拉特福": "Stratford", "汉普斯特德": "Hampstead", "白教堂": "Whitechapel",
+    "贝斯纳尔格林": "Bethnal Green", "马里波恩": "Marylebone", "马里本": "Marylebone",
+    "苏豪": "Soho", "苏活": "Soho", "梅费尔": "Mayfair", "梅菲尔": "Mayfair",
+    "诺丁山": "Notting Hill", "富勒姆": "Fulham", "哈默史密斯": "Hammersmith",
+    "温布尔登": "Wimbledon", "温布尔顿": "Wimbledon", "金丝雀码头": "Canary Wharf",
+    "南华克": "Southwark", "伊灵": "Ealing", "克罗伊登": "Croydon",
+    "巴特西": "Battersea", "沃克斯豪尔": "Vauxhall", "旺兹沃思": "Wandsworth",
+    "托特纳姆": "Tottenham", "温布利": "Wembley", "里士满": "Richmond",
+    "帕特尼": "Putney", "克勒肯维尔": "Clerkenwell", "法灵顿": "Farringdon",
+    "刘易舍姆": "Lewisham", "伍尔维奇": "Woolwich", "奇斯威克": "Chiswick",
+    "阿克顿": "Acton", "伯蒙德西": "Bermondsey", "海格特": "Highgate",
+    "海布里": "Highbury", "芬斯伯里公园": "Finsbury Park", "沃尔瑟姆斯托": "Walthamstow",
+    "迈尔恩德": "Mile End", "金斯顿": "Kingston", "肯特镇": "Kentish Town",
 }
 
 # Curated set of well-known UK cities + London boroughs/areas (canonical spelling).
@@ -749,7 +1144,7 @@ _LONDON_AREA_NAMES = [
     "Notting Hill", "Whitechapel", "Bethnal Green", "Bermondsey", "Deptford",
     "Lewisham", "Wandsworth", "Battersea", "Vauxhall", "Pimlico", "Marylebone",
     "Soho", "Mayfair", "Finsbury Park", "Tottenham", "Walthamstow", "Wembley",
-    "Harrow", "Barnet", "Enfield", "Richmond", "Kingston", "Putney", "Balham",
+    "Harrow", "High Barnet", "Barnet", "Enfield", "Richmond", "Kingston", "Putney", "Balham",
     "Tooting", "Canary Wharf", "Elephant and Castle", "Highbury", "Highgate",
     "Hampstead", "Kentish Town", "Holloway", "Stoke Newington", "Mile End",
     "Clerkenwell", "Farringdon", "Acton", "Chiswick", "Streatham", "Catford",
@@ -758,6 +1153,15 @@ _LONDON_AREA_NAMES = [
     "Camberwell", "Kennington", "Aldgate", "Southwark", "Wapping", "Limehouse",
     "Blackheath", "Forest Hill", "Shepherd's Bush", "Earl's Court",
     "King's Cross",
+    # Well-known residential neighbourhoods a search names (R4-05): "Search 1-bed flats in
+    # Holborn" kept the previous area because Holborn/Bloomsbury were not known places.
+    # Station-like work destinations (Euston, Waterloo, London Bridge ...) are left out.
+    "Holborn", "Bloomsbury", "Fitzrovia", "Covent Garden", "Poplar", "Bow", "Bayswater",
+    "Maida Vale", "Belsize Park", "Primrose Hill", "Swiss Cottage", "West Hampstead",
+    "Muswell Hill", "Crouch End", "Archway", "Tufnell Park", "Haggerston", "Homerton",
+    "Clapton", "Canning Town", "Forest Gate", "Wood Green", "Brockley", "Herne Hill",
+    "Dulwich", "Stockwell", "Barbican", "Holland Park", "White City", "Kensal Rise",
+    "Golders Green", "Finchley", "Hendon", "Angel",
 ]
 
 _KNOWN_AREA_NAMES = _MAJOR_UK_CITY_NAMES + _LONDON_AREA_NAMES
@@ -765,6 +1169,120 @@ _KNOWN_AREA_NAMES = _MAJOR_UK_CITY_NAMES + _LONDON_AREA_NAMES
 _KNOWN_AREAS = {re.sub(r"[’']", "", n.lower()): n for n in _KNOWN_AREA_NAMES}
 # Same normalisation, London half only — the set a geocoder should read "London" into.
 LONDON_AREAS = {re.sub(r"[’']", "", n.lower()): n for n in _LONDON_AREA_NAMES}
+
+# ── Postcode-district -> London BOROUGH, for reconciling a provider's own area label ──
+# OnTheMarket display names carry a borough word chosen by the agent, and it is sometimes
+# simply wrong: "Rugby House 6 Great Ormond Street, Islington WC1N" was returned for a
+# CAMDEN search and shown to a user who had asked for Camden — WC1N is Camden (Bloomsbury),
+# not Islington. The postcode is the one part of that string the agent cannot get wrong.
+#
+# DELIBERATELY INCOMPLETE. Only districts that sit unambiguously inside ONE borough are
+# listed; every district that straddles a boundary (N1 Islington/Hackney, EC1 Islington/
+# City, SE1 Southwark/Lambeth, NW6 Camden/Brent, E20, N4) is OMITTED, because a confident
+# wrong correction is worse than the label we started with. Sub-district overrides come
+# first for the few 4-character codes that leave their district's borough.
+_LONDON_DISTRICT_BOROUGH = {
+    "WC1": "Camden", "NW1": "Camden", "NW3": "Camden", "NW5": "Camden",
+    "N5": "Islington", "N7": "Islington",
+    "E5": "Hackney", "E8": "Hackney", "E9": "Hackney", "N16": "Hackney",
+    "E1": "Tower Hamlets", "E2": "Tower Hamlets", "E3": "Tower Hamlets",
+    "E14": "Tower Hamlets",
+    "SE5": "Southwark", "SE15": "Southwark", "SE16": "Southwark",
+    "SE8": "Lewisham", "SE13": "Lewisham", "SE14": "Lewisham",
+    "SE10": "Greenwich", "SE18": "Greenwich",
+    "SE11": "Lambeth", "SW2": "Lambeth", "SW4": "Lambeth", "SW9": "Lambeth",
+    "SW11": "Wandsworth", "SW17": "Wandsworth", "SW18": "Wandsworth",
+    "W1": "Westminster", "W2": "Westminster", "W9": "Westminster",
+    "SW1": "Westminster", "NW8": "Westminster",
+    "SW3": "Kensington and Chelsea", "SW5": "Kensington and Chelsea",
+    "SW7": "Kensington and Chelsea", "SW10": "Kensington and Chelsea",
+    "W8": "Kensington and Chelsea", "W11": "Kensington and Chelsea",
+    "W6": "Hammersmith and Fulham", "W12": "Hammersmith and Fulham",
+    "W14": "Hammersmith and Fulham", "SW6": "Hammersmith and Fulham",
+    "EC2": "City of London", "EC3": "City of London", "EC4": "City of London",
+}
+# 4-character outward codes whose borough differs from their district's.
+_LONDON_OUTWARD_BOROUGH = {
+    "WC1X": "Islington",
+    "WC1R": "Islington",
+}
+# The borough words a listing string may claim. A label is only ever corrected when BOTH
+# sides are boroughs: a neighbourhood name ("Shoreditch", "Bloomsbury") is not a borough
+# claim and is never touched.
+_LONDON_BOROUGH_NAMES = {
+    b.lower(): b for b in
+    set(_LONDON_DISTRICT_BOROUGH.values()) | set(_LONDON_OUTWARD_BOROUGH.values())
+}
+
+_OUTWARD_IN_ADDRESS_RE = re.compile(
+    r"\b([A-Z]{1,2}[0-9][A-Z0-9]?)\b(?!\s*[0-9][A-Z]{2})", re.IGNORECASE)
+
+
+def borough_for_postcode(text: str) -> str | None:
+    """The London borough an outward postcode in ``text`` unambiguously sits in, else None.
+    Never raises."""
+    try:
+        m = _OUTWARD_IN_ADDRESS_RE.search(str(text or ""))
+        if not m:
+            m = re.search(r"\b([A-Z]{1,2}[0-9][A-Z0-9]?)\s*[0-9][A-Z]{2}\b",
+                          str(text or ""), re.IGNORECASE)
+        if not m:
+            return None
+        outward = m.group(1).upper()
+        if outward in _LONDON_OUTWARD_BOROUGH:
+            return _LONDON_OUTWARD_BOROUGH[outward]
+        district = re.match(r"^([A-Z]{1,2}[0-9]+)", outward)
+        return _LONDON_DISTRICT_BOROUGH.get(district.group(1)) if district else None
+    except Exception:
+        return None
+
+
+def reconcile_area_label(address: object) -> str:
+    """Replace a listing string's BOROUGH word when its own postcode contradicts it.
+
+    "Rugby House 6 Great Ormond Street, Islington WC1N" -> "... Camden WC1N". WC1N is
+    Bloomsbury, i.e. Camden; the borough word in an OnTheMarket display name is chosen by
+    the agent and is sometimes simply wrong, which is how a Camden search answered a Camden
+    question with a listing labelled Islington.
+
+    Only a borough word ADJACENT TO THE POSTCODE is touched — in the postcode's own comma
+    part, or alone in the part just before it. A borough name inside a STREET name
+    ("Camden Park Road, London, E1 4AA") is never rewritten. Untouched, too, when the
+    district is not in the curated unambiguous set, when nothing claims a borough, or when
+    the two already agree, so this can only remove a contradiction and never invent a
+    claim. Never raises."""
+    try:
+        text = " ".join(str(address or "").split())
+        if not text:
+            return text
+        borough = borough_for_postcode(text)
+        if not borough:
+            return text
+        parts = [p.strip() for p in text.split(",")]
+        pc_idx = next((i for i, part in enumerate(parts)
+                       if _OUTWARD_IN_ADDRESS_RE.search(part)
+                       or re.search(r"\b[A-Z]{1,2}[0-9][A-Z0-9]?\s*[0-9][A-Z]{2}\b",
+                                    part, re.IGNORECASE)), None)
+        if pc_idx is None:
+            return text
+        targets = {pc_idx}
+        if pc_idx > 0 and parts[pc_idx - 1].lower() in _LONDON_BOROUGH_NAMES:
+            targets.add(pc_idx - 1)
+        changed = False
+        for idx in sorted(targets):
+            part = parts[idx]
+            for claimed_lower, claimed in _LONDON_BOROUGH_NAMES.items():
+                if claimed == borough:
+                    continue
+                pattern = re.compile(r"\b" + re.escape(claimed) + r"\b", re.IGNORECASE)
+                if pattern.search(part):
+                    part = pattern.sub(borough, part)
+                    changed = True
+            parts[idx] = part
+        return ", ".join(parts) if changed else text
+    except Exception:
+        return str(address or "")
+
 
 # Switch / location cues that precede a place name in a conversational area change.
 # The captured span is VALIDATED against _KNOWN_AREAS, so even a weak cue can never
@@ -778,6 +1296,8 @@ _AREA_CUE_RE = re.compile(
     r"flats?\s+in|places?\s+in|rooms?\s+in|somewhere\s+in|"
     r"property\s+in|properties\s+in|apartments?\s+in|"
     r"want|prefer|choose|pick|go\s+(?:with|to|for)|"
+    # "Now show me Islington ones" (R4-05).
+    r"show\s+me|"
     r"around|near|in"
     r")\s+([a-z][a-z’'\-\.\s]{1,30})",
     re.IGNORECASE,
@@ -794,20 +1314,308 @@ _AREA_BARE_FILLER = re.compile(
 )
 
 
+# A place name that is part of a STREET, STATION or other address is not an area (R2-05):
+# "near Gloucester Avenue, London NW1" switched a Camden search to the city of Gloucester and
+# "I work near Liverpool Street" to Liverpool. A known name followed by one of these words,
+# and every comma-joined component of the address after it ("…Avenue, London NW1"), is part
+# of that address. One exception: a London area's own station ("near King's Cross station")
+# still locates that area.
+_STREET_WORD = (
+    r"(?:high\s+)?(?:street|road|avenue|lane|place|square|park|gardens|terrace|crescent|close|"
+    r"way|drive|grove|mews|row|court|walk|parade|yard|station|bridge|airport|rd|ave|ln|sq|gdns|"
+    r"st(?!\.?\s+(?:pancras|james|johns?|albans|helens|katharine|pauls?|marys?|giles|lukes?|"
+    r"georges?|margarets?|leonards|ives|neots|andrews)\b))(?![a-z])")
+_STREET_AFTER_NAME = re.compile(r"\.?\s+" + _STREET_WORD, re.I)
+_STREET_NAME = re.compile(r"(?<![a-z])[a-z][a-z\-]*\s+" + _STREET_WORD, re.I)
+_ADDRESS_JOIN = re.compile(r"\s*,\s*(?:\d+\s*)?$")
+_POSTCODE_TAIL = re.compile(r"\s*,?\s*[a-z]{1,2}\d{1,2}[a-z]?(?:\s*\d[a-z]{2})?(?![a-z\d])", re.I)
+
+
+def _area_mentions(text: str):
+    """``(key, start, end)`` for every known-area mention in ``text`` (already lower-cased and
+    apostrophe-free) that names an AREA — not part of a street or station address."""
+    mentions = []
+    for key in _KNOWN_AREAS:
+        for found in re.finditer(r"\b" + re.escape(key) + r"\b", text):
+            mentions.append((key, found.start(), found.end()))
+    if not mentions:
+        return []
+    address_ends = [m.end() for m in _STREET_NAME.finditer(text)]
+    mentions.sort(key=lambda item: (item[1], -(item[2] - item[1])))
+    kept = []
+    for key, start, end in mentions:
+        street = _STREET_AFTER_NAME.match(text, end)
+        if street and not (key in LONDON_AREAS
+                           and re.fullmatch(r"\.?\s+station", street.group(), re.I)):
+            # "King's Cross station" still locates the King's Cross area; "Liverpool Street",
+            # "Gloucester Avenue" and "London Bridge" never locate the city they start with.
+            address_ends.append(street.end())
+            continue
+        # A comma-joined component right after an address ("Gloucester Avenue, London NW1",
+        # "10 Downing Street, Westminster") belongs to that address.
+        if any(a <= start and _ADDRESS_JOIN.fullmatch(text[a:start]) for a in address_ends):
+            tail = _POSTCODE_TAIL.match(text, end)
+            address_ends.append(tail.end() if tail else end)
+            continue
+        kept.append((key, start, end))
+    return kept
+
+
 def _match_known_area(fragment: str):
     """Canonical name of the LONGEST known UK city / London area that appears as a
     whole word in ``fragment``, else None. Apostrophes are normalised away so
     "shepherd's bush" matches; longest match wins so "notting hill" beats a stray
-    partial."""
+    partial. A name that is part of a street or station address does not count."""
     if not fragment:
         return None
     t = re.sub(r"[’']", "", fragment.lower())
     best_key = None
-    for key in _KNOWN_AREAS:
-        if re.search(r"\b" + re.escape(key) + r"\b", t):
-            if best_key is None or len(key) > len(best_key):
-                best_key = key
+    for key, _start, _end in _area_mentions(t):
+        if best_key is None or len(key) > len(best_key):
+            best_key = key
     return _KNOWN_AREAS[best_key] if best_key else None
+
+
+# An explicit AREA SWITCH names both the old and the new place, and the new one is not
+# the one a left-to-right scan keeps: "Move the search from Islington to Camden",
+# "Let's look at Camden instead of Islington", "Search in Camden rather than Islington"
+# all searched Islington again under a "verified" header, and "Switch from Islington to
+# Camden" changed nothing (2026-10-19 A-01, 3/3 live). A route question ("how long from
+# Camden to King's Cross") has no switch verb and is not an area switch.
+_SWITCH_FROM_TO = re.compile(
+    r"\b(?:move|switch|change|swap|shift|update|moving|switching|changing)\b"
+    r"[^.;!?\n]{0,40}?\bfrom\s+([a-z][a-z’'\-\s]{1,30}?)\s+to\s+([a-z][a-z’'\-\s]{1,30})", re.I)
+_INSTEAD_OF = re.compile(
+    r"([a-z][a-z’'\-\s]{0,30}?)\s*,?\s+(?:instead\s+of|rather\s+than)\s+([a-z][a-z’'\-\s]{1,30})",
+    re.I)
+_NOT_ROUTE_SWITCH = re.compile(
+    r"\b(?:commute|commuting|journey|travel|route|trip|how long|every day|daily|by (?:bike|bus|"
+    r"tube|train|car)|for work|to work|cycle|cycling)\b", re.I)
+
+
+def _area_switch_target(text: str) -> str | None:
+    """The NEW area of an explicit "from X to Y" / "Y instead of X" switch, else None."""
+    source = str(text or "")
+    for clause in re.split(r"[.;!?\n。；！？]", source):
+        match = _SWITCH_FROM_TO.search(clause)
+        # Route wording is tested only between the switch verb and the new place: "Switch
+        # the search from Islington to Camden, it's closer to work" is a switch; "change my
+        # commute from Islington to Camden" is not.
+        if match and not _NOT_ROUTE_SWITCH.search(clause[match.start():match.start(2)]):
+            old, new = _match_known_area(match.group(1)), _match_known_area(match.group(2))
+            if old and new and old != new:
+                return new
+        match = _INSTEAD_OF.search(clause)
+        if match:
+            new, old = _match_known_area(match.group(1)), _match_known_area(match.group(2))
+            if old and new and old != new:
+                return new
+    return None
+
+
+def _drop_city_qualifier(areas: list[str], phrase: str) -> list[str]:
+    """"Hackney, London" is ONE place: a London area qualified by its city, not two search
+    areas. Restoring a saved default "1-bed in Hackney, London" searched all of London and
+    labelled Chigwell IG7 and Shepherd's Bush W12 "verified" for a Hackney-only default
+    (2026-10-19 A-06, 4/4)."""
+    if "London" not in areas or len(areas) < 2:
+        return areas
+    london_areas = [a for a in areas if a != "London"
+                    and re.sub(r"[’']", "", a.lower()) in LONDON_AREAS]
+    if london_areas and re.search(
+            r"(?:" + "|".join(re.escape(a) for a in london_areas) + r")\s*,\s*london\b",
+            phrase, re.I):
+        return [a for a in areas if a != "London"]
+    return areas
+
+
+# Edits to the CURRENT area list (R1-02 / ledger A-05). "Add Islington as well.",
+# "Drop Hackney, just Islington.", "Add Camden to the search too." and "Remove Stratford."
+# all left the stored areas and the search arguments on the old place while the answer
+# claimed the change; "Also search in Islington." replaced the list instead of growing it.
+_AREA_ADD_BEFORE = re.compile(
+    r"(?:\badd(?:ing)?|\balso\s+(?:include|search|look|check|cover|consider|show)(?:\s+(?:in|at|around))?"
+    r"|\b(?:please|can you|could you)\s+(?:also\s+)?include|\bas\s+well\s+as|\bplus"
+    r"|(?:加上|添加|增加|加入|也看看?|也搜(?:索|一下)?|也找(?:找)?|再加(?:上)?))\s*(?:in\s+)?$", re.I)
+_AREA_ADD_AFTER = re.compile(r"\s*(?:(?:as\s+well|too)\b|也?(?:加上|加进来?|加入|添加|算上))", re.I)
+_AREA_INCLUDE_BEFORE = re.compile(r"\binclude\s+$", re.I)
+_AREA_INCLUDE_AFTER = re.compile(r"\s*(?:too|as\s+well|in\s+(?:the|my)\s+search)\b", re.I)
+_AREA_REMOVE_BEFORE = re.compile(
+    r"(?:\b(?:remove|drop|exclude|delete|skip|forget(?:\s+about)?|take(?:\s+out)?|cross\s+off|no\s+more"
+    r"|no\s+longer\s+(?:want|consider|search(?:\s+in)?)|without|not)"
+    r"|(?:去掉|删除|删掉|移除|排除|不要|不看|不考虑|不再考虑|取消))\s*(?:the\s+)?$", re.I)
+_AREA_REMOVE_AFTER = re.compile(
+    r"\s*(?:(?:out|off)\b(?!\s+of\s+(?:the\s+)?(?:question|budget))|from\s+(?:the|my)\s+(?:search|list|areas?)\b"
+    r"|(?:也)?(?:去掉|删掉|删除|移除|排除|不要了|不看了))", re.I)
+_AREA_ONLY_BEFORE = re.compile(
+    r"(?:\b(?:just|only|stick\s+(?:to|with))(?:\s+(?:search|look|show)(?:\s+(?:in|at))?)?"
+    # A switch REPLACES the list: "Switch to Clapham, drop Camden." left no area at all,
+    # because only the removal was read (R2-13).
+    r"|\b(?:switch(?:ing)?\s+(?:the\s+search\s+|it\s+|over\s+)?to|change\s+(?:it\s+|the\s+(?:area|search)\s+)?to"
+    r"|move\s+(?:it\s+|the\s+search\s+)?to|go(?:ing)?\s+back\s+to|back\s+to)"
+    r"|(?:只看|只要|只搜(?:索)?|只在|仅看|仅在|只考虑|换成|改成|改为|切换到|回到))\s*$", re.I)
+_AREA_ONLY_AFTER = re.compile(r"\s*(?:only\b|就好|就行|就可以)", re.I)
+_AREA_NAMED_ADD = re.compile(
+    r"\b(?i:add)\s+((?:[A-Z][a-z’'\-]+)(?:\s+[A-Z][a-z’'\-]+){0,2})\s+"
+    r"(?:as\s+(?:a|an(?:other)?|my)\s+(?:second\s+|third\s+|new\s+|extra\s+|additional\s+)?(?:search\s+)?area"
+    r"|to\s+(?:the|my)\s+(?:search|areas?|list))\b")
+
+
+def area_list_edit(text: str, current: list | None) -> list[str] | None:
+    """The area list after an explicit add / remove / "just X" edit, else None.
+
+    None means the message is not an edit of the area list (a switch, a question, or no
+    place at all) and the caller keeps its own area logic. Idempotent: applying the same
+    message to its own result returns the result again, so the state node, the executor
+    and the tool can all apply it."""
+    from core.constraint_updates import housing_update_text
+    source = housing_update_text(text or '')
+    if not source or not source.strip():
+        return None
+    current = [a for a in (current or []) if isinstance(a, str) and a.strip()]
+    names = {**_KNOWN_AREAS, **_ZH_AREA_MAP, **_CUE_ONLY_AREAS}
+    for area in current:
+        names.setdefault(re.sub(r"[’']", '', area.lower()), area)
+    alternatives = '|'.join(re.escape(n) for n in sorted(names, key=len, reverse=True))
+    place = re.compile(rf"(?<![a-z])(?:{alternatives})(?![a-z])", re.I)
+    adds, removes, only = [], [], []
+    for clause_match in re.finditer(r"[^.;!?\n。；！？]+", source):
+        clause = clause_match.group()
+        if is_hypothetical(clause) or re.search(r"\b(?:don.t|do not|never|shouldn.t)\s+(?:\w+\s+){0,2}"
+                                                r"(?:add|include|remove|drop|exclude)\b", clause, re.I):
+            continue
+        for found in place.finditer(re.sub(r"[’']", "'", clause)):
+            raw = found.group()
+            canonical = names.get(raw) or names.get(re.sub(r"[’']", '', raw.lower()))
+            if not canonical:
+                continue
+            before = re.split(r"[,，、:：]|\band\b|\bbut\b|但", clause[:found.start()])[-1]
+            after = clause[found.end():found.end() + 40]
+            if _AREA_REMOVE_BEFORE.search(before) or _AREA_REMOVE_AFTER.match(after):
+                removes.append(canonical)
+            elif _AREA_ONLY_BEFORE.search(before) or _AREA_ONLY_AFTER.match(after):
+                only.append(canonical)
+            elif (_AREA_ADD_BEFORE.search(before) or _AREA_ADD_AFTER.match(after)
+                  or (_AREA_INCLUDE_BEFORE.search(before) and _AREA_INCLUDE_AFTER.match(after))):
+                adds.append(canonical)
+        for named in _AREA_NAMED_ADD.finditer(clause):
+            # "Add Angel as a second area": a place outside the curated table, named with
+            # explicit area wording. The curated table deliberately omits Angel/Bow/Kew.
+            candidate = named.group(1).strip()
+            key = re.sub(r"[’']", '', candidate.lower())
+            if not any(key == re.sub(r"[’']", '', a.lower()) for a in adds):
+                adds.append(names.get(key) or candidate)
+    def _key(value):
+        return re.sub(r"[’']", '', value.lower())
+
+    # With no standing list, a removal alone edits nothing ("在Camden找，不要伦敦其他地方"
+    # negates the wider city on a first turn; it must not read as "no area").
+    if not (adds or only or (removes and current)):
+        return None
+
+    if only:
+        result = []
+        for area in only:
+            if _key(area) not in {_key(a) for a in result}:
+                result.append(area)
+        return result
+    gone = {_key(a) for a in removes}
+    result = [a for a in current if _key(a) not in gone]
+    for area in adds:
+        if _key(area) not in gone and _key(area) not in {_key(a) for a in result}:
+            result.append(area)
+    return result
+
+
+def _extract_areas(text: str) -> list[str]:
+    """Explicit residential place alternatives in order; [] means no update.
+
+    Scan a named-place sequence governed by a home/search/keep predicate, rather
+    than collecting every city mentioned in work, routes or weather questions.
+    """
+    from core.constraint_updates import housing_update_text, is_hypothetical
+    source = housing_update_text(text)
+    if not source:
+        return []
+    switched = _area_switch_target(source)
+    if switched:
+        return [switched]
+    names = {**_KNOWN_AREAS, **_ZH_AREA_MAP}
+    alternatives = '|'.join(re.escape(name) for name in sorted(names, key=len, reverse=True))
+    place = rf'(?<![a-z])(?:{alternatives})(?![a-z])'
+    sequence = re.compile(rf'({place})(?:\s*(?:,\s*(?:and\s+)?|、|和|或(?:者)?|及|与|\band\b|\bor\b)\s*({place}))+', re.I)
+    for match in sequence.finditer(source):
+        before = re.split(r'[。.!?;；\n]', source[:match.start()])[-1]
+        phrase = match.group()
+        clause = before + phrase
+        if is_hypothetical(clause):
+            continue
+        # Chinese puts the predicate after the places: "我想在哈克尼和伊斯灵顿找房".
+        after = source[match.end():match.end() + 8]
+        if not (re.search(r'\b(?:search|find|live|living|look|keep|focus|choose|flats?|homes?|properties|areas?)\b|找|住|搜|改为|改成|保留|恢复', before, re.I)
+                or re.match(r'\s*(?:附近|周边|一带)?(?:找|租|住|搜)', after)):
+            continue
+        if re.search(r'\b(?:work|job|office|route|journey|weather)\b|上班|工作|天气|路线', before, re.I) and not re.search(r'\b(?:live|search|find|keep|focus|flats?|homes?|properties)\b|找房|住在|搜索', before, re.I):
+            continue
+        areas = []
+        for found in re.finditer(place, phrase, re.I):
+            raw = found.group()
+            key = re.sub(r"[’']", '', raw.lower())
+            canonical = names.get(raw) or names.get(key)
+            if canonical and canonical not in areas:
+                areas.append(canonical)
+        areas = _drop_city_qualifier(areas, phrase)
+        if len(areas) > 1:
+            return areas
+    area = _extract_area(source)
+    return [area] if area else []
+def most_specific_known_area(text: str) -> str | None:
+    """The MOST SPECIFIC curated UK place named anywhere in ``text``, else None.
+
+    "Most specific" is a two-level order, not a longest-match: a London area/borough
+    ("Shoreditch") beats a bare city ("London"), because a city name locates nothing a
+    geocoder can centre a 300 m circle on. Within a level the longest name wins, so
+    "Notting Hill" beats a stray "Hill"-shaped partial and "Milton Keynes" beats a
+    partial city token.
+
+    This exists because the legacy planner had no place resolver at all: it fell back to
+    the literal string "London" for a POI lookup, and "London" is rejected by the geocode
+    ladder as too generic (``_is_too_generic``), so "What's near Shoreditch in London?"
+    returned "Could not find coordinates for address: London" and zero POIs. Returns the
+    CANONICAL English spelling so downstream geocoding works whatever the input language.
+    Never raises."""
+    try:
+        if not text or not str(text).strip():
+            return None
+        t = re.sub(r"[\u2019']", "", str(text).lower())
+        best_london = best_city = None
+        for key in dict.fromkeys(key for key, _s, _e in _area_mentions(t)):
+            if key in LONDON_AREAS:
+                if best_london is None or len(key) > len(best_london):
+                    best_london = key
+            elif best_city is None or len(key) > len(best_city):
+                best_city = key
+        winner = best_london or best_city
+        return _KNOWN_AREAS[winner] if winner else None
+    except Exception:
+        return None
+
+
+def bare_city_downgrades(city, model_area) -> bool:
+    """True when replacing ``model_area`` with the bare ``city`` this turn's words named
+    would WIDEN the search: the city is London (the only city whose sub-areas the
+    product tables know) and the model supplied a different, non-city place. A model
+    area that is itself another UK city ("Manchester") is a switch, not a refinement,
+    so it never counts."""
+    if not isinstance(city, str) or not isinstance(model_area, str):
+        return False
+    city_key = re.sub(r"[\u2019']", "", city.strip().lower())
+    area_key = re.sub(r"[\u2019']", "", model_area.strip().lower())
+    if city_key != 'london' or not area_key or area_key == city_key:
+        return False
+    if area_key in _KNOWN_AREAS and area_key not in LONDON_AREAS:
+        return False
+    return not re.fullmatch(r'(?:greater\s+|central\s+)?london(?:,?\s*uk)?', area_key)
 
 
 def _extract_area(text: str) -> str | None:
@@ -821,13 +1629,108 @@ def _extract_area(text: str) -> str | None:
     "Wakanda", "火星") yield None and never trigger a bogus area switch. Always
     returns the canonical English name so downstream geocoding works regardless of
     the input language."""
+    from core.constraint_updates import housing_update_text
+    text = housing_update_text(text)
     if not text or not text.strip():
         return None
-    # (a) Chinese city names — distinctive, safe substring match.
+    switched = _area_switch_target(text)
+    if switched:
+        return switched
+    # Coordinated residential alternatives belong to the list extractor.
+    for clause in re.split(r'[。.!?;；\n]', text):
+        if re.search(r'\b(?:search|find|keep|live|flats?)\b|找|住|搜', clause, re.I):
+            found = [name for name in _KNOWN_AREAS if re.search(r'(?<![a-z])' + re.escape(name) + r'(?![a-z])', clause, re.I)]
+            if len(found) > 1 and re.search(r'\band\b|\bor\b|或|和|、', clause, re.I):
+                return None
+    # Chinese places can govern a trailing residential predicate: "在Camden找个
+    # 住处". Bind the place to that predicate before the background city fallback
+    # ("来伦敦读研"), rather than treating every locative 在 as home-search intent.
+    from core.constraint_updates import mention_is_requirement
+    chinese_residence = re.compile(
+        r"(?:住在|在)\s*([a-z][a-z’'\-\s]{0,35})\s*(?:附近|周边|一带)?"
+        r"(?:找(?:(?:个|一[个套间])?(?:住处|住房|房(?:子|源)?|公寓|住宅|地方)|(?=\s*(?:[，,。.!?;；]|$))"
+        # 「在Bloomsbury找个studio」: an English property word after 找 (R4-05).
+        r"|(?:个|一[个套间])?\s*(?=(?:studio|flat|apartment|room|house|\d\s*-?\s*bed)))|"
+        r"租(?:(?:个|一[套间])?(?:房(?:子|源)?|公寓|住宅)|(?=\s*(?:[，,。.!?;；]|$))))", re.I)
+    residential_places = []
+    for match in chinese_residence.finditer(text):
+        if mention_is_requirement(text, match.start(), match.end()):
+            area = _match_known_area(match.group(1).lower())
+            if area:
+                residential_places.append((match.start(), area))
+    # Residential intent outranks a school/work city mentioned earlier in the turn.
+    residence_cue = re.compile(
+        r'(?:先(?:看看|看|找)|住在|找房|改为|改成|恢复|切换到|只看|只在|仅在|只选|仅选|看看|'
+        r'\b(?:restore|keep|focus on|search|live in|look in|look at|search in|search around|switch to|change to|make it|instead of|replace the area with)\s+)\s*([a-z][a-z\s\-]{0,35})', re.I)
+    chosen = list(residential_places)
+    for m in residence_cue.finditer(text):
+        if not mention_is_requirement(text, m.start(), m.end()):
+            continue
+        # In "Camden instead of Watford", the residence is before "instead of".
+        if m.group(0).lower().startswith('instead of'):
+            continue
+        phrase = m.group(1).lower()
+        if re.search(r'\b(?:and|or)\b', phrase):
+            places = {canonical for name, canonical in _KNOWN_AREAS.items()
+                      if re.search(r'(?<![a-z])' + re.escape(name) + r'(?![a-z])', phrase)}
+            if len(places) > 1:
+                # A single-place parser cannot half-apply a multi-area request.
+                return None
+        area = _match_known_area(m.group(1).lower())
+        if area:
+            chosen.append((m.start(), area))
+    replacement = re.search(r'([a-z][a-z\s\-]{0,25})\s+instead of\s+[a-z]', text, re.I)
+    if replacement:
+        area = _match_known_area(replacement.group(1).lower())
+        if area:
+            chosen.append((replacement.start(), area))
+    if chosen:
+        return sorted(chosen, key=lambda item: item[0])[-1][1]
+    # (a) Chinese place names — distinctive, safe substring match. The MOST SPECIFIC match
+    # wins, not the first one in table order: "我想在伦敦卡姆登租..." contains both 伦敦
+    # (London) and 卡姆登 (Camden), and returning the city dropped the borough the user
+    # actually asked for — a Camden request then searched all of London. A London
+    # area/borough beats a bare city; within a level the longest key wins.
+    _zh_london = _zh_city = None
+
+    def _zh_place_skipped(start: int, end: int) -> bool:
+        prefix = re.split(r'[。！？!?;；\n，,:：]', text[:start])[-1][-45:]
+        if is_hypothetical(clause_at(text, start, end)) or re.search(
+                r'(?:不(?:要|是|需要|想|考虑)|取消|删除|移除|去掉|排除)[^，。；;!?]{0,14}$', prefix):
+            return True
+        # A workplace / school named in the same clause is a destination, not a home
+        # area: "我在金丝雀码头上班，想在伦敦找房" must not search Canary Wharf.
+        suffix = re.split(r'[。！？!?;；\n，,:：]', text[end:])[0][:10]
+        return bool(re.match(r'\s*(?:附近)?(?:找(?=工作|实习))?(?:上班|工作|实习|上学|读书|上课|办公|通勤)', suffix)
+                    or re.search(r'(?:通勤|上班|上学)(?:到|去)\s*$', prefix))
+
     for zh, canon in _ZH_AREA_MAP.items():
-        if zh in text:
-            return canon
+        for match in re.finditer(re.escape(zh), text):
+            if _zh_place_skipped(match.start(), match.end()):
+                continue
+            if re.sub(r"[\u2019']", "", canon.lower()) in LONDON_AREAS:
+                if _zh_london is None or len(zh) > len(_zh_london[0]):
+                    _zh_london = (zh, canon)
+            elif _zh_city is None or len(zh) > len(_zh_city[0]):
+                _zh_city = (zh, canon)
+            break
+    if _zh_city and not _zh_london:
+        # An English neighbourhood written inside Chinese text ("伦敦Camden Town附近",
+        # "伦敦Shoreditch附近一居室") is more specific than the city around it; returning
+        # the bare city searched all of London (R1-01). The lookarounds are [a-z]-only
+        # because \b sees no boundary between a CJK character and a Latin letter.
+        plain = re.sub(r"[\u2019']", "", text)
+        for key in sorted(LONDON_AREAS, key=len, reverse=True):
+            for match in re.finditer(r'(?<![a-z])' + re.escape(key) + r'(?![a-z])', plain, re.I):
+                if not _zh_place_skipped(match.start(), match.end()):
+                    return LONDON_AREAS[key]
+    if _zh_london or _zh_city:
+        return (_zh_london or _zh_city)[1]
     t = text.lower().strip()
+    if re.search(r'只(?:修改|改|调整)|(?:备用|主)方案', t):
+        for key in sorted(_KNOWN_AREAS, key=len, reverse=True):
+            if re.search(r'(?<![a-z])' + re.escape(key) + r'(?![a-z])', t):
+                return _KNOWN_AREAS[key]
     # (b) explicit switch / location cue + a VALIDATED known place.
     for m in _AREA_CUE_RE.finditer(t):
         canon = _match_known_area(m.group(1))
@@ -842,7 +1745,99 @@ def _extract_area(text: str) -> str | None:
         canon = _KNOWN_AREAS.get(bare)
         if canon:
             return canon
-    return None
+    return _follow_up_switch_area(text)
+
+
+# Areas the listing snapshot covers but the curated table deliberately leaves out because
+# the name is also a common word ("angel", "bow") or rarely a home area. They count ONLY after
+# an explicit switch cue, never as a bare word: "Switch to Angel instead." searched the OLD
+# area again under a "verified" header (R2-14, 17/17).
+_CUE_ONLY_AREAS = {
+    "angel": "Angel", "bow": "Bow", "bloomsbury": "Bloomsbury", "euston": "Euston",
+    "fitzrovia": "Fitzrovia", "holborn": "Holborn", "south bank": "South Bank",
+    "south kensington": "South Kensington", "knightsbridge": "Knightsbridge",
+    "canning town": "Canning Town", "poplar": "Poplar", "chessington": "Chessington",
+    "inverness": "Inverness",
+}
+# An explicit switch / short follow-up: "switch to X", "make that X", "how about X?", "what
+# about X?", "go back to X", "and X?", "X instead". Clause-local, read on lower-cased text.
+_FOLLOW_UP_CUE_BEFORE = re.compile(
+    r"(?:\b(?:switch(?:ing)?\s+(?:the\s+search\s+|it\s+|over\s+)?to|change\s+(?:it\s+|the\s+(?:area|search)\s+)?to"
+    r"|move\s+(?:it\s+|the\s+search\s+)?to|make\s+(?:it|that)|how\s+about|what\s+about"
+    r"|go(?:ing)?\s+back\s+to|back\s+to|let'?s\s+(?:try|do)|try|search\s+in|look\s+in)\s+$)")
+# A bare follow-up ("and Chelsea?", "Bow?") is the WHOLE clause: "Angel investors are nice"
+# names no area.
+_FOLLOW_UP_BARE_BEFORE = re.compile(r"^\s*(?:and|or|ok(?:ay)?|actually|then)?\s*$")
+_FOLLOW_UP_BARE_AFTER = re.compile(r"\s*(?:instead|please|then|too|as\s+well)?\s*[?.!]*\s*(?:$|[,;\n])")
+
+
+def _follow_up_cue(text: str, start: int, end: int) -> bool:
+    before = re.split(r"[.;!?,，。；！？\n]", text[max(0, start - 40):start])[-1]
+    after = text[end:end + 30]
+    if _FOLLOW_UP_CUE_BEFORE.search(before) or re.match(r"\s+instead\b", after):
+        return True
+    return bool(_FOLLOW_UP_BARE_BEFORE.match(before) and _FOLLOW_UP_BARE_AFTER.match(after))
+
+
+def _follow_up_switch_area(text: str) -> str | None:
+    """The area an explicit switch cue or a short follow-up names, else None.
+
+    Covers the snapshot's cue-only areas and the curated ones a follow-up names without the
+    cues ``_AREA_CUE_RE`` knows ("and Chelsea?", "go back to Camden"). The last such mention
+    wins; a name inside a street/station address never counts (R2-05)."""
+    t = re.sub(r"[’']", "", str(text or "").lower())[:2000]
+    if not t.strip():
+        return None
+    names = {**_KNOWN_AREAS, **_CUE_ONLY_AREAS}
+    best = None
+    for key, canon in names.items():
+        for found in re.finditer(r"(?<![a-z])" + re.escape(key) + r"(?![a-z])", t):
+            if _STREET_AFTER_NAME.match(t, found.end()):
+                continue
+            if not _follow_up_cue(t, found.start(), found.end()):
+                continue
+            rank = (found.start(), len(key))
+            if best is None or rank > best[0]:
+                best = (rank, canon)
+    return best[1] if best else None
+
+
+def canonical_requested_area(value) -> str | None:
+    """A requested area as the search needs it; None when blank.
+
+    "Angel, Islington" / "Hackney, London" is a place qualified by its borough or city.
+    Searched verbatim it matched no covered area and the answer led with a false "listing
+    source is temporarily unavailable" (R2-23). The first covered component wins."""
+    if not (isinstance(value, str) and value.strip()):
+        return None
+    text = value.strip()
+    if ',' in text:
+        for part in (p.strip() for p in text.split(',') if p.strip()):
+            key = re.sub(r"[’']", "", part.lower())
+            canonical = _KNOWN_AREAS.get(key) or _CUE_ONLY_AREAS.get(key)
+            if canonical and canonical != 'London':
+                return canonical
+    return text
+
+
+def names_follow_up_area(text: str, candidate: str) -> bool:
+    """True when ``text`` names ``candidate`` (a place the model chose) right after an explicit
+    switch cue or a short follow-up ("and Newcastle?" -> "Newcastle upon Tyne")."""
+    t = re.sub(r"[’']", "", str(text or "").lower())[:2000]
+    value = re.sub(r"[’']", "", str(candidate or "").lower()).strip()
+    if not t or not value:
+        return False
+    keys = {value, value.split(",")[0].strip()}
+    first = value.split()[0] if value.split() else ""
+    if len(first) >= 4:
+        keys.add(first)
+    for key in keys:
+        if not key:
+            continue
+        for found in re.finditer(r"(?<![a-z])" + re.escape(key) + r"(?![a-z])", t):
+            if _follow_up_cue(t, found.start(), found.end()):
+                return True
+    return False
 
 
 # Phrases meaning "remove/clear any budget limit" — English + Chinese. Distinct from
@@ -862,6 +1857,11 @@ _BUDGET_CLEAR_PHRASES = (
     "价格不限", "不限价格", "不限价", "预算无所谓", "预算不是问题",
     "多少钱都行", "多少钱都可以", "价格无所谓", "不在乎预算", "不在乎价格",
     "预算没有限制",
+    # Retractions (R2-15): the criteria answer said "No maximum" while max_budget stayed 2600.
+    "cancel the budget", "cancel budget", "cancel my budget", "never mind the budget",
+    "never mind about the budget", "nevermind the budget", "ignore the budget",
+    "remove the budget limit", "drop the budget limit", "no budget cap",
+    "取消预算", "去掉预算", "删除预算", "不要预算限制", "预算取消",
 )
 
 # Regex forms carrying an apostrophe / word gap ("budget doesn't matter",
@@ -871,6 +1871,9 @@ _BUDGET_CLEAR_PATTERNS = (
     r"\b(?:budget|price|cost)\s+(?:is\s+not|isn[’']?t|is\s+n[’']?t)\s+(?:a\s+)?(?:concern|issue|problem)\b",
     r"\bno\s+(?:budget|price|spending|cost)\s+(?:limit|cap|maximum|max)\b",
     r"\bdo\s*n[’']?t\s+(?:care|worry)\s+about\s+(?:the\s+|my\s+)?(?:budget|price|cost)\b",
+    # "no maximum" / "no max" only beside a budget word in the same message.
+    r"\bno\s+(?:maximum|max|upper\s+limit|ceiling)\b(?=[^.!?]*\b(?:budget|price|rent)\b)|"
+    r"\b(?:budget|price|rent)\b[^.!?]*\bno\s+(?:maximum|max|upper\s+limit|ceiling)\b(?!\s+(?:commute|travel))",
 )
 
 
@@ -890,6 +1893,50 @@ def _extract_budget_clear(text: str) -> bool:
 # Hard filters a model is NOT allowed to originate. Each maps to the deterministic
 # extractor that can ground it in the user's own words.
 _GROUNDED_HARD_FIELDS = ("max_budget", "bedrooms", "room_type")
+
+
+# A CEILING marker introducing the amount ("最多 2200", "under £2200"). Guards
+# detect_relative_budget_delta, whose loose ZH pattern `(?:提高|…|加|涨|多)\s*(\d…)` matches the
+# single character 多 INSIDE 最多, so the plain ceiling "预算每月最多2200英镑" is read as a
+# +2200 DELTA. Wired into the accumulator that clears max_budget for a delta with no prior
+# ceiling, that turned a first-turn Chinese budget statement into NO BUDGET FILTER AT ALL
+# (reproduced live: fixtest-f4-rz2-legacy, max_budget null where the pre-change run recorded
+# 2000). Its EN half (`at most|max|up to|to`) already lives in search_readiness._ABSOLUTE_TARGET;
+# 最多/不超过/以内 and under/below/no more than do not, so they are covered here until F3 folds
+# them into that regex — see the F3 request in the report.
+_BUDGET_CEILING_MARKER = re.compile(
+    r"(?:最多|至多|不超过|不多于|不高于|最高|上限|以内|以下)\s*(?:£)?\s*(\d[\d,]*(?:\.\d+)?)"
+    r"|\b(?:under|below|no\s+more\s+than|not\s+more\s+than|within)\s*(?:£|gbp\s*)?"
+    r"(\d[\d,]*(?:\.\d+)?)",
+    re.IGNORECASE)
+
+
+def _states_relative_budget_edit(text) -> bool:
+    """True when ``text`` states a budget DELTA ("raise the budget by £200", 「预算提高200镑」)
+    rather than a ceiling.
+
+    Wraps the one detector that knows the difference
+    (``core.search_readiness.detect_relative_budget_delta``) so every budget-override site
+    asks the same question, and adds ONE guard it is missing: when the amount the detector
+    read is the same amount a CEILING marker introduces, the message states a ceiling, not an
+    edit. False for "raise the budget TO £2400" (the detector's own guard) and for
+    「预算每月最多2200英镑」 (this one). Never raises: if the detector is unavailable the
+    callers keep their old behaviour rather than losing the override entirely."""
+    try:
+        from core.search_readiness import detect_relative_budget_delta
+        delta = detect_relative_budget_delta(text)
+        if delta is None:
+            return False
+        for match in _BUDGET_CEILING_MARKER.finditer(str(text or "")):
+            raw = (match.group(1) or match.group(2) or "").replace(",", "")
+            try:
+                if abs(float(raw) - abs(float(delta))) < 1e-9:
+                    return False
+            except ValueError:
+                continue
+        return True
+    except Exception:
+        return False
 
 
 def ground_hard_constraints(params: dict, accumulated: dict = None,
@@ -922,6 +1969,12 @@ def ground_hard_constraints(params: dict, accumulated: dict = None,
     p = dict(params or {})
     acc = accumulated if isinstance(accumulated, dict) else {}
     message = str(current_message or "")
+    # Re-apply only authenticated current text at this boundary, so callers that
+    # have not run the state node yet still use the current explicit update.
+    if message:
+        from core.langgraph_agent import _apply_explicit_criteria_updates
+        # A relative edit is resolved once, by the state node (see the flag's docstring).
+        acc = _apply_explicit_criteria_updates(acc, message, apply_relative_budget=False)
     dropped: list[str] = []
 
     def _correct(field: str, allowed, fallback):
@@ -936,21 +1989,40 @@ def ground_hard_constraints(params: dict, accumulated: dict = None,
             p[field] = fallback
         dropped.append(field)
 
-    # Budget: the message wins, then accumulated. A weekly statement legitimately reaches
-    # the tool as either the weekly figure or its monthly conversion, so accept both.
+    # Monthly is the canonical unit at the model/tool boundary. Pair every
+    # corrected number with its period, preventing £350/week becoming £350/month.
     fresh_budget, fresh_period = _extract_budget(message)
+    # P1-1: a figure stated as a DELTA ("raise the budget by £200") is not a ceiling the
+    # user said, so it must not enter the allowed set — that is how a model-supplied
+    # max_budget of 200 used to be blessed as "something the user actually said". The
+    # accumulated ceiling (already resolved by the graph) is the only allowed value; with
+    # no accumulated ceiling the filter is DROPPED rather than set to the delta.
+    if fresh_budget and _states_relative_budget_edit(message):
+        fresh_budget, fresh_period = None, None
     acc_budget = acc.get("max_budget")
-    allowed_budget = [fresh_budget, acc_budget]
+    allowed_budget = [fresh_budget] if fresh_budget is not None else [acc_budget]
     if fresh_budget and fresh_period in ("week", "weekly", "pw"):
-        allowed_budget.append(int(math.ceil(monthly_from_weekly(fresh_budget))))
+        allowed_budget.append(monthly_from_weekly(fresh_budget))
     _correct("max_budget", allowed_budget, fresh_budget or acc_budget)
+    if fresh_budget is not None:
+        p['max_budget'] = monthly_from_weekly(fresh_budget) if fresh_period == 'week' else fresh_budget
+        p['budget_period'] = 'month'
+    elif acc_budget is not None and p.get('max_budget') == acc_budget:
+        p['budget_period'] = acc.get('budget_period') or 'month'
+
 
     # Bedrooms: _extract_bedrooms returns (min, max); an exact count is min == max.
     fresh_beds = _extract_bedrooms(message)
-    fresh_bedrooms = fresh_beds[0] if fresh_beds and fresh_beds[0] == fresh_beds[1] else None
+    fresh_bedrooms = fresh_beds[0] if fresh_beds else None
     acc_bedrooms = acc.get("bedrooms")
     _correct("bedrooms", [fresh_bedrooms, acc_bedrooms],
              fresh_bedrooms if fresh_bedrooms is not None else acc_bedrooms)
+    if fresh_beds:
+        p['bedrooms'] = fresh_beds[0]
+        p['bedrooms_minimum'] = fresh_beds[0] != fresh_beds[1]
+    elif acc_bedrooms is not None:
+        p['bedrooms'] = acc_bedrooms
+        p['bedrooms_minimum'] = bool(acc.get('bedrooms_minimum'))
 
     # Room type: compare canonically, so 'en-suite' vs 'ensuite' is not a false mismatch.
     fresh_rt = _extract_room_type(message)
@@ -967,7 +2039,37 @@ def ground_hard_constraints(params: dict, accumulated: dict = None,
                 p["room_type"] = resolved
             dropped.append("room_type")
 
-    return p, dropped
+    if fresh_rt or acc_rt:
+        p['room_type'] = fresh_rt or acc_rt
+    if date_is_cleared(message) or ('move_in_date' in acc and acc['move_in_date'] is None):
+        p.pop('move_in_date', None)
+    if p.get('property_features'):
+        from core.langgraph_agent import _extract_accessibility_requirements
+        required = set(_extract_accessibility_requirements(message)['required'])
+        allowed = {_canonical_property_feature(f) for f in acc.get('property_features') or []} | required
+        p['property_features'] = [f for f in p['property_features']
+                                 if not _requires_explicit_feature_evidence(_canonical_property_feature(f))
+                                 or _canonical_property_feature(f) in allowed]
+
+    from core.constraint_updates import protect_confirmed_criteria
+    protected = protect_confirmed_criteria({}, acc)
+    aliases = {'max_travel_time': 'max_commute_time', 'soft_preferences': 'accumulated_preferences'}
+    for field, source in (acc.get('constraint_sources') or {}).items():
+        if field in protected:
+            parameter = aliases.get(field, field)
+            if parameter not in ('destination', 'plans', 'constraint_sources'):
+                if parameter in p and p[parameter] != protected[field] and parameter not in dropped:
+                    dropped.append(parameter)
+                p[parameter] = protected[field]
+    if 'areas' in (acc.get('constraint_sources') or {}):
+        p['areas'], p['area'] = protected.get('areas', []), protected.get('area')
+    if 'commute_destination' in (acc.get('constraint_sources') or {}):
+        p['commute_destination'] = protected.get('commute_destination')
+    # A cleared criterion (no_commute's commute_destination, a removed budget, a cleared
+    # move-in date) is ABSENT, never None: the tool's input contract is strict and checks
+    # the authored schema, so an explicit null failed the whole search (A-02).
+    from core.strict_schema import strip_null_args
+    return strip_null_args(p), dropped
 
 
 def _strip_memory_block(text: str) -> str:
@@ -1166,50 +2268,115 @@ def _soft_gate_question(missing, is_cjk: bool, move_in_missing: bool = False) ->
 
 
 def _partial_note(incomplete_areas, is_cjk: bool) -> str:
-    """Model-facing note when the time budget was reached before some areas were fully
-    searched. Deliberately honest: it says the results are PARTIAL and that more listings
-    may exist in the incomplete areas — and it explicitly tells the model NOT to claim those
-    areas have no listings (incomplete ≠ empty, the H2 honesty failure). Returns '' when
-    nothing is incomplete."""
+    """Explain incomplete coverage without exposing model instructions."""
     areas = [a for a in (incomplete_areas or []) if a]
     if not areas:
         return ""
     if is_cjk:
-        names = "、".join(areas)
-        return (f"（部分结果：已达搜索时间预算，{names} 尚未完成搜索，那里可能还有更多房源。"
-                f"请勿据此判断这些区域没有房源。只陈述已返回房源中真实出现的价格/数字，"
-                f"不要为未搜完的区域估算或推断任何数字。）")
-    names = ", ".join(areas)
-    return (f"Partial results: the search time budget was reached before {names} could be "
-            f"fully searched, so more listings may exist there. Do not conclude that these "
-            f"areas have no listings. State only the prices and figures that actually appear "
-            f"in the returned listings; do not estimate or extrapolate any numbers for the "
-            f"areas that were not fully searched.")
+        return f"部分结果：搜索时间已用完，{'、'.join(areas)} 尚未完成检索，那里可能还有更多房源。"
+    return (f"Partial results: the search time budget was reached before {', '.join(areas)} "
+            "could be fully searched, so more listings may exist there.")
 
 
 def _commute_note(is_cjk: bool) -> str:
-    """Model-facing HONESTY note for when commute times were NOT verified for the returned
-    listings this round — because the deadline-tight degraded path, or a per-stage time
-    guard, skipped commute annotation/filtering while the user actually had a commute
-    constraint. Forbids stating/promising any commute duration (the CR5 failure: the model
-    asserted commute figures the tool never computed) and invites narrowing so commute can
-    be checked next time. Always accompanies `commute_unverified: true` in the payload."""
+    """Explain missing commute evidence to the user."""
     if is_cjk:
-        return ("本轮未核实这些房源的通勤时间——请勿陈述或承诺任何通勤时长。"
-                "可邀请用户缩小范围（更少区域，或指定一个通勤目的地）以便下次核实通勤。")
-    return ("Commute times were NOT verified for these listings this round — do not state "
-            "or promise any commute duration for them. Invite the user to narrow the search "
-            "(fewer areas, or a specific destination) so the commute can be checked.")
+        return "本轮尚未核实这些房源的通勤时间；缩小区域或指定目的地后可以继续核实。"
+    return ("Commute times have not been verified for these listings this round. "
+            "A narrower area or a specific destination can help complete that check.")
 
 
-def _no_results_message(area: str, is_cjk: bool) -> str:
-    """Honest 'nothing found' text, language-aware, always pointing at the form."""
+def _applied_filter_parts(criteria: dict | None, is_cjk: bool) -> list[tuple[str, str]]:
+    """``[(kind, text)]`` for the filters a search actually applied, each named ONCE.
+
+    A studio search carries both ``bedrooms=0`` and ``room_type='studio'``; listing both
+    printed "studio, Studio" (R2-03)."""
+    c = criteria if isinstance(criteria, dict) else {}
+    parts: list[tuple[str, str]] = []
+
+    def add(kind: str, text: str) -> None:
+        key = " ".join(str(text).lower().split())
+        if key and all(" ".join(t.lower().split()) != key for _k, t in parts):
+            parts.append((kind, text))
+
+    budget = c.get('max_budget')
+    if isinstance(budget, (int, float)) and not isinstance(budget, bool) and budget > 0:
+        add('budget', f"月租不超过 £{budget:,.0f}" if is_cjk else f"up to £{budget:,.0f}/month")
+    beds = c.get('bedrooms')
+    studio_by_beds = False
+    if isinstance(beds, int) and not isinstance(beds, bool):
+        if beds == 0:
+            studio_by_beds = True
+            add('bedrooms', "studio" if not is_cjk else "单间(studio)")
+        else:
+            plus = "+" if c.get('bedrooms_minimum') else ""
+            add('bedrooms', f"{beds}{plus} 居室" if is_cjk else
+                f"{beds}{plus} bedroom{'s' if beds != 1 or plus else ''}")
+    room_type = c.get('room_type')
+    if room_type and not (studio_by_beds and str(room_type).lower() == 'studio'):
+        add('room_type', _room_type_label(room_type, is_cjk))
+    for feature in c.get('property_features') or []:
+        if isinstance(feature, str) and feature.strip():
+            add('feature', feature.strip())
+    minutes, destination = c.get('max_travel_time'), c.get('commute_destination')
+    if minutes and destination and not c.get('no_commute'):
+        add('commute', f"到 {destination} 通勤不超过 {minutes} 分钟" if is_cjk
+            else f"within {minutes} min of {destination}")
+    if c.get('move_in_date'):
+        add('move_in', f"{c['move_in_date']} 前可入住" if is_cjk
+            else f"available by {c['move_in_date']}")
+    return parts
+
+
+def _applied_filters_text(criteria: dict | None, is_cjk: bool) -> str:
+    """The filters a search actually applied, in the user's language ('' when none)."""
+    return ("、" if is_cjk else ", ").join(text for _kind, text in
+                                          _applied_filter_parts(criteria, is_cjk))
+
+
+def _no_results_message(area: str, is_cjk: bool, *, criteria: dict | None = None,
+                        area_unresolved: bool = False) -> str:
+    """Honest 'nothing found' text naming the filters that were applied (R1-13).
+
+    "Please check the area spelling" is said only when the area itself could not be
+    resolved; a zero result caused by the budget, a room type or a commute limit used to
+    send the user off to re-spell a perfectly good area. The loosening hint names only
+    filters that were applied: "the commute limit" on a search with none read as if one had
+    been set (R2-03)."""
+    parts = _applied_filter_parts(criteria, is_cjk)
+    filters = ("、" if is_cjk else ", ").join(text for _kind, text in parts)
+    kinds = {kind for kind, _text in parts}
     if is_cjk:
-        return (f"目前在 {area} 附近没有找到符合条件的实时房源。"
-                f"请检查区域拼写，或调整预算/区域后重试（可使用右侧搜索表单）。")
-    return (f"I couldn't find any current listings matching your criteria near {area} "
-            f"right now. Please check the area spelling, or adjust the budget/area and "
-            f"try again (you can also use the search form on the right).")
+        examples = "或".join(label for kind, label in (("budget", "预算"), ("commute", "通勤时间"))
+                            if kind in kinds)
+        lead = (f"本次检索数据中，在 {area} 附近没有找到符合以下条件的房源：{filters}。" if filters
+                else f"本次检索数据中，在 {area} 附近没有找到符合条件的房源。")
+        if area_unresolved:
+            tail = "请检查区域拼写，或换一个附近区域后重试（可使用右侧搜索表单）。"
+        elif examples:
+            tail = f"放宽其中一个条件（例如{examples}）可能会有结果，也可使用右侧搜索表单。"
+        elif parts:
+            tail = "放宽其中一个条件可能会有结果，也可使用右侧搜索表单。"
+        else:
+            tail = "换一个附近区域可能会有结果，也可使用右侧搜索表单。"
+        return lead + tail
+    examples = " or ".join(label for kind, label in (("budget", "the budget"),
+                                                      ("commute", "the commute limit"))
+                           if kind in kinds)
+    lead = (f"I couldn't find listings near {area} in the retrieved data that match: {filters}."
+            if filters else
+            f"I couldn't find listings matching your criteria near {area} in the retrieved data.")
+    if area_unresolved:
+        tail = (" Please check the area spelling, or try a nearby area (you can also use the "
+                "search form on the right).")
+    elif examples:
+        tail = (f" Loosening one of these (for example {examples}) may help; you can also use "
+                "the search form on the right.")
+    elif parts:
+        tail = " Loosening one of these may help; you can also use the search form on the right."
+    else:
+        tail = " A nearby area may have results; you can also use the search form on the right."
+    return lead + tail
 
 
 def _clean_explanation(desc, travel_min, location, travel_source=None):
@@ -1306,23 +2473,11 @@ def _travel_time_label(minutes, target, source) -> str:
 
 
 _RAG_COORDINATOR = None
-# The RAG coordinator is a process-wide singleton with a MUTABLE property_store
-# (build_index overwrites its rows, enhanced_search / search read them). The
-# normalize→build_index→recall sequence used to run inline on the event loop, which
-# — being single-threaded and await-free between build_index and enhanced_search —
-# made that sequence implicitly atomic per search. Now that we offload it to a worker
-# thread (so the embedding/FAISS CPU no longer stalls the loop and its batch-budget
-# timer), this lock preserves that exact atomicity: two concurrent searches can no
-# longer interleave their build_index / recall against the shared store. It is a
-# threading.Lock (held inside worker threads), so contention waits OFF the loop.
+# Native providers share their encoder and fork per-request indexes. The lock
+# protects older injected providers while each read rebinds its request snapshot.
 _RAG_LOCK = threading.Lock()
 
-# Guards CONSTRUCTION of the singleton coordinator (distinct from _RAG_LOCK, which guards
-# build_index/recall against the shared store). The sentence-transformer model load inside
-# RAGCoordinator() blocks ~18-20s on the first construction in a process; this lock makes
-# the background pre-warm thread and a concurrent first real search build it exactly once
-# instead of racing two loads. _RAG_COORDINATOR is only ASSIGNED after the load completes,
-# so `_embedding_store_ready()` reads False for the whole duration of the load.
+# Construction/prewarm is serialized independently from request-local recall.
 _RAG_BUILD_LOCK = threading.Lock()
 
 # Idempotent one-shot guard for the background embedding-store pre-warm.
@@ -1349,6 +2504,9 @@ class _DeterministicRAGCoordinator:
 
     def __init__(self):
         self.property_store = _DeterministicPropertyStore()
+
+    def for_search(self):
+        return type(self)()
 
     def enhanced_search(self, _query, _criteria):
         return list(self.property_store.rows), "", {}
@@ -1562,16 +2720,35 @@ class PropertyFilter:
         return round(price_match + commute_match, 1)
 
 
+def _as_text_list(value) -> list | None:
+    """A list argument as a list of clean strings, or None when nothing usable was sent.
+
+    A model that sends ``"Camden"`` where ``areas: list`` is declared used to have the
+    string iterated character by character. Never raises."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        cleaned = clean_arg_text(value)
+        return [cleaned] if cleaned else None
+    if isinstance(value, (list, tuple, set)):
+        out = [clean_arg_text(item) for item in value]
+        out = [item for item in out if item]
+        return out or None
+    cleaned = clean_arg_text(value)
+    return [cleaned] if cleaned else None
+
+
 async def search_properties_impl(
     user_query: str = "",
     area: str = None,                 # 🆕 想住/搜索的区域（首选）
     areas: list = None,               # 🆕 多区域：一次搜索多个居住区域（含 area）
     location: str = None,             # 遗留别名：见下方解析规则
     commute_destination: str = None,  # 🆕 通勤目的地（可选）
-    max_budget: int = None,
+    max_budget: float = None,
     max_commute_time: int = None,
     no_commute: bool = False,         # 🆕 用户明确表示不通勤
     bedrooms: int = None,             # 🆕 明确的卧室数（0=studio）
+    bedrooms_minimum: bool = False,
     min_budget: int = None,
     radius_miles: float = 2.0,
     limit: int = 10,
@@ -1610,6 +2787,27 @@ async def search_properties_impl(
     Returns:
         包含搜索结果或（仅在 search_area 无法确定时）澄清问题的字典。
     """
+    # ── Argument boundary ──────────────────────────────────────────────────
+    # Everything below this line may assume the free-text arguments ARE strings and the
+    # list arguments ARE lists. A model can send None, a number, a bare string where a
+    # list is declared, or text carrying a lone UTF-16 surrogate; the first statements of
+    # this function (memory stripping, budget parsing) run OUTSIDE the big try/except
+    # below, so a malformed argument used to escape as an unhandled TypeError instead of
+    # the structured {'success': False, 'error': ...} this tool promises.
+    user_query = clean_arg_text(user_query)
+    current_message = clean_arg_text(current_message)
+    area = clean_arg_text(area) or None
+    location = clean_arg_text(location) or None
+    commute_destination = clean_arg_text(commute_destination) or None
+    room_type = clean_arg_text(room_type) or None
+    move_in_date = clean_arg_text(move_in_date) or None
+    reply_language = clean_arg_text(reply_language) or None
+    sort_by = clean_arg_text(sort_by) or "value"
+    budget_period = clean_arg_text(budget_period) or "month"
+    areas = _as_text_list(areas)
+    property_features = _as_text_list(property_features)
+    accumulated_preferences = _as_text_list(accumulated_preferences)
+
     # Memory-stripped view of user_query. The agent PREPENDS a long-term-memory
     # block to user_query; a HARD search filter (area/budget/room_type/bedrooms)
     # must NEVER be extracted from a prior conversation's remembered criteria
@@ -1742,7 +2940,7 @@ async def search_properties_impl(
         # ================================================================
         # 只在"本轮真实消息"上做硬条件抽取（memory-stripped），绝不从注入的长期记忆块里
         # 抓取区域/预算/房型/卧室（跨会话泄漏修复）。
-        msg_for_extraction = current_message or stripped_query
+        msg_for_extraction = scoped_update_text(current_message or stripped_query)
         # 房型：规范化传入值；缺失时从本轮消息里抽取（"我要ensuite" 亦生效）。
         room_type = _normalize_room_type(room_type)
         if not room_type:
@@ -1750,6 +2948,8 @@ async def search_properties_impl(
         # 期望入住日：先净化传入值（累积状态/表单）；再看本轮消息是否显式声明，显式声明优先
         # （与预算"本轮覆盖累积"一致）。可选条件，绝不阻塞搜索。
         move_in_date = _valid_iso_date(move_in_date)
+        if date_is_cleared(msg_for_extraction):
+            move_in_date = None
         _fresh_move_in = _extract_move_in_date(msg_for_extraction)
         if _fresh_move_in and _fresh_move_in != move_in_date:
             logger.info(
@@ -1762,6 +2962,21 @@ async def search_properties_impl(
             logger.info("property_search.no_commute_detected")
         if msg_for_extraction:
             fresh_budget, fresh_period = _extract_budget(msg_for_extraction)
+            # P1-1: "raise the budget by £200" states a DELTA. The graph has already folded
+            # it into the ceiling it hands us, so re-reading the raw figure here would either
+            # re-install £200 as the ceiling (the legacy bug) or, if we applied the delta a
+            # second time, overshoot. A relative edit therefore states NO ceiling as far as
+            # this override is concerned: whatever the caller passed stands, and an absent
+            # ceiling stays absent (no budget filter) rather than becoming the delta.
+            # detect_relative_budget_delta returns None for "raise the budget TO £2400", so
+            # an absolute restatement still overrides exactly as before. Idempotent by
+            # construction — it never adds anything.
+            if fresh_budget and _states_relative_budget_edit(msg_for_extraction):
+                logger.info(
+                    "property_search.relative_budget_not_a_ceiling",
+                    extra={"had_previous_value": max_budget is not None},
+                )
+                fresh_budget = None
             if fresh_budget and fresh_budget != max_budget:
                 logger.info(
                     "property_search.budget_updated",
@@ -1784,7 +2999,7 @@ async def search_properties_impl(
         # 步骤 1: 解析搜索区域（唯一必需项）与通勤标注目标
         # ================================================================
         def _clean_area(v):
-            return v.strip() if isinstance(v, str) and v.strip() else None
+            return canonical_requested_area(v)
 
         search_area = _clean_area(area) or _clean_area(location)
         # 🆕 多区域：清洗/去重显式传入的 areas 列表。缺省单区域时以 areas[0] 作主区域，
@@ -1798,6 +3013,13 @@ async def search_properties_impl(
                 req_areas.append(_ca)
         if not search_area and req_areas:
             search_area = req_areas[0]
+        edited_areas = area_list_edit(msg_for_extraction, req_areas or ([search_area] if search_area else []))
+        fresh_areas = edited_areas if edited_areas is not None else _extract_areas(msg_for_extraction)
+        if len(fresh_areas) == 1 and bare_city_downgrades(fresh_areas[0], search_area):
+            fresh_areas = []    # a bare "London" never widens a finer requested area (R1-01)
+        if fresh_areas:
+            req_areas = fresh_areas
+            search_area = fresh_areas[0]
         search_areas: list = []
         # 记录 search_area 是否由 commute_destination 推导（而非用户当作"住哪"输入的 token）。
         # 由 commute_destination 推导出的 slug 绝不参与"区域即目的地"的重分类（步骤 1.4）。
@@ -1987,10 +3209,10 @@ async def search_properties_impl(
         # ================================================================
         # 步骤 1.5: 解析卧室数量（显式 bedrooms 优先，其次本轮文本/特征）
         # ================================================================
-        min_beds, max_beds = 0, 2  # 未指定时放宽
+        min_beds, max_beds = 0, 6  # An unspecified count must include family homes too.
         feats_lower = [str(f).lower() for f in all_property_features]
         if isinstance(bedrooms, int) and 0 <= bedrooms <= 6:
-            min_beds = max_beds = bedrooms
+            min_beds, max_beds = bedrooms, (6 if bedrooms_minimum else bedrooms)
             resolved_bedrooms = bedrooms
         else:
             beds = _extract_bedrooms(current_message or stripped_query or "")
@@ -2001,12 +3223,19 @@ async def search_properties_impl(
                         break
             if beds is not None:
                 min_beds, max_beds = beds
-                resolved_bedrooms = min_beds if min_beds == max_beds else None
+                resolved_bedrooms = min_beds
+                bedrooms_minimum = min_beds != max_beds
             elif 'studio' in feats_lower or room_type == 'studio':
                 min_beds = max_beds = 0
                 resolved_bedrooms = 0
             else:
                 resolved_bedrooms = None
+
+        # A soft preference keeps its housing requirement, never the health reason given for
+        # it ("mould-free due to asthma" -> "mould-free"), consistent with memory redaction
+        # (R2-04). It is echoed into the conversation's criteria from here.
+        from rag.agent_memory import sanitize_soft_preferences
+        all_soft_preferences = sanitize_soft_preferences(all_soft_preferences)
 
         # 供两种载荷统一复用的 search_criteria 构造器（同时带 canonical + legacy 键）。
         def _criteria():
@@ -2017,6 +3246,7 @@ async def search_properties_impl(
                 'commute_destination': commute_target,
                 'no_commute': no_commute,
                 'bedrooms': resolved_bedrooms,
+                'bedrooms_minimum': bedrooms_minimum,
                 'budget_period': budget_period,
                 'room_type': room_type,
                 'move_in_date': move_in_date,
@@ -2024,6 +3254,9 @@ async def search_properties_impl(
                 'destination': commute_target or search_area,
                 'max_budget': max_budget,
                 'max_travel_time': max_commute_time,
+                'monthly_total_budget': kwargs.get('monthly_total_budget'),
+                'office_days_per_week': kwargs.get('office_days_per_week'),
+                'max_changes': kwargs.get('max_changes'),
                 'property_features': all_property_features,
                 'soft_preferences': all_soft_preferences,
             }
@@ -2037,8 +3270,12 @@ async def search_properties_impl(
                 'commute_destination': commute_target,
                 'max_budget': max_budget,
                 'max_travel_time': max_commute_time,
+                'monthly_total_budget': kwargs.get('monthly_total_budget'),
+                'office_days_per_week': kwargs.get('office_days_per_week'),
+                'max_changes': kwargs.get('max_changes'),
                 'no_commute': no_commute,
                 'bedrooms': resolved_bedrooms,
+                'bedrooms_minimum': bedrooms_minimum,
                 'budget_period': budget_period,
                 'room_type': room_type,
                 'move_in_date': move_in_date,
@@ -2052,6 +3289,9 @@ async def search_properties_impl(
                 'destination': commute_target,
                 'max_budget': max_budget,
                 'max_travel_time': max_commute_time,
+                'monthly_total_budget': kwargs.get('monthly_total_budget'),
+                'office_days_per_week': kwargs.get('office_days_per_week'),
+                'max_changes': kwargs.get('max_changes'),
                 'room_type': room_type,
                 'move_in_date': move_in_date,
                 'property_features': all_property_features,
@@ -2124,7 +3364,8 @@ async def search_properties_impl(
         if has_budget and budget_period and budget_period.lower() == 'week':
             # Preserve the full weekly budget at the monthly filter boundary; the
             # formula and penny rounding live in one shared helper.
-            max_budget = int(math.ceil(monthly_from_weekly(max_budget)))
+            max_budget = monthly_from_weekly(max_budget)
+            budget_period = 'month'
             logger.info(
                 "property_search.budget_period_converted",
                 extra={"conversion_applied": True, "from_period": "week", "to_period": "month"},
@@ -2378,7 +3619,8 @@ async def search_properties_impl(
                     _smeta = _sres.get('meta', {})
                     if _sres.get('rows'):
                         _res_by_area[_a] = _tag(_a, _sres)          # complete-with-results
-                    elif _smeta.get('timed_out'):
+                    elif (_smeta.get('timed_out') or _smeta.get('source_status') in
+                          FAILED_SOURCE_STATES):
                         incomplete_areas.append(_a)                 # deadline hit -> incomplete
                         _res_by_area[_a] = _sres
                     else:
@@ -2408,8 +3650,11 @@ async def search_properties_impl(
         # 'results' (complete, had listings) | 'empty' (complete, genuinely none) | 'incomplete'.
         _area_rowcount = {_a: len(_res_by_area.get(_a, {}).get('rows', []) or [])
                           for _a in search_areas}
+        _source_failure = source_failure_summary(_res_by_area, language='zh' if is_cjk else 'en')
         _area_status = {
-            _a: ('incomplete' if _a in incomplete_areas
+            _a: (_res_by_area[_a]['meta']['source_status']
+                 if (_res_by_area.get(_a, {}).get('meta') or {}).get('source_status') in FAILED_SOURCE_STATES
+                 else 'incomplete' if _a in incomplete_areas
                  else 'results' if _area_rowcount.get(_a) else 'empty')
             for _a in search_areas
         }
@@ -2522,11 +3767,27 @@ async def search_properties_impl(
         # areas the time budget prevented us from fully searching (incomplete ≠ empty).
         def _augment(payload: dict) -> dict:
             out = dict(payload)
-            out['partial'] = bool(incomplete_areas)
+            out['partial'] = bool(incomplete_areas or _source_failure)
             out['incomplete_areas'] = list(incomplete_areas)
             out['partial_note'] = _partial_note(incomplete_areas, is_cjk) if incomplete_areas else ""
             out['cache_stats'] = {"hits": cache_hits, "misses": cache_misses}
             out['area_status'] = dict(_area_status)
+            out.update(_source_failure)
+            out['retrieval_outcome'] = (
+                'source_unavailable' if _source_failure and not live_rows else
+                'stale_fallback' if _source_failure and live_rows else
+                'incomplete' if incomplete_areas else
+                'no_matching_candidates' if payload.get('status') == 'no_results' and live_rows else
+                'no_source_candidates' if payload.get('status') == 'no_results' else 'candidates_returned')
+            if _source_failure:
+                out['message'] = _source_failure['source_message']
+                out['partial_note'] = _source_failure['source_message']
+            elif payload.get('status') == 'no_results' and not incomplete_areas:
+                note = ('未获得可用候选数据，不能据此判断市场上没有房源。' if not live_rows else
+                        '本次候选中没有满足当前筛选的房源；这不代表市场上没有房源。') if is_cjk else (
+                        'No usable source candidates were retrieved; this does not establish that the market is empty.' if not live_rows else
+                        'No retrieved candidates match the current filters; this does not establish that the market is empty.')
+                out['message'] = f"{out.get('message') or ''} {note}".strip()
             # Commute honesty (FIX 2): the user had a commute constraint but commute was never
             # verified this round. `commute_note` ALWAYS rides with the results (independent of
             # the partial note) and forbids stating/promising any commute duration; the returned
@@ -2542,6 +3803,7 @@ async def search_properties_impl(
         # Validate every listing against the requested area's centroid before it
         # can enter RAG, ranking, the similar fallback, or the UI.
         geo_rejected = []
+        area_centres: dict = {}
         geo_validation_enabled = os.getenv("SEARCH_GEO_VALIDATION_ENABLED", "1") != "0"
         if live_rows and geo_validation_enabled and not degraded:
             from core.geography import (
@@ -2551,7 +3813,6 @@ async def search_properties_impl(
             )
             from core.maps_service import geocode_address
 
-            area_centres = {}
             for _idx, _a in enumerate(search_areas):
                 _centre = known_area_centroid(_a)
                 if _centre is None:
@@ -2629,7 +3890,9 @@ async def search_properties_impl(
             # the message must NOT claim "no listings" for them (H2 honesty) — surface the
             # partial note instead. A genuinely-searched empty stays the honest no-results.
             _empty_msg = (_partial_note(incomplete_areas, is_cjk) if incomplete_areas
-                          else _no_results_message(search_area, is_cjk))
+                          else _no_results_message(
+                              search_area, is_cjk, criteria=_criteria(),
+                              area_unresolved=bool(area_centres) and not any(area_centres.values())))
             return _augment({
                 'success': True,
                 'status': 'no_results',
@@ -2664,60 +3927,30 @@ async def search_properties_impl(
             'soft_preferences': all_soft_preferences,
         }
 
-        # 归一化 + 语义索引重建 + 召回是本工具最重的 ON-LOOP 段（build_index 对上百条房源做
-        # embedding、enhanced_search 做查询 embedding+FAISS，均为纯 CPU）。整段离线到工作线程，
-        # 使事件循环（及 batch-budget 计时器）不再被阻塞；行为逐字不变（同样的归一化、同样的
-        # 单/多区域召回与轮转合并）。_RAG_LOCK 保证共享 coordinator 的 build_index→召回 原子，
-        # 复刻此前"循环单线程、二者间无 await"的隐式互斥（并发搜索不会互相踩到同一索引）。
+        # Both recall paths use one request-owned snapshot, including across awaits.
+        from core.listing_retrieval import ListingRetrievalSession
+
+        retrieval_session = None
+
         def _normalize_and_rank():
-            with _RAG_LOCK:
-                # 规范化真实行：解析价格、推断卧室/房型、标记过期。
-                for prop in live_rows:
-                    prop['parsed_price'] = parse_price(prop.get('Price'))
-                    _rt = str(prop.get('Room_Type_Category', ''))
-                    prop.setdefault('Type', _rt or 'Flat')
-                    _bm = re.search(r'(\d+)\s*bed', _rt, re.I)
-                    if _bm:
-                        prop['Bedrooms'] = int(_bm.group(1))
-                    elif 'studio' in _rt.lower():
-                        prop['Bedrooms'] = 'Studio'
-                    if possibly_outdated:
-                        prop['possibly_outdated'] = True
-
-                # 在"仅这些城市正确的真实行"上重建语义索引。
-                _coord = _get_rag_coordinator()
-                _coord.property_store.build_index(live_rows)
-
-                if len(search_areas) > 1:
-                    # 🆕 多区域公平召回。单一（主区域）语义查询 + 全局 top-N 截断（candidates[:15]）
-                    # 会系统性地把非主区域的房源挤出候选池——主区域房源较多时，其排序整体高于其它
-                    # 区域，截断后其它区域一套不剩（用户报告的 Bug 1）。改为按区域各自做语义召回、以
-                    # 来源区域 (_search_area) 归集，再轮转合并（round-robin，保持每个区域各自的排序
-                    # 内序），确保每个搜索区域都被公平代表。下游过滤/标注/评分/展示截断逻辑完全不变。
-                    from collections import deque
-                    _per_area = {}
-                    for _a in search_areas:
-                        _ranked_a, _, _ = _coord.enhanced_search(_build_search_query(_a), criteria)
-                        _al = _a.lower()
-                        _per_area[_al] = [p for p in _ranked_a
-                                          if str(p.get('_search_area', '')).lower() == _al]
-                    _queues = [deque(_per_area.get(_a.lower(), [])) for _a in search_areas]
-                    _ranked = []
-                    while any(_queues):
-                        for _q in _queues:
-                            if _q:
-                                _ranked.append(_q.popleft())
-                    logger.info(
-                        "property_search.multi_area_recall",
-                        extra={
-                            "area_count": len(search_areas),
-                            "result_counts": [
-                                len(_per_area.get(_a.lower(), [])) for _a in search_areas
-                            ],
-                        },
-                    )
-                    return _ranked, [], []
-                return _coord.enhanced_search(search_query, criteria)
+            nonlocal retrieval_session
+            for prop in live_rows:
+                prop['parsed_price'] = parse_price(prop.get('Price'))
+                _rt = str(prop.get('Room_Type_Category', ''))
+                prop.setdefault('Type', _rt or 'Flat')
+                _bm = re.search(r'(\d+)\s*bed', _rt, re.I)
+                if _bm:
+                    prop['Bedrooms'] = int(_bm.group(1))
+                elif 'studio' in _rt.lower():
+                    prop['Bedrooms'] = 'Studio'
+                if possibly_outdated:
+                    prop['possibly_outdated'] = True
+            retrieval_session = ListingRetrievalSession(
+                _get_rag_coordinator(), live_rows, _RAG_LOCK,
+            )
+            return retrieval_session.rank(
+                [(area, _build_search_query(area)) for area in search_areas], criteria,
+            )
 
         def _degraded_rank():
             # Deadline is too close for semantic ranking: normalize the rows and order them
@@ -2741,12 +3974,6 @@ async def search_properties_impl(
             ranked_properties, past_context, area_info = _degraded_rank(), "", {}
         else:
             ranked_properties, past_context, area_info = await asyncio.to_thread(_normalize_and_rank)
-        # Singleton handle for the similar-but-over-budget fallback below. In the NON-degraded
-        # path the offloaded pipeline already constructed it, so this is O(1). In the DEGRADED
-        # path we deliberately never built/loaded the embedding store (that cold load is what
-        # we are avoiding), so grab the existing singleton only if present — NEVER construct it
-        # here — and the similar fallback (which needs embeddings) is skipped while degraded.
-        rag_coordinator = _RAG_COORDINATOR if degraded else _get_rag_coordinator()
         print(f"   ✅ RAG 返回 {len(ranked_properties)} 个候选房源")
 
         # 🆕 根据房产特征过滤结果（注意：不要遮蔽函数级的 room_type 参数）
@@ -2761,7 +3988,7 @@ async def search_properties_impl(
                 for feature in all_property_features:
                     canonical = _canonical_property_feature(feature)
                     evidence = _property_feature_evidence(prop, canonical)
-                    if canonical in _ACCESSIBILITY_FEATURES:
+                    if _requires_explicit_feature_evidence(canonical):
                         # Missing disclosure is not proof that an accessibility
                         # feature is absent. Keep unknown rows visible and let the
                         # candidate contract label them unverified; only an explicit
@@ -2799,7 +4026,7 @@ async def search_properties_impl(
             return _augment({
                 'success': True,
                 'status': 'no_results',
-                'message': _no_results_message(search_area, is_cjk),
+                'message': _no_results_message(search_area, is_cjk, criteria=_criteria()),
                 'recommendations': [],
                 'data_source': data_source,
                 'search_criteria': _criteria(),
@@ -2950,15 +4177,11 @@ async def search_properties_impl(
             if has_budget and not degraded:
                 print(f"\n⚠️ [SEARCH] 无符合结果，尝试 RAG 相似房源...")
 
-                # 相似回退：property_store.search 为 embedding 检索，逐候选的通勤估算/同步
-                # calculate_travel_time 亦为阻塞网络。整段（检索 + 通勤装配）离线到工作线程；
-                # _RAG_LOCK 保护共享 store 的读取，与上面 build_index 互斥。行为逐字不变
-                # （相同的 top-6 截断、通勤过滤、价格归一化与保留判定）。
+                # The fallback reads this request's index, even after another search.
                 def _similar_recall():
-                    with _RAG_LOCK:
-                        sims = rag_coordinator.property_store.search(
-                            f"flat apartment near {search_area} budget {max_budget}", top_k=10
-                        )
+                    sims = retrieval_session.similar(
+                        f"flat apartment near {search_area} budget {max_budget}", top_k=10,
+                    )
                     out = []
                     for prop in (sims or [])[:6]:
                         try:
@@ -3030,7 +4253,12 @@ async def search_properties_impl(
                             geo_location = prop.get('Geo_Location', prop.get('geo_location', ''))
                             row = {
                                 'rank': i,
-                                'address': prop.get('Address', prop.get('address', 'Unknown')),
+                                # The provider's own borough word can contradict the listing's own postcode
+                                # ("... Islington WC1N" for a Camden listing). Show the reconciled label;
+                                # keep the raw provider string for traceability.
+                                'address': reconcile_area_label(
+                                    prop.get('Address', prop.get('address', 'Unknown'))),
+                                'provider_address': prop.get('Address', prop.get('address', 'Unknown')),
                                 'price': f"£{price}/month",
                                 'budget_status': budget_status,
                                 'price_raw': price,
@@ -3125,7 +4353,7 @@ async def search_properties_impl(
 
             # 无预算，或相似回退也没结果 —— 诚实的 no_results（语言感知，提示表单）。
             _empty_msg = (_partial_note(incomplete_areas, is_cjk) if incomplete_areas
-                          else _no_results_message(search_area, is_cjk))
+                          else _no_results_message(search_area, is_cjk, criteria=_criteria()))
             return _augment({
                 'success': True,
                 'status': 'no_results',
@@ -3275,13 +4503,18 @@ async def search_properties_impl(
                     _evidence = _property_feature_evidence(prop, _normal)
                     if _evidence == 'verified':
                         _verified_features.append(_normal)
-                    elif _normal in _ACCESSIBILITY_FEATURES and _evidence == 'unverified':
+                    elif _requires_explicit_feature_evidence(_normal) and _evidence == 'unverified':
                         _unverified_features.append(_normal)
-                    elif _normal in _ACCESSIBILITY_FEATURES and _evidence == 'absent':
+                    elif _requires_explicit_feature_evidence(_normal) and _evidence == 'absent':
                         _absent_features.append(_normal)
                 row = {
                     'rank': i,
-                    'address': prop.get('Address', prop.get('address', 'Unknown')),
+                    # The provider's own borough word can contradict the listing's own postcode
+                    # ("... Islington WC1N" for a Camden listing). Show the reconciled label;
+                    # keep the raw provider string for traceability.
+                    'address': reconcile_area_label(
+                        prop.get('Address', prop.get('address', 'Unknown'))),
+                    'provider_address': prop.get('Address', prop.get('address', 'Unknown')),
                     'price': f"£{int(prop.get('price', 0))}/month",
                     'budget_status': prop.get('budget_status', ''),
                     'score': prop.get('recommendation_score', 0),
@@ -3447,16 +4680,29 @@ search_properties_tool = Tool(
             },
             'no_commute': {
                 'type': 'boolean',
-                'description': 'Set true when the user explicitly does NOT commute / just lives there / works from home (e.g. "我不通勤我单纯住着", "wfh"). Disables all commute computation, filtering and questions.',
+                'description': 'Set true only when the user explicitly does not commute at all. Working from home on some days does not remove an office commute. Disables commute computation and filtering.',
                 'default': False
             },
             'bedrooms': {
                 'type': 'integer',
                 'description': 'Explicit bedroom count (0 = studio). Optional; when omitted the tool infers from the message or defaults to a broad range.'
             },
+            'bedrooms_minimum': {'type': 'boolean', 'description': 'True when bedrooms is a minimum, rather than an exact count.'},
             'max_budget': {
-                'type': 'integer',
-                'description': 'OPTIONAL maximum monthly budget in GBP (e.g., 1500, 2000). Omit for no budget filter — never blocks the search.'
+                'type': 'number',
+                'description': 'OPTIONAL maximum monthly rent in GBP, preserving pennies (e.g., 1900, 2166.67). Omit for no budget filter — never blocks the search.'
+            },
+            'monthly_total_budget': {
+                'type': 'number', 'minimum': 0,
+                'description': 'Separate monthly rent-plus-commuting affordability ceiling in GBP. It is not the rent ceiling, and cannot be verified without candidate-linked travel cost evidence.'
+            },
+            'office_days_per_week': {
+                'type': 'integer', 'minimum': 0, 'maximum': 7,
+                'description': 'Explicit office attendance days per week; retain this when testing the separate total budget.'
+            },
+            'max_changes': {
+                'type': 'integer', 'minimum': 0, 'maximum': 30,
+                'description': 'Explicit maximum public-transport changes. Missing candidate-linked route evidence leaves this constraint unverified.'
             },
             'max_commute_time': {
                 'type': 'integer',
@@ -3500,7 +4746,7 @@ search_properties_tool = Tool(
             'room_type': {
                 'type': 'string',
                 'description': "OPTIONAL preferred room type: 'studio', 'ensuite', or "
-                               "'shared' (omit for any). Studio also implies a 0-bedroom search."
+                               "'shared', or 'whole' for a self-contained flat/house (omit for any). Studio also implies a 0-bedroom search."
             },
             'move_in_date': {
                 'type': 'string',

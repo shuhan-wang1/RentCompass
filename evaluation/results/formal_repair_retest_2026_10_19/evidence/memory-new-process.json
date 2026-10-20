@@ -1,0 +1,57 @@
+{
+  "checks": {
+    "same_namespace_persists_in_new_process": true,
+    "other_namespace_empty": true,
+    "both_reads_successful": true
+  },
+  "passed": true,
+  "records": [
+    {
+      "namespace": "formal_integration_A",
+      "result": {
+        "success": true,
+        "data": {
+          "success": true,
+          "count": 1,
+          "memories": [
+            {
+              "id": "semantic_5d3463a8b307bb1439a7c5a7b10f7957",
+              "text": "Synthetic formal integration preference: quiet whole home; cat permission must be verified.",
+              "mtype": "semantic",
+              "importance": 7,
+              "score": 3.0,
+              "created_at": "2026-10-19T13:01:34"
+            }
+          ],
+          "formatted": "What I remember about this user:\n[FACT] Synthetic formal integration preference: quiet whole home; cat permission must be verified."
+        },
+        "error": null,
+        "execution_time_ms": 12.899160385131836,
+        "tool_name": "recall_memory",
+        "version": "1",
+        "idempotency_key": null,
+        "outcome": "complete"
+      }
+    },
+    {
+      "namespace": "formal_integration_B",
+      "result": {
+        "success": true,
+        "data": {
+          "success": true,
+          "count": 0,
+          "memories": [],
+          "formatted": ""
+        },
+        "error": null,
+        "execution_time_ms": 1.1906623840332031,
+        "tool_name": "recall_memory",
+        "version": "1",
+        "idempotency_key": null,
+        "outcome": "complete"
+      }
+    }
+  ],
+  "new_python_process": true,
+  "time": 1792415856.0570688
+}

@@ -1,0 +1,70 @@
+[
+  {
+    "url": "http://127.0.0.1:15008/api/alex",
+    "status": 200,
+    "method": "POST",
+    "request_headers": {
+      "accept": "text/event-stream",
+      "content-type": "application/json",
+      "cookie": "[REDACTED]",
+      "origin": "http://127.0.0.1:15008",
+      "referer": "http://127.0.0.1:15008/",
+      "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "x-conversation-id": "50644e40a5f84f7f8b2926a5a9252fb0",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Linux\""
+    },
+    "request_body": "{\"message\": \"先暂停找房，只单独查一下明天伦敦的天气：会下雨吗，大概多少度，出门看房要带伞吗？这不是修改我的租房条件。\", \"context\": {\"viewed_properties\": []}, \"is_continuation\": false, \"language\": \"zh\", \"ui_language\": \"zh\", \"conversation_id\": \"50644e40a5f84f7f8b2926a5a9252fb0\"}",
+    "response_headers": {
+      "transfer-encoding": "chunked",
+      "x-request-id": "19f1088b47f74b188caa1c6f73214a75",
+      "cache-control": "no-cache",
+      "x-accel-buffering": "no",
+      "x-agent-version": "e2e-repair-frozen-working-tree",
+      "access-control-allow-credentials": "true",
+      "access-control-allow-origin": "http://127.0.0.1:15008",
+      "date": "Mon, 19 Oct 2026 08:59:28 GMT",
+      "x-agent-arch": "fc_loop",
+      "content-type": "text/event-stream; charset=utf-8",
+      "x-agent-specialists": "0",
+      "server": "uvicorn",
+      "vary": "Cookie"
+    },
+    "response_body": "event: step\ndata: {\"stage\":\"understanding\"}\n\nevent: step\ndata: {\"stage\":\"understanding\"}\n\nevent: step\ndata: {\"stage\":\"writing\"}\n\nevent: step\ndata: {\"stage\":\"searching\"}\n\nevent: step\ndata: {\"stage\":\"writing\"}\n\nevent: step\ndata: {\"stage\":\"checking\"}\n\nevent: step\ndata: {\"stage\":\"saving\"}\n\nevent: final\ndata: {\"status\":200,\"payload\":{\"conversation_id\":\"50644e40a5f84f7f8b2926a5a9252fb0\",\"message\":\"关于明天的伦敦天气，我查到的实时数据如下\\n\\n- 当前气温约 14.2 度，体感约 12.8 度\\n- 天气状况为小雨（Light Rain）\\n- 湿度 72%，风速约 11.5，紫外线指数 1.2\\n- 建议：可能有雨，出门看房记得带伞\\n\\n需要说明的是，这份数据是当前时刻的实况，并没有覆盖明天的完整预报，也没有提供明天具体的降雨概率数值。因此关于“明天会不会下雨”，我只能说目前伦敦正在下小雨、天气偏凉，明天出门看房建议随身带伞并穿一件保暖外套。如果你想要更准确的明日分时预报，可以查看英国气象局（Met Office）官网。\\n\\n另外，这次只是单独查询天气，没有改动你的租房条件：两人、每人每月最多 £1,200、整套合计 £2,400/月、不含账单、伦敦整租 2 居室、这些偏好保持不变。等你想继续找房时告诉我即可。\\n\\nPlease double-check the exact prices against the source listing.\\n\\n注：部分通勤结论缺少可对应的证据，已从回答中移除。\",\"response_type\":\"chat\",\"turn_id\":\"841bb42a83b04a959bdd7f5cd9bdfd86\",\"view_state\":{\"criteria\":{\"amenities_of_interest\":[],\"area\":\"London\",\"areas\":[\"London\"],\"bedrooms\":2,\"bedrooms_minimum\":false,\"budget_period\":\"month\",\"commute_destination\":\"Gower Street, London WC1E 6BT\",\"constraint_sources\":{\"area\":{\"source\":\"user_message\",\"text\":\"先暂停找房，只单独查一下明天伦敦的天气：会下雨吗，大概多少度，出门看房要带伞吗？这不是修改我的租房条件。\",\"value\":\"London\"},\"bedrooms\":{\"source\":\"user_message\",\"text\":\"刚才我点的是“每人每月£1,200”，可是右边仍然是£1,200和3居，和我的意思不符。请纠正为：两个人、每人每月最多£1,200，整套合计£2,400/月、不含账单; 在伦敦找整租2居室，坐公共交通到UCL Bloomsbury主校区30分钟以内。我们还没决定住哪个区，UCL只是上课地点。请把这些保存为以后所有新对话的长期默认偏好。\",\"value\":2},\"bedrooms_minimum\":{\"source\":\"user_message\",\"text\":\"我和两个同学都是中文留学生，下个月去伦敦大学学院 UCL 读硕士，还没确定住处。我们想三个人一起整租3居室，每人每月房租最多£1,000，不含账单，希望到学校别太远。能先帮我们找吗？\",\"value\":false},\"max_budget\":{\"source\":\"user_message\",\"text\":\"有一个同学不来了，现在只剩我们两个人，想改为2居整套，预算也改成£1,200。我说得可能不清楚，你先给我明确的预算口径选项让我选，不要擅自决定是每人还是整套。学校只是上课地点，不是我们已经选好的住处。\",\"value\":1200},\"max_travel_time\":{\"source\":\"user_message\",\"text\":\"刚才我点的是“每人每月£1,200”，可是右边仍然是£1,200和3居，和我的意思不符。请纠正为：两个人、每人每月最多£1,200，整套合计£2,400/月、不含账单; 在伦敦找整租2居室，坐公共交通到UCL Bloomsbury主校区30分钟以内。我们还没决定住哪个区，UCL只是上课地点。请把这些保存为以后所有新对话的长期默认偏好。\",\"value\":30},\"room_type\":{\"source\":\"user_message\",\"text\":\"我和两个同学都是中文留学生，下个月去伦敦大学学院 UCL 读硕士，还没确定住处。我们想三个人一起整租3居室，每人每月房租最多£1,000，不含账单，希望到学校别太远。能先帮我们找吗？\",\"value\":\"whole\"}},\"destination\":\"Gower Street, London WC1E 6BT\",\"max_budget\":1200,\"max_travel_time\":30,\"property_features\":[],\"room_type\":\"whole\",\"soft_preferences\":[]},\"operation\":\"replace\",\"results\":[],\"revision\":5}}}\n\n"
+  },
+  {
+    "url": "http://127.0.0.1:15008/api/conversations",
+    "status": 200,
+    "method": "GET",
+    "request_headers": {
+      "accept": "*/*",
+      "cookie": "[REDACTED]",
+      "referer": "http://127.0.0.1:15008/",
+      "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Linux\""
+    },
+    "request_body": null,
+    "response_headers": {
+      "x-agent-version": "e2e-repair-frozen-working-tree",
+      "access-control-allow-credentials": "true",
+      "access-control-allow-origin": "http://127.0.0.1:15008",
+      "content-length": "674",
+      "date": "Mon, 19 Oct 2026 08:59:34 GMT",
+      "x-agent-arch": "fc_loop",
+      "content-type": "application/json",
+      "x-agent-specialists": "0",
+      "server": "uvicorn",
+      "vary": "Cookie"
+    },
+    "response_body": "{\"conversations\": [{\"agent_arch\": \"fc_loop\", \"agent_version\": \"e2e-repair-frozen-working-tree\", \"branch_depth\": 0, \"created_at\": \"2026-10-19T08:56:21.123961+00:00\", \"edited_slot_turn_id\": null, \"fork_reason\": null, \"forked_from_turn_id\": null, \"id\": \"50644e40a5f84f7f8b2926a5a9252fb0\", \"message_count\": 10, \"parent_conversation_id\": null, \"root_conversation_id\": \"50644e40a5f84f7f8b2926a5a9252fb0\", \"strict\": false, \"title\": \"我和两个同学都是中文留学生，下个月去伦敦大学学院 UCL 读硕士，还没确定住处。…\", \"updated_at\": \"2026-10-19T08:59:34.350295+00:00\"}]}"
+  },
+  {
+    "url": "/api/alex",
+    "request_body": "{\"message\": \"先暂停找房，只单独查一下明天伦敦的天气：会下雨吗，大概多少度，出门看房要带伞吗？这不是修改我的租房条件。\", \"context\": {\"viewed_properties\": []}, \"is_continuation\": false, \"language\": \"zh\", \"ui_language\": \"zh\", \"conversation_id\": \"50644e40a5f84f7f8b2926a5a9252fb0\"}",
+    "status": 200,
+    "response_body": "event: step\ndata: {\"stage\":\"understanding\"}\n\nevent: step\ndata: {\"stage\":\"understanding\"}\n\nevent: step\ndata: {\"stage\":\"writing\"}\n\nevent: step\ndata: {\"stage\":\"searching\"}\n\nevent: step\ndata: {\"stage\":\"writing\"}\n\nevent: step\ndata: {\"stage\":\"checking\"}\n\nevent: step\ndata: {\"stage\":\"saving\"}\n\nevent: final\ndata: {\"status\":200,\"payload\":{\"conversation_id\":\"50644e40a5f84f7f8b2926a5a9252fb0\",\"message\":\"关于明天的伦敦天气，我查到的实时数据如下\\n\\n- 当前气温约 14.2 度，体感约 12.8 度\\n- 天气状况为小雨（Light Rain）\\n- 湿度 72%，风速约 11.5，紫外线指数 1.2\\n- 建议：可能有雨，出门看房记得带伞\\n\\n需要说明的是，这份数据是当前时刻的实况，并没有覆盖明天的完整预报，也没有提供明天具体的降雨概率数值。因此关于“明天会不会下雨”，我只能说目前伦敦正在下小雨、天气偏凉，明天出门看房建议随身带伞并穿一件保暖外套。如果你想要更准确的明日分时预报，可以查看英国气象局（Met Office）官网。\\n\\n另外，这次只是单独查询天气，没有改动你的租房条件：两人、每人每月最多 £1,200、整套合计 £2,400/月、不含账单、伦敦整租 2 居室、这些偏好保持不变。等你想继续找房时告诉我即可。\\n\\nPlease double-check the exact prices against the source listing.\\n\\n注：部分通勤结论缺少可对应的证据，已从回答中移除。\",\"response_type\":\"chat\",\"turn_id\":\"841bb42a83b04a959bdd7f5cd9bdfd86\",\"view_state\":{\"criteria\":{\"amenities_of_interest\":[],\"area\":\"London\",\"areas\":[\"London\"],\"bedrooms\":2,\"bedrooms_minimum\":false,\"budget_period\":\"month\",\"commute_destination\":\"Gower Street, London WC1E 6BT\",\"constraint_sources\":{\"area\":{\"source\":\"user_message\",\"text\":\"先暂停找房，只单独查一下明天伦敦的天气：会下雨吗，大概多少度，出门看房要带伞吗？这不是修改我的租房条件。\",\"value\":\"London\"},\"bedrooms\":{\"source\":\"user_message\",\"text\":\"刚才我点的是“每人每月£1,200”，可是右边仍然是£1,200和3居，和我的意思不符。请纠正为：两个人、每人每月最多£1,200，整套合计£2,400/月、不含账单; 在伦敦找整租2居室，坐公共交通到UCL Bloomsbury主校区30分钟以内。我们还没决定住哪个区，UCL只是上课地点。请把这些保存为以后所有新对话的长期默认偏好。\",\"value\":2},\"bedrooms_minimum\":{\"source\":\"user_message\",\"text\":\"我和两个同学都是中文留学生，下个月去伦敦大学学院 UCL 读硕士，还没确定住处。我们想三个人一起整租3居室，每人每月房租最多£1,000，不含账单，希望到学校别太远。能先帮我们找吗？\",\"value\":false},\"max_budget\":{\"source\":\"user_message\",\"text\":\"有一个同学不来了，现在只剩我们两个人，想改为2居整套，预算也改成£1,200。我说得可能不清楚，你先给我明确的预算口径选项让我选，不要擅自决定是每人还是整套。学校只是上课地点，不是我们已经选好的住处。\",\"value\":1200},\"max_travel_time\":{\"source\":\"user_message\",\"text\":\"刚才我点的是“每人每月£1,200”，可是右边仍然是£1,200和3居，和我的意思不符。请纠正为：两个人、每人每月最多£1,200，整套合计£2,400/月、不含账单; 在伦敦找整租2居室，坐公共交通到UCL Bloomsbury主校区30分钟以内。我们还没决定住哪个区，UCL只是上课地点。请把这些保存为以后所有新对话的长期默认偏好。\",\"value\":30},\"room_type\":{\"source\":\"user_message\",\"text\":\"我和两个同学都是中文留学生，下个月去伦敦大学学院 UCL 读硕士，还没确定住处。我们想三个人一起整租3居室，每人每月房租最多£1,000，不含账单，希望到学校别太远。能先帮我们找吗？\",\"value\":\"whole\"}},\"destination\":\"Gower Street, London WC1E 6BT\",\"max_budget\":1200,\"max_travel_time\":30,\"property_features\":[],\"room_type\":\"whole\",\"soft_preferences\":[]},\"operation\":\"replace\",\"results\":[],\"revision\":5}}}\n\n"
+  }
+]

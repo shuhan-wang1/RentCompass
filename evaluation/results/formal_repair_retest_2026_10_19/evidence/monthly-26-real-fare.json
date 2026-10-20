@@ -1,0 +1,34 @@
+{
+  "input": "Please calculate 26 one-way trips per month using the actual current single fare from Stratford to Bank.",
+  "separate_direct_integration": true,
+  "actual_current_fare_evidence": "final-fare-diagnostic.json",
+  "estimate": {
+    "kind": "estimate",
+    "frequency": {
+      "monthly_singles": 26,
+      "peak_requested": false
+    },
+    "monthly_journeys": 26.0,
+    "amount": 80.6,
+    "currency": "GBP",
+    "single_fare_gbp": 3.1,
+    "formula": "26 × £3.10",
+    "assumptions": [
+      "Each stated monthly journey counts as one single; no extra return trips or office days are inferred.",
+      "The declared monthly trip count is used directly; no weekly-to-monthly conversion is applied.",
+      "The observed single fare applies to every counted journey; discounts, caps and future fare changes are excluded.",
+      "This estimate is not verified travel cost for a particular available flat and does not establish its combined-budget eligibility."
+    ],
+    "conditional_peak_fare": false,
+    "candidate_cost_verified": false,
+    "source": "TfL Unified API Journey Planner"
+  },
+  "display": "Estimated monthly commuting: 26 single journeys/month × £3.10 = £80.60/month. The declared monthly trip count is used directly; no extra return trips or office days are inferred and no weekly conversion is applied. The observed fare is assumed for every trip; discounts, fare caps and future changes are excluded. It is not a verified cost for any flat and does not establish the combined rent-and-commuting budget.",
+  "checks": {
+    "actual_fare_success": true,
+    "single_fare": true,
+    "explicit_monthly_amount": true,
+    "not_candidate_affordability_proof": true
+  },
+  "all_passed": true
+}

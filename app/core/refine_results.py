@@ -406,6 +406,31 @@ def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, A
     if not text:
         return None
 
+    from core.constraint_updates import is_criteria_consultation, is_hypothetical
+    if is_criteria_consultation(text) or is_hypothetical(text):
+        return None
+
+    # A comparison/details request must reach the tools even when it repeats a
+    # location or asks to retain the current limits. Filtering cached rows here
+    # otherwise swallows the actual question and can discard the named comparator.
+    if re.search(r'\b(?:compare|comparison|measurements?|written\s+(?:cat\s+)?permission|'
+                 r'actual\s+details|what\s+.*(?:confirm|unknown)|details\s+for)\b|'
+                 r'比较|对比|尺寸|书面许可|房源详情|实际确认', text, re.I):
+        return None
+    # Repeating the current area while asking for another tool is not a subset
+    # instruction. Let the normal graph execute every independent read.
+    for clause in re.split(r'[.!?。！？;；\n]+', text):
+        # A question about what is near a place ("What supermarkets and parks are near
+        # Gloucester Avenue?") is a nearby-places question, never a filter (R2-05).
+        if re.search(r'\b(?:weather|forecast|schools?|gps?|surgeries|crime|safety|'
+                     r'nearby|amenities|journey|route|tfl|fare|supermarkets?|parks?|shops?|gyms?|'
+                     r'pubs?|restaurants?|caf(?:e|é)s?|pharmac(?:y|ies))\b|'
+                     r'天气|预报|学校|诊所|治安|周边|路线|票价|超市|公园|商店|健身房|餐厅',
+                     clause, re.I) and not re.search(
+                         r'\b(?:do not|don.t|no need to|skip|without checking)\b|不要|不用|无需',
+                         clause, re.I):
+            return None
+
     # Hard bail-outs: this is a new/wider search, not a narrowing of what is shown.
     if _NEW_SEARCH_RE.search(text) or _WIDEN_RE.search(text):
         return None
@@ -419,6 +444,12 @@ def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, A
     # change-of-area (fresh search) when it does not.
     named_area = _extract_area(text)
     if named_area:
+        if re.search(r'\b(?:and|or)\b|和|及|、', text, re.I):
+            labels = {str(r.get('area')).strip().lower()
+                      for r in previous if isinstance(r, dict) and r.get('area')}
+            hits = [label for label in labels if re.search(r'\b' + re.escape(label) + r'\b', text, re.I)]
+            if hits and any(label not in max(hits, key=len) for label in hits):
+                return None
         if not any(named_area.lower() in _record_areas(r) for r in previous):
             return None
         filters.append({'kind': 'area', 'value': named_area})

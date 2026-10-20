@@ -1,0 +1,20 @@
+[
+  {
+    "text": "",
+    "aria": "Save",
+    "title": "Save",
+    "cls": "favorite-btn"
+  },
+  {
+    "text": "Map",
+    "aria": null,
+    "title": "",
+    "cls": "action-btn"
+  },
+  {
+    "text": "Ask AI",
+    "aria": null,
+    "title": "",
+    "cls": "action-btn"
+  }
+]

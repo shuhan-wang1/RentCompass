@@ -1,0 +1,67 @@
+onthemarket.search_failed page=1 error_type=HTTPError
+   ✅ 实时房源 0 个 (areas=1, cached=False)
+{"tool": "search_properties", "seconds": 0.021, "success": true, "exception": null}
+   🌤️  获取天气 location_chars=6 coordinates_supplied=True
+{"tool": "get_weather", "seconds": 0.13, "success": true, "exception": null}
+   🚇 [TfL] get_transport_info: type=line_status from_chars=0 to_chars=0 line_chars=7
+{"tool": "get_transport_info", "seconds": 0.092, "success": true, "exception": null}
+   🚇 [TfL] get_transport_info: type=journey from_chars=16 to_chars=12 line_chars=0
+{"tool": "get_transport_info", "seconds": 9.146, "success": true, "exception": null}
+   🚇 计算通勤 from_chars=24 to_chars=20 mode_supported=True
+{"tool": "calculate_commute", "seconds": 3.304, "success": true, "exception": null}
+
+   🚇 计算综合通勤成本 from_chars=24 to_chars=20 student_request=False mode_supported=True
+   ✅ Measured TfL journey route found
+   🚌 Route uses public transport (heuristic): True
+   📮 从地理编码获取 postcode postcode_present=True
+   📮 从地理编码获取 postcode postcode_present=True
+   📍 Looking up zonal fares
+{"tool": "calculate_commute_cost", "seconds": 1.007, "success": true, "exception": null}
+{"tool": "check_transport_cost", "seconds": 0.0, "success": true, "exception": null}
+   🔒 检查安全性 location_chars=17 language=en
+  -> [API Call] Getting official crime data address_chars=17
+     [OK] Coordinates resolved=True
+     -> Fetching 2026-08...
+       [OK] Found 4408 crimes in 2026-08
+     -> Fetching 2026-07...
+       [OK] Found 4896 crimes in 2026-07
+     -> Fetching 2026-06...
+       [OK] Found 4540 crimes in 2026-06
+     [OK] TOTAL: 13844 crimes across 3 queried months
+{"tool": "check_safety", "seconds": 17.651, "success": true, "exception": null}
+  [Overpass] mirror sidelined cooldown_s=300 reason_chars=8
+  [Overpass] mirror sidelined cooldown_s=300 reason_chars=8
+  [Overpass] mirror sidelined cooldown_s=300 reason_chars=37
+{"tool": "search_nearby_pois", "seconds": 30.03, "success": null, "exception": "TimeoutError"}
+Web search returned no usable evidence query_chars=57
+Web search returned no usable evidence query_chars=57
+  -> [API Call] Web search query_chars=57
+  -> [SearXNG] Query intent: factual, constrained_engine_count: 1
+  -> [SearXNG] Searching query_chars=57 attempt=1 constrained=True
+  -> [SearXNG] Raw result count: 0
+  -> [SearXNG] Empty constrained result; retrying default engines
+  -> [SearXNG] Searching query_chars=57 attempt=2 constrained=False
+  [Overpass] mirror sidelined cooldown_s=300 reason_chars=11
+  [Overpass] mirror sidelined cooldown_s=300 reason_chars=8
+  [Overpass] mirror sidelined cooldown_s=300 reason_chars=8
+  [Overpass] mirror sidelined cooldown_s=300 reason_chars=8
+  -> [SearXNG] Raw result count: 0
+  ⚠️ [SearXNG] No results; unresponsive_engine_count=4
+  ⚠️ SearXNG returned no results query_chars=57
+  [Overpass] mirror sidelined cooldown_s=300 reason_chars=37
+  -> [API Call] Web search query_chars=57
+  -> [SearXNG] Query intent: factual, constrained_engine_count: 1
+  -> [SearXNG] Searching query_chars=57 attempt=1 constrained=True
+  -> [SearXNG] Raw result count: 0
+  -> [SearXNG] Empty constrained result; retrying default engines
+  -> [SearXNG] Searching query_chars=57 attempt=2 constrained=False
+  -> [SearXNG] Raw result count: 0
+  ⚠️ [SearXNG] No results; unresponsive_engine_count=4
+  ⚠️ SearXNG returned no results query_chars=57
+{"tool": "web_search", "seconds": 7.059, "success": false, "exception": null}
+{"tool": "compare_or_rank_areas", "seconds": 2.826, "success": true, "exception": null}
+{"tool": "remember", "seconds": 0.034, "success": true, "exception": null}
+{"tool": "recall_memory", "seconds": 0.007, "success": true, "exception": null}
+{"tool": "ask_user", "seconds": 0.0, "success": false, "exception": null}
+  [Overpass] mirror sidelined cooldown_s=300 reason_chars=11
+  ⚠️ [OSM POI] school: 所有可达镜像都返回空结果 —— 按'确实没有'处理，但不写入缓存

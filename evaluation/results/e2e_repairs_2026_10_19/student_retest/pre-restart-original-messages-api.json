@@ -1,0 +1,310 @@
+{
+  "status": 200,
+  "body": {
+    "messages": [
+      {
+        "content": "我和两个同学都是中文留学生，下个月去伦敦大学学院 UCL 读硕士，还没确定住处。我们想三个人一起整租3居室，每人每月房租最多£1,000，不含账单，希望到学校别太远。能先帮我们找吗？",
+        "id": 3,
+        "role": "user",
+        "timestamp": "2026-10-19T08:56:21.123961+00:00",
+        "turn_id": "299adfc904374c48bbbad08ff2f0f714"
+      },
+      {
+        "content": "根据目前的搜索结果，为你们三个人整租三居室，找到 2 套符合预算的房源。你们的条件是每人每月不超过 £1,000（不含账单），三人合计上限 £3,000/月，以下两套都在预算内：\n\n1. The Grove, Enfield\n- 房型：三居室独栋住宅（3 bed House），整套出租\n- 租金：£2,300/月（三人平摊约每人每月 £767，此为根据该租金的计算）\n- 位置：Enfield 一带，属于伦敦北部外围\n- 链接：https://www.onthemarket.com/details/20335504/\n\n2. Perth Road, London, N22\n- 房型：三居室独栋住宅（3 bed House），整套出租\n- 租金：£2,500/月（三人平摊约每人每月 £833，此为根据该租金的计算）\n- 位置：N22 一带，同样在伦敦北部\n- 链接：https://www.onthemarket.com/details/20347767/\n\n几点需要提醒你们：\n\n- 通勤时间尚未核实。本轮搜索没有核实这两套房到 UCL 主校区（Gower Street, WC1E 6BT）的实际通勤时间，我不能给出任何通勤时长的承诺。从地理位置看，两套都在伦敦北部外围，到 UCL 通常需要一定路程，建议你们看房前先自行确认交通方案。\n- 房源可能已过期。这两条结果来自近期缓存，实时刷新暂不可用，价格和可租状态请以中介页面为准，务必联系中介确认是否仍在出租、何时可入住。\n- 下个月入住的时间点。搜索结果里没有显示可入住日期，这一点也需要向中介直接询问。\n- 账单不含在租金内。你们提到不含账单，上述租金均仅为房租，水、电、燃气、网络及市政税（Council Tax，全日制学生通常可申请豁免，需向学校或市政厅确认）需另行预算。\n\n如果你们希望缩小范围、提高匹配度，可以告诉我更倾向的区域（例如希望靠近某条地铁线，或限定在某个邮编区），或者指定一个通勤目的地，我下次可以帮你们核实通勤时间。另外，如果你们想了解从某处到 UCL 的地铁票价和路线，也可以直接问我，我可以查询 TfL 的实时信息。\n\nPlease double-check the exact prices against the source listing.",
+        "id": 4,
+        "recommendations": [
+          {
+            "absent_features": [],
+            "address": "The Grove, Enfield",
+            "area": "London",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": 3,
+            "budget_basis": 3000.0,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "eligible",
+            "candidate_unknown_reasons": [],
+            "description": "",
+            "distance_miles": null,
+            "explanation": "3 bedroom house to rent in The Grove, Enfield",
+            "geo_location": "51.658153, -0.103044",
+            "images": [
+              "https://media.onthemarket.com/properties/20335504/1644305883/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/20335504/1644305883/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/20335504/1644305883/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/20335504/1644305883/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/20335504/1644305883/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": true,
+            "price": "£2300/month",
+            "property_type": "3 bed House",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "london"
+                ],
+                "bedrooms": 3.0,
+                "bedrooms_minimum": false,
+                "commute_destination": "Gower Street, London WC1E 6BT",
+                "max_budget_monthly": 3000.0,
+                "max_commute_minutes": null,
+                "move_in_date": null,
+                "no_commute": false,
+                "property_features": [],
+                "room_type": "whole"
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "eligible",
+              "unknown_reasons": []
+            },
+            "rank": 1,
+            "room_type": "whole",
+            "score": 100,
+            "score_breakdown": {},
+            "source": "OnTheMarket (cached)",
+            "unverified_features": [],
+            "url": "https://www.onthemarket.com/details/20335504/",
+            "verified_features": []
+          },
+          {
+            "absent_features": [],
+            "address": "Perth Road, London, N22",
+            "area": "London",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": 3,
+            "budget_basis": 3000.0,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "eligible",
+            "candidate_unknown_reasons": [],
+            "description": "",
+            "distance_miles": null,
+            "explanation": "3 bedroom house to rent in Perth Road, London, N22",
+            "geo_location": "51.603536, -0.096378",
+            "images": [
+              "https://media.onthemarket.com/properties/20347767/1644735899/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/20347767/1644735899/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/20347767/1644735899/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/20347767/1644735899/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/20347767/1644735899/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": true,
+            "price": "£2500/month",
+            "property_type": "3 bed House",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "london"
+                ],
+                "bedrooms": 3.0,
+                "bedrooms_minimum": false,
+                "commute_destination": "Gower Street, London WC1E 6BT",
+                "max_budget_monthly": 3000.0,
+                "max_commute_minutes": null,
+                "move_in_date": null,
+                "no_commute": false,
+                "property_features": [],
+                "room_type": "whole"
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "eligible",
+              "unknown_reasons": []
+            },
+            "rank": 2,
+            "room_type": "whole",
+            "score": 100,
+            "score_breakdown": {},
+            "source": "OnTheMarket (cached)",
+            "unverified_features": [],
+            "url": "https://www.onthemarket.com/details/20347767/",
+            "verified_features": []
+          }
+        ],
+        "response_type": "search",
+        "role": "assistant",
+        "timestamp": "2026-10-19T08:56:30.538766+00:00",
+        "turn_id": "299adfc904374c48bbbad08ff2f0f714"
+      },
+      {
+        "content": "有一个同学不来了，现在只剩我们两个人，想改为2居整套，预算也改成£1,200。我说得可能不清楚，你先给我明确的预算口径选项让我选，不要擅自决定是每人还是整套。学校只是上课地点，不是我们已经选好的住处。",
+        "id": 21,
+        "role": "user",
+        "timestamp": "2026-10-19T08:58:08.044193+00:00",
+        "turn_id": "43988525c9414a978d428d0da1fc0bb6"
+      },
+      {
+        "content": "关于新的预算 £1,200，请先确认口径：这是两人合计的整套月租上限，还是每人每月 £1,200（两人合计 £2,400）？",
+        "id": 22,
+        "metadata": {
+          "clarification_kind": "other",
+          "known_criteria": {
+            "area": null,
+            "areas": [],
+            "bedrooms": 3,
+            "budget_period": "month",
+            "commute_destination": "Gower Street, London WC1E 6BT",
+            "max_budget": 1200,
+            "max_travel_time": null,
+            "move_in_date": null,
+            "no_commute": null,
+            "property_features": [],
+            "room_type": "whole",
+            "soft_preferences": []
+          },
+          "missing_fields": [
+            "max_budget"
+          ],
+          "missing_optional_fields": [],
+          "options": [
+            {
+              "label": "整套合计每月 £1,200（两人平摊每人约 £600）",
+              "value": "total_1200"
+            },
+            {
+              "label": "每人每月 £1,200（整套合计 £2,400）",
+              "value": "per_person_1200"
+            }
+          ]
+        },
+        "options": [
+          {
+            "label": "整套合计每月 £1,200（两人平摊每人约 £600）",
+            "value": "total_1200"
+          },
+          {
+            "label": "每人每月 £1,200（整套合计 £2,400）",
+            "value": "per_person_1200"
+          }
+        ],
+        "response_type": "clarification",
+        "role": "assistant",
+        "timestamp": "2026-10-19T08:58:09.652686+00:00",
+        "turn_id": "43988525c9414a978d428d0da1fc0bb6"
+      },
+      {
+        "content": "per_person_1200",
+        "id": 26,
+        "role": "user",
+        "timestamp": "2026-10-19T08:58:23.371694+00:00",
+        "turn_id": "c0a9524ecd88430da0408454f7e7b8b7"
+      },
+      {
+        "content": "本次检索数据中，在 London 附近没有找到符合条件的房源。请检查区域拼写，或调整预算/区域后重试（可使用右侧搜索表单）。 未获得可用候选数据，不能据此判断市场上没有房源。",
+        "id": 28,
+        "recommendations": [],
+        "response_type": "search",
+        "role": "assistant",
+        "timestamp": "2026-10-19T08:58:33.022245+00:00",
+        "turn_id": "c0a9524ecd88430da0408454f7e7b8b7"
+      },
+      {
+        "content": "刚才我点的是“每人每月£1,200”，可是右边仍然是£1,200和3居，和我的意思不符。请纠正为：两个人、每人每月最多£1,200，整套合计£2,400/月、不含账单；在伦敦找整租2居室，坐公共交通到UCL Bloomsbury主校区30分钟以内。我们还没决定住哪个区，UCL只是上课地点。请把这些保存为以后所有新对话的长期默认偏好。",
+        "id": 33,
+        "role": "user",
+        "timestamp": "2026-10-19T08:59:09.433179+00:00",
+        "turn_id": "ebd2f8a4f9e04170b7e027beb83dac36"
+      },
+      {
+        "content": "本次检索数据中，在 London 附近没有找到符合条件的房源。请检查区域拼写，或调整预算/区域后重试（可使用右侧搜索表单）。 未获得可用候选数据，不能据此判断市场上没有房源。",
+        "id": 35,
+        "recommendations": [],
+        "response_type": "search",
+        "role": "assistant",
+        "timestamp": "2026-10-19T08:59:16.783415+00:00",
+        "turn_id": "ebd2f8a4f9e04170b7e027beb83dac36"
+      },
+      {
+        "content": "先暂停找房，只单独查一下明天伦敦的天气：会下雨吗，大概多少度，出门看房要带伞吗？这不是修改我的租房条件。",
+        "id": 37,
+        "role": "user",
+        "timestamp": "2026-10-19T08:59:28.983041+00:00",
+        "turn_id": "841bb42a83b04a959bdd7f5cd9bdfd86"
+      },
+      {
+        "content": "关于明天的伦敦天气，我查到的实时数据如下\n\n- 当前气温约 14.2 度，体感约 12.8 度\n- 天气状况为小雨（Light Rain）\n- 湿度 72%，风速约 11.5，紫外线指数 1.2\n- 建议：可能有雨，出门看房记得带伞\n\n需要说明的是，这份数据是当前时刻的实况，并没有覆盖明天的完整预报，也没有提供明天具体的降雨概率数值。因此关于“明天会不会下雨”，我只能说目前伦敦正在下小雨、天气偏凉，明天出门看房建议随身带伞并穿一件保暖外套。如果你想要更准确的明日分时预报，可以查看英国气象局（Met Office）官网。\n\n另外，这次只是单独查询天气，没有改动你的租房条件：两人、每人每月最多 £1,200、整套合计 £2,400/月、不含账单、伦敦整租 2 居室、这些偏好保持不变。等你想继续找房时告诉我即可。\n\nPlease double-check the exact prices against the source listing.\n\n注：部分通勤结论缺少可对应的证据，已从回答中移除。",
+        "id": 38,
+        "response_type": "chat",
+        "role": "assistant",
+        "timestamp": "2026-10-19T08:59:34.350295+00:00",
+        "turn_id": "841bb42a83b04a959bdd7f5cd9bdfd86"
+      },
+      {
+        "content": "我刷新页面回来了，聊天记录和收藏还在。这条消息只保存长期偏好，不用搜索房源：以后所有新会话默认在伦敦找整租2居室，整套月租上限£2,400，不含账单，坐公共交通到UCL Bloomsbury主校区30分钟以内。我们两人平均分摊，目前住哪个区还没决定。请明确确认这些长期默认是否已保存。",
+        "id": 41,
+        "role": "user",
+        "timestamp": "2026-10-19T08:59:56.713593+00:00",
+        "turn_id": "b57b412172bf4a6f9f5bc9a049f353bf"
+      },
+      {
+        "content": "我已经记住了。\n\n已确认这次只\n\n\n\n「长期默认租房偏好：在伦敦找整租2居室（whole flat, 2 bedrooms），整套月租上限 £2,400/月（不含账单），两人平均分摊（每人约 £1,200/月）；坐公共交通到 UCL Bloomsbury 主校区（Gower Street,目前尚未决定居住区域，UCL 只是上课地点。」\n\n几点说明\n\n- 预算口径已按你的意思记为整套 £2,400/月、不含账单，两人平均分摊即每人约 £1,200/月，不再是之前误设的 £1,200 整套或 3 居室。\n- 房型记为整租 2 居室，不是 3 居。\n- 居住区域仍为未定，UCL 只作为上课地点，不代表已经选定住处。\n\n这些默认会在以后的新会话中生效。等你决定好区域、想开始找房时告诉我，我就按这套条件检索。\n\n注：部分通勤结论缺少可对应的证据，已从回答中移除",
+        "id": 42,
+        "response_type": "chat",
+        "role": "assistant",
+        "timestamp": "2026-10-19T09:00:00.697911+00:00",
+        "turn_id": "b57b412172bf4a6f9f5bc9a049f353bf"
+      }
+    ],
+    "view_state": {
+      "criteria": {
+        "amenities_of_interest": [],
+        "area": "London",
+        "areas": [
+          "London"
+        ],
+        "bedrooms": 2,
+        "bedrooms_minimum": false,
+        "budget_period": "month",
+        "commute_destination": "Gower Street, London WC1E 6BT",
+        "constraint_sources": {
+          "area": {
+            "source": "user_message",
+            "text": "先暂停找房，只单独查一下明天伦敦的天气：会下雨吗，大概多少度，出门看房要带伞吗？这不是修改我的租房条件。",
+            "value": "London"
+          },
+          "bedrooms": {
+            "source": "user_message",
+            "text": "刚才我点的是“每人每月£1,200”，可是右边仍然是£1,200和3居，和我的意思不符。请纠正为：两个人、每人每月最多£1,200，整套合计£2,400/月、不含账单; 在伦敦找整租2居室，坐公共交通到UCL Bloomsbury主校区30分钟以内。我们还没决定住哪个区，UCL只是上课地点。请把这些保存为以后所有新对话的长期默认偏好。",
+            "value": 2
+          },
+          "bedrooms_minimum": {
+            "source": "user_message",
+            "text": "我和两个同学都是中文留学生，下个月去伦敦大学学院 UCL 读硕士，还没确定住处。我们想三个人一起整租3居室，每人每月房租最多£1,000，不含账单，希望到学校别太远。能先帮我们找吗？",
+            "value": false
+          },
+          "max_budget": {
+            "source": "user_message",
+            "text": "我刷新页面回来了，聊天记录和收藏还在。这条消息只保存长期偏好，不用搜索房源：以后所有新会话默认在伦敦找整租2居室，整套月租上限£2,400，不含账单，坐公共交通到UCL Bloomsbury主校区30分钟以内。我们两人平均分摊，目前住哪个区还没决定。请明确确认这些长期默认是否已保存。",
+            "value": 2400
+          },
+          "max_travel_time": {
+            "source": "user_message",
+            "text": "刚才我点的是“每人每月£1,200”，可是右边仍然是£1,200和3居，和我的意思不符。请纠正为：两个人、每人每月最多£1,200，整套合计£2,400/月、不含账单; 在伦敦找整租2居室，坐公共交通到UCL Bloomsbury主校区30分钟以内。我们还没决定住哪个区，UCL只是上课地点。请把这些保存为以后所有新对话的长期默认偏好。",
+            "value": 30
+          },
+          "room_type": {
+            "source": "user_message",
+            "text": "我和两个同学都是中文留学生，下个月去伦敦大学学院 UCL 读硕士，还没确定住处。我们想三个人一起整租3居室，每人每月房租最多£1,000，不含账单，希望到学校别太远。能先帮我们找吗？",
+            "value": "whole"
+          }
+        },
+        "destination": "Gower Street, London WC1E 6BT",
+        "max_budget": 2400,
+        "max_travel_time": 30,
+        "property_features": [],
+        "room_type": "whole",
+        "soft_preferences": []
+      },
+      "operation": "replace",
+      "results": [],
+      "revision": 6
+    }
+  }
+}

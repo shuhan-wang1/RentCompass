@@ -1,0 +1,367 @@
+{
+  "same_prompt_as_round9": true,
+  "canonical_view_state_criteria_equal": true,
+  "canonical_criteria_differences": {},
+  "canonical_before": {
+    "amenities_of_interest": [],
+    "area": "Camden",
+    "areas": [
+      "Camden"
+    ],
+    "bedrooms": 2,
+    "bedrooms_minimum": true,
+    "budget_period": "month",
+    "commute_destination": "Gower Street, London WC1E 6BT",
+    "constraint_sources": {
+      "area": {
+        "message_id": 94,
+        "original_source": {
+          "source": "user_message",
+          "text": "For the last focused Camden flat, St. Augustine's Road, not the older Croxley View flat, reopen the full cached details using the selected card's exact saved listing link. Is street-to-door step-free access, internal doorway/bathroom space and permission for our cat actually evidenced? Also check current weather for the viewing in Camden and calculate public transport from that specific flat to UCL. Give separate, complete detail, weather and journey sections, explain what the returned fastest itinerary does not verify for a wheelchair user and child, and do not run a new property search or treat a weather location as a request to change housing criteria.",
+          "value": "Camden"
+        },
+        "reason": "read_only_or_ancillary_source",
+        "source": "criteria_recovery",
+        "value": "Camden"
+      },
+      "bedrooms": {
+        "source": "user_message",
+        "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+        "value": 2
+      },
+      "bedrooms_minimum": {
+        "source": "user_message",
+        "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+        "value": true
+      },
+      "max_budget": {
+        "source": "user_message",
+        "text": " Search Camden only with a £3,000 per month ceiling, a whole home and at least two bedrooms. Remove lift from both hard requirements and preferences;  step-free street-to-door access and enough wheelchair space remain essential, as do permission for our cat and the 50-minute UCL commute limit. Please apply these replacements now without asking me to choose between old and new budgets.",
+        "value": 3000
+      },
+      "max_travel_time": {
+        "source": "user_message",
+        "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+        "value": 50
+      },
+      "property_features": {
+        "source": "user_message",
+        "text": "We have reopened the same family search. Keep Camden only, £3,000 per month, a whole home with at least two bedrooms, genuine step-free street access, enough wheelchair space, permission for our cat and the 50-minute UCL limit. A lift would be a preference, not a requirement: a genuinely step-free ground-floor home is fine. Search with that optional lift preference and show the actual active hard requirements separately from preferences and unknown evidence.",
+        "value": [
+          "wheelchair-accessible",
+          "step-free"
+        ]
+      },
+      "room_type": {
+        "source": "user_message",
+        "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+        "value": "whole"
+      }
+    },
+    "criteria_repair_provenance": [
+      {
+        "field": "area",
+        "message_id": 6,
+        "previous_value": "Camden",
+        "reason": "read_only_or_ancillary_source",
+        "value": "Watford"
+      },
+      {
+        "field": "area",
+        "message_id": 94,
+        "previous_value": "Camden",
+        "reason": "read_only_or_ancillary_source",
+        "value": "Camden"
+      }
+    ],
+    "destination": "Gower Street, London WC1E 6BT",
+    "max_budget": 3000,
+    "max_travel_time": 50,
+    "plans": {
+      "Camden": {
+        "amenities_of_interest": [],
+        "area": "Camden",
+        "areas": [
+          "Camden"
+        ],
+        "bedrooms": 2,
+        "bedrooms_minimum": true,
+        "budget_period": "month",
+        "commute_destination": "Gower Street, London WC1E 6BT",
+        "constraint_sources": {
+          "area": {
+            "message_id": 94,
+            "original_source": {
+              "source": "user_message",
+              "text": "For the last focused Camden flat, St. Augustine's Road, not the older Croxley View flat, reopen the full cached details using the selected card's exact saved listing link. Is street-to-door step-free access, internal doorway/bathroom space and permission for our cat actually evidenced? Also check current weather for the viewing in Camden and calculate public transport from that specific flat to UCL. Give separate, complete detail, weather and journey sections, explain what the returned fastest itinerary does not verify for a wheelchair user and child, and do not run a new property search or treat a weather location as a request to change housing criteria.",
+              "value": "Camden"
+            },
+            "reason": "read_only_or_ancillary_source",
+            "source": "criteria_recovery",
+            "value": "Camden"
+          },
+          "bedrooms": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": 2
+          },
+          "bedrooms_minimum": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": true
+          },
+          "max_budget": {
+            "source": "user_message",
+            "text": " Search Camden only with a £3,000 per month ceiling, a whole home and at least two bedrooms. Remove lift from both hard requirements and preferences;  step-free street-to-door access and enough wheelchair space remain essential, as do permission for our cat and the 50-minute UCL commute limit. Please apply these replacements now without asking me to choose between old and new budgets.",
+            "value": 3000
+          },
+          "max_travel_time": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": 50
+          },
+          "property_features": {
+            "source": "user_message",
+            "text": "We have reopened the same family search. Keep Camden only, £3,000 per month, a whole home with at least two bedrooms, genuine step-free street access, enough wheelchair space, permission for our cat and the 50-minute UCL limit. A lift would be a preference, not a requirement: a genuinely step-free ground-floor home is fine. Search with that optional lift preference and show the actual active hard requirements separately from preferences and unknown evidence.",
+            "value": [
+              "wheelchair-accessible",
+              "step-free"
+            ]
+          },
+          "room_type": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": "whole"
+          }
+        },
+        "criteria_repair_provenance": [
+          {
+            "field": "area",
+            "message_id": 6,
+            "previous_value": "Camden",
+            "reason": "read_only_or_ancillary_source",
+            "value": "Watford"
+          },
+          {
+            "field": "area",
+            "message_id": 94,
+            "previous_value": "Camden",
+            "reason": "read_only_or_ancillary_source",
+            "value": "Camden"
+          }
+        ],
+        "destination": "Gower Street, London WC1E 6BT",
+        "max_budget": 3000,
+        "max_travel_time": 50,
+        "property_features": [
+          "wheelchair-accessible",
+          "step-free"
+        ],
+        "room_type": "whole",
+        "soft_preferences": [
+          "Would like lift",
+          "Would like step-free"
+        ]
+      }
+    },
+    "property_features": [
+      "wheelchair-accessible",
+      "step-free"
+    ],
+    "room_type": "whole",
+    "soft_preferences": [
+      "Would like lift",
+      "Would like step-free"
+    ]
+  },
+  "canonical_after": {
+    "amenities_of_interest": [],
+    "area": "Camden",
+    "areas": [
+      "Camden"
+    ],
+    "bedrooms": 2,
+    "bedrooms_minimum": true,
+    "budget_period": "month",
+    "commute_destination": "Gower Street, London WC1E 6BT",
+    "constraint_sources": {
+      "area": {
+        "message_id": 94,
+        "original_source": {
+          "source": "user_message",
+          "text": "For the last focused Camden flat, St. Augustine's Road, not the older Croxley View flat, reopen the full cached details using the selected card's exact saved listing link. Is street-to-door step-free access, internal doorway/bathroom space and permission for our cat actually evidenced? Also check current weather for the viewing in Camden and calculate public transport from that specific flat to UCL. Give separate, complete detail, weather and journey sections, explain what the returned fastest itinerary does not verify for a wheelchair user and child, and do not run a new property search or treat a weather location as a request to change housing criteria.",
+          "value": "Camden"
+        },
+        "reason": "read_only_or_ancillary_source",
+        "source": "criteria_recovery",
+        "value": "Camden"
+      },
+      "bedrooms": {
+        "source": "user_message",
+        "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+        "value": 2
+      },
+      "bedrooms_minimum": {
+        "source": "user_message",
+        "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+        "value": true
+      },
+      "max_budget": {
+        "source": "user_message",
+        "text": " Search Camden only with a £3,000 per month ceiling, a whole home and at least two bedrooms. Remove lift from both hard requirements and preferences;  step-free street-to-door access and enough wheelchair space remain essential, as do permission for our cat and the 50-minute UCL commute limit. Please apply these replacements now without asking me to choose between old and new budgets.",
+        "value": 3000
+      },
+      "max_travel_time": {
+        "source": "user_message",
+        "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+        "value": 50
+      },
+      "property_features": {
+        "source": "user_message",
+        "text": "We have reopened the same family search. Keep Camden only, £3,000 per month, a whole home with at least two bedrooms, genuine step-free street access, enough wheelchair space, permission for our cat and the 50-minute UCL limit. A lift would be a preference, not a requirement: a genuinely step-free ground-floor home is fine. Search with that optional lift preference and show the actual active hard requirements separately from preferences and unknown evidence.",
+        "value": [
+          "wheelchair-accessible",
+          "step-free"
+        ]
+      },
+      "room_type": {
+        "source": "user_message",
+        "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+        "value": "whole"
+      }
+    },
+    "criteria_repair_provenance": [
+      {
+        "field": "area",
+        "message_id": 6,
+        "previous_value": "Camden",
+        "reason": "read_only_or_ancillary_source",
+        "value": "Watford"
+      },
+      {
+        "field": "area",
+        "message_id": 94,
+        "previous_value": "Camden",
+        "reason": "read_only_or_ancillary_source",
+        "value": "Camden"
+      }
+    ],
+    "destination": "Gower Street, London WC1E 6BT",
+    "max_budget": 3000,
+    "max_travel_time": 50,
+    "plans": {
+      "Camden": {
+        "amenities_of_interest": [],
+        "area": "Camden",
+        "areas": [
+          "Camden"
+        ],
+        "bedrooms": 2,
+        "bedrooms_minimum": true,
+        "budget_period": "month",
+        "commute_destination": "Gower Street, London WC1E 6BT",
+        "constraint_sources": {
+          "area": {
+            "message_id": 94,
+            "original_source": {
+              "source": "user_message",
+              "text": "For the last focused Camden flat, St. Augustine's Road, not the older Croxley View flat, reopen the full cached details using the selected card's exact saved listing link. Is street-to-door step-free access, internal doorway/bathroom space and permission for our cat actually evidenced? Also check current weather for the viewing in Camden and calculate public transport from that specific flat to UCL. Give separate, complete detail, weather and journey sections, explain what the returned fastest itinerary does not verify for a wheelchair user and child, and do not run a new property search or treat a weather location as a request to change housing criteria.",
+              "value": "Camden"
+            },
+            "reason": "read_only_or_ancillary_source",
+            "source": "criteria_recovery",
+            "value": "Camden"
+          },
+          "bedrooms": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": 2
+          },
+          "bedrooms_minimum": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": true
+          },
+          "max_budget": {
+            "source": "user_message",
+            "text": " Search Camden only with a £3,000 per month ceiling, a whole home and at least two bedrooms. Remove lift from both hard requirements and preferences;  step-free street-to-door access and enough wheelchair space remain essential, as do permission for our cat and the 50-minute UCL commute limit. Please apply these replacements now without asking me to choose between old and new budgets.",
+            "value": 3000
+          },
+          "max_travel_time": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": 50
+          },
+          "property_features": {
+            "source": "user_message",
+            "text": "We have reopened the same family search. Keep Camden only, £3,000 per month, a whole home with at least two bedrooms, genuine step-free street access, enough wheelchair space, permission for our cat and the 50-minute UCL limit. A lift would be a preference, not a requirement: a genuinely step-free ground-floor home is fine. Search with that optional lift preference and show the actual active hard requirements separately from preferences and unknown evidence.",
+            "value": [
+              "wheelchair-accessible",
+              "step-free"
+            ]
+          },
+          "room_type": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": "whole"
+          }
+        },
+        "criteria_repair_provenance": [
+          {
+            "field": "area",
+            "message_id": 6,
+            "previous_value": "Camden",
+            "reason": "read_only_or_ancillary_source",
+            "value": "Watford"
+          },
+          {
+            "field": "area",
+            "message_id": 94,
+            "previous_value": "Camden",
+            "reason": "read_only_or_ancillary_source",
+            "value": "Camden"
+          }
+        ],
+        "destination": "Gower Street, London WC1E 6BT",
+        "max_budget": 3000,
+        "max_travel_time": 50,
+        "property_features": [
+          "wheelchair-accessible",
+          "step-free"
+        ],
+        "room_type": "whole",
+        "soft_preferences": [
+          "Would like lift",
+          "Would like step-free"
+        ]
+      }
+    },
+    "property_features": [
+      "wheelchair-accessible",
+      "step-free"
+    ],
+    "room_type": "whole",
+    "soft_preferences": [
+      "Would like lift",
+      "Would like step-free"
+    ]
+  },
+  "results_before": 4,
+  "results_after": 4,
+  "card_urls_equal": true,
+  "ui_forms_equal": true,
+  "focus_equal": true,
+  "favorite_count_equal": true,
+  "request_ids": [
+    [
+      {
+        "x-request-id": "9f19f92df5954ca9a14f67f12c319360"
+      }
+    ],
+    [
+      {
+        "x-request-id": "1340227ce73945ce85390e719bf1d084"
+      }
+    ]
+  ]
+}

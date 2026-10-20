@@ -1,0 +1,17 @@
+{
+  "tag": "BUTTON",
+  "id": "",
+  "text": "我们家是两位成人和一名8岁孩子，其中一位成人使用轮椅，另有一只猫。请找Strat…\njust now",
+  "outline": "rgb(220, 38, 38) solid 2px",
+  "boxShadow": "none",
+  "rect": {
+    "x": 28,
+    "y": 125,
+    "width": 359.078125,
+    "height": 49,
+    "top": 125,
+    "right": 387.078125,
+    "bottom": 174,
+    "left": 28
+  }
+}

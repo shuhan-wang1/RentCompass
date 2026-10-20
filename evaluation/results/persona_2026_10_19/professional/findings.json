@@ -1,0 +1,554 @@
+{
+  "persona": "English-speaking working professional in the UK, commute-cost and multi-area comparisons, repeat visits",
+  "test_url": "http://127.0.0.1:15004",
+  "scope": "Independent black-box; public brief/snapshot/helper, delivered UI/public assets and own local HTTP responses only",
+  "metrics": {
+    "natural_chat_turns": 26,
+    "additional_visible_form_searches": 1,
+    "total_user_assistant_interactions_including_form": 27,
+    "simulated_usage_sessions": 4,
+    "meaningful_conversations": 4,
+    "consecutive_natural_turns_in_C1_first_session": 12,
+    "first_natural_send_utc": "2026-10-19T05:09:54+00:00",
+    "last_natural_completion_utc": "2026-10-19T05:22:46+00:00",
+    "elapsed_chat_window_minutes": 12.87,
+    "median_chat_seconds": 5.991,
+    "max_chat_seconds": 28.183,
+    "all_natural_http_statuses": [
+      200
+    ],
+    "rate_limit_responses_observed": 0,
+    "service_restarts_requested_and_confirmed": 1,
+    "browser_viewports": [
+      {
+        "width": 1440,
+        "height": 960
+      },
+      {
+        "width": 390,
+        "height": 844
+      }
+    ],
+    "conversation_ids": {
+      "C1": "326d77509ead4f65a1eb5da7213f4655",
+      "C2": "c616b7443a4a4354a7973cae35444efe",
+      "C3": "2300c11544d44c1fb22f738169361a84",
+      "C4": "0673df46c95e488bbaaf79e20af37372"
+    }
+  },
+  "severity_scale": {
+    "P1": "主要任务正确性/候选资格严重受损，应优先修复",
+    "P2": "上下文、结果状态或恢复显著受损",
+    "P3": "局部展示或恢复体验问题"
+  },
+  "findings": [
+    {
+      "id": "PRO-01",
+      "classification": "product_defect",
+      "severity": "P1",
+      "title_zh": "否定房型被写成要选的房型，明确一居要求连续修正后仍是 Studio",
+      "expected_zh": "whole one-bedroom flat, not a room or studio 应设置1居并排除房间/Studio；后续明确修正应覆盖错误条件。",
+      "actual_zh": "T01 bedrooms=0、room_type=studio；T02明确 exactly 1仍0/studio并额外把办公站名的一部分Liverpool加入住宅地区；T03 bedrooms=1、room type=Any仍0/studio。T09明确exclude shared rooms却room_type=shared。",
+      "impact_zh": "普通英文整租用户被送往错误房型，且自然语言纠错不能可靠恢复。",
+      "reproduction_steps": [
+        "使用C1的T01原文开始伦敦三区一居搜索。",
+        "按T02、T03依次纠正Bedrooms和Room type。",
+        "核对响应search_criteria、可见下拉框及Studio结果。",
+        "T03后用可见表单手动改Bedrooms=1、Room type=Any再搜索，可返回多项一居，证明恢复路径存在。"
+      ],
+      "reproducibility_zh": "同一独立对话内连续3轮观测；T09另见否定shared反向写入。未对每种文案做多次全新对话重复，因此不宣称固定失败率。",
+      "evidence": {
+        "turns": [
+          1,
+          2,
+          3,
+          9
+        ],
+        "turn_ids": [
+          "0122b5c9e3f548818b4c2206e3bb2230",
+          "4a821ed9d5f54118b11369f7fe0d1681",
+          "85fb31fd2d074d44bc9f854ae57b4ba4",
+          "366a4f23666c4121bf3d89e9e104562f"
+        ],
+        "request_ids": [],
+        "files": [
+          "primary-turns.jsonl",
+          "transcript.json",
+          "s1-t01-negated-studio.png",
+          "s1-ui-onebed-results.png"
+        ]
+      }
+    },
+    {
+      "id": "PRO-02",
+      "classification": "product_defect",
+      "severity": "P1",
+      "title_zh": "明确要求self-contained flats，却将4套house share列为全部条件已验证",
+      "expected_zh": "整租一居搜索应排除明确house share的条目，或至少标为不满足/未验证。",
+      "actual_zh": "重启后的T25要求1-bedroom self-contained flats并flag room shares，响应却在Meets all declared conditions (verified)下列Cassio Road £625、Harwoods Road £695、Princess Avenue £725、Princes Avenue £825。返回条目的explanation均明确1 bedroom in a house share；search_criteria.property_features=[]、room_type=null。",
+      "impact_zh": "低价合租被包装成已验证整租候选，使多区域预算比较失真。",
+      "reproduction_steps": [
+        "先完成T22保存Watford整租偏好，重启后T23在新对话回忆。",
+        "执行T24 Cambridge试查后执行T25原文回到Watford/£1500。",
+        "对照Meets all declared conditions段落与各卡片house share标题。"
+      ],
+      "reproducibility_zh": "该完整回访路径观测1次；T18曾正确说明同类房源是合租，因此表现不一致而非所有回答均无法区分。",
+      "evidence": {
+        "turns": [
+          18,
+          23,
+          25
+        ],
+        "turn_ids": [
+          "f50546e136754be18612c089a0d3298b",
+          "b051f416790146ab8aa78ba2c37171f8",
+          "e8db67a524ca469b81cc805dcd71ca08"
+        ],
+        "request_ids": [
+          "bf06eb53256c43df9125473d934b101f",
+          "ba051566e2a6436d9209bce1f74c910c",
+          "961607efeb9949f4ab302849d2c80114"
+        ],
+        "files": [
+          "primary-turns.jsonl",
+          "transcript.json",
+          "s4-t25-back-to-watford-1500.png",
+          "s4-t25-back-to-watford-1500.txt"
+        ]
+      }
+    },
+    {
+      "id": "PRO-03",
+      "classification": "product_defect",
+      "severity": "P1",
+      "title_zh": "引用候选价格会覆盖明确要求保留的真实预算",
+      "expected_zh": "房源价格引用与用户最高租金应分开；T19明确保留£1800/month就应保持1800。",
+      "actual_zh": "T18上限1800；T19引用Sydney1495与Flanders1350并明确Keep the £1,800 monthly ceiling，响应max_budget却1495，同时room_type=shared、areas缩为Watford。C1的£2000上限在价格/交通比较及身份追问之后也变7362，T05截图可见。",
+      "impact_zh": "用户无意间扩大或收紧预算，后续结果集与长期偏好发生漂移。",
+      "reproduction_steps": [
+        "以T18得到Watford/High Barnet、£1800搜索。",
+        "发送T19完整原文，引用1495和1350并要求保留1800。",
+        "检查返回search_criteria.max_budget=1495。",
+        "辅助路径按C1 T01–T05及UI01执行，T05表单预算可见7362而非2000。"
+      ],
+      "reproducibility_zh": "在两个不同身份/对话中观察到预算被引用数字影响；T19定位明确。C1仅能定位发生于比较/追问链，未证明具体内部换算来源。",
+      "evidence": {
+        "turns": [
+          4,
+          5,
+          18,
+          19
+        ],
+        "turn_ids": [
+          "4c0443a07d9b4ba5bba2bae9ed4b4022",
+          "d551d260b5a94d9e82222f0a887cb251",
+          "f50546e136754be18612c089a0d3298b",
+          "3da1dba4b32249f09d1239782a58a70e"
+        ],
+        "request_ids": [
+          "bf06eb53256c43df9125473d934b101f",
+          "b9ca08fc1afa4633a8054e92fd9a32f4"
+        ],
+        "files": [
+          "primary-turns.jsonl",
+          "transcript.json",
+          "s1-t05-question-mutates-results.png",
+          "s3-t19-output.jsonl",
+          "s3-t19-whole-flat-refinement.png"
+        ]
+      }
+    },
+    {
+      "id": "PRO-04",
+      "classification": "product_defect",
+      "severity": "P2",
+      "title_zh": "房型身份询问被当成筛选命令，尽管用户明确说不要改条件",
+      "expected_zh": "回答Otter Close是整租还是合租，并保留已有5个结果。",
+      "actual_zh": "T05询问Is Otter Close a whole one-bedroom flat or a room in a shared flat?并说Please don’t change my search criteria，系统却kept only shared listings，删4项留1项。T06承认误把问题当筛选，但未恢复原列表。",
+      "impact_zh": "正常事实核实会破坏候选集，需要用户重新搜索。",
+      "reproduction_steps": [
+        "先用UI01得到5个一居条目。",
+        "发送T05原文。",
+        "观察共享房筛选与4个候选被移除；再用T06请求恢复。"
+      ],
+      "reproducibility_zh": "该事实追问完整路径观测1次；后续T06明确承认行为错误。",
+      "evidence": {
+        "turns": [
+          5,
+          6
+        ],
+        "turn_ids": [
+          "d551d260b5a94d9e82222f0a887cb251",
+          "8174e0d7c158481cad7bdd824e311c90"
+        ],
+        "request_ids": [],
+        "files": [
+          "primary-turns.jsonl",
+          "transcript.json",
+          "s1-t05-question-mutates-results.png"
+        ]
+      }
+    },
+    {
+      "id": "PRO-05",
+      "classification": "product_defect",
+      "severity": "P2",
+      "title_zh": "通勤无法验证的兜底答复覆盖无关的房源费用与纯算术问题",
+      "expected_zh": "无法验证交通时仍可回答已知房源字段、标记未知，或完成用户给定的算术。",
+      "actual_zh": "T07要求读取Canning Road费用字段、T08明确Separate calculation, not a search change询问£400/week×52/12及5周押金，均只返回The commute condition could not be verified for the listing this round。此前T05已显示no_commute=true。",
+      "impact_zh": "一个不可用数据源阻断与它无关的正常工作流。",
+      "reproduction_steps": [
+        "按C1 T01–T06及UI01达到现有状态。",
+        "依次发送T07与T08原文。",
+        "核对不同问题收到相同通勤兜底句，而非未知字段或£1733.33/month、£2000押金计算。"
+      ],
+      "reproducibility_zh": "同一对话T04/T07/T08多次出现；T09重设偏好后T10/T11可恢复有意义回答。交通提供方不可用属环境限制，但无法解释无关算术也失效。",
+      "evidence": {
+        "turns": [
+          4,
+          7,
+          8,
+          11
+        ],
+        "turn_ids": [
+          "4c0443a07d9b4ba5bba2bae9ed4b4022",
+          "a3449ae3d8c94e07a69493755df2d567",
+          "26939a0bb49747139c4a4a9c5ab7d23b",
+          "4a7c06631fb047759c507b60e87da475"
+        ],
+        "request_ids": [],
+        "files": [
+          "primary-turns.jsonl",
+          "transcript.json",
+          "s1-t12-long-context-summary.txt"
+        ]
+      }
+    },
+    {
+      "id": "PRO-06",
+      "classification": "product_defect",
+      "severity": "P2",
+      "title_zh": "不改搜索的地区比较追问清空搜索条件，回答却称未改条件",
+      "expected_zh": "Manchester/Fallowfield、£1400、1卧、无通勤保持不变。",
+      "actual_zh": "T17问题明确without changing the search；正文说I have not changed your search criteria，却返回search_criteria={}。手机表单地区、预算、卧室等字段变空，结果仍是原来两套。",
+      "impact_zh": "用户对当前搜索状态产生误判，后续回访或点击Search可能丢失真实条件。",
+      "reproduction_steps": [
+        "T15创建Manchester/Fallowfield一居、£1200对话。",
+        "T16提高到£1400得到两套。",
+        "T17只询问哪些在Fallowfield及样本能否支持地区比较。",
+        "检查空criteria响应和表单空值。"
+      ],
+      "reproducibility_zh": "该路径观测1次；已保留真实表单值与截图。",
+      "evidence": {
+        "turns": [
+          16,
+          17
+        ],
+        "turn_ids": [
+          "e50a448ef0144e9f91cc524132b4496d",
+          "d7a75c24d42b4801aa78bae64194cb1e"
+        ],
+        "request_ids": [],
+        "files": [
+          "primary-turns.jsonl",
+          "transcript.json",
+          "s2-t17-criteria-cleared.png",
+          "s2-t17-criteria-cleared.txt",
+          "mechanical-actions.jsonl"
+        ]
+      }
+    },
+    {
+      "id": "PRO-07",
+      "classification": "product_defect",
+      "severity": "P2",
+      "title_zh": "12轮总结将算术示例当预算，并虚构£1699/year导致不必要冲突",
+      "expected_zh": "识别T09明确替换为£1700/month、T11为独立假设；T12又明确real £1700 ceiling，应能直接总结。",
+      "actual_zh": "T12称预算分别是£400/week和£1699/year，用户尚未指定哪个覆盖哪个，因此拒绝确定1700。前者来自明确独立算术题，后者从未作为annual预算提出。地区缩小与Canning Road身份则记对。",
+      "impact_zh": "长对话中用户已明确的预算仍被反复要求澄清，降低长期信任。",
+      "reproduction_steps": [
+        "完整执行C1 T01–T12及UI01，特别保留T08独立算术、T09新实际预算、T11假设例子。",
+        "发送T12总结原文。",
+        "对照答复的annual预算与所有真实用户输入。"
+      ],
+      "reproducibility_zh": "在一条12轮连续自然对话中观测1次；后续T13明确修正后可恢复，不能据此认定所有持久记忆失效。",
+      "evidence": {
+        "turns": [
+          8,
+          9,
+          11,
+          12,
+          13
+        ],
+        "turn_ids": [
+          "26939a0bb49747139c4a4a9c5ab7d23b",
+          "366a4f23666c4121bf3d89e9e104562f",
+          "4a7c06631fb047759c507b60e87da475",
+          "31aa0b29558b4319bd0c9364585c1cfc",
+          "fe793af0a8dd43f691043dd0a5e257f8"
+        ],
+        "request_ids": [],
+        "files": [
+          "primary-turns.jsonl",
+          "transcript.json",
+          "s1-t12-long-context-summary.png"
+        ]
+      }
+    },
+    {
+      "id": "PRO-08",
+      "classification": "product_defect",
+      "severity": "P3",
+      "title_zh": "英文界面的超预算状态残留中文",
+      "expected_zh": "EN界面和英语对话中状态标签用英文。",
+      "actual_zh": "T01卡片显示超预算 £300；Manchester T15卡片显示超预算 £150与£155。普通Within Budget标签又是英文，形成混杂。",
+      "impact_zh": "以英文为主的用户不易理解关键预算告警。",
+      "reproduction_steps": [
+        "EN界面执行T01或T15，返回预算外替代项。",
+        "查看卡片上的预算状态。"
+      ],
+      "reproducibility_zh": "跨伦敦和Manchester两次独立搜索均可见。",
+      "evidence": {
+        "turns": [
+          1,
+          15
+        ],
+        "turn_ids": [
+          "0122b5c9e3f548818b4c2206e3bb2230",
+          "d58cf68f8d174394a8aef660c09d1003"
+        ],
+        "request_ids": [],
+        "files": [
+          "primary-turns.jsonl",
+          "transcript.json",
+          "s1-t01-negated-studio.png",
+          "s1-t01-negated-studio.txt"
+        ]
+      }
+    },
+    {
+      "id": "PRO-D01",
+      "classification": "design_concern",
+      "severity": "P2",
+      "title_zh": "过期数据提示未持续出现在浏览和收藏卡片中",
+      "expected_zh": "历史快照房源应在结果/收藏卡片附近持续可见地提示过期、来源或更新时间不详。",
+      "actual_zh": "原始推荐possibly_outdated=true，卡片及Saved视图只见租金、Within Budget、Contact agent等，截图无过期/快照提示。T18回答有明确possibly outdated说明，说明提示主要依赖某次聊天正文。",
+      "impact_zh": "回访只看收藏时容易把旧价格和可租性当作已核实；本测试不证明真实房源已下架。",
+      "reproduction_steps": [
+        "比较T01、UI01或T25响应possibly_outdated=true与对应卡片。",
+        "保存Canning或Sydney，再关闭重开，查看Saved视图。"
+      ],
+      "reproducibility_zh": "桌面和手机、Guest和账户的Saved视图均观察到；是否存在其他未触达提示未全面穷举。",
+      "evidence": {
+        "turns": [
+          1,
+          18,
+          25
+        ],
+        "turn_ids": [
+          "0122b5c9e3f548818b4c2206e3bb2230",
+          "f50546e136754be18612c089a0d3298b",
+          "e8db67a524ca469b81cc805dcd71ca08"
+        ],
+        "request_ids": [
+          "bf06eb53256c43df9125473d934b101f",
+          "961607efeb9949f4ab302849d2c80114"
+        ],
+        "files": [
+          "primary-turns.jsonl",
+          "transcript.json",
+          "s1-saved-canning.png",
+          "s2-mobile-return-conversation.png",
+          "s4-after-restart-saved.png"
+        ]
+      }
+    },
+    {
+      "id": "PRO-D02",
+      "classification": "design_concern",
+      "severity": "P3",
+      "title_zh": "不可验证通勤费用时仅给通用重试，缺少用户要求的预算替代步骤",
+      "expected_zh": "承认无实时路程/票价，再给基于用户自填票价、通勤天数的预算公式或所需字段。",
+      "actual_zh": "T21已明确要求useful way to budget，等待28.183秒后只得到没有可靠数据、稍后重试或改写问题。T11/T26证明使用用户假设完成公式本身可以帮助。",
+      "impact_zh": "用户不知道如何继续比较租金加通勤总成本。",
+      "reproduction_steps": [
+        "在Sydney Road焦点下执行T21原文。",
+        "对照T26用户自填票价后可正确给出的1603总额。"
+      ],
+      "reproducibility_zh": "该完整请求观测1次；实时交通不可用属于已知环境限制，未将缺少真实票价算作产品缺陷。",
+      "evidence": {
+        "turns": [
+          21,
+          26
+        ],
+        "turn_ids": [
+          "12d8b884fb984795ad38769612b406ec",
+          "fad4f721c2d442d68f1416e57ddcbb10"
+        ],
+        "request_ids": [
+          "0464a1d9ae4145bdbf46b55dcdfe2cbb",
+          "d3787dd22e1b4d4d96388b85cdaa08e7"
+        ],
+        "files": [
+          "primary-turns.jsonl",
+          "transcript.json",
+          "s3-t21-commute-unknown.png"
+        ]
+      }
+    }
+  ],
+  "successes": [
+    {
+      "id": "PASS-01",
+      "summary_zh": "可见表单可修正Bedrooms=1、Room type=Any，并返回5项伦敦候选；地区chips可表达多区域。",
+      "evidence": [
+        "s1-ui-onebed-results.png",
+        "transcript.json#UI01"
+      ]
+    },
+    {
+      "id": "PASS-02",
+      "summary_zh": "新Manchester对话的£1200、1卧、无通勤不携带London地区；提高到1400后返回1350与1355两套。",
+      "turns": [
+        15,
+        16
+      ]
+    },
+    {
+      "id": "PASS-03",
+      "summary_zh": "T17地区解释明确这两套并非Fallowfield，样本不足以比较地区，不编造Fallowfield价格；但筛选状态被清空另列缺陷。",
+      "turns": [
+        17
+      ]
+    },
+    {
+      "id": "PASS-04",
+      "summary_zh": "Ask AI选择Sydney焦点后，T20以精确URL匹配地址和£1495月租，押金、税档、账单未知均明示。",
+      "turns": [
+        20
+      ],
+      "evidence": [
+        "s3-ask-ai-sydney.png"
+      ]
+    },
+    {
+      "id": "PASS-05",
+      "summary_zh": "用户给定通勤成本的两次算术正确：1699+6×13=1777、余223；1495+12×9=1603、余147，明确区分真实租金上限。",
+      "turns": [
+        11,
+        26
+      ]
+    },
+    {
+      "id": "PASS-06",
+      "summary_zh": "Guest C1历史及Canning收藏在浏览器关闭、手机重开后恢复；真实服务重启后原Guest仍只见自己的两段历史及Canning。",
+      "evidence": [
+        "s2-mobile-saved-restored.png",
+        "identity-original-guest-after-restart.png",
+        "identity-output.jsonl"
+      ]
+    },
+    {
+      "id": "PASS-07",
+      "summary_zh": "注册虚构账户后历史/收藏为空；退出后新Guest为空，登录后账户历史及Sydney收藏恢复；对话重命名成功。",
+      "evidence": [
+        "s3-new-account-isolation.png",
+        "s3-logout-fresh-guest.png",
+        "s3-login-restored-lists.png",
+        "s3-t22-output.jsonl"
+      ]
+    },
+    {
+      "id": "PASS-08",
+      "summary_zh": "实际服务停止/启动后账户仍认证，Watford working plan的10条消息与Sydney1495收藏恢复。",
+      "evidence": [
+        "s3-before-restart-account-baseline.png",
+        "s4-after-restart-desktop.png",
+        "s4-after-restart-saved.png",
+        "s4-restart-check-output.jsonl"
+      ]
+    },
+    {
+      "id": "PASS-09",
+      "summary_zh": "重启后C4新对话正确回忆T22最新1600pcm、Watford only、self-contained1bed、无硬通勤过滤，并说明早期1800已被替换。Sydney也被正确识别；该候选同时存在浏览器viewed_properties上下文，所以不能单独证明其来自服务端收藏工具。",
+      "turns": [
+        22,
+        23
+      ]
+    },
+    {
+      "id": "PASS-10",
+      "summary_zh": "Cambridge缺缓存时明确不等于市场无房，没有静默替换其他城市，也未宣称实时可租。",
+      "turns": [
+        24
+      ]
+    },
+    {
+      "id": "PASS-11",
+      "summary_zh": "独立新Guest历史和收藏为空，对本人另一账户C3与原Guest C1的已知对话ID请求均404；未接触其他测试员数据。",
+      "evidence": [
+        "identity-output.jsonl",
+        "identity-fresh-guest-empty.png"
+      ]
+    },
+    {
+      "id": "PASS-12",
+      "summary_zh": "桌面1440×960和手机390×844均完成真实聊天与保存/历史操作；26次自然对话HTTP均200、驱动均无超时，未触发429。不能把200等同于任务成功。",
+      "evidence": [
+        "metrics.json",
+        "primary-turns.jsonl",
+        "s4-t26-final-budget-and-unknowns.png"
+      ]
+    }
+  ],
+  "environment_limitations": [
+    {
+      "classification": "environment_limitation",
+      "id": "ENV-01",
+      "summary_zh": "883行历史公开房源快照，33个地区；Watford原抓取2026-10-06，多数其他地区2026-07至09。不是实时租赁市场；Cambridge无快照覆盖。"
+    },
+    {
+      "classification": "environment_limitation",
+      "id": "ENV-02",
+      "summary_zh": "应用/浏览器外网被限制，外部图片、字体、地图、实时交通/犯罪/周边查询可能不可用。空图片和无法验证现时交通本身不计产品缺陷。未访问外部网页、房源链接、图片或地图。"
+    },
+    {
+      "classification": "environment_limitation",
+      "id": "ENV-03",
+      "summary_zh": "执行环境bwrap loopback失败，按公开brief使用require_escalated运行本地工具。一次持久控制器输入/等待故障、一次自己eval脚本语法错误记为测试基础设施问题，改用普通阶段脚本后继续；不归因产品。"
+    },
+    {
+      "classification": "environment_limitation",
+      "id": "ENV-04",
+      "summary_zh": "真实配置DeepSeek调用走应用正常路径；未检查模型内部、私有harness、产品源代码、其他画像资料或旧报告。公开交付页面HTML/JS只用于识别UI控件。"
+    }
+  ],
+  "unverified": [
+    {
+      "classification": "untested_hypothesis",
+      "id": "UNV-01",
+      "summary_zh": "没有经过真实数周/数月；不能证明真实长期使用的记忆衰退、自动日报、提醒、后台定时任务或每日更新行为。四会话是约13分钟内的加速模拟。"
+    },
+    {
+      "classification": "untested_hypothesis",
+      "id": "UNV-02",
+      "summary_zh": "未验证真实房源现时价格、可租性、通勤时间/票价、治安、周边、押金与法律费用准确性；未联系中介、付款或提交真实个人数据。"
+    },
+    {
+      "classification": "untested_hypothesis",
+      "id": "UNV-03",
+      "summary_zh": "新Guest/API404和基本退出登录隔离不构成完整安全审计；未测试认证绕过、会话劫持、密码恢复、用户名枚举、其他真实账户或其他测试员数据。"
+    },
+    {
+      "classification": "untested_hypothesis",
+      "id": "UNV-04",
+      "summary_zh": "没有负载、429恢复、取消途中请求、断网重试、并发聊天、浏览器真实移动系统键盘、更多设备或广泛无障碍测试。移动验证是Chromium390×844视口。"
+    },
+    {
+      "classification": "untested_hypothesis",
+      "id": "UNV-05",
+      "summary_zh": "仅黑盒行为，未证明根因在规则解析、记忆写入、工具裁剪或LLM；没有对每条提示做多次全新身份复跑，不估计全体用户失败率。"
+    }
+  ],
+  "long_use_judgment_zh": "保存层和明确写入的最新记忆在浏览器重开、登录切换及一次实际服务重启后表现良好，但自然语言搜索状态在连续使用中不稳定，整租资格/预算容易漂移或被错误宣称已验证。目前适合作为需要用户核对的发现与整理工具；尚不足以让重视总成本的上班族长期独立依赖其候选资格和筛选状态。"
+}

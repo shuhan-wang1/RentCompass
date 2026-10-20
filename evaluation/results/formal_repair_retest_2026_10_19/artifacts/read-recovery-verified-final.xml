@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="27" time="5.665" timestamp="2026-10-19T14:15:25.736972+01:00" hostname="vmi3266337"><testcase classname="tests.test_formal_retest_boundaries" name="test_removed_duration_does_not_leave_an_empty_positive_label[Total journey time: which is within your 45-minute limit.]" time="0.002" /><testcase classname="tests.test_formal_retest_boundaries" name="test_legacy_binary_feature_contract_still_excludes_missing_feature" time="0.001" /><testcase classname="tests.test_formal_retest_boundaries" name="test_form_replaces_exposed_aliases_and_keeps_unexposed_hard_requirements" time="0.001" /><testcase classname="tests.test_formal_retest_boundaries" name="test_new_requirement_on_three_way_listing_requires_explicit_denial[absent1-excluded]" time="0.001" /><testcase classname="tests.test_formal_retest_boundaries" name="test_family_mixed_neighbourhood_request_must_reach_all_requested_tools" time="0.023" /><testcase classname="tests.test_formal_retest_boundaries" name="test_form_explicit_clear_clears_legacy_budget_and_commute_aliases" time="0.001" /><testcase classname="tests.test_formal_retest_boundaries" name="test_partial_weather_failure_cannot_deny_a_successful_city_forecast" time="0.003" /><testcase classname="tests.test_formal_retest_boundaries" name="test_current_weather_caveat_does_not_deny_a_separate_dated_forecast" time="0.001" /><testcase classname="tests.test_formal_retest_boundaries" name="test_proven_lift_repair_removes_only_its_exact_display_labels" time="0.005" /><testcase classname="tests.test_formal_retest_boundaries" name="test_family_comparison_does_not_become_cached_area_filter" time="0.033" /><testcase classname="tests.test_formal_retest_boundaries" name="test_new_requirement_on_three_way_listing_requires_explicit_denial[absent0-unknown]" time="0.001" /><testcase classname="tests.test_formal_retest_boundaries" name="test_literal_this_home_journey_origin_resolves_to_same_listing_only" time="0.004" /><testcase classname="tests.test_formal_retest_boundaries" name="test_failed_poi_notice_explains_cooldown_and_smaller_radius" time="0.001" /><testcase classname="tests.test_formal_retest_boundaries" name="test_commute_redaction_removes_empty_table_row_and_unsupported_inside_claim" time="0.003" /><testcase classname="tests.test_formal_retest_boundaries" name="test_separate_is_not_the_annual_budget_abbreviation_pa" time="0.007" /><testcase classname="tests.test_formal_retest_boundaries" name="test_precise_requirement_labels_do_not_change_machine_evidence" time="0.001" /><testcase classname="tests.test_formal_retest_boundaries" name="test_removed_duration_does_not_leave_an_empty_positive_label[\u901a\u52e4\u65f6\u95f4\uff1a\u7531 TfL Journey Planner \u63d0\u4f9b\u3002]" time="0.001" /><testcase classname="tests.test_formal_retest_boundaries" name="test_duration_unavailable_notice_is_preserved" time="0.001" /><testcase classname="tests.test_formal_retest_boundaries" name="test_withdrawn_route_proof_withdraws_old_verified_card_text_on_refresh" time="0.001" /><testcase classname="tests.test_formal_snapshot_read_recovery" name="test_get_and_cold_session_recover_source_and_card_text_without_rewriting_history" time="0.013"><failure message="sqlite3.IntegrityError: completed turn requires assistant_message_id">chat = (&lt;starlette.applications.Starlette object at 0x7fa1dd662870&gt;, &lt;uk_rent_agent.web.chat_transport.NativeChatEndpoint object at 0x7fa1dd61f500&gt;, &lt;uk_rent_agent.web.conversation_store.ConversationStore object at 0x7fa1dd61e3c0&gt;)
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x7fa1dd61fb90&gt;
+
+    def test_get_and_cold_session_recover_source_and_card_text_without_rewriting_history(chat, monkeypatch):
+        _, _, store = chat
+        owner = 'snapshot-owner'
+        cid = store.create_conversation(owner)['id']
+        message = ('Keep my current £2,000/month rent cap separate from the £2,150/month '
+                   'rent-plus-commute ceiling, based on two office days a week')
+        message_id = store.add_message(owner, cid, 'user', message)['id']
+        turn_id = store.begin_turn(owner, cid, request_id='read-recovery-test', user_message_id=message_id)['id']
+        criteria = {'max_budget':2150,'max_budget_monthly':2000,'budget_period':'month',
+                    'monthly_total_budget':2150,'office_days_per_week':2,
+                    'destination':"King's Cross",'max_travel_time':45,
+                    'constraint_sources':{'max_budget':{'source':'user_message','value':2150,'text':message}}}
+        row = {'address':'Angel Lane','travel_time':"37 min to King's Cross",
+               'explanation':"2 bedroom flat (TfL transit: 37 min to King's Cross)",
+               'qualification':{'status':'unknown','constraints':hard_constraints(criteria),
+                                'unknown_reasons':['commute evidence is missing'],'reasons':[]}}
+        snapshot = build_turn_snapshot(turn_id=turn_id, persistent_state={
+            'accumulated_search_criteria':criteria,'extracted_context':{'view_results':[row]}},context_revision=9)
+        original = copy.deepcopy(snapshot)
+        store.save_turn_snapshot(owner,cid,turn_id,snapshot)
+&gt;       store.complete_turn(owner,turn_id)
+
+tests/test_formal_snapshot_read_recovery.py:30: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;uk_rent_agent.web.conversation_store.ConversationStore object at 0x7fa1dd61e3c0&gt;
+user_id = 'snapshot-owner', turn_id = '64df32d5fcbb4fabaf6d548780d2855d'
+assistant_message_id = None
+
+    def complete_turn(self, user_id: str, turn_id: str,
+                      assistant_message_id: int | None = None) -&gt; dict | None:
+        """Mark a turn 'completed' (sets completed_at). Optionally record the
+        assistant message id. Returns the updated turn dict, or None if not found."""
+        now = _now_iso()
+        with self._lock:
+            if assistant_message_id is not None:
+                cur = self._conn.execute(
+                    """UPDATE turns SET status='completed', completed_at=?,
+                              assistant_message_id=? WHERE user_id=? AND id=?""",
+                    (now, assistant_message_id, user_id, turn_id),
+                )
+            else:
+&gt;               cur = self._conn.execute(
+                    "UPDATE turns SET status='completed', completed_at=? WHERE user_id=? AND id=?",
+                    (now, user_id, turn_id),
+                )
+E               sqlite3.IntegrityError: completed turn requires assistant_message_id
+
+src/uk_rent_agent/web/conversation_store.py:1228: IntegrityError</failure></testcase><testcase classname="tests.test_native_chat_transport" name="test_stream_keeps_cookie_identity_and_replays_durable_response" time="0.041" /><testcase classname="tests.test_native_chat_transport" name="test_stream_preserves_agent_error_without_exposing_exception" time="0.036" /><testcase classname="tests.test_native_chat_transport" name="test_response_close_before_first_body_cancels_execution" time="0.014" /><testcase classname="tests.test_native_chat_transport" name="test_oversized_native_request_keeps_json_and_identity_headers" time="0.018" /><testcase classname="tests.test_native_chat_transport" name="test_validation_auth_rate_limit_and_preflight_keep_http_status" time="0.019" /><testcase classname="tests.test_native_chat_transport" name="test_stream_disconnect_releases_turn_lease" time="0.014" /><testcase classname="tests.test_native_chat_transport" name="test_waiting_chat_does_not_block_liveness" time="0.014" /></testsuite></testsuites>

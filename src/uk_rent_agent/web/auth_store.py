@@ -23,8 +23,10 @@ CONTRACT
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
+import secrets
 import sqlite3
 import time
 import uuid
@@ -99,6 +101,12 @@ class AuthStore:
                            created_at INTEGER NOT NULL
                        )"""
                 )
+                db.execute("""CREATE TABLE IF NOT EXISTS auth_sessions (
+                    token_hash TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    expires_at INTEGER NOT NULL
+                )""")
+                db.execute("CREATE INDEX IF NOT EXISTS auth_sessions_user ON auth_sessions(user_id)")
         except sqlite3.DatabaseError as exc:
             raise AuthStoreCorrupt(f"credential database is invalid: {self.path}") from exc
 
@@ -281,18 +289,51 @@ class AuthStore:
             ).fetchone()
         return self.public_view(dict(row))
 
+    def create_session(self, user_id: str, ttl_seconds: int) -> str:
+        """Mint a revocable credential; only its digest is stored on the server."""
+        token = secrets.token_urlsafe(32)
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if not db.execute("SELECT 1 FROM users WHERE user_id=?", (user_id,)).fetchone():
+                raise ValueError("account no longer exists")
+            db.execute("DELETE FROM auth_sessions WHERE expires_at<=?", (int(time.time()),))
+            db.execute("INSERT INTO auth_sessions VALUES(?,?,?)", (
+                hashlib.sha256(token.encode()).hexdigest(), user_id,
+                int(time.time()) + int(ttl_seconds),
+            ))
+        return token
+
+    def get_session(self, token: str | None) -> dict | None:
+        if not isinstance(token, str) or not 20 <= len(token) <= 128:
+            return None
+        with self._connect() as db:
+            row = db.execute("""SELECT u.* FROM auth_sessions s JOIN users u
+                ON u.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>?""", (
+                    hashlib.sha256(token.encode()).hexdigest(), int(time.time()),
+                )).fetchone()
+        return self.public_view(dict(row)) if row else None
+
+    def revoke_session(self, token: str | None) -> None:
+        if isinstance(token, str):
+            with self._connect() as db:
+                db.execute("DELETE FROM auth_sessions WHERE token_hash=?", (
+                    hashlib.sha256(token.encode()).hexdigest(),
+                ))
+
     def privacy_inventory(self, user_id: str) -> dict[str, int]:
         with self._connect() as db:
             row = db.execute(
                 "SELECT COUNT(*) AS n FROM users WHERE user_id=?", (user_id,)
             ).fetchone()
+            sessions = db.execute('SELECT COUNT(*) FROM auth_sessions WHERE user_id=?', (user_id,)).fetchone()[0]
         count = int(row["n"] if row else 0)
-        return {"credentials": count, "total": count}
+        return {"credentials": count, "sessions": int(sessions), "total": count + int(sessions)}
 
     def delete_user_id(self, user_id: str) -> int:
         """Delete and verify the credential row for a GDPR erasure request."""
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            db.execute("DELETE FROM auth_sessions WHERE user_id=?", (user_id,))
             deleted = db.execute(
                 "DELETE FROM users WHERE user_id=?", (user_id,)
             ).rowcount

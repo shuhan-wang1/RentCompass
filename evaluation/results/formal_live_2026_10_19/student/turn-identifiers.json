@@ -1,0 +1,14 @@
+[
+  {
+    "turn": 1,
+    "turn_id": "b073181b51a0419c966814ad79a9a9a7",
+    "request_id": null,
+    "request_id_note": "未在实际响应payload和持久化消息中暴露；未猜测"
+  },
+  {
+    "turn": 2,
+    "turn_id": "fb2d996442d742559bfa2abbdf9c1501",
+    "request_id": null,
+    "request_id_note": "未在实际响应payload和持久化消息中暴露；未猜测"
+  }
+]

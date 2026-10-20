@@ -185,8 +185,11 @@ def test_parse_geo_location_accepts_both_scraper_shapes_and_rejects_junk():
 def test_supplied_coordinates_skip_geocoding_entirely(monkeypatch):
     g = _patch_geocoder(monkeypatch, {})     # any geocode attempt would return None -> error
     monkeypatch.setattr(poi, "query_osm_pois", lambda *a, **k: [])
+    # The harness marks coordinates it took from the listing record (2026-10-19 B-06);
+    # unmarked, model-supplied coordinates are not labelled as the listing's own.
     out = poi.search_nearby_pois_impl(address=_RUGBY["address"], poi_type="supermarket",
-                                      latitude=51.522441, longitude=-0.118633)
+                                      latitude=51.522441, longitude=-0.118633,
+                                      _coordinate_source="listing")
     assert out["success"] is True, "the address that cannot be geocoded must still work"
     assert g.calls == []
     ref = out["reference_point"]

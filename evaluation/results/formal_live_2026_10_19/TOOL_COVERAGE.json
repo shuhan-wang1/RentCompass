@@ -1,0 +1,139 @@
+[
+  {
+    "tool": "search_properties",
+    "browser_executor_calls": 6,
+    "terminal_calls": 0,
+    "direct_integration_attempts": 1,
+    "browser_request_ids": [
+      "6b0963c03f074905b5bbb1fbcd8d32d8",
+      "acd59fb3be974bc7b85207241f03e374",
+      "ca2b287ae94b424f9b32a1eefb55e1db",
+      "f235d076615a4647afc7bf07cd4d4b4c",
+      "f429eb333ebb4b52bc2b81247f57eab0"
+    ],
+    "live_housing_success_certified": false,
+    "result": "403 failure-response replay exercised; live listing success BLOCKED"
+  },
+  {
+    "tool": "get_property_details",
+    "browser_executor_calls": 0,
+    "terminal_calls": 0,
+    "direct_integration_attempts": 0,
+    "browser_request_ids": [],
+    "live_housing_success_certified": false,
+    "result": "BLOCKED: no successfully fetched current listing identity"
+  },
+  {
+    "tool": "calculate_commute",
+    "browser_executor_calls": 0,
+    "terminal_calls": 0,
+    "direct_integration_attempts": 1,
+    "browser_request_ids": [],
+    "live_housing_success_certified": null,
+    "result": "Executed real implementation; inspect raw result and evidence scope"
+  },
+  {
+    "tool": "calculate_commute_cost",
+    "browser_executor_calls": 0,
+    "terminal_calls": 0,
+    "direct_integration_attempts": 1,
+    "browser_request_ids": [],
+    "live_housing_success_certified": null,
+    "result": "Executed real implementation; inspect raw result and evidence scope"
+  },
+  {
+    "tool": "get_transport_info",
+    "browser_executor_calls": 2,
+    "terminal_calls": 0,
+    "direct_integration_attempts": 2,
+    "browser_request_ids": [
+      "ca2b287ae94b424f9b32a1eefb55e1db"
+    ],
+    "live_housing_success_certified": null,
+    "result": "Executed real implementation; inspect raw result and evidence scope"
+  },
+  {
+    "tool": "check_transport_cost",
+    "browser_executor_calls": 0,
+    "terminal_calls": 0,
+    "direct_integration_attempts": 1,
+    "browser_request_ids": [],
+    "live_housing_success_certified": null,
+    "result": "Executed real implementation; inspect raw result and evidence scope"
+  },
+  {
+    "tool": "check_safety",
+    "browser_executor_calls": 0,
+    "terminal_calls": 0,
+    "direct_integration_attempts": 1,
+    "browser_request_ids": [],
+    "live_housing_success_certified": null,
+    "result": "Executed real implementation; inspect raw result and evidence scope"
+  },
+  {
+    "tool": "get_weather",
+    "browser_executor_calls": 2,
+    "terminal_calls": 0,
+    "direct_integration_attempts": 1,
+    "browser_request_ids": [
+      "ca2b287ae94b424f9b32a1eefb55e1db"
+    ],
+    "live_housing_success_certified": null,
+    "result": "Executed real implementation; inspect raw result and evidence scope"
+  },
+  {
+    "tool": "search_nearby_pois",
+    "browser_executor_calls": 0,
+    "terminal_calls": 0,
+    "direct_integration_attempts": 0,
+    "browser_request_ids": [],
+    "live_housing_success_certified": null,
+    "result": "DEGRADED: 30s test deadline; Overpass mirror failures observed"
+  },
+  {
+    "tool": "web_search",
+    "browser_executor_calls": 0,
+    "terminal_calls": 0,
+    "direct_integration_attempts": 1,
+    "browser_request_ids": [],
+    "live_housing_success_certified": null,
+    "result": "DEGRADED: no usable result, unresponsive search engines"
+  },
+  {
+    "tool": "compare_or_rank_areas",
+    "browser_executor_calls": 0,
+    "terminal_calls": 0,
+    "direct_integration_attempts": 1,
+    "browser_request_ids": [],
+    "live_housing_success_certified": false,
+    "result": "PASS honest no_data; positive rent ranking BLOCKED"
+  },
+  {
+    "tool": "remember",
+    "browser_executor_calls": 0,
+    "terminal_calls": 0,
+    "direct_integration_attempts": 1,
+    "browser_request_ids": [],
+    "live_housing_success_certified": null,
+    "result": "Executed real implementation; inspect raw result and evidence scope"
+  },
+  {
+    "tool": "recall_memory",
+    "browser_executor_calls": 0,
+    "terminal_calls": 0,
+    "direct_integration_attempts": 1,
+    "browser_request_ids": [],
+    "live_housing_success_certified": null,
+    "result": "Executed real implementation; inspect raw result and evidence scope"
+  },
+  {
+    "tool": "ask_user",
+    "browser_executor_calls": 0,
+    "terminal_calls": 2,
+    "direct_integration_attempts": 1,
+    "browser_request_ids": [],
+    "live_housing_success_certified": null,
+    "result": "PASS valid options contract; invalid test clarification_kind rejected",
+    "valid_contract": true
+  }
+]

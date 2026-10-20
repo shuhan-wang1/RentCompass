@@ -1,0 +1,24 @@
+[
+  {
+    "url": "https://www.onthemarket.com/to-rent/property/camden/",
+    "method": "GET",
+    "user_agent": "RentCompassBot/1.0",
+    "started": 1792410667.284668,
+    "actual_external_request": true,
+    "status": 200,
+    "bytes": 610121,
+    "sha256": "8a29838a2e62593198fa70feecd64b2a62587a685242602b4147c5775f5aedd1",
+    "seconds": 0.05
+  },
+  {
+    "url": "https://www.onthemarket.com/details/19558239/",
+    "method": "GET",
+    "user_agent": "RentCompassBot/1.0",
+    "started": 1792410668.4861186,
+    "actual_external_request": true,
+    "status": 200,
+    "bytes": 200094,
+    "sha256": "d6289a7dcb301d198e67fe2bc31698e02ceb610967c52a43daebe724bc5a942a",
+    "seconds": 0.214
+  }
+]

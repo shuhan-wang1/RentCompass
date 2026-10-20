@@ -1,0 +1,14 @@
+{
+  "listing_cache.sqlite3": {
+    "sha256": "b1cfd7d882c9245d72fad5ade5cbdc3a38d0d136a70039e50524125c02276db4",
+    "bytes": 1675264
+  },
+  "otm_desc_cache.sqlite3": {
+    "sha256": "7b85377c06d0fd8847cdd80598609780fba995b6411d733264f49946f8b7e2a7",
+    "bytes": 819200
+  },
+  "area_reco_cache.sqlite3": {
+    "sha256": "e162c7016fc26029a8e0e5a606ef5adb0835986909986890f9bf494bfecdc86f",
+    "bytes": 36864
+  }
+}

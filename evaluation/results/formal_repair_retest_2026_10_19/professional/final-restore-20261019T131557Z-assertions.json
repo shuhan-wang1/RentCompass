@@ -1,0 +1,176 @@
+{
+  "restore_evidence": "final-restore-20261019T131557Z.json",
+  "overall_pass": true,
+  "passed": 20,
+  "failed": 0,
+  "assertion_count": 20,
+  "assertions": [
+    {
+      "name": "original_conversation_loaded",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "name": "server_criteria.max_budget",
+      "expected": 2000,
+      "actual": 2000,
+      "passed": true
+    },
+    {
+      "name": "server_criteria.budget_period",
+      "expected": "month",
+      "actual": "month",
+      "passed": true
+    },
+    {
+      "name": "server_criteria.monthly_total_budget",
+      "expected": 2150,
+      "actual": 2150,
+      "passed": true
+    },
+    {
+      "name": "server_criteria.office_days_per_week",
+      "expected": 2,
+      "actual": 2,
+      "passed": true
+    },
+    {
+      "name": "server_criteria.bedrooms",
+      "expected": 1,
+      "actual": 1,
+      "passed": true
+    },
+    {
+      "name": "server_criteria.bedrooms_minimum",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "name": "server_criteria.room_type",
+      "expected": "whole",
+      "actual": "whole",
+      "passed": true
+    },
+    {
+      "name": "server_criteria.areas",
+      "expected": [
+        "Lewisham",
+        "Stratford"
+      ],
+      "actual": [
+        "Lewisham",
+        "Stratford"
+      ],
+      "passed": true
+    },
+    {
+      "name": "server_criteria.commute_destination",
+      "expected": "Bank station, London",
+      "actual": "Bank station, London",
+      "passed": true
+    },
+    {
+      "name": "server_criteria.max_travel_time",
+      "expected": 45,
+      "actual": 45,
+      "passed": true
+    },
+    {
+      "name": "ui.max_budget",
+      "expected": 2000,
+      "actual": 2000,
+      "passed": true
+    },
+    {
+      "name": "rent_budget_alias_consistency",
+      "expected": {
+        "max_budget": 2000,
+        "max_budget_monthly": 2000
+      },
+      "actual": {
+        "max_budget": 2000,
+        "max_budget_monthly": 2000
+      },
+      "passed": true
+    },
+    {
+      "name": "saved_count",
+      "expected": "Saved\n2",
+      "actual": "Saved\n2",
+      "passed": true
+    },
+    {
+      "name": "saved_card_addresses",
+      "expected": [
+        "Bonfield Road, London, SE13",
+        "Unex Tower, 7 Station Street, London, E15"
+      ],
+      "actual": [
+        "Bonfield Road, London, SE13",
+        "Unex Tower, 7 Station Street, London, E15"
+      ],
+      "passed": true
+    },
+    {
+      "name": "saved_historical_budget1850",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "name": "saved_historical_budget2000",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "name": "saved_criteria_scope_label",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "name": "model_calls",
+      "expected": 0,
+      "actual": 0,
+      "passed": true
+    },
+    {
+      "name": "blocked_model_or_search_attempts",
+      "expected": 0,
+      "actual": 0,
+      "passed": true
+    }
+  ],
+  "supersedes_failure_for_current_version_only": "final-restore-20261019T130921Z-assertions.json",
+  "budget_source": {
+    "message_id": 35,
+    "original_source": {
+      "source": "user_message",
+      "text": " Keep my current £2,000/month rent cap separate from the £2,150/month rent-plus-commute ceiling, based on two office days a week",
+      "value": 2150
+    },
+    "reason": "parser_value_corrected",
+    "source": "criteria_recovery",
+    "value": 2000
+  },
+  "criteria_repair_provenance": [
+    {
+      "field": "max_budget",
+      "message_id": 27,
+      "previous_value": 1850,
+      "reason": "parser_value_corrected",
+      "value": 1850
+    },
+    {
+      "field": "max_budget",
+      "message_id": 35,
+      "previous_value": 2150,
+      "reason": "parser_value_corrected",
+      "value": 2000
+    }
+  ],
+  "scope": "Fresh browser restore and same authenticated conversation GET only. No model/search. Original R6/R7 and13:09 failed evidence retained."
+}

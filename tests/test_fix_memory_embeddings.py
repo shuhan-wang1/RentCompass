@@ -64,6 +64,21 @@ def _rows():
     ]
 
 
+def test_request_indexes_share_encoder_but_keep_independent_candidates():
+    root = _store()
+    first, second = root.fork(), root.fork()
+    first.build_index(_rows()[:1])
+    second.build_index([{"Address": "1 Islington Rd", "Price": "£1500 pcm"}])
+    assert first.model is second.model is root.model
+    assert first._embedding_cache is second._embedding_cache
+    assert first.search("flat")[0]["Address"] == "1 Camden Rd"
+    assert second.search("flat")[0]["Address"] == "1 Islington Rd"
+    first.build_index([])
+    assert first.search("flat") == []
+    assert first.get_property_by_name("1 Camden Rd") is None
+    assert second.search("flat")[0]["Address"] == "1 Islington Rd"
+
+
 def test_unchanged_rows_are_not_re_encoded():
     store = _store()
     rows = _rows()

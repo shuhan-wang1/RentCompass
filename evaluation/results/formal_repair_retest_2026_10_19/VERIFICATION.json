@@ -1,0 +1,508 @@
+{
+  "generated_at": 1792416354.4716966,
+  "production_deployed": false,
+  "isolated_url": "http://127.0.0.1:15019",
+  "http": {
+    "actual": 233,
+    "audit_budget_stops": 64,
+    "by_host": {
+      "www.onthemarket.com": 4,
+      "api.open-meteo.com": 5,
+      "api.tfl.gov.uk": 85,
+      "nominatim.openstreetmap.org": 105,
+      "data.police.uk": 12,
+      "overpass-api.de": 3,
+      "overpass.kumi.systems": 3,
+      "overpass.osm.ch": 3,
+      "lz4.overpass-api.de": 3,
+      "z.overpass-api.de": 3,
+      "api.postcodes.io": 1,
+      "geocoding-api.open-meteo.com": 6
+    }
+  },
+  "model": {
+    "calls": 55,
+    "status_counts": {
+      "200": 55
+    },
+    "usage": {
+      "prompt_tokens": 674401,
+      "completion_tokens": 25989,
+      "total_tokens": 700390
+    }
+  },
+  "personas": {
+    "student": {
+      "stored_turns": 7,
+      "tool_execute_calls": 18,
+      "ui_model_posts": 7,
+      "non_model_form_searches": 0
+    },
+    "professional": {
+      "stored_turns": 9,
+      "tool_execute_calls": 38,
+      "ui_model_posts": 7,
+      "non_model_form_searches": 2
+    },
+    "family": {
+      "stored_turns": 7,
+      "tool_execute_calls": 37,
+      "ui_model_posts": 7,
+      "non_model_form_searches": 0
+    }
+  },
+  "full-regression-final-read": {
+    "tests": 5322,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 3,
+    "seconds": 224.154
+  },
+  "full-regression-delivery": {
+    "tests": 5313,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 3,
+    "seconds": 216.819
+  },
+  "full-regression-final-contract": {
+    "tests": 5301,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 3,
+    "seconds": 216.157
+  },
+  "full-regression-accepted": {
+    "tests": 5256,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 3,
+    "seconds": 214.218
+  },
+  "full-regression-release": {
+    "tests": 5255,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 3,
+    "seconds": 212.782
+  },
+  "full-regression-frozen": {
+    "tests": 5254,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 3,
+    "seconds": 211.59
+  },
+  "offline_browser": {
+    "passed": 93,
+    "checks": [
+      "mobile closed sidebar is inert",
+      "closed sidebar has no invisible Tab stops",
+      "menu announces expanded and focuses first action",
+      "open menu makes background inert",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "open menu Tab stays in boundary",
+      "Escape closes menu and restores trigger focus",
+      "desktop sidebar and content remain usable",
+      "mobile textarea has explicit accessible name",
+      "area and budget period have accessible names",
+      "message log announces additions",
+      "account dialog closes mobile sidebar before taking focus",
+      "account fields have explicit names",
+      "dialog Tab stays inside modal",
+      "dialog Tab stays inside modal",
+      "dialog Tab stays inside modal",
+      "dialog Tab stays inside modal",
+      "dialog Tab stays inside modal",
+      "dialog Tab stays inside modal",
+      "dialog Tab stays inside modal",
+      "dialog Tab stays inside modal",
+      "dialog Tab stays inside modal",
+      "dialog Tab stays inside modal",
+      "dialog Tab stays inside modal",
+      "dialog Tab stays inside modal",
+      "closing dialog restores usable page and trigger focus",
+      "long Chinese title keeps all four actions visible and pointer reachable",
+      "Ask AI focuses without sending",
+      "focus chip survives refresh",
+      "refreshed request keeps exact selected URL",
+      "conversation B has no A focus chip",
+      "conversation B request excludes A history and focus",
+      "switching back restores only conversation A focus",
+      "clarification renders native buttons without autosend",
+      "option labels are escaped text",
+      "clarification rendering leaves criteria unchanged",
+      "keyboard choice sends its explicit value once",
+      "criteria updates only after chosen response",
+      "consumed clarification buttons cannot resend",
+      "text-only clarification stays compatible",
+      "429 shows wait duration rather than connection error",
+      "Retry-After prevents early duplicate request",
+      "manual send recovers after Retry-After",
+      "503 has service-specific error",
+      "400 has input-specific error",
+      "SSE final status preserves rate-limit details",
+      "incomplete stream has recovery-specific error",
+      "penny budget survives panel fill and unchanged form read",
+      "weekly listing rent is converted before budget comparison",
+      "precise hard requirements use readable English labels",
+      "evidence and input labels localize to Chinese",
+      "precise hard requirements use readable Chinese labels",
+      "cached and budget labels localize to Chinese",
+      "source refusal has a dedicated results state",
+      "source refusal does not suggest widening the budget",
+      "source refusal remains distinct after refresh",
+      "successful retry clears previous refusal",
+      "saved qualification explicitly names saved criteria",
+      "saved commute ceiling remains visible",
+      "saved ranks reflect saved list order",
+      "320px layout does not overflow horizontally",
+      "390px layout does not overflow horizontally",
+      "fresh browser context restores exact A focus",
+      "only latest stored clarification remains interactive after refresh",
+      "stored ask_user choice sends continuation after refresh",
+      "deleting a conversation removes its saved focus context",
+      "delete fallback restores only the other conversation focus",
+      "identity switch clears selected and viewed property context",
+      "identity switch does not copy focus under the new identity",
+      "no browser JavaScript errors: []"
+    ],
+    "mock_chat_requests": 16,
+    "external_requests_blocked": 7,
+    "page_errors": [],
+    "network": "Every request intercepted; no application, model or external network contacted."
+  },
+  "onthemarket": {
+    "guard_requests": 4,
+    "pre_guard_requests": 4,
+    "total_actual": 8,
+    "guard_statuses": {
+      "200": 4
+    },
+    "shared_limit": 12,
+    "identified_program_ua": "RentCompassBot/1.0",
+    "no_challenge_bypass": true
+  },
+  "restoration": {
+    "student": {
+      "time": 1792415822.9017062,
+      "checks": {
+        "no_model_requests": true,
+        "same_conversation_restored": true,
+        "favorites_count": true,
+        "favorite_identities": true,
+        "criteria_areas": true,
+        "criteria_room_type": true,
+        "criteria_bedrooms": true,
+        "criteria_max_budget": true,
+        "criteria_commute_destination": true,
+        "criteria_max_travel_time": true,
+        "criteria_bedrooms_minimum": true,
+        "criteria_no_commute": true,
+        "criteria_move_in_date": true,
+        "visible_result_identities": true
+      },
+      "all_passed": true,
+      "label": "recovery-after-read-projection"
+    },
+    "student_saved_labels": {
+      "checks": {
+        "saved_criteria_label": true,
+        "saved_original_commute_limit_visible": true,
+        "sequential_ranks": true,
+        "no_current_criteria_eligible_label": true
+      },
+      "all_passed": true,
+      "no_model_requests": true
+    },
+    "professional": {
+      "restore_evidence": "final-restore-20261019T131557Z.json",
+      "overall_pass": true,
+      "passed": 20,
+      "failed": 0,
+      "assertion_count": 20,
+      "assertions": [
+        {
+          "name": "original_conversation_loaded",
+          "expected": true,
+          "actual": true,
+          "passed": true
+        },
+        {
+          "name": "server_criteria.max_budget",
+          "expected": 2000,
+          "actual": 2000,
+          "passed": true
+        },
+        {
+          "name": "server_criteria.budget_period",
+          "expected": "month",
+          "actual": "month",
+          "passed": true
+        },
+        {
+          "name": "server_criteria.monthly_total_budget",
+          "expected": 2150,
+          "actual": 2150,
+          "passed": true
+        },
+        {
+          "name": "server_criteria.office_days_per_week",
+          "expected": 2,
+          "actual": 2,
+          "passed": true
+        },
+        {
+          "name": "server_criteria.bedrooms",
+          "expected": 1,
+          "actual": 1,
+          "passed": true
+        },
+        {
+          "name": "server_criteria.bedrooms_minimum",
+          "expected": false,
+          "actual": false,
+          "passed": true
+        },
+        {
+          "name": "server_criteria.room_type",
+          "expected": "whole",
+          "actual": "whole",
+          "passed": true
+        },
+        {
+          "name": "server_criteria.areas",
+          "expected": [
+            "Lewisham",
+            "Stratford"
+          ],
+          "actual": [
+            "Lewisham",
+            "Stratford"
+          ],
+          "passed": true
+        },
+        {
+          "name": "server_criteria.commute_destination",
+          "expected": "Bank station, London",
+          "actual": "Bank station, London",
+          "passed": true
+        },
+        {
+          "name": "server_criteria.max_travel_time",
+          "expected": 45,
+          "actual": 45,
+          "passed": true
+        },
+        {
+          "name": "ui.max_budget",
+          "expected": 2000,
+          "actual": 2000,
+          "passed": true
+        },
+        {
+          "name": "rent_budget_alias_consistency",
+          "expected": {
+            "max_budget": 2000,
+            "max_budget_monthly": 2000
+          },
+          "actual": {
+            "max_budget": 2000,
+            "max_budget_monthly": 2000
+          },
+          "passed": true
+        },
+        {
+          "name": "saved_count",
+          "expected": "Saved\n2",
+          "actual": "Saved\n2",
+          "passed": true
+        },
+        {
+          "name": "saved_card_addresses",
+          "expected": [
+            "Bonfield Road, London, SE13",
+            "Unex Tower, 7 Station Street, London, E15"
+          ],
+          "actual": [
+            "Bonfield Road, London, SE13",
+            "Unex Tower, 7 Station Street, London, E15"
+          ],
+          "passed": true
+        },
+        {
+          "name": "saved_historical_budget1850",
+          "expected": true,
+          "actual": true,
+          "passed": true
+        },
+        {
+          "name": "saved_historical_budget2000",
+          "expected": true,
+          "actual": true,
+          "passed": true
+        },
+        {
+          "name": "saved_criteria_scope_label",
+          "expected": true,
+          "actual": true,
+          "passed": true
+        },
+        {
+          "name": "model_calls",
+          "expected": 0,
+          "actual": 0,
+          "passed": true
+        },
+        {
+          "name": "blocked_model_or_search_attempts",
+          "expected": 0,
+          "actual": 0,
+          "passed": true
+        }
+      ],
+      "supersedes_failure_for_current_version_only": "final-restore-20261019T130921Z-assertions.json",
+      "budget_source": {
+        "message_id": 35,
+        "original_source": {
+          "source": "user_message",
+          "text": " Keep my current £2,000/month rent cap separate from the £2,150/month rent-plus-commute ceiling, based on two office days a week",
+          "value": 2150
+        },
+        "reason": "parser_value_corrected",
+        "source": "criteria_recovery",
+        "value": 2000
+      },
+      "criteria_repair_provenance": [
+        {
+          "field": "max_budget",
+          "message_id": 27,
+          "previous_value": 1850,
+          "reason": "parser_value_corrected",
+          "value": 1850
+        },
+        {
+          "field": "max_budget",
+          "message_id": 35,
+          "previous_value": 2150,
+          "reason": "parser_value_corrected",
+          "value": 2000
+        }
+      ],
+      "scope": "Fresh browser restore and same authenticated conversation GET only. No model/search. Original R6/R7 and13:09 failed evidence retained."
+    },
+    "family": {
+      "assertions": {
+        "no_model_requests": true,
+        "conversation_readable": true,
+        "criteria_restored": true,
+        "favorite_count_restored": true,
+        "focus_restored": true,
+        "cards_restored": true,
+        "legacy_tfl_transit_label_removed": true,
+        "commute_explicitly_unverified": true,
+        "unknown_qualification_retained": true,
+        "viewport_no_overflow": true,
+        "old_37_44_minute_labels_removed": true,
+        "explicit_unknown_commute_labels_present": true
+      },
+      "extra_read_path_assertions": {
+        "server_angel_commute_unverified": true,
+        "server_three_mill_commute_unverified": true
+      }
+    },
+    "exact_final_api": {
+      "no_new_model_calls": true,
+      "all_profiles_passed": true
+    },
+    "identity_api": [
+      {
+        "case": "other_signed_identity_cannot_read_conversation/messages",
+        "status": 404,
+        "passed": true
+      },
+      {
+        "case": "other_signed_identity_cannot_read_conversation/version_map",
+        "status": 404,
+        "passed": true
+      },
+      {
+        "case": "query_user_id_cannot_override_signed_identity",
+        "status": 200,
+        "favorite_count": 0,
+        "passed": true
+      },
+      {
+        "case": "body_user_id_cannot_write_another_identity_favorites",
+        "post_status": 200,
+        "passed": true
+      },
+      {
+        "case": "tampered_signed_cookie_cannot_read_student",
+        "status": 404,
+        "passed": true
+      }
+    ],
+    "memory_new_process": {
+      "same_namespace_persists_in_new_process": true,
+      "other_namespace_empty": true,
+      "both_reads_successful": true
+    }
+  },
+  "service_state": {
+    "existing_container_ids_and_start_times_unchanged": {
+      "uk-rent-app-fc": true,
+      "uk-rent-app": true,
+      "uk-rent-searxng": true,
+      "uk-rent-valkey": true
+    },
+    "only_test_process_groups_terminated": [
+      "relay",
+      "app"
+    ],
+    "isolated_ports_closed": {
+      "15019": true,
+      "19094": true
+    },
+    "public_site_not_reopened": true,
+    "at": 1792416153.4435155
+  },
+  "cleanup": {
+    "at": 1792416402.939361,
+    "only_isolated_test_paths_removed": [
+      "student/student-storage.json",
+      "professional/professional-private-storage.json",
+      "family/family-live-storage.json",
+      "private/",
+      "runtime/*"
+    ],
+    "private_env_and_cookies_removed": true,
+    "isolated_auth_checkpoint_memory_and_cache_databases_removed": true,
+    "public_report_contains_no_browser_cookie_store": true,
+    "source_workspace_and_production_data_preserved": true,
+    "rerun_note": "Live harness requires freshly provisioned private configuration and new signed guest sessions; archived recovery results refer to the completed isolated run."
+  }
+}

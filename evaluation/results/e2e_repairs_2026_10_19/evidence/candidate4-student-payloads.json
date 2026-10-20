@@ -1,0 +1,338 @@
+[
+  {
+    "area_recommendations": [],
+    "conversation_id": "ec66392f2166421bb384435996cae56b",
+    "message": "- 没有同时满足且已核实的房源。\n已排除/不符合：\n- Barrowgate Road, London W4：该房源是备选，未满足全部已声明条件；月租 £2450 超过预算 £2400；经核实通勤为 32 分钟，超过 30 分钟上限\n房源来自缓存，价格和出租状态可能已变化；请联系中介核实。\n\n返回的路线：Acacia House, 51 Kingston Road, New Malden, London → Gower Street, London WC1E 6BT，32 分钟（路线规划器返回的最快行程）。\n该行程仅对应上述起点，不代表其他房源的通勤时长，也未证明准点到达或无台阶通行。\n返回的路线：White City Estate, London W12 → Gower Street, London WC1E 6BT，32 分钟（路线规划器返回的最快行程）。\n返回的路线：High Street, London N8 → Gower Street, London WC1E 6BT，32 分钟（路线规划器返回的最快行程）。\n返回的路线：Caroline Close, London N10 → Gower Street, London WC1E 6BT，32 分钟（路线规划器返回的最快行程）。\n返回的路线：Fortescue Road, Colliers Wood, Greater London → Gower Street, London WC1E 6BT，32 分钟（路线规划器返回的最快行程）。\n返回的路线：River Mill One, London → Gower Street, London WC1E 6BT，32 分钟（路线规划器返回的最快行程）。\n返回的路线：Barrowgate Road, London W4 → Gower Street, London WC1E 6BT，32 分钟（路线规划器返回的最快行程）。\n返回的路线：London → Gower Street, London WC1E 6BT，32 分钟（路线规划器返回的最快行程）。",
+    "recommendations": [
+      {
+        "absent_features": [],
+        "address": "Barrowgate Road, London W4",
+        "alternative": true,
+        "area": "London",
+        "availability_status": "",
+        "available_from": "",
+        "bedrooms": 2,
+        "budget_basis": 2400,
+        "budget_status": "⚠️ 超预算 £50",
+        "budget_status_code": "over",
+        "candidate_reasons": [
+          "alternative is outside the declared hard result set",
+          "monthly price 2450 exceeds budget 2400",
+          "measured commute 32 min exceeds limit 30 min"
+        ],
+        "candidate_status": "excluded",
+        "candidate_unknown_reasons": [],
+        "description": "",
+        "distance_miles": null,
+        "explanation": "2 bedroom flat to rent in Barrowgate Road, London W4",
+        "geo_location": "51.48840449999999, -0.2603863",
+        "images": [
+          "https://media.onthemarket.com/properties/20304142/1643043315/image-0-480x320.jpg",
+          "https://media.onthemarket.com/properties/20304142/1643043315/image-1-480x320.jpg",
+          "https://media.onthemarket.com/properties/20304142/1643043315/image-2-480x320.jpg",
+          "https://media.onthemarket.com/properties/20304142/1643043315/image-3-480x320.jpg",
+          "https://media.onthemarket.com/properties/20304142/1643043315/image-4-480x320.jpg"
+        ],
+        "match_type": "soft_violation",
+        "possibly_outdated": true,
+        "price": "£2450/month",
+        "property_type": "2 bed Flat",
+        "qualification": {
+          "constraints": {
+            "areas": [
+              "london"
+            ],
+            "bedrooms": 2,
+            "bedrooms_minimum": false,
+            "commute_destination": "Gower Street, London WC1E 6BT",
+            "max_budget_monthly": 2400,
+            "max_commute_minutes": 30,
+            "monthly_total_budget": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": null,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "alternative is outside the declared hard result set",
+              "monthly price 2450 exceeds budget 2400",
+              "measured commute 32 min exceeds limit 30 min"
+            ],
+            "zh": [
+              "该房源是备选，未满足全部已声明条件",
+              "月租 £2450 超过预算 £2400",
+              "经核实通勤为 32 分钟，超过 30 分钟上限"
+            ]
+          },
+          "reasons": [
+            "alternative is outside the declared hard result set",
+            "monthly price 2450 exceeds budget 2400",
+            "measured commute 32 min exceeds limit 30 min"
+          ],
+          "source": "structured_listing",
+          "status": "excluded",
+          "unknown_reasons": []
+        },
+        "rank": 1,
+        "room_type": "whole",
+        "score": 99,
+        "score_breakdown": {},
+        "source": "OnTheMarket (cached)",
+        "status_reason": "over_budget",
+        "unverified_features": [],
+        "url": "https://www.onthemarket.com/details/20304142/",
+        "verified_commute_evidence": {
+          "candidate_key": "url:https://www.onthemarket.com/details/20304142",
+          "duration_minutes": 32,
+          "evidence_status": "success",
+          "from_address": "Barrowgate Road, London W4",
+          "raw_data": {
+            "basis": "tfl_journey_plan",
+            "duration_minutes": 32,
+            "from_address": "Barrowgate Road, London W4",
+            "route_source": "TfL Journey Planner",
+            "to_address": "Gower Street, London WC1E 6BT"
+          },
+          "success": true,
+          "to_address": "Gower Street, London WC1E 6BT"
+        },
+        "verified_commute_minutes": 32,
+        "verified_features": []
+      }
+    ],
+    "response_type": "search",
+    "search_criteria": {
+      "amenities_of_interest": [],
+      "area": "London",
+      "areas": [
+        "London"
+      ],
+      "bedrooms": 2,
+      "bedrooms_minimum": false,
+      "budget_period": "month",
+      "commute_destination": "Gower Street, London WC1E 6BT",
+      "constraint_sources": {
+        "bedrooms": {
+          "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+          "source": "saved_preference",
+          "value": 2
+        },
+        "bedrooms_minimum": {
+          "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+          "source": "saved_preference",
+          "value": false
+        },
+        "budget_period": {
+          "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+          "source": "saved_preference",
+          "value": "month"
+        },
+        "commute_destination": {
+          "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+          "source": "saved_preference",
+          "value": "Gower Street, London WC1E 6BT"
+        },
+        "destination": {
+          "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+          "source": "saved_preference",
+          "value": "Gower Street, London WC1E 6BT"
+        },
+        "max_budget": {
+          "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+          "source": "saved_preference",
+          "value": 2400
+        },
+        "max_travel_time": {
+          "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+          "source": "saved_preference",
+          "value": 30
+        },
+        "no_commute": {
+          "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+          "source": "saved_preference",
+          "value": false
+        },
+        "room_type": {
+          "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+          "source": "saved_preference",
+          "value": "whole"
+        }
+      },
+      "destination": "Gower Street, London WC1E 6BT",
+      "max_budget": 2400,
+      "max_budget_monthly": 2400,
+      "max_travel_time": 30,
+      "move_in_date": null,
+      "no_commute": false,
+      "property_features": [],
+      "rent_filter_ceiling_monthly": null,
+      "room_type": "whole",
+      "soft_preferences": []
+    },
+    "turn_id": "5e04651fc37e4fa89f07e6a7b38dfdef",
+    "view_state": {
+      "criteria": {
+        "amenities_of_interest": [],
+        "bedrooms": 2,
+        "bedrooms_minimum": false,
+        "budget_period": "month",
+        "commute_destination": "Gower Street, London WC1E 6BT",
+        "constraint_sources": {
+          "bedrooms": {
+            "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+            "source": "saved_preference",
+            "value": 2
+          },
+          "bedrooms_minimum": {
+            "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+            "source": "saved_preference",
+            "value": false
+          },
+          "budget_period": {
+            "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+            "source": "saved_preference",
+            "value": "month"
+          },
+          "commute_destination": {
+            "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+            "source": "saved_preference",
+            "value": "Gower Street, London WC1E 6BT"
+          },
+          "destination": {
+            "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+            "source": "saved_preference",
+            "value": "Gower Street, London WC1E 6BT"
+          },
+          "max_budget": {
+            "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+            "source": "saved_preference",
+            "value": 2400
+          },
+          "max_travel_time": {
+            "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+            "source": "saved_preference",
+            "value": 30
+          },
+          "no_commute": {
+            "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+            "source": "saved_preference",
+            "value": false
+          },
+          "room_type": {
+            "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+            "source": "saved_preference",
+            "value": "whole"
+          }
+        },
+        "destination": "Gower Street, London WC1E 6BT",
+        "max_budget": 2400,
+        "max_travel_time": 30,
+        "no_commute": false,
+        "property_features": [],
+        "room_type": "whole",
+        "soft_preferences": []
+      },
+      "operation": "replace",
+      "results": [
+        {
+          "absent_features": [],
+          "address": "Barrowgate Road, London W4",
+          "alternative": true,
+          "area": "London",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 2400,
+          "budget_status": "⚠️ 超预算 £50",
+          "budget_status_code": "over",
+          "candidate_reasons": [
+            "alternative is outside the declared hard result set",
+            "monthly price 2450 exceeds budget 2400",
+            "measured commute 32 min exceeds limit 30 min"
+          ],
+          "candidate_status": "excluded",
+          "candidate_unknown_reasons": [],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom flat to rent in Barrowgate Road, London W4",
+          "geo_location": "51.48840449999999, -0.2603863",
+          "images": [
+            "https://media.onthemarket.com/properties/20304142/1643043315/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/20304142/1643043315/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/20304142/1643043315/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/20304142/1643043315/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/20304142/1643043315/image-4-480x320.jpg"
+          ],
+          "match_type": "soft_violation",
+          "possibly_outdated": true,
+          "price": "£2450/month",
+          "property_type": "2 bed Flat",
+          "qualification": {
+            "constraints": {
+              "areas": [],
+              "bedrooms": 2,
+              "bedrooms_minimum": false,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 2400,
+              "max_commute_minutes": 30,
+              "monthly_total_budget": null,
+              "move_in_date": null,
+              "no_commute": false,
+              "office_days_per_week": null,
+              "property_features": [],
+              "room_type": "whole"
+            },
+            "reason_messages": {
+              "en": [
+                "alternative is outside the declared hard result set",
+                "monthly price 2450 exceeds budget 2400",
+                "measured commute 32 min exceeds limit 30 min"
+              ],
+              "zh": [
+                "该房源是备选，未满足全部已声明条件",
+                "月租 £2450 超过预算 £2400",
+                "经核实通勤为 32 分钟，超过 30 分钟上限"
+              ]
+            },
+            "reasons": [
+              "alternative is outside the declared hard result set",
+              "monthly price 2450 exceeds budget 2400",
+              "measured commute 32 min exceeds limit 30 min"
+            ],
+            "source": "structured_listing",
+            "status": "excluded",
+            "unknown_reasons": []
+          },
+          "rank": 1,
+          "room_type": "whole",
+          "score": 99,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "over_budget",
+          "unverified_features": [],
+          "url": "https://www.onthemarket.com/details/20304142/",
+          "verified_commute_evidence": {
+            "candidate_key": "url:https://www.onthemarket.com/details/20304142",
+            "duration_minutes": 32,
+            "evidence_status": "success",
+            "from_address": "Barrowgate Road, London W4",
+            "raw_data": {
+              "basis": "tfl_journey_plan",
+              "duration_minutes": 32,
+              "from_address": "Barrowgate Road, London W4",
+              "route_source": "TfL Journey Planner",
+              "to_address": "Gower Street, London WC1E 6BT"
+            },
+            "success": true,
+            "to_address": "Gower Street, London WC1E 6BT"
+          },
+          "verified_commute_minutes": 32,
+          "verified_features": []
+        }
+      ],
+      "revision": 1
+    }
+  }
+]

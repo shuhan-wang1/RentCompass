@@ -1,0 +1,1174 @@
+{
+  "search_properties": {
+    "additionalProperties": false,
+    "properties": {
+      "user_query": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "The user's natural language query about finding properties. Used only as a fallback to recover an area/criteria when structured params are missing.",
+        "title": "User Query"
+      },
+      "area": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Where the user wants to LIVE / the search area (e.g. Camden, Manchester, or a university like UCL). This (or commute_destination) is the only thing truly needed.",
+        "title": "Area"
+      },
+      "areas": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "OPTIONAL multiple residential areas to search at once (e.g. [\"Camden\", \"Islington\"]). Use when the user wants to compare several neighbourhoods. The single \"area\" is treated as the first of these; results are tagged with the area each listing came from.",
+        "title": "Areas"
+      },
+      "location": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "LEGACY alias. Treated as the search area; if it names a university (e.g. UCL) it also becomes the commute-annotation target. Prefer \"area\" and/or \"commute_destination\".",
+        "title": "Location"
+      },
+      "commute_destination": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Where the user commutes TO (e.g. UCL, London Bridge). Optional. When given, commute times are annotated (and filtered only if max_commute_time is a real limit). If no area is given, the search area is derived from this.",
+        "title": "Commute Destination"
+      },
+      "no_commute": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": false,
+        "description": "Set true when the user explicitly does NOT commute / just lives there / works from home (e.g. \"我不通勤我单纯住着\", \"wfh\"). Disables all commute computation, filtering and questions.",
+        "title": "No Commute"
+      },
+      "bedrooms": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Explicit bedroom count (0 = studio). Optional; when omitted the tool infers from the message or defaults to a broad range.",
+        "title": "Bedrooms"
+      },
+      "bedrooms_minimum": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "True when bedrooms is a minimum, rather than an exact count.",
+        "title": "Bedrooms Minimum"
+      },
+      "max_budget": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "OPTIONAL maximum monthly budget in GBP (e.g., 1500, 2000). Omit for no budget filter — never blocks the search.",
+        "title": "Max Budget"
+      },
+      "max_commute_time": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "OPTIONAL maximum commute time in minutes. ONLY provide if the user explicitly states a limit AND has a commute destination. Omit for no commute filter — never blocks the search.",
+        "title": "Max Commute Time"
+      },
+      "care_about_safety": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": false,
+        "description": "Whether user cares about area safety/crime rates.",
+        "title": "Care About Safety"
+      },
+      "limit": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": 10,
+        "description": "Maximum number of results to return.",
+        "title": "Limit"
+      },
+      "current_message": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "The raw text of ONLY this turn's user message (no injected memory/history). Used to let an explicit budget/commute stated this turn override accumulated values.",
+        "title": "Current Message"
+      },
+      "property_features": {
+        "anyOf": [
+          {
+            "items": {},
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Accumulated property features (e.g. studio, en-suite) carried across turns.",
+        "title": "Property Features"
+      },
+      "accumulated_preferences": {
+        "anyOf": [
+          {
+            "items": {},
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Accumulated soft preferences carried across turns.",
+        "title": "Accumulated Preferences"
+      },
+      "budget_period": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Budget period: 'week' or 'month' (default month).",
+        "title": "Budget Period"
+      },
+      "min_budget": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Minimum monthly budget in GBP.",
+        "title": "Min Budget"
+      },
+      "room_type": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "OPTIONAL preferred room type: 'studio', 'ensuite', or 'shared' (omit for any). Studio also implies a 0-bedroom search.",
+        "title": "Room Type"
+      },
+      "move_in_date": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "OPTIONAL desired move-in / tenancy-start date as 'YYYY-MM-DD'. Never blocks the search: when omitted, every listing still shows its availability; when provided, listings are annotated for fit (available on/before it) and later-only ones are demoted but not excluded. The tool also parses an explicit move-in date stated in the current message.",
+        "title": "Move In Date"
+      },
+      "confirmed": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": false,
+        "description": "Set true when the user has explicitly confirmed to proceed (chat \"continue\"/\"搜索\") or when called from the criteria-panel Search button (/api/search_direct). Bypasses the soft criteria gate.",
+        "title": "Confirmed"
+      },
+      "criteria_gate_shown": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": false,
+        "description": "Injected by the agent from accumulated criteria: true once the soft criteria gate has already been shown in this conversation (so it fires at most once).",
+        "title": "Criteria Gate Shown"
+      },
+      "reply_language": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "OPTIONAL reply-language override: 'zh' or 'en'. When set it FORCES every user-facing string (found summary, gate question, no-results, similar-fallback) into that language instead of inferring from the current message. The app sets it from the reply-language policy (current message CJK, else the frontend UI language); omit to keep the message-based inference.",
+        "title": "Reply Language"
+      }
+    },
+    "title": "SearchPropertiesInput",
+    "type": "object"
+  },
+  "calculate_commute": {
+    "additionalProperties": false,
+    "properties": {
+      "from_address": {
+        "description": "出发地址（房源地址）",
+        "title": "From Address",
+        "type": "string"
+      },
+      "to_address": {
+        "description": "目的地址（工作地点、学校等）",
+        "title": "To Address",
+        "type": "string"
+      },
+      "mode": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "transit",
+              "driving",
+              "walking",
+              "bicycling"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "transit",
+        "description": "通勤方式: transit (地铁/公交/火车), driving (开车), walking (步行), bicycling (骑车). 注意：不要使用 tube/tubing/underground，请用 transit",
+        "title": "Mode"
+      }
+    },
+    "required": [
+      "from_address",
+      "to_address"
+    ],
+    "title": "CalculateCommuteInput",
+    "type": "object"
+  },
+  "calculate_commute_cost": {
+    "additionalProperties": false,
+    "properties": {
+      "from_address": {
+        "description": "起点地址（房源完整地址，包括门牌号、街道名、城市、邮编）",
+        "title": "From Address",
+        "type": "string"
+      },
+      "to_address": {
+        "description": "终点地址（学校/工作地点完整地址）",
+        "title": "To Address",
+        "type": "string"
+      },
+      "travel_type": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "student",
+              "adult"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "student",
+        "description": "乘客类型。学生使用 18+ Student Oyster Card 可享受 Travelcard 30% 折扣",
+        "title": "Travel Type"
+      },
+      "mode": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "transit",
+              "driving",
+              "walking",
+              "bicycling"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "transit",
+        "description": "通勤方式。注意：只有 transit (公共交通) 才会计算交通费用",
+        "title": "Mode"
+      }
+    },
+    "required": [
+      "from_address",
+      "to_address"
+    ],
+    "title": "CalculateCommuteCostInput",
+    "type": "object"
+  },
+  "check_safety": {
+    "additionalProperties": false,
+    "properties": {
+      "address": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "要检查的完整地址或区域名称（如 \"Stratford, London\" 或 \"Scape Bloomsbury, 19-29 Woburn Place, London\"）",
+        "title": "Address"
+      },
+      "area": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "区域名称（address 的别名，可以使用 address 或 area 任意一个）",
+        "title": "Area"
+      },
+      "latitude": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "纬度（可选，如果不提供会自动解析地址）",
+        "title": "Latitude"
+      },
+      "longitude": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "经度（可选，如果不提供会自动解析地址）",
+        "title": "Longitude"
+      },
+      "user_query": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "用户原始查询（用于检测语言）",
+        "title": "User Query"
+      }
+    },
+    "title": "CheckSafetyInput",
+    "type": "object"
+  },
+  "get_weather": {
+    "additionalProperties": false,
+    "properties": {
+      "location": {
+        "description": "地点名称（如 Bloomsbury, London）",
+        "title": "Location",
+        "type": "string"
+      },
+      "latitude": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "纬度（可选）",
+        "title": "Latitude"
+      },
+      "longitude": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "经度（可选）",
+        "title": "Longitude"
+      }
+    },
+    "required": [
+      "location"
+    ],
+    "title": "GetWeatherInput",
+    "type": "object"
+  },
+  "web_search": {
+    "additionalProperties": false,
+    "properties": {
+      "query": {
+        "description": "主查询语句（英文）。示例: 'Scape Bloomsbury safety and amenities'",
+        "title": "Query",
+        "type": "string",
+        "maxLength": 4096
+      },
+      "sub_queries": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "tool": {
+                  "type": "string",
+                  "enum": [
+                    "calculate_commute",
+                    "check_safety",
+                    "get_property_details",
+                    "get_weather",
+                    "search_nearby_pois",
+                    "web_search_only"
+                  ],
+                  "description": "允许的只读工具名称；web_search 本身不可嵌套"
+                },
+                "params": {
+                  "type": "object",
+                  "maxProperties": 32,
+                  "description": "工具参数（有界 JSON object）"
+                }
+              },
+              "required": [
+                "tool",
+                "params"
+              ]
+            },
+            "type": "array",
+            "maxItems": 6
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "子查询列表（可选）。每个子查询包含 tool 和 params",
+        "title": "Sub Queries"
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "title": "WebSearchInput",
+    "type": "object"
+  },
+  "search_nearby_pois": {
+    "additionalProperties": false,
+    "properties": {
+      "address": {
+        "description": "The address to search around",
+        "title": "Address",
+        "type": "string"
+      },
+      "poi_type": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "all",
+        "description": "Type(s) of POI, COMMA-SEPARATED for several at once (e.g. \"supermarket,convenience,tube_station\"). One call covering every type you need is much faster than one call per type. Known types: restaurant, chinese_restaurant, supermarket, convenience, cafe, pharmacy, gym, park, bus_stop, tube_station, bank, atm, or \"all\"",
+        "title": "Poi Type"
+      },
+      "radius": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": 300,
+        "description": "Search radius in meters (default 300, max 800). Keep it tight: \"nearby\" means walking distance, and a wider circle is slower for no better answer.",
+        "title": "Radius"
+      },
+      "user_query": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "",
+        "description": "Original user query for smart POI type inference",
+        "title": "User Query"
+      },
+      "latitude": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "The listing's own latitude, if you have it (get_property_details returns geo_location). Passing it skips geocoding, so the radius is centred on the property itself instead of a street or district centre.",
+        "title": "Latitude"
+      },
+      "longitude": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "The listing's own longitude (see latitude).",
+        "title": "Longitude"
+      }
+    },
+    "required": [
+      "address"
+    ],
+    "title": "SearchNearbyPoisInput",
+    "type": "object"
+  },
+  "get_property_details": {
+    "additionalProperties": false,
+    "properties": {
+      "property_url": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "房产 URL（首选）。推荐索引/搜索结果里每条都带 URL，直接传它可精确命中缓存里那一条房源。",
+        "title": "Property Url"
+      },
+      "property_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "房产名称，如 'Scape Bloomsbury', 'iQ Bloomsbury', 'Tufnell House' 等",
+        "title": "Property Name"
+      },
+      "property_address": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "房产地址或部分地址，如 '19-29 Woburn Place' 或 'London WC1H'",
+        "title": "Property Address"
+      },
+      "question": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "房产相关的具体问题（可选），如 '是不是studio？' 或 '访客政策是什么？'",
+        "title": "Question"
+      }
+    },
+    "title": "GetPropertyDetailsInput",
+    "type": "object"
+  },
+  "check_transport_cost": {
+    "additionalProperties": false,
+    "properties": {
+      "end_zone": {
+        "description": "The furthest zone (e.g., 2, 3, 4, 5, 6). Usually start_zone is 1.",
+        "title": "End Zone",
+        "type": "integer",
+        "enum": [
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "travel_type": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "student",
+              "adult"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Type of passenger. Use 'student' for 18+ Student Oyster Card holders.",
+        "title": "Travel Type"
+      }
+    },
+    "required": [
+      "end_zone"
+    ],
+    "title": "CheckTransportCostInput",
+    "type": "object"
+  },
+  "get_transport_info": {
+    "additionalProperties": false,
+    "properties": {
+      "query_type": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "auto",
+              "journey",
+              "fare",
+              "line_status",
+              "travelcard"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "auto",
+        "description": "What to look up. 'auto' infers it from user_query.",
+        "title": "Query Type"
+      },
+      "from_location": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "",
+        "description": "Journey start: station, postcode, place or address.",
+        "title": "From Location"
+      },
+      "to_location": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "",
+        "description": "Journey destination: station, postcode, place or address.",
+        "title": "To Location"
+      },
+      "line": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "",
+        "description": "Tube/rail line name for a status check (e.g. 'Victoria'). Empty = all lines.",
+        "title": "Line"
+      },
+      "end_zone": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 6
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Furthest London fare zone for a Travelcard (2-6).",
+        "title": "End Zone"
+      },
+      "travel_type": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "adult",
+              "student"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "adult",
+        "description": "Passenger type for Travelcard pricing.",
+        "title": "Travel Type"
+      },
+      "user_query": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "",
+        "description": "Original user question (used to auto-infer query_type).",
+        "title": "User Query"
+      }
+    },
+    "title": "GetTransportInfoInput",
+    "type": "object"
+  },
+  "recall_memory": {
+    "additionalProperties": false,
+    "properties": {
+      "query": {
+        "description": "what to recall about the user",
+        "title": "Query",
+        "type": "string"
+      },
+      "n": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": 6,
+        "description": "max number of memories to return",
+        "title": "N"
+      },
+      "user_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "current user identity (REQUIRED for per-user memory; injected by the agent runtime)",
+        "title": "User Id"
+      },
+      "session_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "default",
+        "description": "current conversation identity",
+        "title": "Session Id"
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "title": "RecallMemoryInput",
+    "type": "object"
+  },
+  "remember": {
+    "additionalProperties": false,
+    "properties": {
+      "content": {
+        "description": "the durable fact to remember about the user",
+        "title": "Content",
+        "type": "string"
+      },
+      "kind": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "semantic",
+        "description": "episodic, semantic, or reflection",
+        "title": "Kind"
+      },
+      "user_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "current user identity (REQUIRED for per-user memory; injected by the agent runtime)",
+        "title": "User Id"
+      },
+      "session_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "default",
+        "description": "current conversation identity",
+        "title": "Session Id"
+      }
+    },
+    "required": [
+      "content"
+    ],
+    "title": "RememberInput",
+    "type": "object"
+  },
+  "ask_user": {
+    "additionalProperties": false,
+    "properties": {
+      "question": {
+        "description": "the clarifying question to show the user, in the user's language",
+        "title": "Question",
+        "type": "string"
+      },
+      "clarification_kind": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "missing_area",
+              "soft_criteria",
+              "other"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "other",
+        "description": "what kind of clarification this is",
+        "title": "Clarification Kind"
+      },
+      "missing_fields": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": [],
+        "description": "required criteria fields still missing",
+        "title": "Missing Fields"
+      },
+      "missing_optional_fields": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": [],
+        "description": "optional criteria fields still missing",
+        "title": "Missing Optional Fields"
+      }
+    },
+    "required": [
+      "question"
+    ],
+    "title": "AskUserInput",
+    "type": "object"
+  },
+  "compare_or_rank_areas": {
+    "additionalProperties": false,
+    "properties": {
+      "city": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "City to compare areas within (e.g. Manchester, London). Provide this or destination.",
+        "title": "City"
+      },
+      "destination": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "A commute destination (university/workplace, e.g. UCL) whose nearby areas to rank; enables the commute dimension.",
+        "title": "Destination"
+      },
+      "max_commute_minutes": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Optional commute-time cap (minutes) to the destination.",
+        "title": "Max Commute Minutes"
+      },
+      "budget_hint": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "type": "object",
+            "properties": {
+              "amount": {
+                "type": "number",
+                "description": "budget amount in GBP"
+              },
+              "period": {
+                "type": "string",
+                "enum": [
+                  "week",
+                  "month"
+                ],
+                "description": "budget period"
+              }
+            }
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Optional budget used for the budget-match rate and value scoring.",
+        "title": "Budget Hint"
+      },
+      "priorities": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "string",
+              "enum": [
+                "value",
+                "commute",
+                "safety",
+                "amenities"
+              ]
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": [
+          "value",
+          "commute"
+        ],
+        "description": "Ranking priorities, leading one weighted heaviest. safety/amenities are excluded when no cheap data is available.",
+        "title": "Priorities"
+      },
+      "candidate_areas": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Optional explicit areas to compare; when absent, candidates are generated from the destination/city.",
+        "title": "Candidate Areas"
+      },
+      "limit": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": 8,
+        "description": "Maximum areas to return (default 8).",
+        "title": "Limit"
+      },
+      "reply_language": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "zh",
+              "en"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Language for user-facing strings ('zh' or 'en').",
+        "title": "Reply Language"
+      }
+    },
+    "title": "CompareOrRankAreasInput",
+    "type": "object"
+  }
+}

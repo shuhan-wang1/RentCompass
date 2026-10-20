@@ -1,0 +1,15 @@
+{
+  "at": 1792416402.939361,
+  "only_isolated_test_paths_removed": [
+    "student/student-storage.json",
+    "professional/professional-private-storage.json",
+    "family/family-live-storage.json",
+    "private/",
+    "runtime/*"
+  ],
+  "private_env_and_cookies_removed": true,
+  "isolated_auth_checkpoint_memory_and_cache_databases_removed": true,
+  "public_report_contains_no_browser_cookie_store": true,
+  "source_workspace_and_production_data_preserved": true,
+  "rerun_note": "Live harness requires freshly provisioned private configuration and new signed guest sessions; archived recovery results refer to the completed isolated run."
+}

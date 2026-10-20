@@ -1,0 +1,314 @@
+RentCompass
+EN
+中文
+CONVERSATIONS
+New
+I'm moving to London for a job near Bank…
+just now
+G
+Guest
+AI Assistant
+
+London Rental Intelligence
+
+I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?
+Edit message
+ALEX
+
+I can help with the commute side of your search, the information provided contains only a commute calculation for Lewisham. It does not contain any actual property listings, so I cannot show you any flats, rents, or addresses — inventing them would be misleading.
+
+What the data does confirm
+
+Commute from Lewisham to Bank station (TfL Journey Planner)
+
+Total journey time: which is within your 45-minute limit.
+Route: walk to Lewisham Clock Tower, bus 129 to Lewisham Station, walk to Lewisham Rail Station, Southeastern national rail to London Cannon Street, walk to 1 Queen Victoria Street.
+Changes: 1 interchange.
+This is the fastest itinerary the TfL Journey Planner returned for these two points, including walking legs and interchanges.
+
+What is missing
+
+No Lewisham property listings were returned, so I cannot confirm whether any self-contained one-bedroom flat there falls within your £1,850 per month rent cap.
+No Stratford commute calculation was returned, so I cannot confirm the journey time from Stratford to Bank.
+No Stratford listings were returned either.
+Because there are no rent figures in the data, I cannot calculate rent plus commuting against your £2,150 per month ceiling. That figure is unavailable from what I have.
+
+How to proceed
+
+Ask me to run the Stratford to Bank commute so we can compare both areas against your 45-minute limit.
+For actual one-bedroom listings in Lewisham and Stratford at up to £1,850 per month, check rightmove.co.uk and zoopla.co.uk directly, or ask me to search again — I will only present real listings that come back.
+Once we have real rents, I can help you work out whether rent plus a monthly travel cost stays within £2,150. For live fares on the Lewisham to Bank route, just ask and I can pull them from TfL.
+
+Would you like me to check the Stratford commute next?
+
+Please double-check the exact prices against the source listing.
+
+Note: some commute claims could not be verified and have been removed from this answer.
+
+Branch from here
+Please search the rental listings in both Lewisham and Stratford for those requirements. I'd also like to compare the two areas for my three-day-a-week Bank commute: check the journey time, PAYG versus a Travelcard, and weekly and monthly transport cost. Please keep the £1,850 rent limit separate from the £2,150 rent-and-commute limit, and tell me what you could actually verify.
+Edit message
+ALEX
+
+I can help with the commute and area comparison, the data I have does not contain any actual property listings. There are no individual flats, addresses, or per-property rents in what was returned, so I cannot show you specific one-bedroom flats in Lewisham or Stratford. Inventing them would be misleading. What I can do is give you verified area-level rent statistics, a measured commute, and transport costs, and tell you exactly what remains unverified.
+
+1. Rental listings: what I could and could not verify
+
+The search returned area-level rent statistics from a cached listings source (OnTheMarket listing cache), not individual properties. Critically, these statistics cover mixed cached listings without room-type or bedroom filtering, so they are not specific to self-contained one-bedroom flats.
+
+Lewisham
+
+Rent range across cached listings: £1,100 to £10,000
+Median: £2,000
+Sample size: 30 listings
+Share of cached listings under your £1,850 rent limit: 36.7%
+
+Stratford
+
+Rent range across cached listings: £900 to £3,850
+Median: £2,317.50
+Sample size: 30 listings
+Share of cached listings under your £1,850 rent limit: 16.7%
+
+So on the rent-only £1,850 limit, Lewisham looks materially more achievable than Stratford, but neither figure confirms a one-bedroom flat at that price. The freshness figure refers to when the cache was fetched, not verification that a price or availability is current. To see real, current one-bedroom listings you would need to check rightmove.co.uk or zoopla.co.uk directly.
+
+2. Commute to Bank station, three days a week
+
+Lewisham to Bank station (TfL Journey Planner): 32 minutes total, within your 45-minute limit. The fastest itinerary returned was: walk to Lewisham Clock Tower, bus 108 to Lewisham Station, walk to Lewisham Rail Station, Southeastern rail to London Bridge, walk to London Bridge, bus 133 to Bank Station / King William Street, walk to 1 Queen Victoria Street. That is two changes.
+
+Stratford: the area comparison gives an area-level commute of 38 minutes to Bank. This is an area reference point, not a verified door-to-door route for any specific home, and I do not have a leg-by-leg itinerary for it in the data. It is within your 45-minute limit on that area-level basis.
+
+Note that both commute figures are area reference points. An actual flat's commute will depend on its exact address.
+
+3. Transport cost: PAYG versus Travelcard
+
+The transport data returned a Travelcard price for Zone 1-3, Adult, based on an estimated zone basis from postcode district (Lewisham approximately Zone 3 to Bank Zone 1). This is a zonal price table, not verified coverage of the named stations or the full journey.
+
+Weekly Travelcard: £52.50
+Monthly Travelcard: £201.60
+Daily cap (pay-as-you-go): £10.50
+
+The source notes that a student 30% discount applies to weekly and monthly Travelcards but not to pay-as-you-go. I have not applied that discount because the data does not confirm your eligibility; if you are a registered student, the discounted weekly and monthly figures would be lower than those shown, but I cannot state the discounted amounts from this data.
+
+For a three-day-a-week commute, pay-as-you-go is capped at £10.50 per day, so three capped days would be £31.50 per week (an explicit calculation from the daily cap). That compares with £52.50 for a weekly Travelcard. However, the daily cap figure is a zonal cap, and whether your specific journeys hit that cap depends on the actual fares, which are not in the data. I would treat the PAYG comparison as indicative only.
+
+I do not have a Stratford-specific transport price in the data, so I cannot give you a verified Stratford Travelcard or PAYG figure. Stratford is generally in a different zone band, but I will not state a price I cannot source.
+
+4. Keeping your two limits separate
+
+Rent-only limit of £1,850: assessed above using the cached rent statistics. Lewisham 36.7% of cached listings under budget; Stratford 16.7%.
+Rent-plus-commute limit of £2,150: I can only partially assess this. Using the monthly Travelcard of £201.60, the rent headroom would be £2,150 minus £201.60, which is £1,948.40 per month (an explicit calculation). That is above your £1,850 rent limit, so the rent limit is the binding constraint if you buy a monthly Travelcard. Using the weekly Travelcard of £52.50, four weeks would be £210.00 (an explicit calculation), leaving £1,940.00 of rent headroom, again above £1,850. I have not combined these with any specific property rent because no property rents were returned.
+
+5. What I could actually verify, summarised
+
+Verified from the data
+
+Lewisham to Bank commute of 32 minutes via a specific TfL itinerary with two changes.
+Area-level commute of 38 minutes for Stratford to Bank (area reference point only).
+Zone 1-3 Adult Travelcard at £52.50 weekly and £201.60 monthly, and a £10.50 daily cap, from TfL's 2026 fare table, on an estimated zone basis.
+Area-level rent statistics for both areas from a cached listings source, mixed room types, 30 listings each.
+
+Not verified
+
+Any individual one-bedroom flat, its address, or its rent.
+That any listing is currently available or priced as cached.
+Bedroom- or room-type-specific rents.
+A Stratford-specific transport price.
+Door-to-door commute for any specific property.
+Your eligibility for the student Travelcard discount.
+
+If you would like, I can pull live TfL journey and fare details for a specific Stratford address once you have a candidate flat, so the commute comparison is like-for-like. For actual one-bedroom listings within £1,850, rightmove.co.uk and zoopla.co.uk are the places to search directly.
+
+Please double-check the exact prices against the source listing.
+
+Note: some commute claims could not be verified and have been removed from this answer.
+
+The area comparison uses mixed cached listings without room-type or bedroom filtering; budget matching covers rent only, freshness describes the cache fetch time and availability is not verified live, and commute figures refer to area reference points, not individual homes.
+
+Branch from here
+Search: Lewisham | ≤£1850/mo | 1 bed | ≤45min to Bank station, London
+Edit message
+ALEX
+No listing is both fully eligible and verified.
+
+Excluded / does not meet:
+
+Bonfield Road, London, SE13: alternative is outside the declared hard result set; monthly price 1875 exceeds budget 1850
+George Hudson Tower, 28 High Street, London, E15: alternative is outside the declared hard result set; monthly price 2000 exceeds budget 1850
+
+Not verified:
+
+High Street, Stratford, E15: cannot verify the commute condition
+Cressingham Road, London, SE13: cannot verify the commute condition
+Deanery Road, London, E15: cannot verify the commute condition
+Dermody Road, Hithergreen, SE13: cannot verify the commute condition
+Rick Roberts Way, London, E15: cannot verify the commute condition
+Molesworth Street, London, SE13: cannot verify the commute condition
+Lee High Road, London, SE13: cannot verify the commute condition
+Station Road, Lewisham: cannot verify the commute condition
+Cedars Close, Belmont Hill, Lewisham, London, SE13: cannot verify the commute condition
+Radford Road, London, SE13: cannot verify the commute condition
+
+These listings are cached; prices and availability may have changed. Confirm with the agent.
+
+Branch from here
+I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?
+Edit message
+ALEX
+
+I need to clear up one thing before I search, because your budget has come through two different ways and I cannot pick one for you.
+
+The conflict
+
+£1,850 per year — this is how one of your earlier messages was recorded.
+£1,850 per month — this is what you have said in your other messages, including this one.
+
+These differ by about 12x, so they cannot both be the rent ceiling. I will not assume the monthly figure replaces the yearly one, and I will not average them or substitute a third number.
+
+Which applies?
+
+£1,850 per month (rent ceiling), with rent plus commuting capped at £2,150 per month — this is what your latest message states, and it is consistent with a London one-bedroom search.
+£1,850 per year — if that is genuinely what you meant, the search will return essentially nothing in Lewisham or Stratford, and I would want to confirm the figure with you.
+
+Once you confirm, I will run the search for a self-contained one-bedroom flat in Lewisham or Stratford, and I will keep the £1,850 rent ceiling separate from the £2,150 rent-plus-commute ceiling. I will also tell you plainly which parts I could verify and which I could not — for example, a cached listing price is a recorded price, not a live confirmation of availability or current asking rent.
+
+One note on what I can and cannot do: I can search real listings, check area safety and nearby amenities, and pull live London transport data from TfL (journey times, PAYG fares, Travelcard prices, line status). I cannot book viewings, sign contracts, or make payments on your behalf.
+
+So — £1,850 per month, or £1,850 per year?
+
+Note: some commute claims could not be verified and have been removed from this answer.
+
+Branch from here
+The rent limit is £1,850 per month, not per year; all my earlier figures were monthly. For the Bonfield Road flat I've selected, please open its recorded listing details and verify the rent, bedroom count and whether it is a self-contained whole flat. Does this exact property meet my current requirements? Please distinguish recorded details from anything you have actually verified as current.
+Edit message
+ALEX
+
+Bonfield Road, London, SE13 — verification against your £1,850/month limit
+
+Recorded details (from the cached listing snapshot)
+
+Rent: £1,875 pcm
+Bedrooms: 1
+Property type: 1 bed Flat
+Address: Bonfield Road, London, SE13
+Description: "1 bedroom flat to rent in Bonfield Road, London, SE13"
+Amenities noted: No Agent Fees, Property Reference Number: 3075081
+Available from: Contact agent
+Listing: https://www.onthemarket.com/details/20567130/
+
+What I have actually verified as current
+
+Nothing.
+
+This lookup returned a cached snapshot only — it did not contact or refresh the listing.
+
+The recorded price and availability are explicitly flagged as not verified as live/current, so treat them as indicative and confirm with the letting agent before relying on them.
+
+Does it meet your current requirements?
+
+Rent limit £1,850 per month: No, on the recorded figure.
+
+At £1,875 pcm it is £25 per month over your limit — a small overshoot, but still over.
+
+Bedroom count: Recorded as 1 bedroom, which matches a one-bedroom requirement.
+Self-contained whole flat: The listing describes it as a "1 bed Flat" to rent, which is consistent with a self-contained whole flat rather than a room in a shared house.
+
+However, the snapshot does not contain an explicit statement confirming exclusive use of the whole property (no mention of a private kitchen or bathroom, and the room-type analysis flags no private kitchen).
+
+So this is a reasonable inference from the property type, not a verified fact — ask the agent to confirm it is a self-contained flat let on an exclusive basis.
+
+Bottom line
+
+On the recorded details, this exact property does not meet your £1,850 monthly limit (it is £25 pcm over) and its one-bedroom, whole-flat character looks right but is not independently confirmed.
+
+If you would like, I can look for other one-bedroom flats in Lewisham or nearby within £1,850 pcm.
+
+The listing details are cached; current price and availability were not verified live. Confirm with the agent.
+
+Returned listing details: Bonfield Road, London, SE13; £1,875 pcm; 1 bed Flat.
+
+Reported features: No Agent Fees, Property Reference Number: 3075081.
+
+Availability: Contact agent. Confirm current availability with the agent.
+
+These listings are cached; prices and availability may have changed. Confirm with the agent.
+
+Branch from here
+Focusing on 1 property
+Clear all
+Bonfield Road, London, S...
+Near UCL
+Safe areas
+Rent stats
+Listings
+Search
+Saved
+1
+Search criteria
+Area
+*
+Lewisham
+×
+Stratford
+×
+Budget
+per month
+per week
+Bedrooms
+Any
+Studio
+1
+2
+3
+4
+5
+6
+At least this many bedrooms
+Room type
+Any
+Whole property
+Studio
+En-suite room
+Shared room
+Commute to
+Max commute (min)
+I don't commute
+Move-in date
+YYYY-MM-DD
+Search
+5
+#1
+Lewisham
+Bonfield Road, London, SE13
+£1875/month
+~42 min to Bank station, London (estimated, unverified)
+Over Budget
+Does not meet these criteria
+alternative is outside the declared hard result set
+monthly price 1875 exceeds budget 1850
+monthly travel cost is not verified for this listing, destination and attendance
+commute evidence is missing
+Live availability has not been verified.
+Move-in date: contact agent
+1 bedroom flat to rent in Bonfield Road, London, SE13 (estimated from coordinates: ~42 min to Bank station, London, not a verified journey time)
+View Deal
+Map
+Ask AI
+5
+#2
+Stratford
+George Hudson Tower, 28 High Street, London, E15
+£2000/month
+~35 min to Bank station, London (estimated, unverified)
+Over Budget
+Does not meet these criteria
+alternative is outside the declared hard result set
+monthly price 2000 exceeds budget 1850
+monthly travel cost is not verified for this listing, destination and attendance
+commute evidence is missing
+Live availability has not been verified.
+Move-in date: contact agent
+1 bedroom flat to rent in George Hudson Tower, 28 High Street, London, E15 (estimated from coordinates: ~35 min to Bank station, London, not a verified journey time)
+View Deal
+Map
+Ask AI

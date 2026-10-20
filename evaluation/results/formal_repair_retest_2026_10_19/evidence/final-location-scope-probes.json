@@ -1,0 +1,211 @@
+{
+  "layer": "direct_registry_after_final_persona_budget_exhausted_not_a_new_ui_turn",
+  "records": [
+    {
+      "tool": "get_weather",
+      "args": {
+        "location": "Stratford"
+      },
+      "result": {
+        "success": true,
+        "data": {
+          "success": true,
+          "weather_type": "current",
+          "source": "Open-Meteo",
+          "timezone": "Europe/London",
+          "valid_at": "2026-10-19T14:00",
+          "location": "Stratford, London",
+          "requested_location": "Stratford",
+          "canonical_location": "Stratford, London",
+          "latitude": 51.541289,
+          "longitude": -0.0035472,
+          "temperature": 12.3,
+          "condition": "Overcast",
+          "humidity": 72,
+          "wind_speed": 9.7,
+          "uv_index": 0.65,
+          "feels_like": 10.2,
+          "rainfall_chance": null,
+          "recommendation": "未报告降水，外出前可再次核对天气",
+          "current_temp": 12.3
+        },
+        "error": null,
+        "execution_time_ms": 317.4114227294922,
+        "tool_name": "get_weather",
+        "version": "1",
+        "idempotency_key": null,
+        "outcome": "complete"
+      },
+      "seconds": 0.319
+    },
+    {
+      "tool": "get_transport_info",
+      "args": {
+        "query_type": "journey",
+        "from_location": "Tennyson Road, Stratford",
+        "to_location": "King's Cross, London",
+        "date": "2026-10-20",
+        "time": "14:00",
+        "time_is": "departure"
+      },
+      "result": {
+        "success": true,
+        "data": {
+          "success": true,
+          "query_type": "journey",
+          "coverage": "london",
+          "from": {
+            "input": "Tennyson Road, Stratford",
+            "resolved_station": "Stratford High Street DLR Station",
+            "naptan": "940GZZDLSHS"
+          },
+          "to": {
+            "input": "King's Cross, London",
+            "resolved_station": "King's Cross St. Pancras Underground Station",
+            "naptan": "940GZZLUKSX"
+          },
+          "duration_minutes": 26,
+          "changes_count": 2,
+          "route_summary": "Dlr DLR to Stratford DLR Station (1 min) -> Elizabeth-line Elizabeth line to Liverpool Street Station (8 min) -> Walk to Moorgate Underground Station (5 min) -> Tube Northern to King's Cross St. Pancras Underground Station (6 min)",
+          "route_legs": [
+            {
+              "mode": "dlr",
+              "lines": [
+                "DLR"
+              ],
+              "duration_minutes": 1,
+              "summary": "DLR to Stratford DLR Station",
+              "from": "Stratford High Street DLR Station",
+              "to": "Stratford DLR Station"
+            },
+            {
+              "mode": "elizabeth-line",
+              "lines": [
+                "Elizabeth line"
+              ],
+              "duration_minutes": 8,
+              "summary": "Elizabeth line to Liverpool Street Station",
+              "from": "Stratford (London) Rail Station",
+              "to": "Liverpool Street Station"
+            },
+            {
+              "mode": "walking",
+              "lines": [],
+              "duration_minutes": 5,
+              "summary": "Walk to Moorgate Station",
+              "from": "Liverpool Street Station",
+              "to": "Moorgate Underground Station"
+            },
+            {
+              "mode": "tube",
+              "lines": [
+                "Northern"
+              ],
+              "duration_minutes": 6,
+              "summary": "Northern line to King's Cross St.Pancras",
+              "from": "Moorgate Underground Station",
+              "to": "King's Cross St. Pancras Underground Station"
+            }
+          ],
+          "selected_itinerary_id": "tfl:e46d637241fd3fcf",
+          "fastest_journey": {
+            "itinerary_id": "tfl:e46d637241fd3fcf",
+            "duration_minutes": 26,
+            "changes_count": 2,
+            "route_summary": "Dlr DLR to Stratford DLR Station (1 min) -> Elizabeth-line Elizabeth line to Liverpool Street Station (8 min) -> Walk to Moorgate Underground Station (5 min) -> Tube Northern to King's Cross St. Pancras Underground Station (6 min)",
+            "route_legs": [
+              {
+                "mode": "dlr",
+                "lines": [
+                  "DLR"
+                ],
+                "duration_minutes": 1,
+                "summary": "DLR to Stratford DLR Station",
+                "from": "Stratford High Street DLR Station",
+                "to": "Stratford DLR Station"
+              },
+              {
+                "mode": "elizabeth-line",
+                "lines": [
+                  "Elizabeth line"
+                ],
+                "duration_minutes": 8,
+                "summary": "Elizabeth line to Liverpool Street Station",
+                "from": "Stratford (London) Rail Station",
+                "to": "Liverpool Street Station"
+              },
+              {
+                "mode": "walking",
+                "lines": [],
+                "duration_minutes": 5,
+                "summary": "Walk to Moorgate Station",
+                "from": "Liverpool Street Station",
+                "to": "Moorgate Underground Station"
+              },
+              {
+                "mode": "tube",
+                "lines": [
+                  "Northern"
+                ],
+                "duration_minutes": 6,
+                "summary": "Northern line to King's Cross St.Pancras",
+                "from": "Moorgate Underground Station",
+                "to": "King's Cross St. Pancras Underground Station"
+              }
+            ],
+            "source": "TfL Unified API Journey Planner",
+            "fare_available": false,
+            "fare_basis": null
+          },
+          "cheapest_journey": null,
+          "source": "TfL Unified API Journey Planner",
+          "from_cache": false,
+          "cache_status": "miss",
+          "planned_for": "2026-10-20T14:00:00+01:00",
+          "journey_time": {
+            "timezone": "Europe/London",
+            "time_basis": "user_requested",
+            "date": "2026-10-20",
+            "time": "14:00",
+            "time_is": "departure",
+            "requested_at": "2026-10-20T14:00:00+01:00"
+          },
+          "stations_used": "Stratford High Street DLR Station -> King's Cross St. Pancras Underground Station",
+          "fare_available": true,
+          "fare_gbp": 3.6,
+          "fare_pence": 360,
+          "fare_display": "£3.60",
+          "fare_basis": "station_pair",
+          "fare_itinerary_id": null,
+          "fare_matches_itinerary": false,
+          "station_fare": {
+            "off_peak_gbp": 3.1,
+            "peak_gbp": 3.6,
+            "from_naptan": "940GZZDLSHS",
+            "to_naptan": "940GZZLUKSX",
+            "source": "TfL Single Fare Finder",
+            "fare_basis": "station_pair",
+            "note": "Station-pair single fares; not verified for the selected journey's route or timing."
+          },
+          "fare_off_peak_gbp": 3.1,
+          "fare_off_peak_display": "£3.10",
+          "fare_note": "Adult pay-as-you-go single: £3.60 peak / £3.10 off-peak (contactless / Oyster, TfL Single Fare Finder). This is a station-pair fare, not a fare confirmed for the selected itinerary; do not combine it with that itinerary's duration as a verified time/price offer."
+        },
+        "error": null,
+        "execution_time_ms": 3984.8763942718506,
+        "tool_name": "get_transport_info",
+        "version": "1",
+        "idempotency_key": null,
+        "outcome": "complete"
+      },
+      "seconds": 3.985
+    }
+  ],
+  "checks": {
+    "bare_stratford_weather_success": true,
+    "london_canonical_location": true,
+    "london_coordinates": true,
+    "no_persona_model_requests": true
+  },
+  "passed": true
+}

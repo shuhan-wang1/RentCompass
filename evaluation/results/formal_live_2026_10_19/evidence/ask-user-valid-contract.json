@@ -1,0 +1,29 @@
+{
+  "success": true,
+  "data": {
+    "success": true,
+    "status": "ask_user",
+    "question": "Which budget basis applies?",
+    "clarification_kind": "other",
+    "missing_fields": [
+      "budget_basis"
+    ],
+    "missing_optional_fields": [],
+    "options": [
+      {
+        "label": "Whole home total",
+        "value": "whole_total"
+      },
+      {
+        "label": "Per person",
+        "value": "per_person"
+      }
+    ]
+  },
+  "error": null,
+  "execution_time_ms": 0.11658668518066406,
+  "tool_name": "ask_user",
+  "version": "1",
+  "idempotency_key": null,
+  "outcome": "complete"
+}

@@ -275,6 +275,69 @@ def scrub_internal_vocabulary(text: str, reply_language: str = "en") -> str:
     return body
 
 
+# "Do you store anything about me when I haven't asked you to remember it? Be honest." was
+# answered "No… I won't save anything silently" while automatic memory had already stored an
+# episodic log, semantic facts and reflections (R2-19). For this question class the answer
+# carries a fixed, truthful description of what the system does, whatever the model said.
+_AUTOMATIC_STORAGE_QUESTION = re.compile(
+    r"\b(?:store|stor(?:e|ing)|save|saving|keep|keeping|remember|record|log|track)\w*\b"
+    r"[^.?!]{0,80}(?:haven.t asked|have not asked|didn.t ask|did not ask|without (?:my )?asking|"
+    r"without being asked|unless I ask|automatic\w*|silently|by default|in the background|be honest)"
+    r"|(?:没让你|没有让你|未经|自动|偷偷|默认).{0,20}(?:存|保存|记住|记录)|(?:存|保存|记住|记录).{0,20}(?:自动|偷偷|没让你)",
+    re.IGNORECASE)
+AUTOMATIC_MEMORY_DISCLOSURE_EN = (
+    "How memory works here: besides anything you explicitly ask me to remember, this service "
+    "automatically keeps a short log of your requests, extracts durable facts you state (such "
+    "as budget, areas or commute) and forms its own inferences about your priorities, across "
+    "conversations. You can ask what I have, or ask me to forget it.")
+AUTOMATIC_MEMORY_DISCLOSURE_ZH = (
+    "关于记忆的说明：除了你明确要求我记住的内容外，本服务还会自动保存你的请求摘要、提取你说过的长期信息"
+    "（如预算、区域、通勤），并形成对你偏好的推断，跨对话保留。你可以随时询问我保存了什么，或要求我删除。")
+
+
+def disclose_automatic_memory(text: str, message: str, reply_language: str = "en") -> str:
+    """Append the truthful automatic-memory description to an answer about silent storage."""
+    body = str(text or "")
+    if not _AUTOMATIC_STORAGE_QUESTION.search(str(message or "")[:2000]):
+        return body
+    zh = str(reply_language or "").lower().startswith("zh")
+    note = AUTOMATIC_MEMORY_DISCLOSURE_ZH if zh else AUTOMATIC_MEMORY_DISCLOSURE_EN
+    if note in body:
+        return body
+    return f"{body.rstrip()}\n\n{note}" if body.strip() else note
+
+
+# A remembered "my max budget is £1,800/month" was in the memory block, yet a new
+# conversation's search answered "You haven't given a budget…" and listed £2,751-£4,400 homes
+# (R2-21). The minimal guarantee: an answer never says no budget was given while a saved
+# budget fact exists; it names the saved one and offers to apply it.
+_NO_BUDGET_CLAIM = re.compile(
+    r"\b(?:haven.t|have\s+not|didn.t|did\s+not|hasn.t|has\s+not)\s+(?:yet\s+)?(?:given|set|mentioned|told\s+me|"
+    r"specified|shared|provided)\s+(?:me\s+)?(?:a\s+|any\s+|your\s+)?(?:\w+\s+)?budget|"
+    r"\bno\s+budget\s+(?:was\s+|has\s+been\s+|is\s+)?(?:given|set|specified|mentioned|provided)|"
+    r"\bwithout\s+(?:a|any)\s+budget\b|没有(?:提供|设置|给出|说明)?预算|未(?:提供|设置|给出)预算", re.I)
+_SAVED_BUDGET = re.compile(
+    r"^\[FACT\][^\n]*?\bbudget\b[^\n]*?(£\s?\d[\d,]*(?:\.\d+)?(?:\s*(?:/\s*month|per\s+month|a\s+month|pcm|/\s*week|per\s+week|pw))?)|"
+    r"^\[FACT\][^\n]*?(£\s?\d[\d,]*(?:\.\d+)?(?:\s*(?:/\s*month|per\s+month|a\s+month|pcm))?)[^\n]*?\bbudget\b",
+    re.I | re.M)
+
+
+def acknowledge_remembered_budget(text: str, memory_block: str, max_budget=None,
+                                  reply_language: str = "en") -> str:
+    body = str(text or "")
+    if max_budget or not _NO_BUDGET_CLAIM.search(body):
+        return body
+    match = _SAVED_BUDGET.search(str(memory_block or ""))
+    if not match:
+        return body
+    amount = " ".join((match.group(1) or match.group(2) or "").split())
+    zh = str(reply_language or "").lower().startswith("zh")
+    note = (f"补充：你之前保存过预算 {amount}。如需按这个预算重新搜索，请告诉我。" if zh else
+            f"Note: you saved a budget of {amount} earlier. Say if you want me to apply it "
+            "to this search.")
+    return body if note in body else f"{body.rstrip()}\n\n{note}"
+
+
 def _mark_announced_stub(text: str, reply_language: str) -> str:
     """Append the explicit marker once, keeping whatever the model did produce."""
     marker = (ANNOUNCED_TOOL_STUB_MARKER_ZH
@@ -3205,6 +3268,12 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             text = _mark_announced_stub(text, reply_language)
 
         text = await _validate_commute_off_loop(text, state)
+        text = disclose_automatic_memory(
+            text, (state.get("extracted_context") or {}).get("current_message")
+            or _current_message(state.get("user_query") or ""), reply_language)
+        text = acknowledge_remembered_budget(
+            text, state.get("memory_context") or "",
+            (state.get("accumulated_search_criteria") or {}).get("max_budget"), reply_language)
         memory_contract = state.get("memory_write_contract") or {}
         if memory_contract.get("requested"):
             lang = _reply_language_from_ctx(

@@ -150,7 +150,12 @@ MEMORY_CONFIRM_RULE = (
 MEMORY_IN_CONTEXT_RULE = (
     "MEMORY CONTEXT: Use the WHAT I REMEMBER block when it is present. "
     + NO_RECALL_MARKER + " merely to repeat a fact it contains. If the block is empty "
-    "or the needed remembered fact is absent, call recall_memory."
+    "or the needed remembered fact is absent, call recall_memory. "
+    + "AUTOMATIC MEMORY (state it truthfully when asked): besides what the user explicitly asks "
+    "you to remember, this service automatically keeps a short log of the user's requests, "
+    "extracts durable facts they state (budget, areas, commute, needs) and forms its own "
+    "inferences, across conversations, without being asked. Never tell the user nothing is "
+    "stored unless they asked you to remember it."
 )
 
 # Trust is a role property, not a delimiter property.  Runtime data is deliberately sent in

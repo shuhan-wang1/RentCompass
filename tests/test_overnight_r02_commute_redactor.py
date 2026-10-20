@@ -360,3 +360,125 @@ def test_r2_01_sentence_scope_and_route_fallback_stay_linear():
     out = validate_commute_response(answer, state)
     assert time.perf_counter() - started < 2.0
     assert "99 minutes" not in out
+
+
+# ── the exact pre-validation model texts of the live acceptance (checkpoint DB) ─────────
+_LIVE_A = (
+    "Here is the journey for tomorrow, Tuesday 20 October 2026, departing King's Cross at 09:00 "
+    "(live data from the official TfL Journey Planner):\n\nFastest option: 23 minutes, 1 change\n"
+    "- Northern line from King's Cross St. Pancras to Moorgate (6 min)\n"
+    "- Walk to Liverpool Street (5 min)\n"
+    "- Elizabeth line from Liverpool Street to Canary Wharf (7 min)\n"
+    "- Walk to Canary Wharf station (5 min)\n\n"
+    "Fare: adult pay-as-you-go single on this station pair is £3.60 at peak times and £3.10 "
+    "off-peak (contactless or Oyster, TfL Single Fare Finder).")
+_LIVE_B = (
+    "From Highgate West Hill, N6 to UCL, the journey is quick and direct.\n\n"
+    "**Journey (TfL Journey Planner, live data)**\n"
+    "- Highgate Underground Station to Goodge Street Underground Station on the Northern line\n"
+    "- About 14 minutes in the tube, no changes\n"
+    "- Adult pay-as-you-go single: £3.30 (contactless or Oyster)\n\n"
+    "Two things to keep in mind:\n"
+    "- The 14 minutes is the tube leg only. It does not include walking from Highgate West Hill "
+    "down to Highgate station, or the short walk from Goodge Street to the UCL main campus on "
+    "Gower Street, so allow extra time for those.")
+_LIVE_C = (
+    "I couldn't get a real journey plan for this one — the TfL planner returned no itinerary for "
+    "King's Cross to Canary Wharf, so I can't give you a measured tube time.\n\n"
+    "What I can give you is an estimate: roughly 34 to 51 minutes, derived from the straight-line "
+    "distance of about 7.8 km and a model fitted to real TfL journeys. That is an estimate, not a "
+    "timetable figure, so treat it as a rough range rather than a journey time.")
+_LIVE_D = (
+    "Here's how the three areas stack up for a 1-bed under £2,200 with a commute to King's Cross.\n\n"
+    "**1. Camden — best overall**\n- Median rent: £2,100/month (range £850–£5,000, 95 listings "
+    "sampled)\n- Commute to King's Cross: about 31 minutes\n\n"
+    "**2. Islington — fastest commute, tightest budget**\n- Median rent: £2,400/month\n"
+    "- Commute to King's Cross: about 14 minutes — by far the quickest\n\n"
+    "**3. Hackney — weakest fit**\n- Median rent: £2,750/month\n"
+    "- Commute to King's Cross: about 41 minutes")
+_LIVE_E = (
+    "I can only help with UK student housing, so I can't search for flats in Paris.\n\n"
+    "If you'd like, I can keep looking in Stratford (or another UK area) — for example, your "
+    "earlier search was 1-bed flats in Stratford under £2,000 pcm with no commute. Want me to run "
+    "that again, or adjust the budget or area?")
+
+
+@pytest.mark.parametrize("answer,state_factory", [
+    (_LIVE_A, lambda: _kx_cw_state()),
+    (_LIVE_B, lambda: _state(
+        "How long is the commute from Highgate West Hill, London N6 to UCL?",
+        _artifact("calculate_commute", {"success": False,
+                                        "error": "无法计算通勤时间（地址解析失败）"}, success=False),
+        _artifact("get_transport_info", dict(_HIGHGATE_UCL_JOURNEY, fare_gbp=3.3,
+                                             fare_display="£3.30")))),
+    (_LIVE_C, lambda: _estimate_state()),
+    (_LIVE_D, lambda: _areas_state()),
+    (_LIVE_E, lambda: _state("Find me a flat in Paris")),
+], ids=["a-kx-cw", "b-highgate", "c-estimate", "d-areas", "e-paris"])
+def test_r2_01_the_live_model_texts_ship_unchanged(answer, state_factory):
+    assert validate_commute_response(answer, state_factory()) == answer
+
+
+# ── R2-25: the inst-B garbling cases (exact model texts) ───────────────────────────────
+def _leg(mode, lines, minutes, to, frm=""):
+    return {"mode": mode, "lines": lines, "duration_minutes": minutes, "summary": "",
+            "from": frm, "to": to}
+
+
+_T5_KX = {
+    "success": True, "query_type": "fare", "coverage": "london",
+    "from": {"input": "Heathrow Terminal 5", "resolved_station": "Heathrow Terminal 5"},
+    "to": {"input": "King's Cross St Pancras",
+           "resolved_station": "King's Cross St. Pancras Underground Station"},
+    "duration_minutes": 42, "changes_count": 2,
+    "route_legs": [_leg("national-rail", ["Heathrow Express"], 20, "London Paddington"),
+                   _leg("bus", ["27"], 2, "Edgware Road"),
+                   _leg("tube", ["Hammersmith & City"], 8,
+                        "King's Cross St. Pancras Underground Station")],
+    "cheapest_journey": {
+        "duration_minutes": 47, "changes_count": 1, "source": "TfL Unified API Journey Planner",
+        "route_legs": [_leg("national-rail", ["Heathrow Express"], 20, "London Paddington"),
+                       _leg("walking", [], 12, "Paddington (H&C Line) Underground Station"),
+                       _leg("tube", ["Hammersmith & City"], 11,
+                            "King's Cross St. Pancras Underground Station")]},
+    "source": "TfL Unified API Journey Planner", "fare_gbp": 30.75,
+}
+_T5_ANSWER = (
+    "I found two TfL journey fares from Heathrow Terminal 5 to King's Cross St Pancras.\n\n"
+    "- **Fastest route, £30.75:** about 42 minutes with 2 changes. It takes the Heathrow Express "
+    "to Paddington (20 min), the 27 bus to Edgware Road (2 min), then the Hammersmith & City line "
+    "to King's Cross St Pancras (8 min).\n"
+    "- **Cheapest route, £29.00:** about 47 minutes with 1 change. It takes the Heathrow Express "
+    "to Paddington (20 min), a 12-minute walk to the Hammersmith & City platforms, then that line "
+    "to King's Cross St Pancras (11 min).\n\n"
+    "Fastest route (42 minutes, £30.75):\n"
+    "- Heathrow Express to London Paddington: 20 minutes\n"
+    "- Bus 27 to Edgware Road: 2 minutes\n"
+    "- Hammersmith & City line to King's Cross St Pancras: 8 minutes")
+
+
+def test_r2_25_the_cheaper_itinerary_and_its_legs_are_evidence():
+    state = _state("What is the fare from Heathrow Terminal 5 to King's Cross off-peak?",
+                   _artifact("get_transport_info", _T5_KX))
+    assert validate_commute_response(_T5_ANSWER, state) == _T5_ANSWER
+    out = validate_commute_response("The cheaper route takes about 52 minutes.", state)
+    assert "52 minutes" not in out
+
+
+def _measured(origin, minutes):
+    return {"success": True, "from_address": origin, "to_address": "Liverpool Street Station, London",
+            "mode": "transit", "duration_minutes": minutes, "basis": "tfl_journey_plan",
+            "route_source": "TfL Journey Planner", "route_legs": []}
+
+
+def test_r2_25_a_comparison_of_two_measured_routes_survives():
+    state = _state("Compare the first two on commute to Liverpool Street and total monthly cost",
+                   _artifact("calculate_commute", _measured("Powerscroft Road, Hackney, London, E5", 36)),
+                   _artifact("calculate_commute", _measured("Kingsland Road, London, E8", 16)))
+    answer = ("- Time cost: Kingsland Road saves about 20 minutes each way.\n"
+              "Kingsland Road is about £50 a month cheaper in total and has a much shorter "
+              "commute, so it comes out ahead on both counts.")
+    assert validate_commute_response(answer, state) == answer
+    wrong = validate_commute_response(
+        "Powerscroft Road has a much shorter commute than Kingsland Road.", state)
+    assert "much shorter commute" not in wrong

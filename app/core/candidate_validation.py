@@ -1170,6 +1170,10 @@ _MONEY_OR_WEATHER_SPAN = re.compile(
     r"(?:\b(?:about|around|roughly|over|under|above|below)\s+)?(?<![\d.])-?\d+(?:\.\d+)?\s*"
     r"(?:°\s*[CF]?|℃|degrees?(?:\s+[CF]\b)?)|"
     r"\btemperatures?\s+(?:\w+\s+){0,2}(?:above|below|around|about|over|under)\s+\w+|"
+    # A DISTANCE is not a travel time: "derived from the straight-line distance of about
+    # 7.8 km" was withdrawn as a commute verdict (R2-01 c).
+    r"(?:\b(?:about|around|roughly|over|under|within|nearly|almost)\s+)?(?<![\d.])\d+(?:\.\d+)?\s*"
+    r"(?:km|kilomet(?:er|re)s?|miles?|mi|metres?|meters?|m)\b|"
     r"(?:预算|租金|月租)(?:以内|之内|范围内|内)|(?<![\d.])\d+\s*(?:度|℃)",
     re.IGNORECASE)
 
@@ -1437,7 +1441,7 @@ def _route_legs(journey: dict) -> list[dict]:
             continue
         modes = [str(line) for line in leg.get("lines") or [] if str(line or "").strip()]
         if str(leg.get("mode") or "").lower() == "walking":
-            modes.append("walk")
+            modes.extend(("walk", "步行", "走路"))
         if not modes:
             continue
         legs.append({"minutes": float(value),
@@ -1574,6 +1578,15 @@ def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
                    "destinations": _place_labels(raw.get("to_address") or raw.get("to")),
                    "minutes": value}
         legs = _route_legs(journey) if value is not None else []
+        # The planner's CHEAPER itinerary for the same pair is part of the same result: "A
+        # cheaper alternative takes 45 minutes with one change" and "Cheapest route, £29.00:
+        # about 47 minutes" quoted it and lost the figure (R2-25).
+        alternative = raw.get("cheapest_journey") if tool == "get_transport_info" else None
+        if value is not None and isinstance(alternative, dict):
+            alt_value = _measured_minutes(alternative)
+            if alt_value is not None and alt_value != value:
+                binding["alt_minutes"] = [alt_value]
+                legs = legs + _route_legs(alternative)
         if legs:
             binding["legs"] = legs
         if estimate:
@@ -1602,6 +1615,8 @@ def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
                 equivalent["minutes"] = value
                 if legs:
                     equivalent["legs"] = legs
+                if binding.get("alt_minutes"):
+                    equivalent["alt_minutes"] = binding["alt_minutes"]
             if estimate:
                 equivalent["estimate"] = sorted(set(equivalent.get("estimate") or []) | set(estimate))
         elif not any(binding == prior for prior in routes):
@@ -1853,14 +1868,20 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
         return False
     destinations = binding.get("destinations") or []
     scope = f"{fragment} {context}"
-    if destinations and not _targets_on_route(fragment, binding, scope):
+    values = _minute_claim_values(fragment)
+    # A clause that names one of the route's legs and quotes exactly that leg's figure is the
+    # leg, whatever it walks TO: "a 12-minute walk to the Hammersmith & City platforms" (R2-25).
+    leg_quote = bool(values) and all(
+        any(abs(value - leg["minutes"]) < 1e-9 for leg in _named_legs(f"{scope} {heading}", binding))
+        for value in values)
+    if destinations and not leg_quote and not _targets_on_route(fragment, binding, scope):
         return False
     if binding.get("minutes") is None:
         return _estimate_is_quoted_as_estimate(fragment, binding, caps, context, sentence_marked)
     if re.search(r"wheelchair|step.free|accessible|轮椅|无障碍|无台阶", fragment, re.I):
         # A fastest itinerary is not an accessibility audit or a personalised travel time.
         return False
-    allowed = {binding["minutes"]} | caps
+    allowed = {binding["minutes"]} | set(binding.get("alt_minutes") or []) | caps
     # A leg's own duration is part of the same measurement, but only for a leg this claim
     # names by line or mode — "(6 min)" attached to "Northern line to Moorgate". A claim
     # about the WHOLE trip may not borrow one: a whole-trip word ("the journey takes 6
@@ -1873,12 +1894,21 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
                   and any(_key_in(_label_key(l), hay) for l in destinations))
     if not (_WHOLE_TRIP_WORD.search(fragment) or _WHOLE_TRIP_WORD.search(heading)
             or end_to_end):
-        for leg in _named_legs(scope, binding):
+        # A leg named in the line's label counts too: "- Heathrow Express to London
+        # Paddington: 20 minutes" (R2-25).
+        for leg in _named_legs(f"{scope} {heading}", binding):
             # A leg ending at an intermediate stop is unambiguous; one ending at the
             # destination only inside an enumerated itinerary.
             if not _arrives_at_destination(leg, binding) or id(binding) in itinerary:
                 allowed.add(leg["minutes"])
-    values = _minute_claim_values(fragment)
+        if id(binding) in itinerary:
+            # Inside an enumerated itinerary, "then that line to King's Cross St Pancras
+            # (11 min)" names the leg by where it arrives (R2-25).
+            target = _TARGET.search(_without_abbreviation_dots(scope))
+            if target:
+                hay_target = _label_key(target.group(1))
+                allowed.update(leg["minutes"] for leg in binding.get("legs") or []
+                               if any(_key_in(place, hay_target) for place in leg["places"]))
     if any(not any(abs(value - permitted) < 1e-9 for permitted in allowed)
            for value in values):
         # A measured pair may also carry the straight-line estimate another tool returned;
@@ -1943,8 +1973,13 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
     for candidate in pool:
         if candidate.get("minutes") is not None:
             pool_figures.add(candidate["minutes"])
+        pool_figures.update(candidate.get("alt_minutes") or [])
         pool_figures.update(candidate.get("estimate") or [])
         pool_figures.update(leg["minutes"] for leg in candidate.get("legs") or [])
+    # "its commute is 20 minutes shorter each way" compares two measured routes (36 vs 16):
+    # the DIFFERENCE of two of this turn's measurements, quoted with a comparative (R2-25).
+    measured = sorted({c["minutes"] for c in pool if c.get("minutes") is not None})[:40]
+    differences = {round(abs(a - b), 2) for i, a in enumerate(measured) for b in measured[i + 1:]}
     lines: list[str] = []
     for line in str(text or "").split("\n"):
         removed_before_line = len(removed)
@@ -1987,6 +2022,18 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             if _claim_is_evidenced(fragment, effective, caps, context=context, heading=heading,
                                    itinerary=itinerary, sentence_marked=sentence_marked):
                 return True
+            values = _minute_claim_values(fragment)
+            if (values and differences and _COMPARATIVE_DIFFERENCE.search(fragment)
+                    and all(round(value, 2) in differences for value in values)):
+                return True
+            if (not values and len(measured) > 1 and effective is not None
+                    and effective.get("minutes") is not None):
+                # "has a much shorter commute" compares this listing's measured route with the
+                # other measured routes of the turn; it holds when the direction is right.
+                if re.search(r"\b(?:shorter|quicker|faster|closer|nearer)\b|更短|更快|更近", fragment, re.I):
+                    return effective["minutes"] == measured[0]
+                if re.search(r"\b(?:longer|slower|further|farther)\b|更长|更慢|更远", fragment, re.I):
+                    return effective["minutes"] == measured[-1]
             if effective is not None or not pool:
                 return False
             values = _minute_claim_values(fragment)
@@ -2073,6 +2120,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 opened = index + 2
         kept: list[str] = []
         dropped_in_sentence = False
+        crossed_sentence = False     # the last withdrawn clause ended its sentence
         sentence_start = 0          # index in ``kept`` where the current sentence starts
         sentence_dropped = False    # something was withdrawn from the current sentence
         inherited = binding
@@ -2120,13 +2168,17 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 claim, inherited, sentence_marked=sentence_marked)
             # A dependent clause after a redacted one restates its verdict without repeating
             # its subject ("…, which is well within your limit"), so it goes with it.
+            # Across a sentence boundary only a dependent VERDICT still leans on the withdrawn
+            # clause ("... 12 minutes. Which is within your limit."); a new sentence such as
+            # "That is an estimate, not a timetable figure" stands on its own (R2-01 c).
+            within = dropped_in_sentence and not crossed_sentence
             if (not drop and dropped_in_sentence and fragment.strip()
                     and ((_CONTINUATION.match(fragment) and _FIT_WORD.search(fragment)
                           and not _evidenced(fragment, inherited,
                                              sentence_marked=sentence_marked))
-                         or _dependent_commute_aside(fragment))):
+                         or (within and _dependent_commute_aside(fragment)))):
                 drop = True
-            if (not drop and dropped_in_sentence and fragment.strip()
+            if (not drop and within and fragment.strip()
                     and _DANGLING_AFTER_DROP.match(fragment)):
                 # "Cheapest route: with the same line pattern." / "Cons - the longest of the
                 # three.": what is left of a sentence whose figure went cannot stand (R1-10).
@@ -2135,6 +2187,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 removed.append(fragment)
                 dropped_in_sentence = True
                 sentence_dropped = True
+                crossed_sentence = bool(_SENTENCE_END.search(separator))
                 if _SENTENCE_END.search(separator):
                     # The sentence ends with the withdrawn clause. What is left of it either
                     # goes whole (a stub) or keeps the full stop, so it does not run on into
@@ -2147,9 +2200,10 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                     # A table cell keeps its column: the row would otherwise shift left.
                     kept.append(" — " + separator)
                 continue  # its trailing separator goes with it
-            if dropped_in_sentence:
+            if within:
                 # "Features: and the listing says ..." - a coordinator left at the front.
                 fragment = _LEADING_COORDINATOR.sub(r"\1", fragment)
+            crossed_sentence = False
             kept.append(fragment + separator)
             if _SENTENCE_END.search(separator):
                 dropped_in_sentence = False
@@ -2194,6 +2248,11 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
         return None
     return result
 
+
+
+_COMPARATIVE_DIFFERENCE = re.compile(
+    r"\b(?:shorter|longer|quicker|faster|slower|less|more|saves?|saving|extra|difference|"
+    r"cuts?|adds?)\b|更短|更长|更快|更慢|节省|省|多出|相差", re.I)
 
 
 def _stub_remnant(text: str) -> bool:

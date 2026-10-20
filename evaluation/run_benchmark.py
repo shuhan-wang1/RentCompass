@@ -283,10 +283,86 @@ def fixture_service_report(declared: Dict[str, int], served: Dict[str, int]) -> 
     }
 
 
+def _offline_search_no_results(kwargs: Optional[dict]) -> Dict[str, Any]:
+    """Offline stand-in for a search_properties call that COMPLETED and matched nothing.
+
+    It keeps the real tool's no-results contract instead of a bare placeholder. Every
+    ``status: no_results`` return in ``core.tools.search_properties`` carries
+    ``search_criteria`` (the criteria the tool searched with) and a ``message`` built by
+    ``_no_results_message``, which names the area and each applied filter. The product's
+    no-results path shows that ``message`` as the answer to a listing request (R1-13).
+    The old stub sent ``search_criteria: {}`` and a ``summary`` with no ``message``, a
+    shape the real tool never returns. So a product that honestly reports the empty
+    search answered "(offline stub) no listings", and A1's ``room_type_match`` text
+    fallback (which looks for "2-bed" in the answer) could not pass.
+
+    The criteria echoed are the ones the product's executor actually sent
+    (``_inject_search_params``), so a product that fails to extract "2-bed" still fails.
+    The bedroom fallback and the message come from the production helpers, never a
+    parallel copy. ``partial`` / ``retrieval_outcome`` match ``_augment`` for a completed
+    search that returned no candidates. Two simplifications, neither of which names a
+    criterion: ``_augment``'s trailing "does not establish that the market is empty"
+    note is not appended, and a call with no area is named neutrally where the real
+    tool would derive one from the commute destination or ask."""
+    from core.tools.search_properties import (  # type: ignore
+        _extract_bedrooms, _has_cjk, _no_results_message)
+
+    kw = kwargs if isinstance(kwargs, dict) else {}
+
+    def _text(value: Any) -> str:
+        return value.strip() if isinstance(value, str) else ""
+
+    current = _text(kw.get("current_message")) or _text(kw.get("user_query"))
+    reply_language = kw.get("reply_language")
+    is_cjk = (reply_language == "zh") if reply_language in ("zh", "en") else _has_cjk(current)
+    areas = [a.strip() for a in kw.get("areas") or []
+             if isinstance(a, str) and a.strip()] if isinstance(kw.get("areas"), list) else []
+    area = _text(kw.get("area")) or _text(kw.get("location")) or (areas[0] if areas else None)
+    no_commute = bool(kw.get("no_commute"))
+    commute_target = None if no_commute else (_text(kw.get("commute_destination")) or None)
+    bedrooms = kw.get("bedrooms")
+    bedrooms_minimum = bool(kw.get("bedrooms_minimum"))
+    if not (isinstance(bedrooms, int) and not isinstance(bedrooms, bool) and 0 <= bedrooms <= 6):
+        beds = _extract_bedrooms(current)
+        bedrooms = beds[0] if beds is not None else None
+        if beds is not None:
+            bedrooms_minimum = beds[0] != beds[1]
+    features = kw.get("property_features")
+    soft = kw.get("accumulated_preferences")
+    criteria = {
+        "area": area,
+        "areas": areas or ([area] if area else []),
+        "commute_destination": commute_target,
+        "no_commute": no_commute,
+        "bedrooms": bedrooms,
+        "bedrooms_minimum": bedrooms_minimum,
+        "budget_period": kw.get("budget_period") or "month",
+        "room_type": kw.get("room_type"),
+        "move_in_date": kw.get("move_in_date"),
+        "destination": commute_target or area,
+        "max_budget": kw.get("max_budget"),
+        "max_travel_time": kw.get("max_commute_time"),
+        "property_features": list(features) if isinstance(features, list) else [],
+        "soft_preferences": list(soft) if isinstance(soft, list) else [],
+    }
+    shown_area = area or ("所需区域" if is_cjk else "the requested area")
+    return {
+        "success": True, "status": "no_results", "total_found": 0,
+        "message": _no_results_message(shown_area, is_cjk, criteria=criteria),
+        "recommendations": [], "search_criteria": criteria,
+        "partial": False, "retrieval_outcome": "no_source_candidates",
+    }
+
+
+def _offline_canned_data(name: str, kwargs: Optional[dict] = None) -> Any:
+    """The offline stub result for ``name``. search_properties is built per call from the
+    call's own criteria; every other tool returns its fixed ``_CANNED_TOOL_DATA`` entry."""
+    if name == "search_properties":
+        return _offline_search_no_results(kwargs)
+    return _CANNED_TOOL_DATA.get(name, {"success": True, "stub": True})
+
+
 _CANNED_TOOL_DATA: Dict[str, Any] = {
-    "search_properties": {"success": True, "status": "no_results", "total_found": 0,
-                          "recommendations": [], "summary": "(offline stub) no listings",
-                          "search_criteria": {}},
     "check_safety": {"address": "(offline stub)", "safety_score": 50,
                      "safety_level": "Unknown", "crime_data": {},
                      "recommendation": "(offline stub) no crime data"},
@@ -1335,8 +1411,11 @@ class CaseRunner:
                 execution_time_ms=0.5,
             )
 
-        def _next_result(name: str) -> Optional[Any]:
-            """Return the exact replay result, or ``None`` for a permitted live call."""
+        def _next_result(name: str, kwargs: Optional[dict] = None) -> Optional[Any]:
+            """Return the exact replay result, or ``None`` for a permitted live call.
+
+            ``kwargs`` are the call's own arguments; the offline search stub echoes them
+            as the criteria it searched with, exactly as the real tool does."""
             item = None
             if name in fixture_queue and fixture_queue[name]:
                 item = fixture_queue[name].pop(0)
@@ -1361,13 +1440,13 @@ class CaseRunner:
                     tool_name=name, execution_time_ms=0.0,
                 )
             if offline:
-                data = _CANNED_TOOL_DATA.get(name, {"success": True, "stub": True})
+                data = _offline_canned_data(name, kwargs)
                 return ToolResult(success=True, data=data, error=None,
                                   tool_name=name, execution_time_ms=0.5)
             return None
 
         async def patched(name, **kwargs):
-            result = _next_result(name)
+            result = _next_result(name, kwargs)
             if result is not None:
                 record(name, result, kwargs, mcp=False)
             else:
@@ -1379,7 +1458,7 @@ class CaseRunner:
 
         def _make_specialist_stub(name: str, original):
             async def _stub(**kwargs):
-                desired = _next_result(name)
+                desired = _next_result(name, kwargs)
                 if desired is None:
                     value = original(**kwargs)
                     return await value if inspect.isawaitable(value) else value

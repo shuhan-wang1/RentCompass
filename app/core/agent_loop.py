@@ -308,8 +308,11 @@ AUTOMATIC_MEMORY_DISCLOSURE_ZH = (
 def disclose_automatic_memory(text: str, message: str, reply_language: str = "en") -> str:
     """Append the truthful automatic-memory description to an answer about silent storage."""
     body = str(text or "")
-    if not _AUTOMATIC_STORAGE_QUESTION.search(str(message or "")[:2000]):
-        return body
+    asked = str(message or "")[:2000]
+    if not _AUTOMATIC_STORAGE_QUESTION.search(asked) or re.match(
+            r"\s*(?:please\s+|pls\s+|can you\s+|could you\s+)?(?:remember|save|note|keep)\b|\s*(?:请)?(?:记住|保存|记下)",
+            asked, re.I):
+        return body      # a request to remember something is not a question about storage
     zh = str(reply_language or "").lower().startswith("zh")
     note = AUTOMATIC_MEMORY_DISCLOSURE_ZH if zh else AUTOMATIC_MEMORY_DISCLOSURE_EN
     if note in body:
@@ -5195,7 +5198,12 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 requires_status and str(final_response or '').strip()
                 and search_found.get('status') != 'no_results'
                 and (_cued_dimensions(_cm) or re.search(
-                    r"\b(?:weather|forecast|fare|fares|tfl)\b|天气|票价", _cm, re.I))
+                    r"\b(?:weather|forecast|fare|fares|tfl)\b|天气|票价", _cm, re.I)
+                     # An area recommendation ("Recommend 3 areas under £1600") answered from
+                     # compare_or_rank_areas was replaced by the incidental search ledger
+                     # (R2-28).
+                     or any(a.get("tool") == "compare_or_rank_areas" and _is_executed(a)
+                            for a in artifacts))
                 and any(a.get("tool") not in ("search_properties", "remember", "ask_user")
                         and _is_executed(a) for a in artifacts))
             if composite_answer:

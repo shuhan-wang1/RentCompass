@@ -44,3 +44,9 @@ def test_r2_21_untouched_when_a_budget_is_applied_or_none_is_saved():
     assert acknowledge_remembered_budget(answer, "[FACT] I have a cat", None) == answer
     assert acknowledge_remembered_budget("Here are flats under £1,800.", _MEMORY, None) == \
         "Here are flats under £1,800."
+
+
+def test_r2_19_a_remember_request_is_not_a_storage_question():
+    for message in ("Please remember my budget by default is £1,800",
+                    "记住：默认保存我的预算 £1,800"):
+        assert disclose_automatic_memory("Saved.", message) == "Saved."

@@ -133,3 +133,28 @@ def test_r2_26_composite_answer_leads_and_the_ledger_follows():
     out = nodes["format_output_fc"](state)["final_response"]
     assert out.startswith("For Canning Road, Stratford")
     assert "Legacy Tower" in out
+
+
+def test_r2_28_an_area_recommendation_keeps_its_answer_ahead_of_the_ledger():
+    from core import agent_loop
+    from core.agent_loop import build_fc_nodes
+    from core.candidate_validation import validate_candidates
+    from tests.test_agent_contract_guards import Chat, Provider, _state
+
+    rows = [{"address": "Limes Avenue, Chigwell IG7", "price": 1400, "area": "London"},
+            {"address": "Grosvenor Road, London E6", "price": 1800, "area": "London"}]
+    criteria = {"area": "London", "areas": ["London"], "max_budget": 1600}
+    validation = validate_candidates(rows, criteria, [])
+    message = "What's the cheapest area in London to rent a 1-bed? Recommend 3 areas under £1600"
+    answer = "Based on the area comparison, Walthamstow ranks first, then Tooting and Stratford."
+    nodes = build_fc_nodes(Provider([]), agent_llm=Chat())
+    state = _state(message)
+    state["final_response"] = answer
+    state["tool_artifacts"] = [
+        agent_loop._artifact(1, "compare_or_rank_areas", {"success": True, "areas": []}, success=True),
+        agent_loop._artifact(1, "search_properties", {
+            "status": "found", "recommendations": rows[:1], "over_budget_alternatives": rows[1:],
+            "candidate_validation": validation, "search_criteria": criteria}, success=True)]
+    assert validation.get("excluded")
+    out = nodes["format_output_fc"](state)["final_response"]
+    assert out.startswith("Based on the area comparison")

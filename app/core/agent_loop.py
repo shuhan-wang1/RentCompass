@@ -2456,6 +2456,12 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
     # completed, nothing matched" while NAMING the requested room type/area from the criteria the
     # payload echoes, so the complete-empty grading branch (room_type_match_if_evidence) passes.
     empty_raw = None if (recs or search_incomplete) else _completed_empty_search_raw(artifacts)
+    # "I do not yet have listing results ready to show" belongs to a listing turn; a failed
+    # web lookup on a non-listing question says the lookup failed (R2-27).
+    searched = any(a.get("tool") == "search_properties" for a in artifacts)
+    web_failed = (any(a.get("tool") == "web_search" for a in artifacts)
+                  and not any(a.get("tool") == "web_search" and _is_executed(a) and a.get("success")
+                              for a in artifacts))
     empty_criteria = {}
     if isinstance(empty_raw, dict):
         empty_criteria = (empty_raw.get("search_criteria")
@@ -2511,6 +2517,8 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             _cond = f"按 {empty_rt} 的条件" if empty_rt else "按当前条件"
             lines.append(f"房源搜索已完成：{_area}{_cond}没有找到匹配的房源"
                          "（数据来源 OnTheMarket）。")
+        elif web_failed and not searched:
+            lines.append("本轮的网页查询失败，所以没能核实你问的内容。")
         else:
             lines.append("目前还没有可以直接展示的房源结果。")
         for place, score, level in safety_lines[:4]:
@@ -2562,6 +2570,8 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             _in = f" in {empty_area}" if empty_area else ""
             lines.append(f"The property search completed: no {_rt}listings{_in} matched your "
                          "criteria (data from OnTheMarket).")
+        elif web_failed and not searched:
+            lines.append("The web lookup failed this turn, so I could not check what you asked.")
         else:
             lines.append("I do not yet have listing results ready to show.")
         for place, score, level in safety_lines[:4]:

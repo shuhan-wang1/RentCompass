@@ -90,3 +90,16 @@ def test_r2_31_a_partial_failure_says_so():
     arts = [{"tool": "remember", "success": True, "raw_data": {"success": True, "stored": "I have a cat"}},
             {"tool": "remember", "success": False, "raw_data": None, "error": "boom"}]
     assert "part of that" in memory_notice(memory_contract_from_artifacts(arts), "en")
+
+
+# ── R2-27: a failed web lookup is reported as one ─────────────────────────────────────
+def test_r2_27_failed_web_search_fallback_names_the_failure():
+    from core.agent_loop import _artifact_grounded_fallback_answer
+    state = {"extracted_context": {"current_message": "What is the council tax band rule for students?",
+                                   "reply_language": "en"},
+             "user_query": "What is the council tax band rule for students?",
+             "tool_artifacts": [{"turn": 1, "tool": "web_search", "raw_data": None,
+                                 "success": False, "error": "unavailable", "params_digest": "w"}]}
+    out = _artifact_grounded_fallback_answer(state, reason="time_budget")
+    assert "web lookup failed" in out
+    assert "listing results" not in out

@@ -265,8 +265,26 @@ def _stored_route_evidence(candidate: dict, constraints: dict, entry: Any) -> di
             'duration_minutes': duration, 'raw_data': facts}
 
 
+_STUDIO_WORD = re.compile(r"\bstudio\b|开间|单间公寓|一室户", re.I)
+
+
 def _candidate_bedrooms(candidate: dict) -> float | None:
-    return _number(candidate.get("bedrooms", candidate.get("Bedrooms")))
+    """Bedroom count; a studio is 0 bedrooms.
+
+    Listings carry ``bedrooms: 'Studio'`` / ``property_type: 'Studio'``; read as "no number",
+    every studio of a studio search was filed "Not verified: bedroom count is not verified"
+    under "No listing is both fully eligible and verified" (R4-07)."""
+    raw = candidate.get("bedrooms", candidate.get("Bedrooms"))
+    value = _number(raw)
+    if value is not None:
+        return value
+    if isinstance(raw, str) and _STUDIO_WORD.search(raw):
+        return 0.0
+    if raw in (None, "", "N/A", "n/a", "Unknown") and any(
+            isinstance(candidate.get(key), str) and _STUDIO_WORD.search(candidate[key])
+            for key in ("property_type", "Type", "room_type", "Room_Type_Category")):
+        return 0.0
+    return None
 
 
 def _iso_date(value: Any) -> str | None:

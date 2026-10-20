@@ -555,7 +555,11 @@ _YEAR_TOKEN = re.compile(r'(?<![\d.£])(?:19|20)\d\d(?![\d])(?!\.\d)')
 _YEAR_MONEY_BEFORE = re.compile(
     r'(?:£|\b(?:budget|ceiling|max(?:imum)?|under|below|up\s+to|no\s+more\s+than|less\s+than|'
     r'around|about|rent(?:al)?|pay(?:ing)?|afford|spend)\b(?:\s+(?:is|of|at|now|to|around|about|be))*'
-    r'\s*[=:]?|预算|月租|租金|房租|上限|最多|最高|不超过)\s*$', re.I)
+    r'\s*[=:]?|'
+    # 「预算改成2000」 masked 2000 as a calendar year (R4-05): a budget verb between the
+    # budget noun and the figure keeps it money.
+    r'(?:预算|月租|租金|房租|上限)(?:改成|改为|调到|调整为|调整到|提高到|提到|降到|降低到|是|为|设为|设成)?|'
+    r'最多|最高|不超过)\s*$', re.I)
 _YEAR_MONEY_AFTER = re.compile(
     r'\s*(?:pcm|pm|pw|p/?m|per\b|a\s+(?:month|week)|/|镑|英镑|块|元|以内|以下|左右|'
     r'max(?:imum)?\b|budget\b|ceiling\b|pounds?\b|gbp\b|or\s+(?:less|under|below)\b)', re.I)
@@ -635,6 +639,11 @@ def _extract_budget(text: str):
     for pattern in (
         r'(?:budget\b|ceiling\b|最多|预算|上限)[^£\d。;；]{0,30}£?\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)',
         r'(?:under|below|up\s+to|no\s+more\s+than|max(?:imum)?)\s*£?\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)',
+        # "What about Camden at £900?" / "3 bedrooms in Edinburgh at £900" names the price
+        # point of the search (R4-05) — only with an area/search/bedroom word before it,
+        # so a listing's "at £2,000" in a question about that listing is not a budget.
+        r'(?:(?:what|how)\s+about|search(?:ing)?|find|show(?:\s+me)?|look(?:ing)?\s+for)\b'
+        r'[^£。;；?？]{0,40}?\bat\s+£\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)',
         r'£?\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)[^。;；]{0,12}(?:ceiling|budget|以内|以下)',
     ):
         for candidate in re.finditer(pattern, t):
@@ -1144,6 +1153,15 @@ _LONDON_AREA_NAMES = [
     "Camberwell", "Kennington", "Aldgate", "Southwark", "Wapping", "Limehouse",
     "Blackheath", "Forest Hill", "Shepherd's Bush", "Earl's Court",
     "King's Cross",
+    # Well-known residential neighbourhoods a search names (R4-05): "Search 1-bed flats in
+    # Holborn" kept the previous area because Holborn/Bloomsbury were not known places.
+    # Station-like work destinations (Euston, Waterloo, London Bridge ...) are left out.
+    "Holborn", "Bloomsbury", "Fitzrovia", "Covent Garden", "Poplar", "Bow", "Bayswater",
+    "Maida Vale", "Belsize Park", "Primrose Hill", "Swiss Cottage", "West Hampstead",
+    "Muswell Hill", "Crouch End", "Archway", "Tufnell Park", "Haggerston", "Homerton",
+    "Clapton", "Canning Town", "Forest Gate", "Wood Green", "Brockley", "Herne Hill",
+    "Dulwich", "Stockwell", "Barbican", "Holland Park", "White City", "Kensal Rise",
+    "Golders Green", "Finchley", "Hendon", "Angel",
 ]
 
 _KNOWN_AREA_NAMES = _MAJOR_UK_CITY_NAMES + _LONDON_AREA_NAMES
@@ -1278,6 +1296,8 @@ _AREA_CUE_RE = re.compile(
     r"flats?\s+in|places?\s+in|rooms?\s+in|somewhere\s+in|"
     r"property\s+in|properties\s+in|apartments?\s+in|"
     r"want|prefer|choose|pick|go\s+(?:with|to|for)|"
+    # "Now show me Islington ones" (R4-05).
+    r"show\s+me|"
     r"around|near|in"
     r")\s+([a-z][a-z’'\-\.\s]{1,30})",
     re.IGNORECASE,
@@ -1628,7 +1648,9 @@ def _extract_area(text: str) -> str | None:
     from core.constraint_updates import mention_is_requirement
     chinese_residence = re.compile(
         r"(?:住在|在)\s*([a-z][a-z’'\-\s]{0,35})\s*(?:附近|周边|一带)?"
-        r"(?:找(?:(?:个|一[个套间])?(?:住处|住房|房(?:子|源)?|公寓|住宅|地方)|(?=\s*(?:[，,。.!?;；]|$)))|"
+        r"(?:找(?:(?:个|一[个套间])?(?:住处|住房|房(?:子|源)?|公寓|住宅|地方)|(?=\s*(?:[，,。.!?;；]|$))"
+        # 「在Bloomsbury找个studio」: an English property word after 找 (R4-05).
+        r"|(?:个|一[个套间])?\s*(?=(?:studio|flat|apartment|room|house|\d\s*-?\s*bed)))|"
         r"租(?:(?:个|一[套间])?(?:房(?:子|源)?|公寓|住宅)|(?=\s*(?:[，,。.!?;；]|$))))", re.I)
     residential_places = []
     for match in chinese_residence.finditer(text):

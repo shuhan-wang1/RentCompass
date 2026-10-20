@@ -160,6 +160,17 @@ def _pick_disambiguation(disamb: dict):
     return best.get('parameterValue'), name
 
 
+def _postcode_district(text: str) -> str | None:
+    """The outward code of a UK postcode at the end of ``text`` ("..., London E5" -> "E5")."""
+    match = re.search(r'\b([A-Z]{1,2}\d{1,2}[A-Z]?)(?:\s*\d[A-Z]{2})?\s*$', str(text or '').strip(' ,.'),
+                      re.I)
+    return match.group(1).upper() if match else None
+
+
+def _postcode_area(district: str) -> str:
+    return re.match(r'[A-Z]*', str(district or '').upper()).group()
+
+
 def _resolve_station(location: str) -> dict:
     """Resolve a free-text place/postcode/station to a fare-chargeable TfL station.
 
@@ -179,7 +190,9 @@ def _resolve_station(location: str) -> dict:
     if not location:
         return {"input": location, "in_london": None, "station": False, "token": None, "name": None}
 
-    cache_key = create_cache_key('tfl_resolve_station_v2', location.lower())
+    # v3: resolutions are now checked against the input's postcode district (R2-09); a v2
+    # entry may hold a wrong-district station.
+    cache_key = create_cache_key('tfl_resolve_station_v3', location.lower())
     cached = _cache_get(cache_key, _GEO_TTL)
     if cached is not None:
         return cached
@@ -193,6 +206,26 @@ def _resolve_station(location: str) -> dict:
         stripped = re.sub(r',?\s*[A-Z]{1,2}\d{1,2}[A-Z]?\s*$', '', location).strip(' ,')
         if stripped and stripped.lower() != location.lower():
             geo = _geocode(stripped)
+    # The input's own postcode district must agree with where the geocoder put it.
+    # "Powerscroft Road, London E5" geocoded to the Powerscroft Road in Sidcup, snapped to St
+    # Mary Cray (Bromley) and returned a 54-minute Orpington route as success (R2-09).
+    district = _postcode_district(location)
+    if district and geo and geo.get('lat') is not None:
+        found = _postcode_district(str(geo.get('postcode') or ''))
+        # Compared by postcode AREA (the letters): a neighbouring district (WC1E/WC1X) is a
+        # boundary detail, another area (E vs DA) is another place.
+        if found and _postcode_area(found) != _postcode_area(district):
+            retry = _geocode(f"{district}, London")
+            retry_district = _postcode_district(str((retry or {}).get('postcode') or ''))
+            if retry and retry.get('lat') is not None and (
+                    not retry_district or _postcode_area(retry_district) == _postcode_area(district)):
+                geo = dict(retry)
+                result['approximate'] = f'postcode district {district}'
+            else:
+                result['unresolved_reason'] = (
+                    f'the address resolved outside its stated postcode district {district}')
+                _cache_set(cache_key, result)
+                return result
     if geo and geo.get('lat') is not None:
         lat, lng = geo['lat'], geo['lng']
         result['coords'] = {'lat': lat, 'lng': lng}
@@ -547,9 +580,12 @@ def _do_journey(from_location: str, to_location: str, want_fare: bool,
     if to.get('in_london') is False:
         return _outside_london(to_location)
     if not frm.get('token') or not to.get('token'):
+        bad = frm if not frm.get('token') else to
+        reason = bad.get('unresolved_reason')
         return {"success": False,
                 "error": f"Couldn't locate {'the start' if not frm.get('token') else 'the destination'} "
-                         "on the TfL network. Try a nearby station name or a postcode."}
+                         + (f"reliably: {reason}. " if reason else "on the TfL network. ")
+                         + "Try a nearby station name or a full postcode."}
 
     if requested_time is None:
         time_params, planned_for = _journey_time_params()
@@ -594,8 +630,10 @@ def _do_journey(from_location: str, to_location: str, want_fare: bool,
         "success": True,
         "query_type": "fare" if want_fare else "journey",
         "coverage": "london",
-        "from": {"input": from_location, "resolved_station": frm.get('name'), "naptan": frm.get('token')},
-        "to": {"input": to_location, "resolved_station": to.get('name'), "naptan": to.get('token')},
+        "from": {"input": from_location, "resolved_station": frm.get('name'), "naptan": frm.get('token'),
+                 **({"approximate": frm['approximate']} if frm.get('approximate') else {})},
+        "to": {"input": to_location, "resolved_station": to.get('name'), "naptan": to.get('token'),
+               **({"approximate": to['approximate']} if to.get('approximate') else {})},
         "duration_minutes": selected['duration_minutes'],
         "changes_count": selected['changes_count'],
         "route_summary": selected['route_summary'],

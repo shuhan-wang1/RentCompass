@@ -38,12 +38,18 @@ def test_side_by_side_measured_routes_and_legs_are_kept():
             "much shorter walk to the station (4 min vs 14 min)") in out
 
 
-def test_the_invented_weekly_saving_still_goes_with_the_note():
-    """9 min x 2 x 5 = "roughly 90 minutes" is arithmetic no tool returned."""
+def test_the_weekly_saving_follows_the_measured_difference():
+    """Owner rule (r12): a weekly total derived from a measured difference quoted on the line,
+    by the ordinary multipliers (x2 a day, x5 or the user's office days a week), is evidenced:
+    9 min each way x 2 x 5 = "roughly 90 minutes". Arithmetic that does not follow is still
+    removed, with the Note."""
     text, state = _case("r10_bb5cdb25_critic")
     out = validate_commute_response(text, state)
-    assert "roughly 90 minutes" not in out
-    assert out.count(NOTE_EN) == 1
+    assert "Over a five-day week, Stratford saves roughly 90 minutes of commuting compared with Bow." in out
+    assert NOTE_EN not in out
+    wrong = validate_commute_response(text.replace("roughly 90 minutes", "roughly 150 minutes"), state)
+    assert "150 minutes" not in wrong
+    assert wrong.count(NOTE_EN) == 1
 
 
 def test_the_agent_draft_is_kept_whole():
@@ -66,7 +72,7 @@ def test_false_bounds_and_wrong_comparisons_are_still_removed():
         assert true in text
         out = validate_commute_response(text.replace(true, false), state)
         assert false not in out, false
-        assert out.count(NOTE_EN) == 1
+        assert out.count(NOTE_EN) == 1, false
 
 
 def test_recall_caveat_after_a_commute_topic_is_not_a_commute_claim():

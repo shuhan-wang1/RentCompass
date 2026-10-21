@@ -118,14 +118,20 @@ def test_a_rewrite_is_told_which_lookups_failed():
 
 # ── collateral: advice beside an invented figure ──────────────────────────────────────
 
-def test_advice_clause_survives_and_the_invented_arithmetic_goes():
+def test_advice_clause_survives_and_only_wrong_arithmetic_goes():
+    """The advice clause stays. Owner rule (r12): "9 minutes each way versus Bow (29 minus 20),
+    which is 18 minutes a day on a return trip and 90 minutes over a five-day week" follows
+    from the measured 20/29 and stays too; arithmetic that does not follow is removed."""
     text, state = _case("r11_d36a82c2_critic")
     out = validate_commute_response(text, state)
     assert ("and for Bow you would want to look at addresses closer to Bow Church DLR Station "
             "than the one measured here") in out
-    assert "90 minutes over a five-day week" not in out
-    assert "18 minutes a day" not in out
-    assert out.count(NOTE_EN) == 1
+    assert "which is 18 minutes a day on a return trip and 90 minutes over a five-day week" in out
+    assert NOTE_EN not in out
+    wrong = validate_commute_response(text.replace("90 minutes over", "2 hours over"), state)
+    assert "2 hours over" not in wrong
+    assert "and for Bow you would want to look at addresses closer to Bow Church DLR Station" in wrong
+    assert wrong.count(NOTE_EN) == 1
 
 
 def test_measured_legs_on_the_routes_own_line_are_kept():

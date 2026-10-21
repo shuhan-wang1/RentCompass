@@ -1325,9 +1325,17 @@ def _asserts_commute(fragment: str) -> bool:
         # hypothetical preference of the user's, not a journey (r06 099518b9).
         return False
     # A bound in words is a verdict too: "a commute under a quarter of an hour", and so is
-    # "about the same commute" as another place.
+    # "about the same commute" as another place, and a time total in hours or words ("roughly
+    # 3 hours a week on a five-day commute", r12 53bfec0e).
     return bool(_COMMUTE_WORD.search(text) and (_FIT_WORD.search(text) or _duration_bounds(text)
-                                                or _SAME_WORD.search(text)))
+                                                or _SAME_WORD.search(text) or _period_total(text)))
+
+
+def _period_total(text: str) -> bool:
+    """A journey-time total stated in hours or words, or one per day/week."""
+    text = str(text or "")
+    return bool(_HOURS_AND_MINUTES.search(text) or (
+        (_DAY_PERIOD.search(text) or _WEEK_PERIOD.search(text)) and _durations_in(text)))
 
 
 # Figure-free advice on where to look: "and for Bow you would want to look at addresses closer
@@ -2271,7 +2279,10 @@ def _compares_measured_routes(fragment: str, context: str, pool: list) -> bool:
 
 
 _COMPARED_WITH = re.compile(
-    r"\b(?:than|compared\s+(?:with|to)|versus|vs\.?|relative\s+to)\s+(?:the\s+|that\s+(?:of|in)\s+)?", re.I)
+    r"\b(?:than|compared\s+(?:with|to)|versus|vs\.?|relative\s+to|"
+    # "near-identical overall score to Camden" (r12 8573f129)
+    r"(?:identical|similar|close|comparable|equal|level|equivalent)\s+(?:[\w'’-]+\s+){0,3}?(?:to|with))"
+    r"\s+(?:the\s+|that\s+(?:of|in)\s+)?", re.I)
 
 
 def _comparison_target(fragment: str, bindings: list) -> dict | None:
@@ -2330,6 +2341,87 @@ def _recapitalise(rebuilt: str, original: str) -> str:
             return match.group(0)        # it already started a sentence in the original
         return match.group(1) + match.group(2).upper()
     return re.sub(r"(^\s*|[.!?]\s+)([a-z])", fix, rebuilt)
+
+
+_WORD_NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7}
+_DAY_PERIOD = re.compile(r"\b(?:a|per|each|every)\s+day\b|\bdaily\b|\breturn\s+trip\b|\bround\s+trip\b", re.I)
+_WEEK_PERIOD = re.compile(r"\b(?:a|per|each|every)\s+week\b|\bweekly\b|\bweek\b", re.I)
+_ROUGHLY = re.compile(r"\b(?:roughly|about|around|approximately|approx\.?|nearly|almost|just\s+(?:over|under)|"
+                      r"some|close\s+to)\b|~|≈", re.I)
+_HOURS_AND_MINUTES = re.compile(
+    r"(?<![\d.])(\d{1,2}(?:\.\d)?)\s*(?:hours?|hrs?|h)\b(?:\s*(?:and\s+)?(\d{1,2})\s*(?:minutes?|mins?)\b)?", re.I)
+
+
+def _office_days(state: dict) -> set:
+    """Commuting days a week the user stated (criteria or this message), besides 5."""
+    days = set()
+    value = (state.get("accumulated_search_criteria") or {}).get("office_days_per_week")
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and 0 < value <= 7:
+        days.add(float(value))
+    current = str((state.get("extracted_context") or {}).get("current_message") or "")
+    for match in re.finditer(r"\b([1-7]|one|two|three|four|five|six|seven)[\s-]*days?\s+(?:a|per)\s+week",
+                             current, re.I):
+        word = match.group(1).lower()
+        days.add(float(_WORD_NUMBERS.get(word, word if word.isdigit() else 0)))
+    return {d for d in days if d}
+
+
+def _durations_in(text: str) -> list:
+    """Every journey duration a fragment states, in minutes: "2 hours 20 minutes" is one 140."""
+    text = str(text or "")
+    found = []
+    for match in _HOURS_AND_MINUTES.finditer(text):
+        found.append(float(match.group(1)) * 60 + float(match.group(2) or 0))
+    rest = _HOURS_AND_MINUTES.sub(" ", text)
+    found.extend(_minute_claim_values(rest))
+    words = " ".join(rest.lower().split())
+    for phrase, value in _DURATION_WORDS:
+        if phrase in words:
+            found.append(value)
+            words = words.replace(phrase, " ")
+    return found
+
+
+_OVER_A_PERIOD = re.compile(
+    r"\b(?:over|across|during|in|for)\s+(?:a|an|the|one|your)\s+(?:[\w-]+\s+){0,2}?(?:day|week|month|year)\b", re.I)
+
+
+def _derived_commute_total(fragment: str, line: str, differences: set, office_days: set | None,
+                           previous_clause: str = "") -> bool:
+    """A daily or weekly time saving derived from a measured difference quoted on the same
+    line: "14 minutes each way, so about 28 minutes a day, roughly 2 hours 20 minutes a week on
+    a five-day commute" (r12 53bfec0e; Kentish Town 21, Camden 35). The saving is the
+    difference x 2 a day (there and back), x 2 x the commuting days a week (5, the user's own
+    office days, or the N-day week the line names). "roughly"/"about" allow 10% (at least 2
+    minutes); otherwise the figure must be exact. The base difference must itself be quoted on
+    the line, so a total never stands while the figure it comes from is withdrawn."""
+    # "Over a five-day week, Stratford saves roughly 90 minutes" names its period one clause
+    # earlier, in the same sentence.
+    scope = f"{previous_clause} {fragment}"
+    day, week = bool(_DAY_PERIOD.search(scope)), bool(_WEEK_PERIOD.search(scope))
+    if not (day or week):
+        return False
+    values = _durations_in(fragment)
+    plain = _OVER_A_PERIOD.sub(" ", _ROUTE_COMPARATIVE.sub(" ", fragment))   # "over a week" is no verdict
+    if not values or _PASS_VERDICT.search(plain) or _FAIL_VERDICT.search(plain):
+        return False
+    quoted = {round(v, 2) for v in _minute_claim_values(_HOURS_AND_MINUTES.sub(" ", line))}
+    bases = {d for d in differences if d in quoted and d > 0}
+    if not bases:
+        return False
+    days = {5.0} | set(office_days or ())
+    for match in re.finditer(r"\b([1-7]|one|two|three|four|five|six|seven)[\s-]*days?\b", line, re.I):
+        word = match.group(1).lower()
+        days.add(float(_WORD_NUMBERS.get(word, word if word.isdigit() else 0)))
+    allowed = set()
+    for base in bases:
+        if day:
+            allowed.add(base * 2)
+        if week:
+            allowed.update(base * 2 * d for d in days if d)
+    loose = bool(_ROUGHLY.search(fragment))
+    return all(any(abs(value - target) <= (max(2.0, 0.1 * target) if loose else 0.5)
+                   for target in allowed) for value in values)
 
 
 def _shared_by_every_route(fragment: str, pool: list) -> bool:
@@ -2482,7 +2574,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                            default_binding: dict | None = None,
                            preference_context: bool = False,
                            source_texts: list[str] | None = None,
-                           removed: list | None = None) -> str | None:
+                           removed: list | None = None,
+                           office_days: set | None = None) -> str | None:
     """Drop the unverifiable commute assertions and keep everything else.
 
     Price, area, availability and an honest caveat are all still true and still useful when
@@ -2576,10 +2669,17 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             values = _minute_claim_values(fragment)
             # "Hackney is the faster commute, by 8 minutes (29 minus 21)": the comparative is
             # in the clause the "by …" figure qualifies (r06 099518b9).
-            comparative = bool(_COMPARATIVE_DIFFERENCE.search(fragment) or (
-                re.match(r"\s*by\b", fragment, re.I) and _COMPARATIVE_DIFFERENCE.search(previous_clause)))
+            # "- Versus Camden (35 min): 14 minutes each way" (r12 53bfec0e): the label the
+            # figure qualifies names the comparison.
+            comparative = bool(_COMPARATIVE_DIFFERENCE.search(fragment) or _VERSUS.search(fragment) or (
+                (re.match(r"\s*by\b", fragment, re.I)
+                 or re.search(r"\b(?:each|one)\s+way\b|\bper\s+(?:trip|journey)\b", fragment, re.I))
+                and (_COMPARATIVE_DIFFERENCE.search(previous_clause) or _VERSUS.search(previous_clause))))
             if (values and differences and comparative
                     and all(round(value, 2) in differences for value in values)):
+                return True
+            if differences and _derived_commute_total(fragment, line, differences, office_days,
+                                                      previous_clause=previous_clause):
                 return True
             target = _comparison_target(fragment, bindings)
             if target is not None and not values:
@@ -2717,6 +2817,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
         sentence_dropped = False    # something was withdrawn from the current sentence
         inherited = binding
         commute_context = False
+        figure_context = False      # an earlier clause of this line quoted a journey time
         last_fragment = ""          # the previous clause of the current sentence
         continuation_broken = False  # a kept clause leans on a withdrawn one ("…, but I have
                                      # not verified that") — no clean cut exists (R3-01)
@@ -2775,10 +2876,15 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             # that names the commute ITSELF is judged by ``_asserts_commute`` alone, whose
             # exemptions (a generic "within a certain commute time" offer) the context rule
             # used to override (stress B-02 80e0de95: a clarification turn got the Note).
-            asserts = (_asserts_commute(claim) or
+            # "- Versus Holloway (24 min): 3 minutes each way, …, roughly an hour a week": a
+            # time total after the line's own journey figures is a journey claim too.
+            period_claim = bool(figure_context and _period_total(claim) and not monetary_or_independent)
+            if _MINUTE_TOKEN.search(fragment):
+                figure_context = True
+            asserts = period_claim or (_asserts_commute(claim) or
                        (commute_context and not _COMMUTE_WORD.search(claim)
                         and (_FIT_WORD.search(_without_money_or_weather(claim))
-                             or _duration_bounds(claim))
+                             or _duration_bounds(claim) or _period_total(claim))
                         and not monetary_or_independent
                         and not (_ADVICE_CLAUSE.match(claim) and not _MINUTE_TOKEN.search(claim))))
             sentence_marked = marked_at.get(index, False)
@@ -2828,6 +2934,10 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 elif separator.strip() == "|" and line.lstrip().startswith("|"):
                     # A table cell keeps its column: the row would otherwise shift left.
                     kept.append(" — " + separator)
+                elif kept and re.search(r"\s+[–—-]\s+$", kept[-1]):
+                    # "pick — <withdrawn>, for only £150 more" shipped as "pick —  for only"
+                    # (r12 8573f129): the dash introduced the withdrawn clause, it goes too.
+                    kept[-1] = re.sub(r"\s+[–—-]\s+$", " ", kept[-1])
                 continue  # its trailing separator goes with it
             if within:
                 if (_LEANING_CONTINUATION.match(fragment)
@@ -2861,6 +2971,12 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             rebuilt = _without_touched_sentences(original_body, removed[removed_before_line:])
         if re.fullmatch(r"[*_#\s]*[^:：\n]{1,40}[:：]\s*[*_]*\s*", rebuilt) and not _MINUTE_TOKEN.search(rebuilt):
             rebuilt = ""         # "Cheapest route:" with nothing left after it (R1-10)
+        label = original_body.split(":", 1)[0] if ":" in original_body[:80] else ""
+        if label.strip() and rebuilt.strip(" .:：;*") == label.strip(" .:：;*"):
+            # Everything after the label went: "- Versus Camden (35 min)." shipped as a stub
+            # bullet (r12 53bfec0e). The bullet goes whole.
+            rebuilt = ""
+        rebuilt = re.sub(r"(?<=\S) {2,}(?=\S)", " ", rebuilt)
         # Tidy up after removal: no doubled or dangling separators.
         rebuilt = re.sub(r"([,，；;、:：])\s*(?=[,，；;、:：])", "", rebuilt)
         rebuilt = re.sub(r"^[\s,，；;、]+", "", rebuilt)
@@ -3510,7 +3626,8 @@ def _validate_commute_response(response: str, state: dict, *, note_present: bool
     redacted = _redact_commute_claims(
         text, zh=zh, bindings=bindings, caps=_known_commute_caps(state),
         default_binding=default, preference_context=memory_reference,
-        source_texts=_listing_source_texts(state), removed=removed)
+        source_texts=_listing_source_texts(state), removed=removed,
+        office_days=_office_days(state))
     if redacted is None:
         fallback = render_structured_evidence_fallback(state, language=language)
         if not fallback and len(original.strip()) >= _LEDGER_FALLBACK_MIN_CHARS:

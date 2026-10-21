@@ -155,7 +155,7 @@ else:
 
 
 def test_shared_source_pacing_covers_search_and_details(monkeypatch):
-    monkeypatch.setattr(access, "MIN_INTERVAL_SECONDS", 0.025)
+    monkeypatch.setattr(access, "MIN_INTERVAL_SECONDS", 0.1)
     stamps = []
     class TimedSession:
         def get(self, url, **kwargs):
@@ -167,7 +167,7 @@ def test_shared_source_pacing_covers_search_and_details(monkeypatch):
             "https://www.onthemarket.com/to-rent/property/islington/"]
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
         list(pool.map(lambda url: access.get(session, url), urls))
-    assert max(stamps) - min(stamps) >= 0.045
+    assert max(stamps) - min(stamps) >= 0.18
 
 
 def test_bare_page_and_only_permitted_pagination_are_sent(monkeypatch):

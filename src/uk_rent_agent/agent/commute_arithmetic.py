@@ -143,10 +143,14 @@ def subtractions(text: Any) -> list[dict]:
             for m in SUBTRACTION.finditer(str(text or ""))]
 
 
-def subtraction_is_correct(step: dict, measured: Iterable[float]) -> bool:
-    measured = list(measured)
-    return (any(abs(step["a"] - m) < 1e-9 for m in measured)
-            and any(abs(step["b"] - m) < 1e-9 for m in measured)
+def subtraction_is_correct(step: dict, measured: Iterable[float], caps: Iterable[float] = ()) -> bool:
+    """Both operands are measured routes, or one is the user's limit ("25 − 19 = 6 minutes
+    under", "29 − 25 = 4 minutes over", r16 0a6c11d6), and the result is right."""
+    points = list(measured) + [float(c) for c in caps if c]
+    return (any(abs(step["a"] - m) < 1e-9 for m in points)
+            and any(abs(step["b"] - m) < 1e-9 for m in points)
+            and (any(abs(step["a"] - m) < 1e-9 for m in measured)
+                 or any(abs(step["b"] - m) < 1e-9 for m in measured))
             and abs(step["a"] - step["b"] - step["result"]) <= 0.5)
 
 
@@ -182,10 +186,12 @@ def product_is_correct(product: dict, measured: Iterable[float], days: Iterable[
             if not any(abs(value - d) < 1e-9 for d in days):
                 return False
         elif unit.startswith(_COUNT_UNITS):
-            if value not in (1.0, 2.0):
+            # 2 a day, or the week's journeys: "x 10 journeys" for 5 days, "6 journeys" for 3.
+            if value not in (1.0, 2.0) and not any(abs(value - 2 * d) < 1e-9 for d in days):
                 return False
         elif not unit:
-            if value not in (1.0, 2.0) and not any(abs(value - d) < 1e-9 for d in days):
+            if value not in (1.0, 2.0) and not any(abs(value - d) < 1e-9 or abs(value - 2 * d) < 1e-9
+                                                   for d in days):
                 return False
         else:
             return False
@@ -216,7 +222,8 @@ def route_minutes(evidence: Any, *, _depth: int = 0, _key: str = "") -> set[floa
     return found
 
 
-_SENTENCE = re.compile(r"[^.!?\n]*(?:[.!?](?=\s|$)|\n|$)")
+# A decimal point ("around 2.5 hours") and an abbreviation dot do not end a sentence.
+_SENTENCE = re.compile(r"(?:[^.!?\n]|\.(?=\d)|(?<=\b(?:St|Dr|Mr|Ms|vs|No))\.)*(?:[.!?](?=\s|$)|\n|$)")
 _ARITHMETIC_CUE = re.compile(
     r"\b(?:each|one)\s+way\b|\bper\s+(?:trip|journey)\b|\bsaves?\b|\bsaving\b|\bdifference\b|\bgap\b|"
     r"\b(?:quicker|faster|shorter|longer|slower|less|more|extra)\b|\bversus\b|\bvs\.?|\bover\b|\bthan\b|"
@@ -280,7 +287,11 @@ def _bases(text: str, measured: list, days: set) -> tuple[set, bool]:
     operand; a product operand that is itself a total of a quoted base ("6 x 5 = 30" after
     "3 x 2 = 6") is a step, not a wrong base."""
     quoted = [float(m.group(1) or m.group(2)) for m in BASE_FIGURE.finditer(text)]
-    quoted += [step["result"] for step in subtractions(text)]
+    # A subtraction of two measured routes is a base; one against the user's limit ("25 − 19 =
+    # 6 minutes under") is a margin, judged as one.
+    quoted += [step["result"] for step in subtractions(text)
+               if any(abs(step["a"] - m) < 1e-9 for m in measured)
+               and any(abs(step["b"] - m) < 1e-9 for m in measured)]
     valid = {v for v in quoted if is_difference(v, measured)}
     wrong = any(not is_difference(v, measured) for v in quoted)
     for product in products(text):
@@ -293,8 +304,11 @@ def _bases(text: str, measured: list, days: set) -> tuple[set, bool]:
 
 
 def _route_after(text: str, start: int, routes: list) -> dict | None:
+    """The route compared WITH right after a figure, inside the figure's own clause: "18
+    minutes vs Holloway, 96 minutes vs Camden" (r16) gives each figure its own target, while
+    "(about half an hour) and … against Camden (…)" gives "half an hour" none."""
     segment = text[start:]
-    stop = re.search(r"\d", segment)
+    stop = re.search(r"\d|[,;()]|\s(?:and|but|while)\s|[—–]", segment)
     segment = segment[:stop.start()] if stop else segment
     match = re.search(r"\b(?:over|versus|vs\.?|than|compared\s+(?:with|to)|against)\s+(.{1,60})", segment, re.I)
     if not match:
@@ -378,8 +392,9 @@ def pair_reference(*, text: str, at: int, sentence: str, line: str, label: str, 
     line_bases, _ = _bases(line, measured, days)
     if line_bases:
         return line_bases, True
-    target = ((_route_just_before(text, start, routes) if start is not None else None)
-              or _route_after(text, at, routes) or (_route_after(label, 0, routes) if label else None))
+    target = (_route_after(text, at, routes)
+              or (_route_just_before(text, start, routes) if start is not None else None)
+              or (_route_after(label, 0, routes) if label else None))
     if target is None:
         return set(differences(measured)), False
     # The other end: a route the sentence names that is not itself compared WITH ("… against
@@ -417,19 +432,23 @@ _AFTER_UNDER = re.compile(
     r"^\s*(?:to\s+spare|spare|of\s+(?:headroom|leeway|margin|buffer|room)|"
     r"(?:inside|within|under|below)\s+" + _CAP_PHRASE + r")\b", re.I)
 _BEFORE_UNDER = re.compile(
-    r"(?:(?:inside|within|under|below)\s+" + _CAP_PHRASE + r"\s+by|(?:a\s+)?(?:margin|buffer|headroom|leeway)\s+of)"
+    r"(?:(?:inside|within|under|below)\s+" + _CAP_PHRASE + r"[,\s]+by|(?:a\s+)?(?:margin|buffer|headroom|leeway)\s+of)"
     r"\s+" + _HEDGE_WORDS + r"$", re.I)
-_AFTER_OVER_CAP = re.compile(r"^\s*(?:over|above|beyond|past)\s+" + _CAP_PHRASE + r"\b|^\s*too\s+long\b", re.I)
+_AFTER_OVER_CAP = re.compile(r"^\s*(?:over|above|beyond|past|outside)\s+" + _CAP_PHRASE + r"\b|^\s*too\s+long\b", re.I)
 _AFTER_OVER_BARE = re.compile(r"^\s*over\b(?!\s+(?:the\s+|a\s+)?[A-Za-z])", re.I)
-_BEFORE_OVER = re.compile(r"(?:over|above|beyond|past)\s+" + _CAP_PHRASE + r"\s+by\s+" + _HEDGE_WORDS + r"$", re.I)
+_BEFORE_OVER = re.compile(r"(?:over|above|beyond|past|outside|exceeds?|misses)\s+" + _CAP_PHRASE + r"[,\s]+by\s+"
+                          + _HEDGE_WORDS + r"$", re.I)
 
 
-def margin_side(text: str, start: int, end: int, sentence: str, caps_known: bool = False) -> str | None:
+def margin_side(text: str, start: int, end: int, sentence: str, caps_known: bool = False,
+                lead: str = "") -> str | None:
     """'under' / 'over' when the figure at [start, end) is a margin against the user's limit:
     "5 minutes to spare", "5 minutes inside your cap", "under your limit by 5 minutes", "a
     margin of 5 minutes"; "4 minutes over your limit", "over your cap by 4 minutes", and a
     bare "4 minutes over." when a limit is named in the sentence or known for this turn."""
-    after, before = text[end:end + 40], text[max(0, start - 40):start]
+    # ``lead`` is the clause before this one: "**Bow — outside your limit, by 4 minutes**"
+    # splits at its comma, and the cap the "by 4 minutes" refers to is in the clause before.
+    after, before = text[end:end + 40], (f"{lead} " + text[:start])[-60:]
     if _AFTER_UNDER.search(after) or _BEFORE_UNDER.search(before):
         return "under"
     if _AFTER_OVER_CAP.search(after) or _BEFORE_OVER.search(before):
@@ -503,16 +522,18 @@ def _clause_of(text: str, start: int, end: int) -> str:
 
 def figure_days(clause: str, sentence: str, user_days: Iterable[float], answer_days: Iterable[float]) -> set:
     """Commuting days for a weekly total: an N-day week the answer states FOR this figure
-    (its clause, then its sentence), else the user's own office days, else an N-day week the
-    answer states, else 5. The user's days are never overridden by a 5-day default."""
+    (its clause, then its sentence), else the user's own office days, else the standard 5 or
+    an N-day week the answer states elsewhere. The user's days are never overridden by a 5-day
+    default; without them, an example elsewhere ("e.g. three days a week") does not displace
+    the standard week, so a text judged after a removal reads its 5-day totals the same way
+    (r17: the critic flagged the correct leftover once the "five-day week" lead-in went)."""
     local = days_stated(clause) or days_stated(sentence)
     if local:
         return local
     user = {float(d) for d in user_days if d}
     if user:
         return user
-    stated = {float(d) for d in answer_days if d}
-    return stated or {STANDARD_DAYS}
+    return {float(d) for d in answer_days if d} | {STANDARD_DAYS}
 
 
 def total_matches(value: float, diffs: Iterable[float], unit: str | None, days: Iterable[float], *,
@@ -559,6 +580,55 @@ def spreads(text: str, sentence: str, routes: list) -> list:
     return found
 
 
+# A stated journey COUNT: "(10 journeys)", "6 journeys", "10 trips a week", "5 return trips",
+# "two journeys a day", "5 one-way trips". A week has 2 x days journeys (days one-way trips only
+# when one-way is explicit, days return/round trips); a day has 2 (1 one-way).
+_COUNT_WORD = r"(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fourteen)"
+_COUNT_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
+                "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "fourteen": 14}
+JOURNEY_COUNT = re.compile(
+    r"\b" + _COUNT_WORD + r"\s+(one[\s-]way\s+|single\s+|return\s+|round[\s-]|commuting\s+)?"
+    r"(journeys|trips|commutes)\b(\s+(?:a|per|each)\s+(?:day|week))?", re.I)
+
+
+def journey_counts(text: str) -> list:
+    """``[(span, count, kind, period)]``: kind 'leg' (one-way journeys), 'one_way' (explicit
+    one-way wording), 'round' (return/round trips); period 'day', 'week' or None."""
+    found = []
+    for match in JOURNEY_COUNT.finditer(str(text or "")):
+        word = match.group(1).lower()
+        count = float(_COUNT_WORDS.get(word) or int(word))
+        qualifier = (match.group(2) or "").lower()
+        kind = ("one_way" if qualifier.startswith(("one", "single")) else
+                "round" if qualifier.startswith(("return", "round")) else "leg")
+        period = None
+        if match.group(4):
+            period = "day" if "day" in match.group(4).lower() else "week"
+        found.append((match.span(), count, kind, period))
+    return found
+
+
+def journey_count_holds(count: float, kind: str, period: str | None, days: Iterable[float]) -> bool:
+    if period == "day":
+        return count == (1.0 if kind in ("one_way", "round") else 2.0)
+    days = [float(d) for d in days if d]
+    if kind == "round":
+        return any(count == d for d in days)
+    if kind == "one_way":
+        return any(count in (d, 2 * d) for d in days)
+    return any(count == 2 * d for d in days) or (period is None and count in (1.0, 2.0))
+
+
+def journey_counts_ok(text: str, *, context: str = "", sentence: str = "",
+                      user_days: Iterable[float] = (), answer_days: Iterable[float] = ()) -> bool:
+    """Every journey count ``text`` states matches the week (or day) it is for."""
+    for (start, end), count, kind, period in journey_counts(text):
+        scope = f"{context} {_clause_of(text, start, end)}"
+        if not journey_count_holds(count, kind, period, figure_days(scope, sentence, user_days, answer_days)):
+            return False
+    return True
+
+
 def figure_spans(text: str) -> list:
     """``[(start, end, minutes)]`` for every duration in ``text`` ("2 hours 20 minutes" = 140)."""
     spans = [(m.start(), m.end(), float(m.group(1)) * 60 + float(m.group(2) or 0))
@@ -579,7 +649,8 @@ def figure_spans(text: str) -> list:
 def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", context: str = "",
                   routes: list, days: Iterable[float], subject: dict | None = None,
                   known: Iterable[float] = (), skip_bounds: bool = False,
-                  caps: Iterable[float] = (), user_days: Iterable[float] = ()) -> tuple[bool, bool]:
+                  caps: Iterable[float] = (), user_days: Iterable[float] = (),
+                  lead: str = "") -> tuple[bool, bool]:
     """``(every figure of text is evidenced, text does arithmetic)`` — THE derived-figure rule.
 
     A figure is evidenced when it is a correct product or subtraction step (or restates the
@@ -598,9 +669,10 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
     _, wrong_base = _bases(line or sentence, measured, days)
     if wrong_base:
         return False, True
+    caps = sorted({float(c) for c in caps if c})
     covered, results, seen = [], [], False
     for step in subtractions(text):
-        if not subtraction_is_correct(step, measured):
+        if not subtraction_is_correct(step, measured, caps):
             return False, True
         covered.append(step["span"])
         results.append(step["result"])
@@ -632,6 +704,13 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
             return False, True
         covered.append(span)
         seen = True
+    # A stated journey count must match the week it is for: "(8 journeys)" for "a typical
+    # five-day week with two journeys a day" is wrong (5 x 2 = 10; r17).
+    if journey_counts(text):
+        if not journey_counts_ok(text, context=context, sentence=sentence, user_days=user_days,
+                                 answer_days=answer_days):
+            return False, True
+        seen = True
     results += [p["result"] for p in products(context) if product_is_correct(p, measured, days)]
     rest = text
     for start, end in sorted(covered, reverse=True):
@@ -648,7 +727,7 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
         if caps and any(abs(value - cap) < 1e-9 for cap in caps) and CAP_NAMED.search(
                 rest[max(0, start - 12):end + 20]):
             continue          # the user's limit itself: "your 25-minute limit"
-        side = margin_side(rest, start, end, sentence, caps_known=bool(caps))
+        side = margin_side(rest, start, end, sentence, caps_known=bool(caps), lead=lead)
         if side is not None:
             # A margin against the user's limit: cap - the subject's minutes (or the reverse
             # when over), exact or hedged, and NEVER another pair or an evidence coincidence:
@@ -707,6 +786,24 @@ def _sentences_with_lines(text: str) -> list:
     return [(sentence, line) for line in str(text or "").split("\n") for sentence in sentences(line)]
 
 
+_LIST_ITEM = re.compile(r"^\s*(?:[-•]|\*(?!\*)|\d+[.)])\s+")
+_HEADER = re.compile(r"^\s*(?:\*\*|#{1,4}\s)|[:：]\s*$")
+
+
+def _with_header_subjects(text: str, routes: list) -> list:
+    """``[(sentence, line, subject)]``: a list item under a header that names ONE route is
+    about that route ("**Bow — no, it's over**" then "- 29 minutes door to door, so 4 minutes
+    over your limit", r16 0a6c11d6), as the redactor reads it."""
+    out, subject = [], None
+    for line in str(text or "").split("\n"):
+        if line.strip() and not _LIST_ITEM.match(line):
+            named = [r for r in routes if any(_mentions(line, label) >= 0 for label in r["labels"] if label)]
+            subject = named[0] if _HEADER.search(line) and len(named) == 1 else None
+        for sentence in sentences(line):
+            out.append((sentence, line, subject if _LIST_ITEM.match(line) else None))
+    return out
+
+
 def unsupported_arithmetic(text: str, routes: list, days: Iterable[float],
                            known: Iterable[float] = (), limits: Iterable[float] = (),
                            user_days: Iterable[float] = ()) -> list:
@@ -717,16 +814,18 @@ def unsupported_arithmetic(text: str, routes: list, days: Iterable[float],
     Hypothetical "would save you …" prose is judged too: a saving is arithmetic either way."""
     days = set(days) | days_stated(text)
     bad = []
-    for sentence, line in _sentences_with_lines(text):
-        if not figure_spans(sentence) and not products(sentence):
+    for sentence, line, subject in _with_header_subjects(text, routes):
+        if not figure_spans(sentence) and not products(sentence) and not JOURNEY_COUNT.search(sentence):
             continue
         if not (_ARITHMETIC_CUE.search(sentence) or DAY_PERIOD.search(sentence) or WEEK_PERIOD.search(sentence)
                 or MARGIN_UNDER.search(sentence) or MARGIN_OVER.search(sentence)
-                or SPREAD_BOUND.search(sentence) or SPREAD_EXACT.search(sentence)):
+                or SPREAD_BOUND.search(sentence) or SPREAD_EXACT.search(sentence)
+                or JOURNEY_COUNT.search(sentence)):
             continue
         # The user's own limit is the reference of a margin ("about 5 minutes to spare").
         ok, seen = check_figures(sentence, sentence=sentence, line=line, routes=routes, days=days,
-                                 known=known, skip_bounds=True, caps=limits, user_days=user_days)
+                                 known=known, skip_bounds=True, caps=limits, user_days=user_days,
+                                 subject=subject)
         if seen and not ok:
             bad.append(sentence)
     return bad
@@ -740,11 +839,11 @@ def supported_in_text(value: float, text: str, routes_or_measured: Iterable, day
     routes = [r if isinstance(r, dict) else {"labels": [], "minutes": float(r)} for r in routes_or_measured]
     days = set(days) | days_stated(text)
     token = re.compile(r"(?<![\d.])" + re.escape(f"{value:g}") + r"(?![\d.])")
-    for sentence, line in _sentences_with_lines(text):
+    for sentence, line, subject in _with_header_subjects(text, routes):
         if not token.search(sentence):
             continue
         ok, seen = check_figures(sentence, sentence=sentence, line=line, routes=routes, days=days,
-                                 known=known, caps=caps, user_days=user_days)
+                                 known=known, caps=caps, user_days=user_days, subject=subject)
         if ok and seen:
             return True
     return False

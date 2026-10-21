@@ -1311,6 +1311,8 @@ def _asserts_commute(fragment: str) -> bool:
     text = str(fragment or "")
     if _MINUTE_TOKEN.search(text):
         return True
+    if _arithmetic.JOURNEY_COUNT.search(text) and _arithmetic.journey_counts(text):
+        return True       # "(8 journeys)": a count the week must bear out (r17)
     # A travel expense within a monetary budget is not a travel-time verdict.
     if re.search(r"fare|\bcost\b|\bprice\b|票价|费用|交通费", text, re.I):
         return False
@@ -1350,8 +1352,9 @@ _SPECULATION = re.compile(r"\b(?:could|might|may)\s+(?:well\s+|also\s+|even\s+)?
 # nothing.
 _ADVICE_CLAUSE = re.compile(
     r"^\s*(?:(?:and|but|so|or)\s+)?(?:(?:for|in)\s+[\w'’ -]{1,40}?,?\s+)?"
-    r"(?:you|i|we)\s+(?:would|might|may|could|should)\s+(?:also\s+)?(?:want|need|like|prefer|do\s+well)?"
-    r"\s*(?:to\s+)?(?:look|search|consider|focus|try|check|aim|target)\b", re.I)
+    r"(?:you|i|we)\s+(?:would|might|may|could|should)\s+(?:also\s+)?(?:want|need|like|prefer|do\s+well|have)?"
+    r"\s*(?:to\s+)?(?:either\s+)?(?:look|search|consider|focus|try|check|aim|target|accept|choose|pick|find|"
+    r"weigh|trade|compromise|live|go)\b", re.I)
 
 
 # A figure-free condition on the USER's priorities ("If your priority is a shorter journey",
@@ -2404,7 +2407,8 @@ def _sentence_of(line: str, fragment: str) -> str:
 
 
 def _arithmetic_evidenced(fragment: str, *, context: str, previous_clause: str, line: str,
-                          pool: list, days: set, subject: dict | None, user_days: set = frozenset()) -> bool:
+                          pool: list, days: set, subject: dict | None, user_days: set = frozenset(),
+                          caps: set = frozenset()) -> bool:
     """Arithmetic on this turn's measured routes, in any notation, by THE shared rule
     (``uk_rent_agent.agent.commute_arithmetic.check_figures``, also the critic's): differences
     of the PAIR the text names or implies, their x2 / x days / x2 x days totals, products and
@@ -2418,17 +2422,27 @@ def _arithmetic_evidenced(fragment: str, *, context: str, previous_clause: str, 
         return False
     text = str(fragment or "")
     if not (_arithmetic.MINUTES.search(text) or _HOURS_AND_MINUTES.search(text)
+            or _arithmetic.JOURNEY_COUNT.search(text)
             or any(phrase in text.lower() for phrase, _v in _arithmetic.DURATION_WORDS)):
         return False
     label = line[:80].split(":", 1)[0] if ":" in line[:80] else ""
     scope = f"{label} {previous_clause} {context} {text}"
     if not (_DAY_PERIOD.search(scope) or _WEEK_PERIOD.search(scope) or _COMPARISON_CUE.search(scope)
-            or _arithmetic.products(text) or _arithmetic.subtractions(text)):
+            or _arithmetic.products(text) or _arithmetic.subtractions(text)
+            or _arithmetic.JOURNEY_COUNT.search(text)
+            or (caps and re.search(r"\b(?:limit|cap|max(?:imum)?|spare|headroom|margin|buffer)\b", scope, re.I))):
         return False      # no arithmetic here: cheap exit, before any line-wide work
     if _line_has_wrong_base(line, tuple(measured), tuple(sorted(set(days) | set(user_days) | {5.0}))):
         return False      # consistency: a wrong base takes the line's totals with it
     plain = _OVER_A_PERIOD.sub(" ", _ROUTE_COMPARATIVE.sub(" ", _SUPERLATIVE.sub(" ", text)))
     plain = re.sub(r"\b(?:over|than|versus|vs\.?|against)\s+(?:[A-Z][\w'’-]*\s*){1,3}", " ", plain)
+    if caps:
+        # A margin's own direction word is checked by the margin rule: "25 − 19 = 6 minutes
+        # under", "outside your limit, by 4 minutes" (r16 0a6c11d6).
+        plain = re.sub(r"(?<=\bminutes)\s+(?:under|over)\b|(?<=\bmins)\s+(?:under|over)\b", " ", plain, flags=re.I)
+        plain = re.sub(r"\b(?:within|inside|under|below|over|above|beyond|outside|past)\s+"
+                       r"(?:your|the)\s+(?:\d+[\s-]*minute\s+)?(?:cap|limit|max(?:imum)?|ceiling|threshold)\b",
+                       " ", plain, flags=re.I)
     plain = _arithmetic.SUBTRACTION.sub(" ", plain)
     if _PASS_VERDICT.search(plain) or _FAIL_VERDICT.search(plain) or _duration_bounds(text):
         return False
@@ -2438,7 +2452,8 @@ def _arithmetic_evidenced(fragment: str, *, context: str, previous_clause: str, 
         subject_route = {"labels": list(subject["labels"]), "minutes": subject["minutes"]}
     ok, seen = _arithmetic.check_figures(text, sentence=f"{previous_clause} {sentence}", line=line,
                                          label=label, context=context, routes=routes, days=days,
-                                         subject=subject_route, user_days=user_days)
+                                         subject=subject_route, user_days=user_days, caps=caps,
+                                         lead=previous_clause)
     if not (ok and seen):
         return False      # plain journey times are the ordinary per-route check's business
     superlative = _SUPERLATIVE.search(text)
@@ -2708,7 +2723,11 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             binding = block_binding
         elif not list_item and line.strip():
             own_line = _line_binding(line, bindings)
-            block_binding = own_line if own_line is not None and own_line.get("listing") else None
+            # A listing's header, or a route's: "**Bow — no, it's over**" / "### Bow" / "Bow:"
+            # (r16 0a6c11d6), so "- 29 minutes door to door, so 4 minutes over your limit" is Bow's.
+            header = bool(re.match(r"^\s*(?:\*\*|#{1,4}\s)", line) or line.rstrip().endswith((":", "：")))
+            block_binding = own_line if own_line is not None and own_line.get("labels") and not own_line.get(
+                "members") and (own_line.get("listing") or header) else None
         preference_line = preference_context or bool(re.search(
             r"preference|default|remember|偏好|默认|保存|记住|"
             r"requirements?\s+(?:stand|remain)|conditions?\s+(?:stand|remain)|"
@@ -2743,6 +2762,12 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             if _quotes_source_text(fragment, source_texts):
                 return True
             effective = _binding if _binding is not None else binding
+            if _arithmetic.journey_counts(fragment) and not _MINUTE_TOKEN.search(fragment):
+                # A journey count alone ("(8 journeys)", "6 journeys"): it must match the week it
+                # is for, whatever the turn measured (r17). Same rule as the critic.
+                return _arithmetic.journey_counts_ok(
+                    fragment, context=f"{context} {previous_clause}", sentence=line,
+                    user_days=user_days, answer_days=answer_days)
             if _claim_is_evidenced(fragment, effective, caps, context=context, heading=heading,
                                    itinerary=itinerary, sentence_marked=sentence_marked):
                 return True
@@ -2763,7 +2788,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 return True
             if _arithmetic_evidenced(fragment, context=context, previous_clause=previous_clause,
                                      line=line, pool=pool, days=answer_days, subject=effective,
-                                     user_days=user_days):
+                                     user_days=user_days, caps=caps):
                 return True
             if values and _owned_by_named_routes(fragment, bindings, caps):
                 return True
@@ -3018,6 +3043,14 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             if drop:
                 address_tail_open = separator.strip() in {",", "，"}
                 removed.append(fragment)
+                if (len(kept) > sentence_start
+                        and re.match(r"^\s*(?:so\s+|and\s+|but\s+)?(?:if|when|unless|once|whenever)\b[^.!?]*[,，]\s*$",
+                                     kept[-1], re.I)):
+                    # The condition lost the main clause it led into: "— so if Bow is on your
+                    # shortlist, <withdrawn>." left "so if Bow is on your shortlist." (r16).
+                    removed.append(kept.pop())
+                    if len(kept) > sentence_start:
+                        kept[-1] = re.sub(r"\s+[–—-]\s+$", "", kept[-1])
                 dropped_in_sentence = True
                 sentence_dropped = True
                 crossed_sentence = bool(_SENTENCE_END.search(separator))
@@ -3237,7 +3270,8 @@ def _stub_remnant(text: str) -> bool:
         return True
     if _LEAD_IN_TAIL.search(plain):
         return True
-    if _SUBORDINATE_ONLY.match(plain) and not re.search(r"[,;]\s*\w", plain):
+    if (_SUBORDINATE_ONLY.match(plain) or (_PREPOSITION_LED.match(plain) and not _FINITE_VERB.search(plain))) \
+            and not re.search(r"[,;]\s*\w", plain):
         # Only a subordinate clause is left: "While Bow comes in roughly 4 minutes over.",
         # "With 3 office days a week (return trips)." (r15). The sentence goes whole.
         return True
@@ -3247,9 +3281,16 @@ def _stub_remnant(text: str) -> bool:
     return len(words) <= 4
 
 
+# A clause led by a subordinating conjunction is a fragment on its own; one led by a
+# preposition ("With three office days that's 9 x 2 x 3 = 54 minutes a week") is a fragment
+# only when no verb follows it ("With 3 office days a week (return trips).").
 _SUBORDINATE_ONLY = re.compile(
-    r"^\s*(?:while|whilst|whereas|although|though|because|since|unless|with|without|as|after|before|"
-    r"if|when|so\s+that)\b", re.I)
+    r"^\s*(?:while|whilst|whereas|although|though|because|since|unless|if|when|whenever|so\s+that|"
+    r"so\s+if|which|who)\b", re.I)
+_PREPOSITION_LED = re.compile(r"^\s*(?:with|without|as|after|before|for|at)\b", re.I)
+_FINITE_VERB = re.compile(
+    r"\b(?:is|are|was|were|be|been|that['’]s|it['’]s|there['’]s|takes?|took|saves?|gives?|comes?|has|have|"
+    r"had|would|will|can|could|means?|works?|adds?|makes?|puts?|gets?)\b", re.I)
 _LEAD_IN_TAIL = re.compile(
     r"(?:\bfor\s+example|\bfor\s+instance|\be\.g\.?|\bsuch\s+as|\bnamely|\bi\.e\.?|"
     r"\bin\s+particular|\bspecifically|\bincluding|例如|比如)[\s,，:：]*$", re.I)

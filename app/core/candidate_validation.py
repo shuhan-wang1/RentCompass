@@ -2553,10 +2553,17 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
     # The margin between this measurement and the user's cap: "meets your 25-minute limit with
     # about 5 minutes to spare", "comes in roughly 4 minutes over" (r10 bb5cdb25). Only in the
     # direction the measurement actually points.
-    if re.search(r"\bto\s+spare\b|\bspare\b|\bmargin\b|\bheadroom\b|\bleeway\b", fragment, re.I):
-        allowed |= {round(cap - binding["minutes"], 2) for cap in caps if cap > binding["minutes"]}
-    if re.search(r"\bover\b|\bbeyond\b|\btoo\s+long\b|\bmore\s+than\b", fragment, re.I):
-        allowed |= {round(binding["minutes"] - cap, 2) for cap in caps if binding["minutes"] > cap}
+    # The margin is judged by the shared rule (uk_rent_agent.agent.commute_arithmetic), so the
+    # critic and this redactor agree: its reference is the cap, exact or hedged, and never
+    # another route ("about 9 minutes to spare" with Stratford 20 under a 25 cap goes).
+    hedged_margin = bool(_ROUGHLY.search(fragment))
+    for start, end, value in _arithmetic.figure_spans(fragment):
+        side = _arithmetic.margin_side(fragment, start, end, fragment, caps_known=bool(caps))
+        if side is None:
+            continue
+        margins = [cap - binding["minutes"] if side == "under" else binding["minutes"] - cap for cap in caps]
+        if any(margin > 0 and _arithmetic.close(value, margin, hedged_margin) for margin in margins):
+            allowed.add(value)
     # A leg's own duration is part of the same measurement, but only for a leg this claim
     # names by line or mode — "(6 min)" attached to "Northern line to Moorgate". A claim
     # about the WHOLE trip may not borrow one: a whole-trip word ("the journey takes 6
@@ -3038,6 +3045,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             # not a label and stays (r13 control 3709647b).
             rebuilt = ""
         rebuilt = re.sub(r"(?<=\S) {2,}(?=\S)", " ", rebuilt)
+        rebuilt = re.sub(r"[,，;；:：]+\s*(?=[.!?。！？](?:\s|$))", "", rebuilt)   # "to spare,." (r14 follow-up)
         # "If commute is your priority,confirm rents" (r13): a kept comma keeps its space.
         rebuilt = re.sub(r"(?<=[A-Za-z)])([,;])(?=[A-Za-z])", r"\1 ", rebuilt)
         # Tidy up after removal: no doubled or dangling separators.

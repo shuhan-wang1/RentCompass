@@ -639,10 +639,9 @@ def unsupported_external_numbers(response: str, evidence: Any, user_text: str = 
     # 25-minute cap with Stratford measured at 20.
     limits = arithmetic.durations(user_text)
     if unit_unsupported:
-        points = list(routes) + [{"labels": [], "minutes": float(v)} for v in limits]
         unit_unsupported = [value for value in unit_unsupported
-                            if not arithmetic.supported_in_text(value, asserted_response, points, days,
-                                                                known=allowed)]
+                            if not arithmetic.supported_in_text(value, asserted_response, routes, days,
+                                                                known=allowed, caps=limits)]
     if unit_unsupported:
         return True
     # ... and a saving that does NOT derive is unsupported even in "would save you …" prose,

@@ -357,6 +357,14 @@ def _compared_routes(sentence: str, routes: list) -> list:
 
 def pair_differences(*, text: str, at: int, sentence: str, line: str, label: str, routes: list,
                      measured: list, days: set, subject: dict | None = None, start: int | None = None) -> set:
+    return pair_reference(text=text, at=at, sentence=sentence, line=line, label=label, routes=routes,
+                          measured=measured, days=days, subject=subject, start=start)[0]
+
+
+def pair_reference(*, text: str, at: int, sentence: str, line: str, label: str, routes: list,
+                   measured: list, days: set, subject: dict | None = None,
+                   start: int | None = None) -> tuple[set, bool]:
+    """``(differences, fixed)``: ``fixed`` is False only for the any-pair fallback."""
     """The differences a figure at ``at`` in ``text`` may be derived from (r14 loophole).
 
     The base difference quoted in the same sentence wins, then one quoted on the same line;
@@ -365,14 +373,14 @@ def pair_differences(*, text: str, at: int, sentence: str, line: str, label: str
     only when nothing identifies a pair, any difference of the turn."""
     sentence_bases, _ = _bases(sentence, measured, days)
     if sentence_bases:
-        return sentence_bases
+        return sentence_bases, True
     line_bases, _ = _bases(line, measured, days)
     if line_bases:
-        return line_bases
+        return line_bases, True
     target = ((_route_just_before(text, start, routes) if start is not None else None)
               or _route_after(text, at, routes) or (_route_after(label, 0, routes) if label else None))
     if target is None:
-        return set(differences(measured))
+        return set(differences(measured)), False
     # The other end: a route the sentence names that is not itself compared WITH ("… against
     # Holloway (…) and … against Camden (…)" names two targets and no subject).
     compared = _compared_routes(sentence, routes)
@@ -383,8 +391,51 @@ def pair_differences(*, text: str, at: int, sentence: str, line: str, label: str
             and not any(c["minutes"] == subject["minutes"] for c in compared):
         other = subject
     if other is not None:
-        return {round(abs(target["minutes"] - other["minutes"]), 2)} - {0.0}
-    return {d for d, pairs in differences(measured).items() if any(target["minutes"] in p for p in pairs)}
+        return {round(abs(target["minutes"] - other["minutes"]), 2)} - {0.0}, True
+    return {d for d, pairs in differences(measured).items() if any(target["minutes"] in p for p in pairs)}, True
+
+
+# A margin against the user's LIMIT: its reference is the cap, never another route.
+# "with about 5 minutes to spare", "5 minutes inside your cap", "under your limit by 5
+# minutes", "a margin of 5 minutes"; and the other way, "roughly 4 minutes over (your limit)".
+_LIMIT_NOUN = r"(?:cap|limit|max(?:imum)?|ceiling|threshold|target)"
+MARGIN_UNDER = re.compile(
+    r"\bto\s+spare\b|\bspare\b|\bmargin\b|\bheadroom\b|\bleeway\b|\bbuffer\b|"
+    r"\b(?:inside|within|under|below)\s+(?:your|the)\s+(?:\d+[\s-]*minute\s+)?" + _LIMIT_NOUN + r"\b", re.I)
+MARGIN_OVER = re.compile(
+    r"\b(?:over|above|beyond|past)\s+(?:your|the)\s+(?:\d+[\s-]*minute\s+)?" + _LIMIT_NOUN + r"\b|"
+    r"\b(?:minutes?|mins?)\s+(?:too\s+long|over)\b(?!\s+(?:the\s+)?[A-Z])", re.I)
+CAP_NAMED = re.compile(
+    r"\b(?:your|the)\s+(?:\d+[\s-]*minute\s+)?" + _LIMIT_NOUN + r"\b|\b\d+[\s-]*minute\s+" + _LIMIT_NOUN + r"\b",
+    re.I)
+
+
+_CAP_PHRASE = r"(?:your|the)\s+(?:\d+[\s-]*minute\s+)?" + _LIMIT_NOUN
+_HEDGE_WORDS = r"(?:about\s+|roughly\s+|around\s+|just\s+|only\s+|nearly\s+|almost\s+)?"
+_AFTER_UNDER = re.compile(
+    r"^\s*(?:to\s+spare|spare|of\s+(?:headroom|leeway|margin|buffer|room)|"
+    r"(?:inside|within|under|below)\s+" + _CAP_PHRASE + r")\b", re.I)
+_BEFORE_UNDER = re.compile(
+    r"(?:(?:inside|within|under|below)\s+" + _CAP_PHRASE + r"\s+by|(?:a\s+)?(?:margin|buffer|headroom|leeway)\s+of)"
+    r"\s+" + _HEDGE_WORDS + r"$", re.I)
+_AFTER_OVER_CAP = re.compile(r"^\s*(?:over|above|beyond|past)\s+" + _CAP_PHRASE + r"\b|^\s*too\s+long\b", re.I)
+_AFTER_OVER_BARE = re.compile(r"^\s*over\b(?!\s+(?:the\s+|a\s+)?[A-Za-z])", re.I)
+_BEFORE_OVER = re.compile(r"(?:over|above|beyond|past)\s+" + _CAP_PHRASE + r"\s+by\s+" + _HEDGE_WORDS + r"$", re.I)
+
+
+def margin_side(text: str, start: int, end: int, sentence: str, caps_known: bool = False) -> str | None:
+    """'under' / 'over' when the figure at [start, end) is a margin against the user's limit:
+    "5 minutes to spare", "5 minutes inside your cap", "under your limit by 5 minutes", "a
+    margin of 5 minutes"; "4 minutes over your limit", "over your cap by 4 minutes", and a
+    bare "4 minutes over." when a limit is named in the sentence or known for this turn."""
+    after, before = text[end:end + 40], text[max(0, start - 40):start]
+    if _AFTER_UNDER.search(after) or _BEFORE_UNDER.search(before):
+        return "under"
+    if _AFTER_OVER_CAP.search(after) or _BEFORE_OVER.search(before):
+        return "over"
+    if _AFTER_OVER_BARE.search(after) and (caps_known or CAP_NAMED.search(sentence)):
+        return "over"
+    return None
 
 
 _BOUND_BEFORE = re.compile(
@@ -411,7 +462,8 @@ def figure_spans(text: str) -> list:
 
 def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", context: str = "",
                   routes: list, days: Iterable[float], subject: dict | None = None,
-                  known: Iterable[float] = (), skip_bounds: bool = False) -> tuple[bool, bool]:
+                  known: Iterable[float] = (), skip_bounds: bool = False,
+                  caps: Iterable[float] = ()) -> tuple[bool, bool]:
     """``(every figure of text is evidenced, text does arithmetic)`` — THE derived-figure rule.
 
     A figure is evidenced when it is a correct product or subtraction step (or restates the
@@ -451,18 +503,37 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
     comparison = bool(COMPARISON_CUE.search(scope))
     hedged = bool(HEDGE.search(text))
     known = [float(k) for k in known]
+    caps = sorted({float(c) for c in caps if c})
     for start, end, value in figure_spans(rest):
         if any(abs(value - r) < 0.5 for r in results):
             seen = True
             continue
-        if any(abs(value - k) <= 0.01 for k in known):
-            continue          # the evidence states it outright (a leg, a fare-free figure, …)
+        if caps and any(abs(value - cap) < 1e-9 for cap in caps) and CAP_NAMED.search(
+                rest[max(0, start - 12):end + 20]):
+            continue          # the user's limit itself: "your 25-minute limit"
+        side = margin_side(rest, start, end, sentence, caps_known=bool(caps))
+        if side is not None:
+            # A margin against the user's limit: cap - the subject's minutes (or the reverse
+            # when over), exact or hedged, and NEVER another pair or an evidence coincidence:
+            # "about 9 minutes to spare" (Bow - Stratford) under a 25 cap with Stratford at 20.
+            seen = True
+            owner = _route_before(rest, start, routes) or subject or _first_route(sentence, routes)
+            if owner is None or not caps:
+                return False, True
+            margins = [cap - owner["minutes"] if side == "under" else owner["minutes"] - cap for cap in caps]
+            if not any(margin > 0 and close(value, margin, hedged) for margin in margins):
+                return False, True
+            continue
+        diffs, fixed = pair_reference(text=rest, at=end, sentence=sentence, line=line, label=label,
+                                      routes=routes, measured=measured, days=days, subject=subject,
+                                      start=start)
+        if known and not fixed and any(abs(value - k) <= 0.01 for k in known):
+            continue          # the evidence states it outright and nothing fixes a reference
         if skip_bounds and _BOUND_BEFORE.search(rest[max(0, start - 40):start]):
             continue          # "still under half an hour" is a verdict, not arithmetic
-        diffs = pair_differences(text=rest, at=end, sentence=sentence, line=line, label=label,
-                                 routes=routes, measured=measured, days=days, subject=subject,
-                                 start=start)
-        if period and any(close(value, d * f, hedged) for d in diffs for f in multipliers(days)):
+        # The any-pair fallback takes a hedged figure only EXACTLY: a near-miss never passes
+        # through a pair nobody named.
+        if period and any(close(value, d * f, hedged and fixed) for d in diffs for f in multipliers(days)):
             seen = True
             continue
         if comparison and any(abs(value - d) < 1e-9 for d in diffs):
@@ -471,12 +542,21 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
         owner = _route_before(rest, start, routes) or subject
         if owner is not None and owner.get("minutes") is not None and abs(owner["minutes"] - value) < 1e-9:
             continue
+        if any(abs(value - k) <= 0.01 for k in known):
+            continue          # an evidence figure (a leg, …) quoted beside the comparison
         return False, True if (seen or period or comparison) else False
     return True, seen
 
 
 def sentences(text: str) -> list:
     return [m.group() for m in _SENTENCE.finditer(str(text or "")) if m.group().strip()]
+
+
+def _sentences_with_lines(text: str) -> list:
+    """``[(sentence, its line)]``: a base quoted earlier in the paragraph fixes the pair of a
+    later sentence ("… a gap of roughly 14 minutes each way … at three office days it's about
+    1 hour 25 minutes"), exactly as the redactor reads it."""
+    return [(sentence, line) for line in str(text or "").split("\n") for sentence in sentences(line)]
 
 
 def unsupported_arithmetic(text: str, routes: list, days: Iterable[float],
@@ -487,34 +567,33 @@ def unsupported_arithmetic(text: str, routes: list, days: Iterable[float],
     a comparison with a figure) is judged; every figure of it must pass ``check_figures``.
     Hypothetical "would save you …" prose is judged too: a saving is arithmetic either way."""
     days = set(days) | days_stated(text)
-    # The user's own limit is a reference point: "about 5 minutes to spare" under a 25-minute
-    # cap with a measured 20 is a difference too.
-    routes = list(routes) + [{"labels": [], "minutes": float(v)} for v in limits]
     bad = []
-    for sentence in sentences(text):
+    for sentence, line in _sentences_with_lines(text):
         if not figure_spans(sentence) and not products(sentence):
             continue
-        if not (_ARITHMETIC_CUE.search(sentence) or DAY_PERIOD.search(sentence) or WEEK_PERIOD.search(sentence)):
+        if not (_ARITHMETIC_CUE.search(sentence) or DAY_PERIOD.search(sentence) or WEEK_PERIOD.search(sentence)
+                or MARGIN_UNDER.search(sentence) or MARGIN_OVER.search(sentence)):
             continue
-        ok, seen = check_figures(sentence, sentence=sentence, line=sentence, routes=routes, days=days,
-                                 known=known, skip_bounds=True)
+        # The user's own limit is the reference of a margin ("about 5 minutes to spare").
+        ok, seen = check_figures(sentence, sentence=sentence, line=line, routes=routes, days=days,
+                                 known=known, skip_bounds=True, caps=limits)
         if seen and not ok:
             bad.append(sentence)
     return bad
 
 
 def supported_in_text(value: float, text: str, routes_or_measured: Iterable, days: Iterable[float],
-                      known: Iterable[float] = ()) -> bool:
+                      known: Iterable[float] = (), caps: Iterable[float] = ()) -> bool:
     """For the critic: ``value`` (a figure the evidence lacks) sits in an arithmetic sentence
     of ``text`` whose figures all derive under the pair rule."""
     routes = [r if isinstance(r, dict) else {"labels": [], "minutes": float(r)} for r in routes_or_measured]
     days = set(days) | days_stated(text)
     token = re.compile(r"(?<![\d.])" + re.escape(f"{value:g}") + r"(?![\d.])")
-    for sentence in sentences(text):
+    for sentence, line in _sentences_with_lines(text):
         if not token.search(sentence):
             continue
-        ok, seen = check_figures(sentence, sentence=sentence, line=sentence, routes=routes, days=days,
-                                 known=known)
+        ok, seen = check_figures(sentence, sentence=sentence, line=line, routes=routes, days=days,
+                                 known=known, caps=caps)
         if ok and seen:
             return True
     return False

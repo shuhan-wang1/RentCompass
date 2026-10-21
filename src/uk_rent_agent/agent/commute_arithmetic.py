@@ -74,9 +74,10 @@ def days_stated(text: Any) -> set[float]:
     days = set()
     pattern = (r"\b(" + _NUMBER_WORD + r")[\s-]*(?:office\s+)?days?"
                r"(?:\s+(?:a|per)\s+week|[\s-]+(?:office\s+)?(?:week|commute)|\s+in\s+the\s+office)"
-               r"|\b(" + _NUMBER_WORD + r")\s+office\s+days?\b")
+               r"|\b(" + _NUMBER_WORD + r")\s+office\s+days?\b"
+               r"|\bon\s+(" + _NUMBER_WORD + r")\s+days\b")
     for match in re.finditer(pattern, str(text or ""), re.I):
-        word = (match.group(1) or match.group(2)).lower()
+        word = (match.group(1) or match.group(2) or match.group(3)).lower()
         days.add(float(WORD_NUMBERS.get(word) or int(word)))
     return days
 
@@ -443,6 +444,121 @@ _BOUND_BEFORE = re.compile(
     r"at\s+most|up\s+to|no\s+more\s+than|beyond)\s+(?:just\s+|about\s+|roughly\s+|around\s+|a\s+)?$", re.I)
 
 
+# The period a total is FOR, read next to the figure (r15 efaa330f: "about 18 minutes a week
+# saved — around 54 minutes over a typical month" with 9 x 2 x 3 = 54 a week passed because
+# every multiplier was allowed whatever the unit).
+_UNIT_PHRASES = (
+    ("month", re.compile(r"\b(?:a|per|each|every|the|over\s+(?:a|the)(?:\s+typical)?|in\s+a)\s+month\b|"
+                         r"\bmonthly\b|\bmonths?\b", re.I)),
+    ("year", re.compile(r"\b(?:a|per|each|every|over\s+(?:a|the)|in\s+a)\s+year\b|\byearly\b|"
+                        r"\bannual(?:ly)?\b", re.I)),
+    ("week", re.compile(r"\b(?:a|per|each|every|the|over\s+(?:a|the)|in\s+a|across\s+the)\s+"
+                        r"(?:[\w-]+\s+){0,2}?week\b|\bweekly\b|\bweek\b", re.I)),
+    ("day", re.compile(r"\b(?:a|per|each|every)\s+(?:working\s+|office\s+)?day\b|\bdaily\b", re.I)),
+)
+_CLAUSE_BREAK = re.compile(r"[,;:—–()]|\s-\s|(?<=[.!?])\s")
+_ONE_WAY = re.compile(r"\b(?:one[\s-]way|each\s+way|in\s+each\s+direction|per\s+direction)\b", re.I)
+
+
+def _unit_in(segment: str, *, last: bool = False) -> str | None:
+    found = []
+    for unit, pattern in _UNIT_PHRASES:
+        for match in pattern.finditer(segment):
+            found.append((match.start(), unit))
+    if not found:
+        return None
+    found.sort()
+    return found[-1][1] if last else found[0][1]
+
+
+def figure_unit(text: str, start: int, end: int, sentence: str = "") -> str | None:
+    """'day' / 'week' / 'month' / 'year' for the total at [start, end): the period phrase right
+    after it in its clause, else the nearest one before it in the clause, else in the sentence."""
+    after = text[end:end + 60]
+    stop = re.search(r"\d|[,;:—–]|(?<=[.!?])\s|$", after)
+    unit = _unit_in(after[:stop.start()] if stop else after)
+    if unit:
+        return unit
+    before = text[max(0, start - 80):start]
+    cut = max([m.end() for m in _CLAUSE_BREAK.finditer(before)], default=0)
+    unit = _unit_in(before[cut:], last=True)
+    if unit:
+        return unit
+    if sentence:
+        probe = text[max(0, start - 20):start]
+        at = sentence.find(probe) + len(probe) if probe and probe in sentence else -1
+        if at >= 0:
+            return _unit_in(sentence[:at], last=True) or _unit_in(sentence[at:])
+        return _unit_in(sentence)
+    return None
+
+
+def _clause_of(text: str, start: int, end: int) -> str:
+    before = text[max(0, start - 120):start]
+    cut = max([m.end() for m in _CLAUSE_BREAK.finditer(before)], default=0)
+    after = text[end:end + 120]
+    stop = _CLAUSE_BREAK.search(after)
+    return before[cut:] + text[start:end] + (after[:stop.start()] if stop else after)
+
+
+def figure_days(clause: str, sentence: str, user_days: Iterable[float], answer_days: Iterable[float]) -> set:
+    """Commuting days for a weekly total: an N-day week the answer states FOR this figure
+    (its clause, then its sentence), else the user's own office days, else an N-day week the
+    answer states, else 5. The user's days are never overridden by a 5-day default."""
+    local = days_stated(clause) or days_stated(sentence)
+    if local:
+        return local
+    user = {float(d) for d in user_days if d}
+    if user:
+        return user
+    stated = {float(d) for d in answer_days if d}
+    return stated or {STANDARD_DAYS}
+
+
+def total_matches(value: float, diffs: Iterable[float], unit: str | None, days: Iterable[float], *,
+                  hedged: bool, one_way: bool = False) -> bool:
+    """A daily total is diff x 2 (diff x 1 only "one way"); a weekly one diff x 2 x days (x days
+    only "one way"); a monthly or yearly total, or one with no period, is not derived here."""
+    if unit == "day":
+        factors = {2.0} | ({1.0} if one_way else set())
+    elif unit == "week":
+        days = [float(d) for d in days if d]
+        factors = {2.0 * d for d in days} | ({d for d in days} if one_way else set())
+    else:
+        return False
+    return any(close(value, d * f, hedged) for d in diffs for f in factors)
+
+
+# The SPREAD of the routes: "all three are within 4 minutes of each other" (Camden 25, Holloway
+# 24, Kentish Town 21; r15 700d77a8), "they are 4 minutes apart".
+_N = r"(\d{1,3}(?:\.\d+)?)\s*(?:minutes?|mins?)"
+SPREAD_BOUND = re.compile(
+    r"\b(?:within|under|less\s+than|no\s+more\s+than|at\s+most)\s+(?:about\s+|roughly\s+|around\s+|just\s+)?"
+    + _N + r"\s+of\s+(?:each\s+other|one\s+another)\b", re.I)
+SPREAD_EXACT = re.compile(
+    r"\b" + _N + r"\s+apart\b|\b(?:spread|range)\s+of\s+(?:only\s+|just\s+|about\s+|roughly\s+)?" + _N +
+    r"|\b(?:separated|differ)\s+by\s+(?:only\s+|just\s+|about\s+|roughly\s+)?" + _N, re.I)
+
+
+def spreads(text: str, sentence: str, routes: list) -> list:
+    """``[(span, holds)]`` for each spread claim in ``text``: a bound must be >= max - min of
+    the routes the sentence names (all measured routes when it names fewer than two); an
+    exact spread must equal it (hedged: within the tolerance)."""
+    named = [r for r in routes if any(_mentions(sentence, label) >= 0 for label in r["labels"] if label)]
+    pool = named if len(named) >= 2 else routes
+    values = [float(r["minutes"]) for r in pool if r.get("minutes") is not None]
+    if len(values) < 2:
+        return []
+    spread = max(values) - min(values)
+    found = []
+    for match in SPREAD_BOUND.finditer(text):
+        found.append((match.span(), float(match.group(1)) >= spread - 1e-9))
+    for match in SPREAD_EXACT.finditer(text):
+        value = float(next(g for g in match.groups() if g))
+        found.append((match.span(), close(value, spread, bool(HEDGE.search(match.group())))))
+    return found
+
+
 def figure_spans(text: str) -> list:
     """``[(start, end, minutes)]`` for every duration in ``text`` ("2 hours 20 minutes" = 140)."""
     spans = [(m.start(), m.end(), float(m.group(1)) * 60 + float(m.group(2) or 0))
@@ -463,7 +579,7 @@ def figure_spans(text: str) -> list:
 def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", context: str = "",
                   routes: list, days: Iterable[float], subject: dict | None = None,
                   known: Iterable[float] = (), skip_bounds: bool = False,
-                  caps: Iterable[float] = ()) -> tuple[bool, bool]:
+                  caps: Iterable[float] = (), user_days: Iterable[float] = ()) -> tuple[bool, bool]:
     """``(every figure of text is evidenced, text does arithmetic)`` — THE derived-figure rule.
 
     A figure is evidenced when it is a correct product or subtraction step (or restates the
@@ -475,7 +591,9 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
     measured = sorted({float(r["minutes"]) for r in routes})
     if len(measured) < 2:
         return False, False
-    days = {float(d) for d in days if d} | {STANDARD_DAYS}
+    answer_days = {float(d) for d in days if d}
+    user_days = {float(d) for d in user_days if d}
+    days = answer_days | user_days | {STANDARD_DAYS}       # every week length anyone stated
     scope = f"{label} {sentence} {context}"
     _, wrong_base = _bases(line or sentence, measured, days)
     if wrong_base:
@@ -488,12 +606,31 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
         results.append(step["result"])
         seen = True
     for product in products(text):
-        diffs = pair_differences(text=text, at=product["span"][1], sentence=sentence, line=line,
+        start_, end_ = product["span"]
+        diffs = pair_differences(text=text, at=end_, sentence=sentence, line=line,
                                  label=label, routes=routes, measured=measured, days=days, subject=subject)
-        if not product_is_correct(product, measured, days, diffs=diffs):
+        clause = _clause_of(text, start_, end_)
+        local = days_stated(clause)
+        if not product_is_correct(product, measured, local or days, diffs=diffs):
+            return False, True
+        # ... and the result is a total for the period it names: "3 x 2 = 6 minutes per day",
+        # never "4 x 2 = 8 minutes a week".
+        unit = figure_unit(text, end_ - 1, end_, "")
+        stated_days = {v for v, u in product["operands"] if u.startswith("day")}
+        if unit in ("day", "week") and diffs and not total_matches(
+                product["result"], diffs, unit,
+                stated_days or figure_days(clause, sentence, user_days, answer_days),
+                hedged=False, one_way=bool(_ONE_WAY.search(clause))):
+            return False, True
+        if unit in ("month", "year"):
             return False, True
         covered.append(product["span"])
         results.append(product["result"])
+        seen = True
+    for span, holds in spreads(text, sentence, routes):
+        if not holds:
+            return False, True
+        covered.append(span)
         seen = True
     results += [p["result"] for p in products(context) if product_is_correct(p, measured, days)]
     rest = text
@@ -531,11 +668,22 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
             continue          # the evidence states it outright and nothing fixes a reference
         if skip_bounds and _BOUND_BEFORE.search(rest[max(0, start - 40):start]):
             continue          # "still under half an hour" is a verdict, not arithmetic
-        # The any-pair fallback takes a hedged figure only EXACTLY: a near-miss never passes
-        # through a pair nobody named.
-        if period and any(close(value, d * f, hedged and fixed) for d in diffs for f in multipliers(days)):
-            seen = True
-            continue
+        # A total is checked for the period it names, over the right number of days; the any-
+        # pair fallback takes a hedged figure only EXACTLY.
+        unit = figure_unit(rest, start, end, sentence) if period else None
+        if unit in ("month", "year"):
+            return False, True    # outside the rule: a monthly figure is not derived here
+        if unit in ("day", "week"):
+            clause = _clause_of(rest, start, end)
+            if total_matches(value, diffs, unit, figure_days(clause, sentence, user_days, answer_days),
+                             hedged=hedged and fixed, one_way=bool(_ONE_WAY.search(rest[end:end + 40]))):
+                seen = True
+                continue
+            if not (comparison and any(abs(value - d) < 1e-9 for d in diffs)):
+                owner = _route_before(rest, start, routes) or subject
+                if not (owner is not None and owner.get("minutes") is not None
+                        and abs(owner["minutes"] - value) < 1e-9):
+                    return False, True
         if comparison and any(abs(value - d) < 1e-9 for d in diffs):
             seen = True
             continue
@@ -560,7 +708,8 @@ def _sentences_with_lines(text: str) -> list:
 
 
 def unsupported_arithmetic(text: str, routes: list, days: Iterable[float],
-                           known: Iterable[float] = (), limits: Iterable[float] = ()) -> list:
+                           known: Iterable[float] = (), limits: Iterable[float] = (),
+                           user_days: Iterable[float] = ()) -> list:
     """For the critic: the arithmetic sentences of ``text`` whose figures do not derive.
 
     Only a sentence that does arithmetic (a product, a subtraction step, a day/week total, or
@@ -572,18 +721,20 @@ def unsupported_arithmetic(text: str, routes: list, days: Iterable[float],
         if not figure_spans(sentence) and not products(sentence):
             continue
         if not (_ARITHMETIC_CUE.search(sentence) or DAY_PERIOD.search(sentence) or WEEK_PERIOD.search(sentence)
-                or MARGIN_UNDER.search(sentence) or MARGIN_OVER.search(sentence)):
+                or MARGIN_UNDER.search(sentence) or MARGIN_OVER.search(sentence)
+                or SPREAD_BOUND.search(sentence) or SPREAD_EXACT.search(sentence)):
             continue
         # The user's own limit is the reference of a margin ("about 5 minutes to spare").
         ok, seen = check_figures(sentence, sentence=sentence, line=line, routes=routes, days=days,
-                                 known=known, skip_bounds=True, caps=limits)
+                                 known=known, skip_bounds=True, caps=limits, user_days=user_days)
         if seen and not ok:
             bad.append(sentence)
     return bad
 
 
 def supported_in_text(value: float, text: str, routes_or_measured: Iterable, days: Iterable[float],
-                      known: Iterable[float] = (), caps: Iterable[float] = ()) -> bool:
+                      known: Iterable[float] = (), caps: Iterable[float] = (),
+                      user_days: Iterable[float] = ()) -> bool:
     """For the critic: ``value`` (a figure the evidence lacks) sits in an arithmetic sentence
     of ``text`` whose figures all derive under the pair rule."""
     routes = [r if isinstance(r, dict) else {"labels": [], "minutes": float(r)} for r in routes_or_measured]
@@ -593,7 +744,7 @@ def supported_in_text(value: float, text: str, routes_or_measured: Iterable, day
         if not token.search(sentence):
             continue
         ok, seen = check_figures(sentence, sentence=sentence, line=line, routes=routes, days=days,
-                                 known=known, caps=caps)
+                                 known=known, caps=caps, user_days=user_days)
         if ok and seen:
             return True
     return False

@@ -634,21 +634,23 @@ def unsupported_external_numbers(response: str, evidence: Any, user_text: str = 
     # with the commute redactor (uk_rent_agent.agent.commute_arithmetic), pair rule included.
     from uk_rent_agent.agent import commute_arithmetic as arithmetic
     routes = arithmetic.named_routes(_successful_evidence(evidence))
-    days = arithmetic.days_stated(user_text) | arithmetic.days_stated(response)
+    days = arithmetic.days_stated(response)            # N-day weeks the answer states
+    user_days = arithmetic.days_stated(user_text)      # the user's own office days win over 5
     # The user's own limit is a reference point too: "about 5 minutes to spare" under a stated
     # 25-minute cap with Stratford measured at 20.
     limits = arithmetic.durations(user_text)
     if unit_unsupported:
         unit_unsupported = [value for value in unit_unsupported
                             if not arithmetic.supported_in_text(value, asserted_response, routes, days,
-                                                                known=allowed, caps=limits)]
+                                                                known=allowed, caps=limits,
+                                                                user_days=user_days)]
     if unit_unsupported:
         return True
     # ... and a saving that does NOT derive is unsupported even in "would save you …" prose,
     # or stated in hours ("3 hours a week over Camden"), which the unit scan never sees: the
     # critic agrees with the redactor (r14 item 3).
     if len(routes) >= 2 and arithmetic.unsupported_arithmetic(response or "", routes, days, known=allowed,
-                                                              limits=limits):
+                                                              limits=limits, user_days=user_days):
         return True
     # The live critic supplies the current user message. Keep the legacy direct
     # evaluate_grounding helper compatible when that context is intentionally absent.

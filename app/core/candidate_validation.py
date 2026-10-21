@@ -1321,7 +1321,7 @@ def _asserts_commute(fragment: str) -> bool:
         # "flats within a certain budget or commute time" offers a kind of search; it
         # asserts nothing about any journey (r08 NEW-D).
         return False
-    if _PRIORITY_CONDITION.match(text) or _ADVICE_CLAUSE.match(text):
+    if _PRIORITY_CONDITION.match(text) or _ADVICE_CLAUSE.match(text) or _SPECULATION.search(text):
         # "If your own priority is a shorter journey rather than lower rent" states a
         # hypothetical preference of the user's, not a journey (r06 099518b9).
         return False
@@ -1337,6 +1337,12 @@ def _period_total(text: str) -> bool:
     text = str(text or "")
     return bool(_HOURS_AND_MINUTES.search(text) or (
         (_DAY_PERIOD.search(text) or _WEEK_PERIOD.search(text)) and _durations_in(text)))
+
+
+# A figure-free possibility: "a particular listing in Bow could be closer to the station (or
+# further)" (r15 452df7d4) says what may be so, it asserts no journey.
+_SPECULATION = re.compile(r"\b(?:could|might|may)\s+(?:well\s+|also\s+|even\s+)?(?:be|sit|lie|end\s+up|turn\s+out)\b",
+                          re.I)
 
 
 # Figure-free advice on where to look: "and for Bow you would want to look at addresses closer
@@ -2363,8 +2369,13 @@ def _office_days(state: dict) -> set:
     value = (state.get("accumulated_search_criteria") or {}).get("office_days_per_week")
     if isinstance(value, (int, float)) and not isinstance(value, bool) and 0 < value <= 7:
         days.add(float(value))
-    current = str((state.get("extracted_context") or {}).get("current_message") or "")
+    context = state.get("extracted_context") or {}
+    current = str(context.get("current_message") or "")
     days |= _arithmetic.days_stated(current)
+    if not days:
+        for turn in (context.get("history") or [])[-20:]:
+            if isinstance(turn, dict):
+                days |= _arithmetic.days_stated(str(turn.get("user") or ""))
     return {d for d in days if d}
 
 
@@ -2393,7 +2404,7 @@ def _sentence_of(line: str, fragment: str) -> str:
 
 
 def _arithmetic_evidenced(fragment: str, *, context: str, previous_clause: str, line: str,
-                          pool: list, days: set, subject: dict | None) -> bool:
+                          pool: list, days: set, subject: dict | None, user_days: set = frozenset()) -> bool:
     """Arithmetic on this turn's measured routes, in any notation, by THE shared rule
     (``uk_rent_agent.agent.commute_arithmetic.check_figures``, also the critic's): differences
     of the PAIR the text names or implies, their x2 / x days / x2 x days totals, products and
@@ -2414,7 +2425,7 @@ def _arithmetic_evidenced(fragment: str, *, context: str, previous_clause: str, 
     if not (_DAY_PERIOD.search(scope) or _WEEK_PERIOD.search(scope) or _COMPARISON_CUE.search(scope)
             or _arithmetic.products(text) or _arithmetic.subtractions(text)):
         return False      # no arithmetic here: cheap exit, before any line-wide work
-    if _line_has_wrong_base(line, tuple(measured), tuple(sorted(days))):
+    if _line_has_wrong_base(line, tuple(measured), tuple(sorted(set(days) | set(user_days) | {5.0}))):
         return False      # consistency: a wrong base takes the line's totals with it
     plain = _OVER_A_PERIOD.sub(" ", _ROUTE_COMPARATIVE.sub(" ", _SUPERLATIVE.sub(" ", text)))
     plain = re.sub(r"\b(?:over|than|versus|vs\.?|against)\s+(?:[A-Z][\w'’-]*\s*){1,3}", " ", plain)
@@ -2427,7 +2438,7 @@ def _arithmetic_evidenced(fragment: str, *, context: str, previous_clause: str, 
         subject_route = {"labels": list(subject["labels"]), "minutes": subject["minutes"]}
     ok, seen = _arithmetic.check_figures(text, sentence=f"{previous_clause} {sentence}", line=line,
                                          label=label, context=context, routes=routes, days=days,
-                                         subject=subject_route)
+                                         subject=subject_route, user_days=user_days)
     if not (ok and seen):
         return False      # plain journey times are the ordinary per-route check's business
     superlative = _SUPERLATIVE.search(text)
@@ -2564,6 +2575,7 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
         margins = [cap - binding["minutes"] if side == "under" else binding["minutes"] - cap for cap in caps]
         if any(margin > 0 and _arithmetic.close(value, margin, hedged_margin) for margin in margins):
             allowed.add(value)
+            own.add(value)        # "(5 minutes to spare)" restates this route against the cap
     # A leg's own duration is part of the same measurement, but only for a leg this claim
     # names by line or mode — "(6 min)" attached to "Northern line to Moorgate". A claim
     # about the WHOLE trip may not borrow one: a whole-trip word ("the journey takes 6
@@ -2651,7 +2663,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
     bindings = list(bindings or [])
     caps = set(caps or ())
     # Commuting days a week for derived totals: 5, the user's own, or an N-day week the answer states.
-    answer_days = {5.0} | set(office_days or ()) | _arithmetic.days_stated(text)
+    answer_days = _arithmetic.days_stated(text)         # N-day weeks the answer states
+    user_days = set(office_days or ())                   # the user's own office days
     itinerary = _itinerary_bindings(text, bindings + ([default_binding] if default_binding else []))
     removed = removed if removed is not None else []
     # Every route/area/listing of this turn that carries a figure. A clause attributable to
@@ -2679,6 +2692,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
     lines: list[str] = []
     source_lines = str(text or "").split("\n")
     produced_at: list[int] = []        # len(lines) before each source line was processed
+    block_binding = None                # the listing a header line names, for its bullets
     for line in source_lines:
         produced_at.append(len(lines))
         removed_before_line = len(removed)
@@ -2686,6 +2700,15 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
         prefix = bullet.group(1) if bullet else ""
         body = line[len(prefix):]
         binding = _line_binding(line, bindings, default_binding)
+        # Bullets under a listing's header are about that listing: "**King Square, London,
+        # EC1V — £1,800/month**" then "- Commute to King's Cross: roughly 20 minutes (an
+        # estimate …)" quoted King Square's own ~20 (r15 40a2522f), not the area route.
+        list_item = bool(re.match(r"^\s*(?:[-•]|\*(?!\*)|\d+[.)])\s+", line))   # "**Bold" is a header
+        if list_item and _line_binding(line, bindings) is None and block_binding is not None:
+            binding = block_binding
+        elif not list_item and line.strip():
+            own_line = _line_binding(line, bindings)
+            block_binding = own_line if own_line is not None and own_line.get("listing") else None
         preference_line = preference_context or bool(re.search(
             r"preference|default|remember|偏好|默认|保存|记住|"
             r"requirements?\s+(?:stand|remain)|conditions?\s+(?:stand|remain)|"
@@ -2739,7 +2762,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                     and all(round(value, 2) in differences for value in values)):
                 return True
             if _arithmetic_evidenced(fragment, context=context, previous_clause=previous_clause,
-                                     line=line, pool=pool, days=answer_days, subject=effective):
+                                     line=line, pool=pool, days=answer_days, subject=effective,
+                                     user_days=user_days):
                 return True
             if values and _owned_by_named_routes(fragment, bindings, caps):
                 return True
@@ -2757,6 +2781,14 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                     return effective["minutes"] == measured[0]
                 if re.search(r"\b(?:longer|slower|further|farther)\b|更长|更慢|更远", fragment, re.I):
                     return effective["minutes"] == measured[-1]
+            if pool and (_arithmetic.SPREAD_BOUND.search(fragment) or _arithmetic.SPREAD_EXACT.search(fragment)):
+                # "All three are within 4 minutes of each other": max - min of the routes the
+                # line names, or of every measured route (r15 700d77a8). Same rule as the critic.
+                routes = [{"labels": list(c.get("labels") or []), "minutes": c["minutes"]}
+                          for c in pool if c.get("minutes") is not None]
+                ok, seen = _arithmetic.check_figures(fragment, sentence=line, line=line, routes=routes,
+                                                     days=answer_days, user_days=user_days)
+                return bool(ok and seen)
             if not pool:
                 return False
             if _duration_bounds(fragment) and (effective is None or (
@@ -2908,8 +2940,11 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                     for short in local["labels"] for long in inherited.get("labels") or []))
                 # A listing row's Area cell ("| Hackney |") names the listing's area, not a
                 # switch to that area's route (r08 NEW-B).
+                # A table row or a listing's list item; never prose ("for Islington as an area,
+                # the TfL Journey Planner gives … 15 minutes" is the area route, r15 40a2522f).
                 area_cell = bool(inherited and inherited.get("listing") and not local.get("listing")
-                                 and not _asserts_commute(fragment))
+                                 and not _asserts_commute(fragment)
+                                 and (line.lstrip().startswith("|") or list_item))
                 # "… than Camden but a much shorter commute" names Camden as what the line's
                 # subject is compared WITH; the subject stays (r11 97bdde65).
                 compared_with = local is not None and local is _comparison_target(fragment, bindings)
@@ -2948,7 +2983,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                         and (_FIT_WORD.search(_without_money_or_weather(claim))
                              or _duration_bounds(claim) or _period_total(claim))
                         and not monetary_or_independent
-                        and not (_ADVICE_CLAUSE.match(claim) and not _MINUTE_TOKEN.search(claim))))
+                        and not ((_ADVICE_CLAUSE.match(claim) or _SPECULATION.search(claim))
+                                 and not _MINUTE_TOKEN.search(claim))))
             sentence_marked = marked_at.get(index, False)
             # A bare figure split off by a dash belongs to the clause before it: "Northern
             # line from King's Cross St. Pancras to Moorgate — 6 min" is the leg's own measured
@@ -3027,9 +3063,21 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             continue
         rebuilt = "".join(kept)
         for between, tail in split_coordinators:
-            if tail.strip():
-                rebuilt = re.sub(r"[ ,，]*;[ \t]*(?=" + re.escape(tail) + ")",
-                                 lambda _m, text=between: text, rebuilt, count=1)
+            if not tail.strip():
+                continue
+            found = re.search(r"[ ,，]*;[ \t]*(?=" + re.escape(tail) + ")", rebuilt)
+            if not found:
+                continue
+            head = rebuilt[:found.start()].rstrip()
+            if not head or head.endswith((".", "!", "?", "。", "！", "？")):
+                # The clause the coordinator joined was withdrawn: what follows is only a
+                # subordinate clause ("While Bow comes in roughly 4 minutes over.", r15), so
+                # it goes to the end of its sentence.
+                close = re.search(r"[.!?。！？](?=\s|$)", rebuilt[found.end():])
+                cut = found.end() + (close.end() if close else len(rebuilt) - found.end())
+                rebuilt = (rebuilt[:found.start()] + " " + rebuilt[cut:]).strip()
+            else:
+                rebuilt = rebuilt[:found.start()] + between + rebuilt[found.end():]
         if continuation_broken or _unbalanced_after_removal(rebuilt, original_body):
             # No clean clause cut exists: a bracket lost its partner or a kept clause leans on
             # the withdrawn one. Drop each sentence a withdrawal touched, whole (R3-01).
@@ -3189,12 +3237,19 @@ def _stub_remnant(text: str) -> bool:
         return True
     if _LEAD_IN_TAIL.search(plain):
         return True
+    if _SUBORDINATE_ONLY.match(plain) and not re.search(r"[,;]\s*\w", plain):
+        # Only a subordinate clause is left: "While Bow comes in roughly 4 minutes over.",
+        # "With 3 office days a week (return trips)." (r15). The sentence goes whole.
+        return True
     if re.search(r"\d|£", plain):
         return False
     words = re.findall(r"[A-Za-z][A-Za-z'’-]*|[\u4e00-\u9fff]", plain)
     return len(words) <= 4
 
 
+_SUBORDINATE_ONLY = re.compile(
+    r"^\s*(?:while|whilst|whereas|although|though|because|since|unless|with|without|as|after|before|"
+    r"if|when|so\s+that)\b", re.I)
 _LEAD_IN_TAIL = re.compile(
     r"(?:\bfor\s+example|\bfor\s+instance|\be\.g\.?|\bsuch\s+as|\bnamely|\bi\.e\.?|"
     r"\bin\s+particular|\bspecifically|\bincluding|例如|比如)[\s,，:：]*$", re.I)

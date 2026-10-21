@@ -539,23 +539,63 @@ def _evidenced_arithmetic(answer: str, evidence_money, supported: set) -> set:
     return exact
 
 
-def _successful_numeric_evidence(evidence: Any) -> str:
-    """Serialize only successful evidence, excluding failed/unknown tool outcomes."""
+def _failed_outcome(evidence: Any) -> bool:
+    return isinstance(evidence, dict) and (evidence.get("success") is False or any(
+        evidence.get(flag) for flag in ("timed_out", "abandoned", "outcome_unknown", "denied")))
+
+
+# A numeric leaf is evidence of a figure only with its unit, which only its KEY carries:
+# compare_or_rank_areas returns ``"commute_minutes": 27``, and with numbers dropped every
+# minute figure of an area answer was "unsupported", so the critic regenerated an honest
+# answer into one that called a failed gym lookup a coverage gap (r11 97bdde65).
+_KEY_UNITS = (
+    (re.compile(r"(?:^|_)(?:minutes?|mins?)$|duration", re.I), "minutes"),
+    (re.compile(r"(?:^|_)(?:km|kilomet(?:er|re)s?)$", re.I), "km"),
+    (re.compile(r"(?:^|_)miles?$", re.I), "miles"),
+    (re.compile(r"(?:^|_)(?:m|metres?|meters?)$", re.I), "m"),
+)
+
+
+def _numeric_leaf_text(key: Any, value: Any) -> str:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return ""
+    for pattern, unit in _KEY_UNITS:
+        if pattern.search(str(key or "")):
+            return f"{value:g} {unit}"
+    return ""
+
+
+def _successful_numeric_evidence(evidence: Any, key: Any = "") -> str:
+    """Serialize only successful evidence, excluding failed/unknown tool outcomes. A
+    numeric leaf is written with the unit its key names ("27 minutes")."""
     if isinstance(evidence, (list, tuple)):
-        return " ".join(_successful_numeric_evidence(item) for item in evidence)
+        return " ".join(_successful_numeric_evidence(item, key) for item in evidence)
     if isinstance(evidence, dict):
-        if evidence.get("success") is False or any(
-                evidence.get(flag) for flag in ("timed_out", "abandoned", "outcome_unknown", "denied")):
+        if _failed_outcome(evidence):
             return ""
         if "raw_data" in evidence:
             return _successful_numeric_evidence(evidence.get("raw_data"))
         return " ".join(
-            _successful_numeric_evidence(value) for value in evidence.values()
+            _successful_numeric_evidence(value, child_key) for child_key, value in evidence.items()
             if not isinstance(value, (bytes, bytearray))
         )
     if isinstance(evidence, str):
         return evidence
-    return ""
+    return _numeric_leaf_text(key, evidence)
+
+
+def _successful_evidence(evidence: Any) -> Any:
+    """``evidence`` with failed/unknown tool outcomes taken out, structure kept (so money
+    keys such as ``rent.median`` still read as money)."""
+    if isinstance(evidence, (list, tuple)):
+        return [_successful_evidence(item) for item in evidence if not _failed_outcome(item)]
+    if isinstance(evidence, dict):
+        if _failed_outcome(evidence):
+            return {}
+        if "raw_data" in evidence:
+            return _successful_evidence(evidence.get("raw_data"))
+        return {k: _successful_evidence(v) for k, v in evidence.items() if not _failed_outcome(v)}
+    return evidence
 
 
 def _unit_numbers(text: str) -> set[float]:
@@ -592,7 +632,7 @@ def unsupported_external_numbers(response: str, evidence: Any, user_text: str = 
     # The live critic supplies the current user message. Keep the legacy direct
     # evaluate_grounding helper compatible when that context is intentionally absent.
     return bool(user_text and unsupported_reply_prices(
-        response or "", [successful, user_text]))
+        response or "", [_successful_evidence(evidence), user_text]))
 
 # ── station-name grounding ─────────────────────────────────────────────────
 # THE LEGITIMATE NAME UNIVERSE, enumerated. Every source of a real station/place name

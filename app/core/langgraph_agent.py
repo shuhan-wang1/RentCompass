@@ -4486,7 +4486,44 @@ def _fc_artifact_observation(state: AgentState) -> Optional[str]:
     return "\n\n".join(pieces)
 
 
+def _failed_lookups_note(state: AgentState) -> str:
+    """Every lookup of this fc turn that ran and FAILED, for the rewrite prompt."""
+    lines = [line for a in state.get("tool_artifacts") or [] for line in _failed_lookup_observation(a)]
+    if not lines:
+        return ""
+    return "FAILED LOOKUPS THIS TURN (data about the attempts, not results):\n" + "\n".join(lines)
+
+
+def _failed_lookup_observation(artifact: dict) -> list:
+    """A lookup that ran and FAILED, as a fact the rewrite must keep.
+
+    Failed artifacts carry no data, and leaving them out entirely let the critic's rewrite
+    turn "the nearby-places lookup failed twice … not a finding that there are no gyms" into
+    "the search results I have don't cover gyms" (r11 97bdde65): the rewrite never knew a gym
+    lookup had run. The failure is stated, with what the lookup was for; no data is added."""
+    if not isinstance(artifact, dict) or artifact.get("success") is not False and not any(
+            artifact.get(flag) for flag in ("timed_out", "abandoned", "outcome_unknown")):
+        return []
+    if artifact.get("tool") in (None, "ask_user", "remember", "recall_memory"):
+        return []
+    raw = artifact.get("raw_data") if isinstance(artifact.get("raw_data"), dict) else {}
+    about = {k: raw[k] for k in ("address", "area", "location", "query", "requested_types",
+                                 "failed_types", "service_status") if raw.get(k)}
+    return [f"[{artifact.get('tool', 'tool')}#{artifact.get('turn', '')} FAILED] This lookup ran "
+            "and did not complete, so it is a failed lookup: not an empty result and not a "
+            "gap in coverage. "
+            + json.dumps({"error": artifact.get("error") or raw.get("error"), **about},
+                         ensure_ascii=False, default=str)]
+
+
 def _build_generation_prompt(state: AgentState) -> str:
+    """The generation prompt, plus the lookups of this turn that ran and failed (r11 97bdde65)."""
+    prompt = _build_generation_prompt_body(state)
+    note = _failed_lookups_note(state)
+    return f"{prompt}\n\n{note}" if note else prompt
+
+
+def _build_generation_prompt_body(state: AgentState) -> str:
     """Assemble the response-generation prompt from state.
 
     Shared by ``generate_response`` and the critic's regeneration pass so both

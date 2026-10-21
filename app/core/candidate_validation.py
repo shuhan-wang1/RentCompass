@@ -1320,12 +1320,23 @@ def _asserts_commute(fragment: str) -> bool:
         # "flats within a certain budget or commute time" offers a kind of search; it
         # asserts nothing about any journey (r08 NEW-D).
         return False
-    if _PRIORITY_CONDITION.match(text):
+    if _PRIORITY_CONDITION.match(text) or _ADVICE_CLAUSE.match(text):
         # "If your own priority is a shorter journey rather than lower rent" states a
         # hypothetical preference of the user's, not a journey (r06 099518b9).
         return False
-    # A bound in words is a verdict too: "a commute under a quarter of an hour".
-    return bool(_COMMUTE_WORD.search(text) and (_FIT_WORD.search(text) or _duration_bounds(text)))
+    # A bound in words is a verdict too: "a commute under a quarter of an hour", and so is
+    # "about the same commute" as another place.
+    return bool(_COMMUTE_WORD.search(text) and (_FIT_WORD.search(text) or _duration_bounds(text)
+                                                or _SAME_WORD.search(text)))
+
+
+# Figure-free advice on where to look: "and for Bow you would want to look at addresses closer
+# to Bow Church DLR Station than the one measured here" (r11 d36a82c2) recommends, it measures
+# nothing.
+_ADVICE_CLAUSE = re.compile(
+    r"^\s*(?:(?:and|but|so|or)\s+)?(?:(?:for|in)\s+[\w'’ -]{1,40}?,?\s+)?"
+    r"(?:you|i|we)\s+(?:would|might|may|could|should)\s+(?:also\s+)?(?:want|need|like|prefer|do\s+well)?"
+    r"\s*(?:to\s+)?(?:look|search|consider|focus|try|check|aim|target)\b", re.I)
 
 
 # A figure-free condition on the USER's priorities ("If your priority is a shorter journey",
@@ -1981,6 +1992,12 @@ def _names_route_place(target_text: str, binding: dict, scope: str) -> bool:
     hay = _label_key(target_text)
     if any(_key_in(_label_key(label), hay) for label in binding.get("destinations") or []):
         return True
+    if re.search(r"\bline\b|\bdlr\b|\boverground\b|\bthameslink\b", hay) and any(
+            _key_in(_label_key(mode), hay) for leg in binding.get("legs") or []
+            for mode in leg.get("modes") or [] if mode not in ("walk", "步行", "走路")):
+        # One of the route's own LINES: "puts you about 4 minutes from the Jubilee line"
+        # travels to nowhere off the route (r11 d36a82c2).
+        return True
     return any(_key_in(place, hay) for leg in _named_legs(scope, binding)
                for place in leg["places"])
 
@@ -2253,11 +2270,73 @@ def _compares_measured_routes(fragment: str, context: str, pool: list) -> bool:
     return False
 
 
+_COMPARED_WITH = re.compile(
+    r"\b(?:than|compared\s+(?:with|to)|versus|vs\.?|relative\s+to)\s+(?:the\s+|that\s+(?:of|in)\s+)?", re.I)
+
+
+def _comparison_target(fragment: str, bindings: list) -> dict | None:
+    """The one measured entity ``fragment`` compares something WITH ("than Camden")."""
+    for match in _COMPARED_WITH.finditer(str(fragment or "")):
+        tail = re.split(r"[,;:(]|\s(?:but|and|while|though|whereas|so)\s", fragment[match.end():], maxsplit=1)[0]
+        named = [b for b in bindings if not b.get("members")
+                 and any(_label_in(label, tail) for label in b.get("labels") or [])]
+        unique = [b for i, b in enumerate(named) if all(b is not other for other in named[:i])]
+        if len(unique) == 1:
+            return unique[0]
+    return None
+
+
+_SHORTER_WORD = re.compile(r"\b(?:shorter|quicker|faster|closer|nearer|less\s+travel)\b|更短|更快|更近", re.I)
+_LONGER_WORD = re.compile(r"\b(?:longer|slower|further|farther|more\s+travel)\b|更长|更慢|更远", re.I)
+_SAME_WORD = re.compile(
+    r"\b(?:(?:about|roughly|much|more\s+or\s+less|practically|essentially)\s+the\s+same|"
+    r"(?:similar|comparable)\s+(?:commute|journey|travel(?:\s+time)?|trip))\b|差不多|相近", re.I)
+
+
+def _comparative_against(fragment: str, subject: dict | None, target: dict) -> bool:
+    """A figure-free comparison of the subject's commute with ``target``'s, checked against
+    both measurements: shorter/quicker needs fewer minutes, longer more, "about the same"
+    within 3 minutes. A missing measurement, or both directions at once, is not evidence."""
+    if subject is not None and subject.get("members"):
+        others = [m for m in subject["members"] if m is not target]
+        subject = others[0] if len(others) == 1 else None
+    if subject is None or subject is target:
+        return False
+    mine, theirs = subject.get("minutes"), target.get("minutes")
+    if mine is None or theirs is None:
+        return False
+    text = _without_money_or_weather(fragment)
+    directions = [bool(_SHORTER_WORD.search(text)), bool(_LONGER_WORD.search(text)),
+                  bool(_SAME_WORD.search(text))]
+    if sum(directions) != 1:
+        return False
+    rest = _SAME_WORD.sub(" ", _LONGER_WORD.sub(" ", _SHORTER_WORD.sub(" ", text)))
+    if _PASS_VERDICT.search(rest) or _FAIL_VERDICT.search(rest):
+        return False
+    if directions[0]:
+        return mine < theirs
+    if directions[1]:
+        return mine > theirs
+    return abs(mine - theirs) <= 3
+
+
+def _recapitalise(rebuilt: str, original: str) -> str:
+    """A sentence that now starts where a withdrawn clause stood starts with a capital: "Value
+    score 68.8, total 75.9. the data is older here" shipped (r11 97bdde65)."""
+    def fix(match):
+        tail = rebuilt[match.start(2):match.start(2) + 30]
+        if (original.lstrip().startswith(tail)
+                or re.search(r"[.!?]\s+" + re.escape(tail), original)):
+            return match.group(0)        # it already started a sentence in the original
+        return match.group(1) + match.group(2).upper()
+    return re.sub(r"(^\s*|[.!?]\s+)([a-z])", fix, rebuilt)
+
+
 def _shared_by_every_route(fragment: str, pool: list) -> bool:
     """"the in-transit time is identical at 9 minutes on both routes": a figure said to hold
     for every route the turn measured, and it does (a whole trip or a leg of each)."""
     if not re.search(r"\b(?:both|each|every|all)\b[^.;!?]{0,20}\b(?:routes?|journeys?|options?|lines?)\b|"
-                     r"\bon\s+both\b", fragment, re.I):
+                     r"\bon\s+both\b|\b(?:minutes?|mins?)\s+(?:each|apiece)\b", fragment, re.I):
         return False
     values = _minute_claim_values(fragment)
     routes = [route for route in pool if route.get("minutes") is not None]
@@ -2502,6 +2581,12 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             if (values and differences and comparative
                     and all(round(value, 2) in differences for value in values)):
                 return True
+            target = _comparison_target(fragment, bindings)
+            if target is not None and not values:
+                # "Slightly dearer median than Camden but a much shorter commute" compares
+                # Holloway's measured 10 minutes with Camden's 27 (r11 97bdde65): decided by
+                # the two measurements, not by the turn's overall shortest route.
+                return _comparative_against(fragment, effective, target)
             if (not values and len(measured) > 1 and effective is not None
                     and effective.get("minutes") is not None):
                 # "has a much shorter commute" compares this listing's measured route with the
@@ -2607,7 +2692,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 start = m.start()
                 while start > 0 and body[start - 1] in " ,，":
                     start -= 1
-                split_coordinators.append((body[start:m.end()], body[m.end():m.end() + 40]))
+                tail = re.split(r"\s+(?:and|while|but)\s+", body[m.end():m.end() + 40], maxsplit=1)[0]
+                split_coordinators.append((body[start:m.end()], tail))
                 return "; "
             body = coordinated.sub(_split_coordinator, body)
 
@@ -2661,8 +2747,11 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 # switch to that area's route (r08 NEW-B).
                 area_cell = bool(inherited and inherited.get("listing") and not local.get("listing")
                                  and not _asserts_commute(fragment))
+                # "… than Camden but a much shorter commute" names Camden as what the line's
+                # subject is compared WITH; the subject stays (r11 97bdde65).
+                compared_with = local is not None and local is _comparison_target(fragment, bindings)
                 if (not nested_component or _asserts_commute(fragment) or "→" in fragment) \
-                        and not area_cell:
+                        and not area_cell and not compared_with:
                     inherited = local
             # A parenthetical already checked against its own clause is not re-judged as part
             # of the enclosing clause: "Walk to the exit (5 min)" kept its leg figure above,
@@ -2690,7 +2779,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                        (commute_context and not _COMMUTE_WORD.search(claim)
                         and (_FIT_WORD.search(_without_money_or_weather(claim))
                              or _duration_bounds(claim))
-                        and not monetary_or_independent))
+                        and not monetary_or_independent
+                        and not (_ADVICE_CLAUSE.match(claim) and not _MINUTE_TOKEN.search(claim))))
             sentence_marked = marked_at.get(index, False)
             # A bare figure split off by a dash belongs to the clause before it: "Northern
             # line from King's Cross St. Pancras to Moorgate — 6 min" is the leg's own measured
@@ -2780,6 +2870,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
         if rebuilt and re.search(r"[.!?。！？]\s*$", body) and not re.search(
                 r"[.!?。！？]\s*$", rebuilt):
             rebuilt += "。" if zh else "."
+        rebuilt = _recapitalise(rebuilt, original_body)
 
         if not rebuilt.strip():
             # The line was nothing but a commute claim; drop it, prefix included. A blank

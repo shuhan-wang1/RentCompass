@@ -75,7 +75,8 @@ def test_a_bound_on_an_unattributed_clause_must_hold_for_every_measured_route():
 @pytest.mark.parametrize("name", ["r06_099518b9_draft", "r06_099518b9_critic",
                                   "r06_ecbf2c1f_critic", "r06_27d8b56d_critic",
                                   "r07_97b3d456_critic", "r07_97b3d456_draft",
-                                  "r07_38299e93_draft", "stress_80e0de95_draft"])
+                                  "r07_38299e93_draft", "stress_80e0de95_draft",
+                                  "stress_562f3254_draft"])
 def test_recorded_answers_with_only_evidenced_claims_get_no_note(name):
     """Each of these shipped with "Note: some commute claims ... removed" on ce29db4/7483f77;
     every claim the post-processor removed is backed by this turn's (or the shown listings')
@@ -112,6 +113,13 @@ def test_generic_commute_offer_in_a_clarification_is_not_a_claim():
     """Stress B-02 80e0de95: a clarification turn with no commute tool got the Note."""
     text, state = _case("stress_80e0de95_draft")
     assert "within a certain commute time" in validate_commute_response(text, state)
+
+
+def test_walking_distance_offer_on_a_weather_turn_is_not_a_claim():
+    """Stress f-weather-unavail 562f3254: "what's within walking distance of an address",
+    after a commute clause in a capability offer, was withdrawn with the Note."""
+    text, state = _case("stress_562f3254_draft")
+    assert "what's within walking distance of an address" in validate_commute_response(text, state)
 
 
 def test_tilde_estimates_are_quoted_as_estimates():

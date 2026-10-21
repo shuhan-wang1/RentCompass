@@ -1265,8 +1265,16 @@ _POSITIONAL_REFERENCE = re.compile(
     r"(?=\s*(?:[,.;:!?)]|$|(?:and|but|or|so|for|is|are|was|were)\b))", re.I)
 
 
+# Walking DISTANCE is proximity, not a journey time: the offer "what's within walking distance
+# of an address" after a commute clause was withdrawn on a weather turn (stress f-weather-unavail).
+_PROXIMITY_PHRASE = re.compile(
+    r"\b(?:within|in)\s+(?:(?:easy|short|comfortable|reasonable|a)\s+)?(?:walking|cycling)\s+distance\b",
+    re.I)
+
+
 def _without_money_or_weather(text: str) -> str:
-    return _POSITIONAL_REFERENCE.sub(" ", _MONEY_OR_WEATHER_SPAN.sub(" ", str(text or "")))
+    text = _MONEY_OR_WEATHER_SPAN.sub(" ", str(text or ""))
+    return _PROXIMITY_PHRASE.sub(" ", _POSITIONAL_REFERENCE.sub(" ", text))
 
 
 # A clause that says there IS no commute (none was set, none applies) asserts nothing about one.

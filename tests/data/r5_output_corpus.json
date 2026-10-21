@@ -3285,6 +3285,59 @@
   },
   "text": "I found 15 one-bed flats across the four areas, all within your £3,500 budget. Prices run from £1,800 to £3,000 a month, median around £2,300. Here are the ones with the strongest commute to Liverpool Street:\n\n**Best commute times (measured by TfL Journey Planner)**\n- **Queensbridge Road, London E2 (Hackney)** — £2,500/month, 14 min to Liverpool Street\n- **Roman Road, Bow E3** — £1,800/month, 24 min to Liverpool Street (the cheapest of the set)\n- **Jacob House, London E8 (Hackney)** — £1,950/month, 28 min to Liverpool Street\n- **Gloucester Avenue, London NW1 (Camden)** — £2,150/month, 36 min to Liverpool Street\n\n**Estimated times (not verified by a journey plan — these are straight-line estimates, so treat them as approximate)**\n- Queensgate House, 1 Bow Central, Hereford Road, Bow E3 — £1,950/month, ~28 min\n- Hoey Court, 4 Barry Blandford Way, Bow E3 — £2,000/month, ~31 min\n- St. Clements Street, Islington N7 — £2,500/month, ~27 min\n- Eden Grove, London N7 (Islington) — £2,250/month, ~30 min\n- 22-24 Powell Road, London E5 (Hackney) — £2,300/month, ~31 min\n- Mornington Crescent, London NW1 (Camden) — £2,600/month, ~31 min\n- Highgate West Hill, London N6 (Camden) — £2,000/month, ~38 min\n\nThe remaining listings (including Bayham Street NW1 at £2,700 and others in Islington and Hackney) are in the results panel on the right.\n\nA few things worth knowing:\n- The four measured times come from real TfL journey plans; the \"~\" ones are distance-based estimates and could differ by 10-15 minutes in practice.\n- Bow and Hackney clearly win on both price and commute here — Roman Road at £1,800 with a 24-minute measured journey is the standout value.\n- Camden is the weakest on commute: even the fastest measured option (Gloucester Avenue) is 36 minutes, and Highgate West Hill is furthest out.\n\nWant me to pull full details on any of these, or check safety and nearby amenities for a specific one?"
  },
+ "stress_562f3254_draft": {
+  "request_id": "562f3254602441f983945af78ac36aa0",
+  "stage": "agent draft (last AIMessage)",
+  "state": {
+   "accumulated_search_criteria": {
+    "amenities_of_interest": [],
+    "destination": null,
+    "max_budget": null,
+    "max_travel_time": null,
+    "property_features": [],
+    "soft_preferences": []
+   },
+   "candidate_validation": {},
+   "extracted_context": {
+    "current_message": "What's the weather in Camden tomorrow at 10am?",
+    "reply_language": "en"
+   },
+   "memory_context": "",
+   "tool_artifacts": [
+    {
+     "error": "无法解析地点",
+     "raw_data": {
+      "error": "无法解析地点",
+      "success": false
+     },
+     "success": false,
+     "tool": "get_weather"
+    },
+    {
+     "error": "天气查询失败",
+     "raw_data": {
+      "error": "天气查询失败",
+      "retryable": true,
+      "success": false
+     },
+     "success": false,
+     "tool": "get_weather"
+    },
+    {
+     "error": "天气查询失败",
+     "raw_data": {
+      "error": "天气查询失败",
+      "retryable": true,
+      "success": false
+     },
+     "success": false,
+     "tool": "get_weather"
+    }
+   ],
+   "user_query": "What's the weather in Camden tomorrow at 10am?"
+  },
+  "text": "I tried the weather lookup for Camden tomorrow (Tuesday 20 October 2026) at 10:00, but the weather service failed on all three attempts — first it could not resolve the location, then it returned a retryable service error for both Camden Town and London coordinates. So I have no forecast to give you, and I won't guess at temperatures or conditions.\n\nA couple of options:\n- Ask me again in a moment and I'll retry the lookup.\n- If you're planning a viewing in Camden tomorrow, I can meanwhile help with things that don't depend on the weather: how long the commute from a specific Camden listing to your campus or office would take, what's within walking distance of an address, or crime data for a particular street from data.police.uk.\n\nWant me to retry the weather now?"
+ },
  "stress_6b514555_draft": {
   "request_id": "6b514555fec44adbae8d0ed6faa42723",
   "stage": "agent draft (last AIMessage)",

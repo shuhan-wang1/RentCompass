@@ -17,8 +17,117 @@ _KEPT_OUT_CLAUSE = re.compile(
     r'[^。.!?;；\n]*(?:[。.!?;；\n]|$)', re.I)
 
 
+# Someone else's place is not the user's criterion (stress A-08): "…, my friend lives in
+# Peckham, …" switched the search area to Peckham. A clause whose SUBJECT is another person
+# and that says nothing about the user ("I", "me", "we", "us") is a reference, like a withdrawn
+# plan. The vocabulary is the memory layer's (rag.agent_memory._THIRD_PARTY) minus the people
+# who act on the user's OWN terms: "My employer reduced office attendance to two days per week"
+# and "my landlord wants £1,800" are about the user's commute and rent.
+_THIRD_PARTY_NOUN = (
+    r"partner|wife|husband|spouse|son|daughter|child|children|kids?|"
+    r"friend|mother|mum|mom|father|dad|parents?|brother|sister|colleague|flatmate|roommate|"
+    r"housemate|girlfriend|boyfriend|fianc[ée]e?")
+_THIRD_PARTY_CLAUSE = re.compile(
+    r"(?:^|(?<=[,，;；.。!?！？\n:：]))(\s*(?:(?:and|but|also|plus|while|whereas)\s+)?"
+    r"(?:my|our|his|her|their|a)\s+(?:(?:best|close|old|older|younger|little|big)\s+)?"
+    r"(?:" + _THIRD_PARTY_NOUN + r")(?:'s|’s|s)?\b)([^,，;；.。!?！？\n]*)"
+    r"|(?:^|(?<=[,，;；。！？\n]))(\s*(?:我|我的|我们的?)?"
+    r"(?:伴侣|老公|老婆|丈夫|妻子|孩子|儿子|女儿|朋友|父母|同事|室友))([^,，;；。！？\n]*)",
+    re.I)
+_FIRST_PERSON_WORD = re.compile(r"\b(?:i|i'm|i’m|i've|i'd|i'll|me|we|we're|us)\b|我(?!的?(?:朋友|父母|同事|室友))", re.I)
+
+
+_ADOPTS_PLACE = re.compile(
+    r"\b(?:there|near\s+(?:him|her|them)|close\s+to\s+(?:him|her|them)|(?:the\s+)?same\s+area|"
+    r"that\s+area|nearby)\b|那里|那边|附近", re.I)
+
+
+def without_third_party_clauses(text: str) -> str:
+    """``text`` without clauses about another person ("my friend lives in Peckham").
+
+    "My partner and I need a 2-bed" and "my sister and I are moving to Hackney" stay: the
+    user is part of the subject."""
+    value = str(text or '')
+
+    def _keep_or_drop(match):
+        rest = match.group(2) if match.group(1) is not None else match.group(4)
+        return match.group(0) if _FIRST_PERSON_WORD.search(rest or '') else ''
+    stripped = _THIRD_PARTY_CLAUSE.sub(_keep_or_drop, value)
+    # "My friend lives in Peckham, find me a flat there": the user adopts that place.
+    if stripped != value and _ADOPTS_PLACE.search(stripped):
+        return value
+    return stripped
+
+
+# A conditional stretch is not a new ceiling (stress A-08): "my budget could stretch to £2,100
+# for the right place" raised max_budget 1,900 -> 2,100. Narrower than the memory layer's
+# _SOFT_BOUND on purpose: "Could you find flats under £2,000?" is a ceiling.
+_STRETCH_CUE = re.compile(
+    r"\b(?:stretch\w*|at\s+a\s+push|for\s+the\s+right\s+(?:place|flat|home|property|one)|"
+    r"wiggle\s+room|leeway|willing\s+to\s+go|would\s+consider\s+(?:going|paying)|"
+    r"(?:could|might|can)\s+(?:go|push|pay)\s+(?:up\s+to|as\s+high\s+as)|"
+    r"if\s+(?:needed|necessary|need\s+be|i\s+(?:have|had)\s+to|it'?s\s+worth\s+it|pushed))\b|"
+    r"上浮|放宽到|实在不行|必要时|合适的话|勉强", re.I)
+_STRETCH_CLAUSE_SPLIT = re.compile(
+    r"(?<!\d)[,，]|[,，](?!\d)|[;；。!?！？\n]|\.(?!\d)|\bbut\b|\s+and\s+(?=(?:it\s+|i\s+|that\s+)?(?:could|might|can|would)\b)",
+    re.I)
+_MONEY_FIGURE = re.compile(r"£\s?\d|\d\s?(?:k\b|pcm|p/m|per\s+month|a\s+month|pw|per\s+week|镑|英镑)|\d{3,}", re.I)
+
+
+def _stretch_clauses(text: str) -> list[str]:
+    return [part.strip() for part in _STRETCH_CLAUSE_SPLIT.split(str(text or '')[:4000])
+            if part and _STRETCH_CUE.search(part) and _MONEY_FIGURE.search(part)]
+
+
+def without_conditional_stretch(text: str) -> str:
+    """``text`` without the clauses that state a conditional stretch of a figure."""
+    value = str(text or '')
+    for clause in _stretch_clauses(value):
+        value = value.replace(clause, ' ')
+    return value
+
+
+def conditional_stretch_notes(text: str) -> list[str]:
+    """The user's own stretch clauses, kept as soft notes beside the ceiling."""
+    notes = []
+    for clause in _stretch_clauses(without_third_party_clauses(text)):
+        note = re.sub(r"^(?:and|but|also|so)\s+", '', clause, flags=re.I).strip(' .')
+        if note and note not in notes:
+            notes.append(note[:160])
+    return notes
+
+
+# A place the user only mentions does not replace a commute destination already set:
+# "…, and I study part-time at Birkbeck." (a "nothing to search" background turn) replaced
+# the Canary Wharf workplace with Malet Street (stress A-08). A destination change says so.
+_DESTINATION_CHANGE_CUE = re.compile(
+    r"\b(?:commut\w*|work\w*|office|workplace|job|destination|travel\w*\s+to|get(?:ting)?\s+to|"
+    r"near|nearby|close\s+to|around|walking\s+distance|instead|now|actually|chang\w*|switch\w*|"
+    r"new|mov\w*)\b|通勤|上班|工作|附近|改为|改成|换成|现在", re.I)
+
+
+_SEARCH_REQUEST = re.compile(r"\b(?:find|search|look\s+for|show\s+me)\b|找房|帮我找|搜索", re.I)
+_NO_SEARCH = re.compile(
+    r"\bnothing\s+to\s+search\b|\b(?:don.t|do\s+not|no\s+need\s+to|not)\s+(?:\w+\s+)?search|"
+    r"\bno\s+action\b|\bfor\s+context\s+only\b|不要搜索|先不(?:用)?搜|不用搜", re.I)
+
+
+def replaces_destination(text: str, name: str) -> bool:
+    """True when the clause naming ``name`` presents it as the (new) commute destination."""
+    value = str(text or '')
+    key = re.sub(r"[.,;:!?]+$", '', str(name or '').strip())
+    found = re.search(re.escape(key), value, re.I) if key else None
+    clause = clause_at(value, found.start(), found.end()) if found else value
+    if _DESTINATION_CHANGE_CUE.search(clause):
+        return True
+    # "I study at UCL, find me a studio nearby": a search asked for in the same message is
+    # built around the place; "…, still nothing to search: …" is not.
+    return bool(_SEARCH_REQUEST.search(value) and not _NO_SEARCH.search(value))
+
+
 def scoped_update_text(text: str) -> str:
     text = str(text or '')
+    text = without_third_party_clauses(text)
     # Withdrawn experiments and other people's plans are references, not updates.
     # Each clause pattern is anchored at a clause START (``_CLAUSE_START``). Unanchored, the
     # leading ``[^…]*`` let the engine retry from every character of a long clause, each

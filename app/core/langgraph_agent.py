@@ -814,6 +814,14 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         if 'max_budget' not in result or result.get('max_budget') is not None:
             result['max_budget'] = None
             changed = True
+    # "my budget could stretch to £2,100 for the right place" keeps the ceiling (the budget
+    # extractor skips it) and is kept beside it as the user's own soft note (stress A-08).
+    from core.constraint_updates import conditional_stretch_notes
+    for note in conditional_stretch_notes(current_message):
+        existing = result.setdefault('soft_preferences', [])
+        if note not in existing:
+            existing.append(note)
+            changed = True
 
     # A place can be residential in general but a workplace in this sentence.
     # Persist that distinction before the LLM plans tools so all calls see the
@@ -892,6 +900,14 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
             or (message_destination or {}).get('name')
             or known_destination
         )
+        from core.constraint_updates import replaces_destination
+        if (destination and result.get('commute_destination')
+                and result.get('commute_destination') != destination and not labelled_destination
+                and not replaces_destination(current_message, (message_destination or {}).get('name')
+                                             or destination)):
+            # "…, and I study part-time at Birkbeck." in a background turn named another place
+            # the user goes; it did not move the commute destination (stress A-08).
+            destination = None
         if destination and (
             result.get('commute_destination') != destination
             or result.get('destination') != destination

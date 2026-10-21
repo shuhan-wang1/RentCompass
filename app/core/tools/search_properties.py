@@ -583,7 +583,10 @@ def _extract_budget(text: str):
     without an extra LLM round-trip."""
     if not text or is_criteria_consultation(text):
         return None, None
-    t = scoped_update_text(text).lower()
+    # A conditional stretch ("could stretch to £2,100 for the right place") is not a ceiling
+    # (stress A-08); the state node keeps it as a soft note instead.
+    from core.constraint_updates import without_conditional_stretch
+    t = without_conditional_stretch(scoped_update_text(text)).lower()
     t = re.sub(r'(?<=\d),(?=\d{3}\b)', '', t)
     t = _mask_years(t)
     if (re.search(r'not\s+(?:yet\s+)?(?:chosen|decided)|haven.t (?:yet )?chosen|尚未(?:选择|决定)|还没选|未确定', t, re.I)

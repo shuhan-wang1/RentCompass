@@ -3123,8 +3123,22 @@ _REMEMBERED_QUESTION = re.compile(
     r"记得.{0,12}我|记住了.{0,8}(?:什么|哪些)|(?:保存|存储|存)了.{0,10}(?:什么|哪些|我)", re.I)
 
 
+# How many saved facts a recall question puts in the memory block (R4-13). Wide on purpose: the
+# block says how many of how many it lists, and the prompt assembler marks any line it cuts.
+_RECALL_FACTS_MAX = 100
+
+
 def _asks_what_is_remembered(message: str) -> bool:
     return bool(_REMEMBERED_QUESTION.search(str(message or "")[:2000]))
+
+
+def _with_all_saved_facts(memory, user_id, mems):
+    """``(records, saved_total)`` for a recall question: every saved fact first (newest first, up
+    to ``_RECALL_FACTS_MAX``), then the relevance-ranked ``mems`` not already listed."""
+    seen = {m.get('id') for m in mems}
+    saved = memory.semantic_records(user_id=user_id)
+    return ([m for m in saved[:_RECALL_FACTS_MAX] if m.get('id') not in seen] + list(mems),
+            len(saved))
 
 
 def _write_back_turn(user_id, conversation_id, user_message, assistant_text,
@@ -3373,6 +3387,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     _mem_block = ""
     _mems = []
     _semantic_defaults = []
+    _saved_total = None
     try:
         from rag.agent_memory import get_agent_memory
         _am = get_agent_memory()
@@ -3385,11 +3400,13 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         if _asks_what_is_remembered(user_message):
             # "What do you remember about me?" is answered from EVERY saved fact, not the six
             # most relevant mixed records: a recall of 12 saved facts merged, dropped and
-            # miscounted them, and filled the gap with inferences (R2-20).
-            _seen = {m.get('id') for m in _mems}
-            _mems = [m for m in _am.semantic_records(user_id=user_id)[:20]
-                     if m.get('id') not in _seen] + _mems
-        _mem_block = _am.format_for_prompt(_mems)
+            # miscounted them, and filled the gap with inferences (R2-20). A cap of 20 then
+            # dropped the 5 oldest of 25 saved facts under "Here is everything I have stored"
+            # (R4-13): the block now carries all of them up to a wide bound, and says how many
+            # of how many it lists.
+            _mems, _saved_total = _with_all_saved_facts(_am, user_id, _mems)
+        _mem_block = (_am.format_for_prompt(_mems) if _saved_total is None
+                      else _am.format_for_prompt(_mems, saved_total=_saved_total))
         if _mem_block:
             print(f"[Memory] 🧠 注入 {len(_mems)} 条相关记忆")
     except Exception as _e:
@@ -3405,7 +3422,9 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     selected_defaults = [record for record in _semantic_defaults if record.get('id') in selected_memory_ids]
     if selected_defaults:
         _mems = selected_defaults + [record for record in _mems if record.get('id') not in selected_memory_ids]
-        _mem_block = _am.format_for_prompt(_mems[:6])
+        # A recall question keeps its full list (R4-13); otherwise the six most relevant.
+        _mem_block = (_am.format_for_prompt(_mems[:6]) if _saved_total is None
+                      else _am.format_for_prompt(_mems, saved_total=_saved_total))
 
     # Assemble the legacy query as before. FC-compatible arches have a dedicated channel for
     # long-term memory; putting the same block into user_query would show it twice in

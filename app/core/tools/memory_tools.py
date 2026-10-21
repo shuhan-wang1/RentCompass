@@ -29,12 +29,21 @@ def recall_memory_impl(query: str, n: int = 6,
     # escalates or attributes is not returned (R4-12).
     mems = presentable_memories(store.retrieve(query, session_id=session_id, user_id=user_id,
                                                n=int(n)))
+    try:
+        saved_total = len(store.semantic_records(user_id=user_id))
+    except Exception:
+        saved_total = None
     return {
         "success": True,
         "count": len(mems),
         "memories": [dict(m, note=INFERENCE_NOTE) if m.get("mtype") == "reflection" else m
                      for m in mems],
         "formatted": store.format_for_prompt(mems),
+        # The tool ranks by relevance: it never returns "everything" (R4-13).
+        "completeness": ("the most relevant memories for this query, not a complete list"
+                         + (f"; the user has {saved_total} saved facts in total"
+                            if saved_total is not None else "")
+                         + "; never say this is everything stored"),
     }
 
 

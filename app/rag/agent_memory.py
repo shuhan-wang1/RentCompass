@@ -1489,11 +1489,15 @@ class AgentMemory:
         except Exception:
             pass
 
-    def format_for_prompt(self, mems) -> str:
+    def format_for_prompt(self, mems, saved_total=None) -> str:
         """The memory block. Reflections are the assistant's own INFERENCES and are labelled
         and listed apart: they were recalled as "everything I have saved" and applied as
         search preferences (R2-06/R2-20). They are labelled TENTATIVE, and one whose wording
-        escalates or attributes is not shown at all (R4-12)."""
+        escalates or attributes is not shown at all (R4-12).
+
+        ``saved_total`` (a recall question): how many saved facts the user has, so the block
+        says whether it lists all of them. "Here is everything I have stored" listed 19 of 25
+        (R4-13)."""
         mems = presentable_memories(mems)
         if not mems:
             return ""
@@ -1501,7 +1505,15 @@ class AgentMemory:
         stated = [f"[{tag.get(m.get('mtype'), 'MEM')}] {m['text']}" for m in mems
                   if m.get("mtype") != "reflection"]
         inferred = [f"[INFERENCE] {m['text']}" for m in mems if m.get("mtype") == "reflection"]
-        block = "What I remember about this user:\n" + "\n".join(stated) if stated else ""
+        header = "What I remember about this user:"
+        if saved_total is not None:
+            shown = sum(1 for m in mems if m.get("mtype") == "semantic")
+            header = (f"What I remember about this user (all {saved_total} saved facts are "
+                      "listed):" if shown >= saved_total else
+                      f"What I remember about this user (showing {shown} of {saved_total} saved "
+                      "facts; this list is NOT complete, so never say it is everything you have "
+                      "stored):")
+        block = header + "\n" + "\n".join(stated) if stated else ""
         if inferred:
             block = (block + "\n" if block else "") + (
                 "The assistant's own inferences: TENTATIVE guesses that may be wrong, NOT said or "

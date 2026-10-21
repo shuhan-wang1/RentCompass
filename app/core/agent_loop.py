@@ -3592,6 +3592,16 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                             ",".join(_ungrounded))
         except Exception as exc:
             logger.error("fc_loop.ground_hard_constraints_failed type=%s", type(exc).__name__)
+        # Soft preferences and the safety flag the model supplies must come from the user's
+        # words or saved facts, never from a reflection (R4-12).
+        try:
+            from core.preference_grounding import ground_soft_signals
+            p, _ungrounded_soft = ground_soft_signals(p, state)
+            if _ungrounded_soft:
+                logger.info("fc_loop.ungrounded_soft_signals fields=%s",
+                            ",".join(_ungrounded_soft))
+        except Exception as exc:
+            logger.error("fc_loop.ground_soft_signals_failed type=%s", type(exc).__name__)
         try:
             from core.tools.search_properties import _extract_area, area_list_edit, bare_city_downgrades
             # An add/remove edit is already folded into `acc` above; reading "Also search in
@@ -3725,6 +3735,15 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         if commute_query_forbidden(p['current_message']):
             p['no_commute'] = True
             p.pop('max_commute_time', None)
+        # A sensitive detail never travels as a preference; a housing need it names travels
+        # as that requirement (NEW-E).
+        try:
+            from core.preference_grounding import apply_preference_policy
+            p, _policy_changed = apply_preference_policy(p)
+            if _policy_changed:
+                logger.info("fc_loop.sensitive_preferences_replaced")
+        except Exception as exc:
+            logger.error("fc_loop.preference_policy_failed type=%s", type(exc).__name__)
         # Harness-supplied params cross the same strict input contract as the model's: an
         # explicit None is a validation failure there, not "unset". strip_null_args already
         # ran on the MODEL's arguments; this covers every value injected after it.

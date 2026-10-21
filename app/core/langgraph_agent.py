@@ -4062,6 +4062,16 @@ def _make_execute_tool_node(tool_registry):
                         "Hard-constraint grounding unavailable",
                         extra={"error_type": type(_e).__name__},
                     )
+                # Soft preferences / the safety flag must come from the user, not a
+                # reflection (R4-12) — same rule as fc_loop's executor.
+                try:
+                    from core.preference_grounding import ground_soft_signals
+                    params, _ungrounded_soft = ground_soft_signals(params, state)
+                except Exception as _e:
+                    logger.warning(
+                        "Soft-signal grounding unavailable",
+                        extra={"error_type": type(_e).__name__},
+                    )
                 # 1a: a city switch stated THIS turn must WIN over the accumulated area
                 # (post-search area freeze). _apply_explicit_criteria_updates has normally
                 # already folded it into accumulated['area'] in the extract_preferences
@@ -4127,6 +4137,13 @@ def _make_execute_tool_node(tool_registry):
                 _rl = extracted_context.get('reply_language')
                 if _rl and not params.get('reply_language'):
                     params['reply_language'] = _rl
+                # A sensitive detail travels only as the housing requirement it names (NEW-E).
+                try:
+                    from core.preference_grounding import apply_preference_policy
+                    params, _ = apply_preference_policy(params)
+                except Exception as _e:
+                    logger.warning("Preference policy unavailable",
+                                   extra={"error_type": type(_e).__name__})
                 # A protected-but-cleared criterion arrives here as None; the strict input
                 # contract rejects an explicit null, so a cleared value is sent as absent.
                 from core.strict_schema import strip_null_args

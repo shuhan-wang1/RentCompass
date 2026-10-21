@@ -3075,12 +3075,19 @@ async def search_properties_impl(
                     all_property_features.append(feat)
 
             new_prefs = criteria_response.get('soft_preferences', '')
+            # The extraction read the MODEL's user_query, which can restate the assistant's
+            # own inferences; a preference it returns must trace to this turn's own text or a
+            # preference the executor already grounded (R4-12).
+            from core.preference_grounding import preference_is_traceable
+            _pref_evidence = [current_message or stripped_query, *all_soft_preferences]
             if isinstance(new_prefs, str) and new_prefs:
-                if new_prefs not in all_soft_preferences:
+                if (new_prefs not in all_soft_preferences
+                        and preference_is_traceable(new_prefs, _pref_evidence)):
                     all_soft_preferences.append(new_prefs)
             elif isinstance(new_prefs, list):
                 for pref in new_prefs:
-                    if pref and pref not in all_soft_preferences:
+                    if (pref and pref not in all_soft_preferences
+                            and preference_is_traceable(pref, _pref_evidence)):
                         all_soft_preferences.append(pref)
 
             extracted_dest = criteria_response.get('destination')
@@ -3236,6 +3243,14 @@ async def search_properties_impl(
         # (R2-04). It is echoed into the conversation's criteria from here.
         from rag.agent_memory import sanitize_soft_preferences
         all_soft_preferences = sanitize_soft_preferences(all_soft_preferences)
+        # Nor a sensitive detail: "wheelchair user - step-free access needed" travels as the
+        # step-free requirement, "Universal Credit tenant" not at all (NEW-E). This is the
+        # tool's own boundary, so every caller and the echoed criteria get the same rule.
+        from core.preference_grounding import split_sensitive_preferences
+        all_soft_preferences, _sensitive_features = split_sensitive_preferences(all_soft_preferences)
+        for _feature in _sensitive_features:
+            if _feature not in all_property_features:
+                all_property_features.append(_feature)
 
         # 供两种载荷统一复用的 search_criteria 构造器（同时带 canonical + legacy 键）。
         def _criteria():

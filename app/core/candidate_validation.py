@@ -1311,6 +1311,8 @@ def _asserts_commute(fragment: str) -> bool:
     text = str(fragment or "")
     if _MINUTE_TOKEN.search(text):
         return True
+    if _arithmetic.JOURNEY_COUNT.search(text) and _arithmetic.journey_counts(text):
+        return True       # "(8 journeys)": a count the week must bear out (r17)
     # A travel expense within a monetary budget is not a travel-time verdict.
     if re.search(r"fare|\bcost\b|\bprice\b|票价|费用|交通费", text, re.I):
         return False
@@ -2420,12 +2422,14 @@ def _arithmetic_evidenced(fragment: str, *, context: str, previous_clause: str, 
         return False
     text = str(fragment or "")
     if not (_arithmetic.MINUTES.search(text) or _HOURS_AND_MINUTES.search(text)
+            or _arithmetic.JOURNEY_COUNT.search(text)
             or any(phrase in text.lower() for phrase, _v in _arithmetic.DURATION_WORDS)):
         return False
     label = line[:80].split(":", 1)[0] if ":" in line[:80] else ""
     scope = f"{label} {previous_clause} {context} {text}"
     if not (_DAY_PERIOD.search(scope) or _WEEK_PERIOD.search(scope) or _COMPARISON_CUE.search(scope)
             or _arithmetic.products(text) or _arithmetic.subtractions(text)
+            or _arithmetic.JOURNEY_COUNT.search(text)
             or (caps and re.search(r"\b(?:limit|cap|max(?:imum)?|spare|headroom|margin|buffer)\b", scope, re.I))):
         return False      # no arithmetic here: cheap exit, before any line-wide work
     if _line_has_wrong_base(line, tuple(measured), tuple(sorted(set(days) | set(user_days) | {5.0}))):
@@ -2758,6 +2762,12 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             if _quotes_source_text(fragment, source_texts):
                 return True
             effective = _binding if _binding is not None else binding
+            if _arithmetic.journey_counts(fragment) and not _MINUTE_TOKEN.search(fragment):
+                # A journey count alone ("(8 journeys)", "6 journeys"): it must match the week it
+                # is for, whatever the turn measured (r17). Same rule as the critic.
+                return _arithmetic.journey_counts_ok(
+                    fragment, context=f"{context} {previous_clause}", sentence=line,
+                    user_days=user_days, answer_days=answer_days)
             if _claim_is_evidenced(fragment, effective, caps, context=context, heading=heading,
                                    itinerary=itinerary, sentence_marked=sentence_marked):
                 return True

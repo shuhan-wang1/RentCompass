@@ -143,3 +143,54 @@ def test_a_condition_goes_with_the_main_clause_it_led_into():
     assert "so if Bow is on your shortlist" not in out
     assert "40 minutes" not in out
     assert "plus a change at Mile End." in out
+
+
+# ── r17: a stated journey count must match the week ───────────────────────────────────
+
+BLOCK = ("(10 journeys):\n- vs Holloway: 3 × 10 = 30 minutes per week\n"
+         "- vs Camden: 16 × 10 = 160 minutes per week (2 hours 40 minutes)")
+
+
+def _r17(old, new):
+    case = CORPUS["r16_2e4cddc7"]
+    _, _, evidence, message = _case("r16_2e4cddc7")
+    text = case["critic_text"]
+    assert old in text
+    mutated = text.replace(old, new)
+    return mutated, validate_commute_response(mutated, case["critic_state"]), evidence, message
+
+
+@pytest.mark.parametrize("old,new", [
+    ("(10 journeys)", "(8 journeys)"),                                     # 5 days x 2 = 10
+    ("three days a week = 6 journeys", "three days a week = 8 journeys"),  # 3 days x 2 = 6
+    ("(10 journeys)", "(10 return trips a week)"),                         # 5 return trips
+])
+def test_a_wrong_journey_count_label_is_removed_and_flagged(old, new):
+    mutated, out, evidence, message = _r17(old, new)
+    assert new not in out
+    assert out.count(NOTE_EN) == 1
+    assert unsupported_external_numbers(mutated, evidence, message), new
+
+
+@pytest.mark.parametrize("old,new", [
+    ("(10 journeys)", "(10 journeys)"),
+    ("three days a week = 6 journeys", "three days a week = 6 journeys"),
+    ("(10 journeys)", "(5 one-way trips)"),                                # explicit one-way
+])
+def test_a_correct_journey_count_is_kept(old, new):
+    mutated, out, evidence, message = _r17(old, new)
+    assert out == mutated and NOTE_EN not in out
+    assert not unsupported_external_numbers(mutated, evidence, message)
+
+
+def test_no_critic_flagged_leftover_after_a_wrong_block_goes():
+    """The wrong "(8 journeys)" block goes whole; what is left must not be flagged by the
+    critic, or the Unverified footer would follow (the 5-day week stated in the removed
+    lead-in is still the standard week for "half an hour" / "2 hours 40 minutes")."""
+    wrong = ("(8 journeys):\n- vs Holloway: 3 × 8 = 24 minutes per week\n"
+             "- vs Camden: 16 × 8 = 128 minutes per week")
+    mutated, out, evidence, message = _r17(BLOCK, wrong)
+    assert "8 journeys" not in out and "3 × 8" not in out and "16 × 8" not in out
+    assert unsupported_external_numbers(mutated, evidence, message)
+    assert not unsupported_external_numbers(out, evidence, message)
+    assert "saves roughly half an hour a week over Holloway, and about 2 hours 40 minutes a week" in out

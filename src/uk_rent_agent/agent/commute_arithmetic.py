@@ -522,16 +522,18 @@ def _clause_of(text: str, start: int, end: int) -> str:
 
 def figure_days(clause: str, sentence: str, user_days: Iterable[float], answer_days: Iterable[float]) -> set:
     """Commuting days for a weekly total: an N-day week the answer states FOR this figure
-    (its clause, then its sentence), else the user's own office days, else an N-day week the
-    answer states, else 5. The user's days are never overridden by a 5-day default."""
+    (its clause, then its sentence), else the user's own office days, else the standard 5 or
+    an N-day week the answer states elsewhere. The user's days are never overridden by a 5-day
+    default; without them, an example elsewhere ("e.g. three days a week") does not displace
+    the standard week, so a text judged after a removal reads its 5-day totals the same way
+    (r17: the critic flagged the correct leftover once the "five-day week" lead-in went)."""
     local = days_stated(clause) or days_stated(sentence)
     if local:
         return local
     user = {float(d) for d in user_days if d}
     if user:
         return user
-    stated = {float(d) for d in answer_days if d}
-    return stated or {STANDARD_DAYS}
+    return {float(d) for d in answer_days if d} | {STANDARD_DAYS}
 
 
 def total_matches(value: float, diffs: Iterable[float], unit: str | None, days: Iterable[float], *,
@@ -576,6 +578,55 @@ def spreads(text: str, sentence: str, routes: list) -> list:
         value = float(next(g for g in match.groups() if g))
         found.append((match.span(), close(value, spread, bool(HEDGE.search(match.group())))))
     return found
+
+
+# A stated journey COUNT: "(10 journeys)", "6 journeys", "10 trips a week", "5 return trips",
+# "two journeys a day", "5 one-way trips". A week has 2 x days journeys (days one-way trips only
+# when one-way is explicit, days return/round trips); a day has 2 (1 one-way).
+_COUNT_WORD = r"(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fourteen)"
+_COUNT_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
+                "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "fourteen": 14}
+JOURNEY_COUNT = re.compile(
+    r"\b" + _COUNT_WORD + r"\s+(one[\s-]way\s+|single\s+|return\s+|round[\s-]|commuting\s+)?"
+    r"(journeys|trips|commutes)\b(\s+(?:a|per|each)\s+(?:day|week))?", re.I)
+
+
+def journey_counts(text: str) -> list:
+    """``[(span, count, kind, period)]``: kind 'leg' (one-way journeys), 'one_way' (explicit
+    one-way wording), 'round' (return/round trips); period 'day', 'week' or None."""
+    found = []
+    for match in JOURNEY_COUNT.finditer(str(text or "")):
+        word = match.group(1).lower()
+        count = float(_COUNT_WORDS.get(word) or int(word))
+        qualifier = (match.group(2) or "").lower()
+        kind = ("one_way" if qualifier.startswith(("one", "single")) else
+                "round" if qualifier.startswith(("return", "round")) else "leg")
+        period = None
+        if match.group(4):
+            period = "day" if "day" in match.group(4).lower() else "week"
+        found.append((match.span(), count, kind, period))
+    return found
+
+
+def journey_count_holds(count: float, kind: str, period: str | None, days: Iterable[float]) -> bool:
+    if period == "day":
+        return count == (1.0 if kind in ("one_way", "round") else 2.0)
+    days = [float(d) for d in days if d]
+    if kind == "round":
+        return any(count == d for d in days)
+    if kind == "one_way":
+        return any(count in (d, 2 * d) for d in days)
+    return any(count == 2 * d for d in days) or (period is None and count in (1.0, 2.0))
+
+
+def journey_counts_ok(text: str, *, context: str = "", sentence: str = "",
+                      user_days: Iterable[float] = (), answer_days: Iterable[float] = ()) -> bool:
+    """Every journey count ``text`` states matches the week (or day) it is for."""
+    for (start, end), count, kind, period in journey_counts(text):
+        scope = f"{context} {_clause_of(text, start, end)}"
+        if not journey_count_holds(count, kind, period, figure_days(scope, sentence, user_days, answer_days)):
+            return False
+    return True
 
 
 def figure_spans(text: str) -> list:
@@ -652,6 +703,13 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
         if not holds:
             return False, True
         covered.append(span)
+        seen = True
+    # A stated journey count must match the week it is for: "(8 journeys)" for "a typical
+    # five-day week with two journeys a day" is wrong (5 x 2 = 10; r17).
+    if journey_counts(text):
+        if not journey_counts_ok(text, context=context, sentence=sentence, user_days=user_days,
+                                 answer_days=answer_days):
+            return False, True
         seen = True
     results += [p["result"] for p in products(context) if product_is_correct(p, measured, days)]
     rest = text
@@ -757,11 +815,12 @@ def unsupported_arithmetic(text: str, routes: list, days: Iterable[float],
     days = set(days) | days_stated(text)
     bad = []
     for sentence, line, subject in _with_header_subjects(text, routes):
-        if not figure_spans(sentence) and not products(sentence):
+        if not figure_spans(sentence) and not products(sentence) and not JOURNEY_COUNT.search(sentence):
             continue
         if not (_ARITHMETIC_CUE.search(sentence) or DAY_PERIOD.search(sentence) or WEEK_PERIOD.search(sentence)
                 or MARGIN_UNDER.search(sentence) or MARGIN_OVER.search(sentence)
-                or SPREAD_BOUND.search(sentence) or SPREAD_EXACT.search(sentence)):
+                or SPREAD_BOUND.search(sentence) or SPREAD_EXACT.search(sentence)
+                or JOURNEY_COUNT.search(sentence)):
             continue
         # The user's own limit is the reference of a margin ("about 5 minutes to spare").
         ok, seen = check_figures(sentence, sentence=sentence, line=line, routes=routes, days=days,

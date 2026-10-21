@@ -615,6 +615,39 @@ def update_search_criteria(accumulated: dict, new_criteria: dict) -> dict:
     return protect_confirmed_criteria(result, accumulated)
 
 
+def _withdraw_criteria_topics(accumulated: dict, message: str) -> dict:
+    """Clear every slot of a topic the user withdrew as a whole (R4-14).
+
+    'location' clears where to live and the commute destination, 'area' only where to live,
+    'commute' the destination and limit (and records no_commute). Each clear is recorded in
+    constraint_sources, so a later search echo cannot fill the slot back in. Returns the
+    SAME object when nothing changes. A place named later in the same message is applied
+    afterwards by the caller, as usual."""
+    from core.constraint_updates import withdrawn_topics
+    topics = withdrawn_topics(message)
+    if not topics:
+        return accumulated
+    cleared: dict = {}
+    if topics & {'location', 'area'}:
+        cleared.update(area=None, areas=[])
+    if topics & {'location', 'commute'}:
+        cleared.update(commute_destination=None, destination=None)
+    if 'commute' in topics:
+        cleared.update(no_commute=True, max_travel_time=None)
+    changed = [key for key, value in cleared.items()
+               if key not in accumulated or accumulated.get(key) != value]
+    if not changed:
+        return accumulated
+    result = {k: (list(v) if isinstance(v, list) else v) for k, v in accumulated.items()}
+    sources = dict(result.get('constraint_sources') or {})
+    for key in changed:
+        result[key] = cleared[key]
+        sources[key] = {'source': 'user_message', 'value': cleared[key], 'text': message[:800]}
+    result['constraint_sources'] = sources
+    logger.info("criteria.topics_withdrawn topics=%s", ",".join(sorted(topics)))
+    return result
+
+
 def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
                                      apply_relative_budget: bool = True,
                                      _reaffirmed: bool = False) -> dict:
@@ -638,6 +671,16 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     """
     if not current_message:
         return accumulated
+    if not _reaffirmed:
+        # "Forget everything about location" / "never mind the commute" (R4-14), read on the
+        # raw text: a withdrawal is exactly what scoped_update_text removes as a reference.
+        withdrawn = _withdraw_criteria_topics(accumulated, current_message)
+        from core.constraint_updates import without_withdrawals
+        remainder = without_withdrawals(current_message)
+        if remainder != current_message:
+            accumulated, current_message = withdrawn, remainder
+            if not re.search(r'[0-9A-Za-z\u4e00-\u9fff]', current_message):
+                return accumulated
     from core.constraint_updates import housing_update_text
     # ``_reaffirmed``: the text is already the explicit feature requirement extracted below.
     # Gating it through housing_update_text AGAIN can return '' again and recurse forever:
@@ -893,6 +936,15 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
             changed = True
         if result.get('max_travel_time') is not None:
             result['max_travel_time'] = None
+            changed = True
+        # Nothing is left to commute to: "Never mind about commute." kept King's Cross in
+        # view_state for the rest of the conversation (NEW-4). Lifting only the LIMIT keeps it.
+        from core.constraint_updates import commute_withdrawal_drops_destination
+        previous_destination = result.get('commute_destination')
+        if commute_withdrawal_drops_destination(current_message) and previous_destination:
+            result['commute_destination'] = None
+            if result.get('destination') == previous_destination:
+                result['destination'] = None
             changed = True
 
     # D (listing-advice contract): a move-in date stated THIS turn ("move in from

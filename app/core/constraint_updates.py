@@ -543,6 +543,118 @@ def cleared_fields(text: str) -> set[str]:
     return result
 
 
+# A whole topic withdrawn in one phrase (R4-14): "Forget everything we have said in this
+# conversation about location." changed nothing, so view_state kept area=Camden and the
+# Canary Wharf destination while the reply said "Location: none set", and the next search
+# still carried the destination (A-F5). The topic word must be the direct object of the
+# withdrawal ("forget [everything we said] [about] [the] location"); "Don't forget the
+# area" and "ignore my friend's area" are not withdrawals.
+_TOPIC_VERB = (r"(?<!n't )(?<!\bnot )(?<!\bnever )"
+               r"\b(?:forget|disregard|ignore|never\s*mind|scrap|drop|clear|reset|cancel|ditch)\b")
+_TOPIC_EVERYTHING = (r"(?:\s+about)?(?:\s+(?:everything|anything|all))?"
+                     r"(?:\s+(?:that\s+)?(?:we|i|you)(?:\s+(?:have|'ve|had))?\s+"
+                     r"(?:said|discussed|talked\s+about|mentioned|covered|agreed)"
+                     r"(?:\s+(?:so\s+far|earlier|before|previously|"
+                     r"in\s+(?:this|the)\s+(?:conversation|chat)))*)?")
+_TOPIC_OBJECT = r"(?:\s+(?:about|regarding|on|re))?(?:\s+(?:the|my|our|any|that|this))?\s+"
+_TOPIC_RE = {
+    'location': re.compile(_TOPIC_VERB + _TOPIC_EVERYTHING + _TOPIC_OBJECT
+                           + r"(?:locations?|where\s+(?:i|we)\s+(?:want\s+to\s+|would\s+|should\s+)?live)\b"
+                           r"|\blocations?\s+(?:doesn.t|does\s+not|no\s+longer)\s+matters?\b"
+                           r"|(?:忘掉|忘记|忘了|不管|别管|不考虑|不用考虑|不要考虑)[^。，,.!?；;]{0,12}(?:位置|地点|地段)",
+                           re.I),
+    'area': re.compile(_TOPIC_VERB + _TOPIC_EVERYTHING + _TOPIC_OBJECT
+                       + r"(?:areas?|neighbou?rhoods?)\b"
+                       r"|(?:忘掉|忘记|忘了|不管|别管|不考虑|不用考虑|不要考虑)[^。，,.!?；;]{0,12}(?:区域|地区)",
+                       re.I),
+    'commute': re.compile(_TOPIC_VERB + _TOPIC_EVERYTHING + _TOPIC_OBJECT
+                          + r"(?:commut(?:e|es|ing)|journey\s+to\s+work)\b(?!\s+(?:time|limit|filter|cap|max))",
+                          re.I),
+}
+
+
+def _withdrawal_spans(text: str) -> list[tuple[str, int, int]]:
+    """(topic, start, end) of each topic withdrawal; questions/hypotheticals withdraw nothing."""
+    spans: list[tuple[str, int, int]] = []
+    value = str(text or '')[:4000]
+    for topic, pattern in _TOPIC_RE.items():
+        for match in pattern.finditer(value):
+            clause = clause_at(value, match.start(), match.end())
+            sentence_end = re.search(r'[.!?。！？\n]', value[match.end():match.end() + 300])
+            if is_hypothetical(clause) or (sentence_end and sentence_end.group() in '?？'):
+                continue
+            spans.append((topic, match.start(), match.end()))
+    return spans
+
+
+def withdrawn_topics(text: str) -> set[str]:
+    """{'location', 'area', 'commute'} topics this message withdraws as a whole.
+
+    'location' covers where to live AND where the user commutes to; 'area' only the former."""
+    return {topic for topic, _start, _end in _withdrawal_spans(text)}
+
+
+def without_withdrawals(text: str) -> str:
+    """``text`` minus its topic withdrawals, so what follows them still applies:
+    "Disregard the area, search Stratford." searches Stratford (the withdrawn-clause filter
+    of scoped_update_text would otherwise drop the whole sentence)."""
+    value = str(text or '')
+    spans = sorted((start, end) for _topic, start, end in _withdrawal_spans(value))
+    if not spans:
+        return value
+    out, position = [], 0
+    for start, end in spans:
+        if start < position:
+            continue
+        out.append(value[position:start])
+        position = end
+    out.append(value[position:])
+    return ''.join(out)
+
+
+def commute_withdrawal_drops_destination(text: str) -> bool:
+    """A no-commute statement withdraws the destination too, unless it only lifts the limit.
+
+    "Never mind about commute." / "forget the commute, I will work from home" leave nothing to
+    commute to (NEW-4); "remove the commute limit" / "取消通勤时间" keep the destination for the
+    per-listing travel times."""
+    return not re.search(
+        r'\bcommut\w*\s+(?:time\s+)?(?:limit|filter|cap|max(?:imum)?|threshold)s?\b|\btime\s+limit\b'
+        r'|通勤(?:时间|时长)|时间限制|不限制通勤', str(text or ''), re.I)
+
+
+def withdrawn_by_user(accumulated: dict, field: str) -> bool:
+    """True when the user (message or form) explicitly cleared ``field`` and it is still clear."""
+    acc = accumulated if isinstance(accumulated, dict) else {}
+    source = (acc.get('constraint_sources') or {}).get(field)
+    return (acc.get(field) in (None, [], '') and isinstance(source, dict)
+            and source.get('value') in (None, [], '')
+            and source.get('source') in ('user_message', 'user_form', 'form', 'manual'))
+
+
+def _names_place(message: str, place: str) -> bool:
+    key = re.sub(r"[’']", '', str(place or '').split(',')[0].strip().lower())
+    text = re.sub(r"[’']", '', str(message or '').lower())
+    return bool(key) and re.search(r'(?<![a-z])' + re.escape(key) + r'(?![a-z])', text) is not None
+
+
+def drop_withdrawn_places(params: dict, accumulated: dict, message: str) -> tuple[dict, list[str]]:
+    """Remove a model-supplied destination / legacy location the user withdrew (R4-14).
+
+    After "Forget everything we have said about location." the model still sent the old
+    Canary Wharf destination from the conversation it remembers. A place this turn's
+    message names again is the user's choice and stays."""
+    p = dict(params or {})
+    dropped = []
+    for field, cleared in (('commute_destination', 'commute_destination'), ('location', 'area')):
+        value = p.get(field)
+        if (isinstance(value, str) and value.strip() and withdrawn_by_user(accumulated, cleared)
+                and not _names_place(message, value)):
+            p.pop(field, None)
+            dropped.append(field)
+    return p, dropped
+
+
 def independent_memory_task(message: str) -> bool:
     """A positive independent request survives a memory-only turn boundary.
 

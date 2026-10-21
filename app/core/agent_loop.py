@@ -3718,6 +3718,12 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             p['areas'] = [acc['area']]
         if cd and not acc.get('no_commute'):
             p['commute_destination'] = cd
+        # A destination / location the user withdrew is not re-supplied by the model from the
+        # conversation it remembers (R4-14); one this message names again stays.
+        from core.constraint_updates import drop_withdrawn_places
+        p, _withdrawn = drop_withdrawn_places(p, acc, p.get("current_message") or "")
+        if _withdrawn:
+            logger.info("fc_loop.withdrawn_places_dropped fields=%s", ",".join(_withdrawn))
         if acc.get('no_commute'):
             # REMOVE the commute filters; never set them to None. SearchPropertiesInput is
             # strict and validates against the authored schema, where max_commute_time is

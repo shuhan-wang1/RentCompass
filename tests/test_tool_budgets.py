@@ -1728,14 +1728,20 @@ def test_wrap_partial_search_still_cut_short_not_completed_empty(monkeypatch):
 
 
 def test_wrap_no_search_artifact_keeps_old_fallback():
-    """No search artifact at all -> the genuinely-absent fallback line is unchanged."""
+    """No search artifact at all -> the genuinely-absent fallback line is unchanged on a turn
+    about listings; a turn that did not ask for listings is not told about listing results
+    (R4-10, r07 B-F12)."""
     state = _state(
-        extracted_context={"current_message": "compare Camden and Islington",
+        extracted_context={"current_message": "compare flats in Camden and Islington",
                             "reply_language": "en"},
         tool_artifacts=[{"turn": 0, "tool": "compare_or_rank_areas", "params_digest": "d",
                          "success": True, "raw_data": {"ok": True}}])
     ans = agent_loop._deterministic_wrap_answer(state)
     assert "I do not yet have listing results ready to show." in ans
+    state["extracted_context"]["current_message"] = "compare Camden and Islington"
+    ans = agent_loop._deterministic_wrap_answer(state)
+    assert "listing results" not in ans
+    assert "from what I have gathered so far" not in ans   # nothing was gathered
 
 
 def test_completed_empty_search_raw_helper():

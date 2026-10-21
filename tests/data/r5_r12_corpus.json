@@ -1,0 +1,483 @@
+{
+ "r12_53bfec0e_draft": {
+  "request_id": "53bfec0e03804202a73fdd51558fc55d",
+  "stage": "agent draft (last AIMessage)",
+  "state": {
+   "accumulated_search_criteria": {
+    "amenities_of_interest": [],
+    "commute_destination": "King's Cross",
+    "constraint_sources": {
+     "commute_destination": {
+      "source": "user_message",
+      "text": "Compare Holloway, Camden and Kentish Town for a commute to King's Cross, and roughly how much time a week would I save with the quickest one?",
+      "value": "King's Cross"
+     },
+     "destination": {
+      "source": "user_message",
+      "text": "Compare Holloway, Camden and Kentish Town for a commute to King's Cross, and roughly how much time a week would I save with the quickest one?",
+      "value": "King's Cross"
+     },
+     "no_commute": {
+      "source": "user_message",
+      "text": "Compare Holloway, Camden and Kentish Town for a commute to King's Cross, and roughly how much time a week would I save with the quickest one?",
+      "value": false
+     }
+    },
+    "destination": "King's Cross",
+    "max_budget": null,
+    "max_travel_time": null,
+    "no_commute": false,
+    "property_features": [],
+    "soft_preferences": []
+   },
+   "candidate_validation": {},
+   "extracted_context": {
+    "current_message": "Compare Holloway, Camden and Kentish Town for a commute to King's Cross, and roughly how much time a week would I save with the quickest one?",
+    "reply_language": "en"
+   },
+   "memory_context": "",
+   "tool_artifacts": [
+    {
+     "error": null,
+     "raw_data": {
+      "areas": [
+       {
+        "budget_match_rate": null,
+        "commute_minutes": 24,
+        "name": "Holloway",
+        "no_data": false,
+        "rank": 1,
+        "rent": {
+         "freshness_days": 91,
+         "low_sample": false,
+         "max": 3600.0,
+         "median": 2250.0,
+         "min": 1517.0,
+         "sample_size": 30
+        },
+        "score": {
+         "components": {
+          "commute": 90.0,
+          "value": 66.7
+         },
+         "partial": false,
+         "total": 82.2,
+         "weights": {
+          "commute": 0.6667,
+          "value": 0.3333
+         }
+        },
+        "slug": "holloway",
+        "sources": [
+         "OnTheMarket listing cache",
+         "commute routing"
+        ]
+       },
+       {
+        "budget_match_rate": null,
+        "commute_minutes": 35,
+        "name": "Camden",
+        "no_data": false,
+        "rank": 2,
+        "rent": {
+         "freshness_days": 47,
+         "low_sample": false,
+         "max": 5000.0,
+         "median": 2100.0,
+         "min": 850.0,
+         "sample_size": 95
+        },
+        "score": {
+         "components": {
+          "commute": 53.3,
+          "value": 100.0
+         },
+         "partial": false,
+         "total": 68.9,
+         "weights": {
+          "commute": 0.6667,
+          "value": 0.3333
+         }
+        },
+        "slug": "camden",
+        "sources": [
+         "OnTheMarket listing cache",
+         "commute routing"
+        ]
+       },
+       {
+        "budget_match_rate": null,
+        "commute_minutes": 21,
+        "name": "Kentish Town",
+        "no_data": true,
+        "rank": 3,
+        "rent": null,
+        "score": {
+         "components": {
+          "commute": 100.0
+         },
+         "partial": true,
+         "total": 100.0,
+         "weights": {
+          "commute": 0.6667,
+          "value": 0.3333
+         }
+        },
+        "slug": "kentish-town",
+        "sources": [
+         "commute routing"
+        ]
+       }
+      ],
+      "evidence_scope": {
+       "bedrooms_filtered": false,
+       "budget_match_basis": "rent_only",
+       "commute_scope": "area_reference_point",
+       "freshness_basis": "cache_fetch_time",
+       "live_verified": false,
+       "rent_sample": "mixed_cached_listings",
+       "room_type_filtered": false
+      },
+      "explanation_notes": [
+       "Composite score = weighted sum of 0-100 components (value = lower median rent, adjusted by how many cached listings fall under budget; commute = shorter time). Weights come from the ranking priorities (as passed to the tool) and sum to 1: commute=0.6667, value=0.3333. The best area on a component scores 100; gaps are measured against at least a 30-minute commute spread and a rent spread of 20% of the dearest median, so small differences stay small.",
+       "Rent statistics cover mixed cached listings without room-type or bedroom filtering. Budget match measures rent only. Freshness is the cache age, not verification of current price or availability. Area commute times do not verify individual homes.",
+       "No cached listings for: Kentish Town — rent shown as null (search these areas first).",
+       "Areas without cached rent data are scored on commute alone and are ranked AFTER every fully scored area; their score is not comparable with the others.",
+       "Ranked order (present the areas in this order; #1 is the top recommendation): #1 Holloway, #2 Camden, #3 Kentish Town."
+      ],
+      "not_evaluated": [],
+      "priorities": [
+       "commute",
+       "value"
+      ],
+      "priorities_note": "Do not describe these priorities as the user's own unless the user stated them in this conversation.",
+      "priorities_source": "caller_supplied",
+      "status": "ok",
+      "success": true,
+      "weights": {
+       "commute": 0.6667,
+       "value": 0.3333
+      }
+     },
+     "success": true,
+     "tool": "compare_or_rank_areas"
+    }
+   ],
+   "user_query": "Compare Holloway, Camden and Kentish Town for a commute to King's Cross, and roughly how much time a week would I save with the quickest one?"
+  },
+  "text": "Here's how the three compare for a commute to King's Cross (area-level journey times, not tied to any specific flat):\n\n| Area | Commute to King's Cross | Median rent (cached listings) | Notes |\n|---|---|---|---|\n| Holloway | 24 min | £2,250 (range £1,517–£3,600, 30 listings) | Best overall balance |\n| Camden | 35 min | £2,100 (range £850–£5,000, 95 listings) | Cheapest median, widest choice, longest commute |\n| Kentish Town | 21 min | No cached rent data | Quickest, but no rent evidence |\n\nTime saved per week with the quickest option (Kentish Town, 21 min):\n\n- Versus Camden (35 min): 14 minutes each way, so about 28 minutes a day, roughly 2 hours 20 minutes a week on a five-day commute.\n- Versus Holloway (24 min): 3 minutes each way, about 6 minutes a day, roughly half an hour a week.\n\nSo the real saving is against Camden, not Holloway. Kentish Town and Holloway are within a few minutes of each other, which means the choice between them comes down to rent and the flat itself rather than travel time.\n\nA few caveats worth knowing:\n\n- These are area-level commute times from each neighbourhood's reference point, not measured door-to-door from a particular property. An individual flat can differ noticeably depending on which end of the area it sits.\n- The rent figures come from cached listings and are not live-verified, so treat them as a guide to the market rather than current asking prices. They also mix room types and bedroom counts, so they are not a like-for-like comparison.\n- Kentish Town has no cached rent data at all, so its ranking is based on commute alone and is not directly comparable with the other two.\n\nIf you tell me your budget and room type, I can pull actual listings in these areas and check the commute from specific addresses."
+ },
+ "r12_8573f129_draft": {
+  "request_id": "8573f12968f540fbb2b656c9f43504af",
+  "stage": "agent draft (last AIMessage)",
+  "state": {
+   "accumulated_search_criteria": {
+    "amenities_of_interest": [],
+    "bedrooms": 1,
+    "bedrooms_minimum": false,
+    "constraint_sources": {
+     "bedrooms": {
+      "source": "user_message",
+      "text": "Which gyms are near Camden Road, Islington N7, and which nearby area is best value for a 1-bed?",
+      "value": 1
+     },
+     "bedrooms_minimum": {
+      "source": "user_message",
+      "text": "Which gyms are near Camden Road, Islington N7, and which nearby area is best value for a 1-bed?",
+      "value": false
+     },
+     "room_type": {
+      "source": "user_message",
+      "text": "Which gyms are near Camden Road, Islington N7, and which nearby area is best value for a 1-bed?",
+      "value": "whole"
+     }
+    },
+    "destination": null,
+    "max_budget": null,
+    "max_travel_time": null,
+    "property_features": [],
+    "room_type": "whole",
+    "soft_preferences": []
+   },
+   "candidate_validation": {},
+   "extracted_context": {
+    "current_message": "Which gyms are near Camden Road, Islington N7, and which nearby area is best value for a 1-bed?",
+    "reply_language": "en"
+   },
+   "memory_context": "",
+   "tool_artifacts": [
+    {
+     "error": "Nearby POI lookup failed",
+     "raw_data": {
+      "address": "Camden Road, Islington, London N7",
+      "budget_seconds": 51.0,
+      "category_status": {
+       "gym": {
+        "attempts": 0,
+        "error": "POI lookup failed",
+        "error_type": "OverpassError",
+        "radius_m": 800,
+        "retryable": true,
+        "service_status": "cooldown",
+        "source": "OpenStreetMap Overpass",
+        "status": "failed"
+       }
+      },
+      "completed_types": [],
+      "elapsed_seconds": 0.001,
+      "empty_types": [],
+      "error": "Nearby POI lookup failed",
+      "executed_types": [
+       "gym"
+      ],
+      "failed_types": [
+       "gym"
+      ],
+      "failure_note": "No requested category completed; do not report this as no nearby places.",
+      "message": "Nearby POI lookup failed",
+      "note": "Lookup FAILED (not an empty result): gym.",
+      "partial": true,
+      "pois": {},
+      "radius_clamped": false,
+      "radius_m": 800,
+      "reference_point": {
+       "coordinate_source": "address_geocoding",
+       "distance_basis": "straight_line",
+       "is_specific_address": false,
+       "lat": 51.5518318,
+       "lon": -0.1256076,
+       "measured_from": "the geocoded CENTRE of the area 'Camden Road, Islington, London N7' — not a property address. Distances are straight-line from that centre, so they describe the area, not the walk from any home the user might take. Say so when quoting them.",
+       "precision": "area",
+       "query": "Camden Road, Islington, London N7",
+       "query_precision_hint": "area"
+      },
+      "requested_radius_m": 800,
+      "requested_types": [
+       "gym"
+      ],
+      "retryable": true,
+      "search_status": "failed",
+      "service_status": "unavailable",
+      "skipped_types": [],
+      "source": "OpenStreetMap Overpass",
+      "success": false,
+      "summary": "Found 0 places in completed categories within the actual 800m straight-line search radius, measured from the geocoded CENTRE of the area 'Camden Road, Islington, London N7' — not a property address. Distances are straight-line from that centre, so they describe the area, not the walk from any home the user might take. Say so when quoting them.\n\nLookup FAILED (not an empty result): gym.",
+      "unknown_types": [
+       "gym"
+      ],
+      "unqueried_types": [],
+      "unsupported_types": [],
+      "user_requested_radius_m": null
+     },
+     "success": false,
+     "tool": "search_nearby_pois"
+    },
+    {
+     "error": null,
+     "raw_data": {
+      "areas": [
+       {
+        "budget_match_rate": null,
+        "commute_minutes": 27,
+        "name": "Camden",
+        "no_data": false,
+        "rank": 1,
+        "rent": {
+         "freshness_days": 47,
+         "low_sample": false,
+         "max": 5000.0,
+         "median": 2100.0,
+         "min": 850.0,
+         "sample_size": 95
+        },
+        "score": {
+         "components": {
+          "commute": 40.0,
+          "value": 100.0
+         },
+         "partial": false,
+         "total": 80.0,
+         "weights": {
+          "commute": 0.3333,
+          "value": 0.6667
+         }
+        },
+        "slug": "camden",
+        "sources": [
+         "OnTheMarket listing cache",
+         "commute routing"
+        ]
+       },
+       {
+        "budget_match_rate": null,
+        "commute_minutes": 9,
+        "name": "Holloway",
+        "no_data": false,
+        "rank": 2,
+        "rent": {
+         "freshness_days": 91,
+         "low_sample": false,
+         "max": 3600.0,
+         "median": 2250.0,
+         "min": 1517.0,
+         "sample_size": 30
+        },
+        "score": {
+         "components": {
+          "commute": 100.0,
+          "value": 68.8
+         },
+         "partial": false,
+         "total": 79.2,
+         "weights": {
+          "commute": 0.3333,
+          "value": 0.6667
+         }
+        },
+        "slug": "holloway",
+        "sources": [
+         "OnTheMarket listing cache",
+         "commute routing"
+        ]
+       },
+       {
+        "budget_match_rate": null,
+        "commute_minutes": 26,
+        "name": "Islington",
+        "no_data": false,
+        "rank": 3,
+        "rent": {
+         "freshness_days": 47,
+         "low_sample": false,
+         "max": 5000.0,
+         "median": 2400.0,
+         "min": 1517.0,
+         "sample_size": 59
+        },
+        "score": {
+         "components": {
+          "commute": 43.3,
+          "value": 37.5
+         },
+         "partial": false,
+         "total": 39.4,
+         "weights": {
+          "commute": 0.3333,
+          "value": 0.6667
+         }
+        },
+        "slug": "islington",
+        "sources": [
+         "OnTheMarket listing cache",
+         "commute routing"
+        ]
+       },
+       {
+        "budget_match_rate": null,
+        "commute_minutes": 10,
+        "name": "Lower Holloway",
+        "no_data": true,
+        "rank": 4,
+        "rent": null,
+        "score": {
+         "components": {
+          "commute": 96.7
+         },
+         "partial": true,
+         "total": 96.7,
+         "weights": {
+          "commute": 0.3333,
+          "value": 0.6667
+         }
+        },
+        "slug": "lower-holloway",
+        "sources": [
+         "commute routing"
+        ]
+       },
+       {
+        "budget_match_rate": null,
+        "commute_minutes": 13,
+        "name": "Tufnell Park",
+        "no_data": true,
+        "rank": 5,
+        "rent": null,
+        "score": {
+         "components": {
+          "commute": 86.7
+         },
+         "partial": true,
+         "total": 86.7,
+         "weights": {
+          "commute": 0.3333,
+          "value": 0.6667
+         }
+        },
+        "slug": "tufnell-park",
+        "sources": [
+         "commute routing"
+        ]
+       },
+       {
+        "budget_match_rate": null,
+        "commute_minutes": 20,
+        "name": "Highbury",
+        "no_data": true,
+        "rank": 6,
+        "rent": null,
+        "score": {
+         "components": {
+          "commute": 63.3
+         },
+         "partial": true,
+         "total": 63.3,
+         "weights": {
+          "commute": 0.3333,
+          "value": 0.6667
+         }
+        },
+        "slug": "highbury",
+        "sources": [
+         "commute routing"
+        ]
+       }
+      ],
+      "evidence_scope": {
+       "bedrooms_filtered": false,
+       "budget_match_basis": "rent_only",
+       "commute_scope": "area_reference_point",
+       "freshness_basis": "cache_fetch_time",
+       "live_verified": false,
+       "rent_sample": "mixed_cached_listings",
+       "room_type_filtered": false
+      },
+      "explanation_notes": [
+       "Composite score = weighted sum of 0-100 components (value = lower median rent, adjusted by how many cached listings fall under budget; commute = shorter time). Weights come from the ranking priorities (as passed to the tool) and sum to 1: value=0.6667, commute=0.3333. The best area on a component scores 100; gaps are measured against at least a 30-minute commute spread and a rent spread of 20% of the dearest median, so small differences stay small.",
+       "Rent statistics cover mixed cached listings without room-type or bedroom filtering. Budget match measures rent only. Freshness is the cache age, not verification of current price or availability. Area commute times do not verify individual homes.",
+       "No cached listings for: Highbury, Tufnell Park, Lower Holloway — rent shown as null (search these areas first).",
+       "Areas without cached rent data are scored on commute alone and are ranked AFTER every fully scored area; their score is not comparable with the others.",
+       "Ranked order (present the areas in this order; #1 is the top recommendation): #1 Camden, #2 Holloway, #3 Islington, #4 Lower Holloway, #5 Tufnell Park, #6 Highbury."
+      ],
+      "not_evaluated": [],
+      "priorities": [
+       "value",
+       "commute"
+      ],
+      "priorities_note": "Do not describe these priorities as the user's own unless the user stated them in this conversation.",
+      "priorities_source": "caller_supplied",
+      "status": "ok",
+      "success": true,
+      "weights": {
+       "commute": 0.3333,
+       "value": 0.6667
+      }
+     },
+     "success": true,
+     "tool": "compare_or_rank_areas"
+    }
+   ],
+   "user_query": "Which gyms are near Camden Road, Islington N7, and which nearby area is best value for a 1-bed?"
+  },
+  "text": "Here's what I can and can't tell you.\n\n**Gyms near Camden Road, N7 — not available right now**\n\nThe OpenStreetMap lookup for gyms failed (the service was in a cooldown/outage), so I have no verified gym list to give you. This is a failed lookup, not a finding that there are no gyms — Camden Road is a busy stretch and there are certainly gyms in the area, I just can't name them from real data. If you ask again in a little while I can retry the search.\n\n**Best value nearby areas for a 1-bed**\n\nRanked on rent value plus commute to Camden Road (rent figures come from the OnTheMarket listing cache, commute from routing):\n\n1. **Camden** — median rent £2,100/month (95 listings, cache 47 days old), about 27 minutes to Camden Road. Best value score of the group; cheapest median of the areas with rent data.\n2. **Holloway** — median £2,250/month (30 listings, cache 91 days old), only about 9 minutes away. Slightly pricier but by far the shortest commute, so it scores almost identically overall.\n3. **Islington** — median £2,400/month (59 listings, cache 47 days old), about 26 minutes. The most expensive of the three with rent data, and no commute advantage over Camden.\n\nLower Holloway (about 10 minutes), Tufnell Park (about 13 minutes) and Highbury (about 20 minutes) have good commute times but no cached rent data, so I can't score them on value — they'd need a listing search first.\n\nTwo caveats worth knowing: those rent medians are for mixed cached listings, not filtered to 1-beds, and they're cache snapshots rather than live asking prices. Area commute times are measured from each area's centre, not from a specific flat.\n\n**My read:** Holloway is the strongest practical pick — near-identical overall score to Camden but a 9-minute commute instead of 27, for only £150 more in median rent. Camden wins if you want the lowest rent and don't mind the longer trip.\n\nWant me to search actual 1-bed flats in Holloway and Camden so we can compare real listings rather than area medians?"
+ }
+}

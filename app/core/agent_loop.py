@@ -457,6 +457,78 @@ def _invalid_call_diagnostics(calls) -> str:
     return ";".join(out)[:500] or "-"
 
 
+_UNANSWERED_CALL_ERROR = (
+    "not run: no result was recorded for this {name} call this turn. Call it again if you "
+    "still need it, or answer from the results above and say what you could not check.")
+_MALFORMED_CALL_ERROR = (
+    "not run: the arguments of this {name} call were not valid JSON. Call {name} again with "
+    "valid JSON arguments if you still need it, or answer from the results above.")
+
+
+def _malformed_call_result(name: str) -> str:
+    return json.dumps({"success": False, "data": None,
+                       "error": _MALFORMED_CALL_ERROR.format(name=name)}, ensure_ascii=False)
+
+
+def _provider_transcript(messages) -> list:
+    """The messages as a provider may receive them: every tool call answered exactly once.
+
+    An assistant message's tool calls INCLUDE its ``invalid_tool_calls`` once serialised
+    (langchain-openai sends both), so a malformed sibling of a valid call left an id with no
+    tool result, and DeepSeek answered the next plan call with 400 "insufficient tool messages
+    following tool_calls message" (r10 6e02119f: search_nearby_pois ran,
+    compare_or_rank_areas had unquoted JSON, the user got "model service unavailable"). Here:
+
+    * a malformed call is sent as a call with empty arguments (its malformed text is never
+      echoed back), and a call with no result gets a "not run" result;
+    * a duplicate result for one id, or a result with no call before it, is dropped.
+
+    The state transcript is not modified; this is the view each model call receives."""
+    msgs = list(messages or [])
+    out: list = []
+    i = 0
+    while i < len(msgs):
+        m = msgs[i]
+        if isinstance(m, ToolMessage):
+            i += 1          # no assistant tool call before it: a provider rejects an orphan
+            continue
+        invalid = list(getattr(m, "invalid_tool_calls", None) or []) if isinstance(m, AIMessage) else []
+        calls = list(getattr(m, "tool_calls", None) or []) if isinstance(m, AIMessage) else []
+        if not (calls or invalid):
+            out.append(m)
+            i += 1
+            continue
+        if invalid:
+            calls = calls + [{"name": str(c.get("name") or "unknown"), "args": {},
+                              "id": c.get("id"), "type": "tool_call"}
+                             for c in invalid if isinstance(c, dict) and c.get("id")]
+            m = m.model_copy(update={"tool_calls": calls, "invalid_tool_calls": []})
+        malformed = {c.get("id") for c in invalid if isinstance(c, dict)}
+        j = i + 1
+        answered: dict = {}
+        ids = [c.get("id") for c in calls if c.get("id")]
+        while j < len(msgs) and isinstance(msgs[j], ToolMessage):
+            tcid = getattr(msgs[j], "tool_call_id", None)
+            if tcid in ids and tcid not in answered:
+                answered[tcid] = msgs[j]
+            j += 1
+        out.append(m)
+        for call in calls:
+            tcid = call.get("id")
+            if not tcid:
+                continue
+            if tcid in answered:
+                out.append(answered[tcid])
+                continue
+            name = str(call.get("name") or "unknown")
+            content = (_malformed_call_result(name) if tcid in malformed else json.dumps(
+                {"success": False, "data": None,
+                 "error": _UNANSWERED_CALL_ERROR.format(name=name)}, ensure_ascii=False))
+            out.append(ToolMessage(content=content, tool_call_id=tcid, name=name))
+        i = j
+    return out
+
+
 def _has_invalid_call_nudge(messages) -> bool:
     return any(
         isinstance(getattr(m, "additional_kwargs", None), dict)
@@ -2065,7 +2137,8 @@ def _descaffold_for_wrap(messages: list) -> list:
             name = getattr(m, "name", None) or "tool"
             out.append(_low_privilege_data_message(f"tool_result:{name}", m.content))
             continue
-        if isinstance(m, AIMessage) and getattr(m, "tool_calls", None):
+        if isinstance(m, AIMessage) and (getattr(m, "tool_calls", None)
+                                         or getattr(m, "invalid_tool_calls", None)):
             content = m.content if isinstance(m.content, str) else ""
             text = content.strip()
             if text:
@@ -2642,7 +2715,12 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
     # back to the honest line, never become a silent claim (E11 invented "about 15-20 min"
     # exactly where a dimension had no usable evidence).
     satisfied_tools = {a.get("tool") for a in executed if a.get("success")}
-    missing_lines = _missing_requested_dimension_lines(cm, satisfied_tools, lang)
+    # A lookup that RAN and failed is named as failed, with what it was for (R4-10): "Nearby
+    # amenities have not been looked up yet" after two failed gym lookups was untrue, and the
+    # answer never said which lookup failed (r07 B-F12).
+    failed_lines, failed_dimension_tools = _failed_lookup_lines(executed, lang)
+    missing_lines = _missing_requested_dimension_lines(
+        cm, satisfied_tools | failed_dimension_tools, lang)
 
     recs = []
     for a in reversed(artifacts):
@@ -2698,20 +2776,30 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             level = raw.get("safety_level") or ""
             safety_lines.append((str(place), raw.get("safety_score"), str(level)))
 
+    # A preamble that promises results ("These are the results already obtained this turn:")
+    # is printed only when a result follows it; it was followed by nothing (r06 e373e422,
+    # acceptance NEW-7).
+    from core.candidate_validation import render_structured_evidence_fallback
+    evidence = render_structured_evidence_fallback(state, language=lang)
+    has_results = bool(recs or empty_raw is not None or safety_lines or str(evidence or "").strip())
     if lang == "zh":
         if reason == 'provider_error':
-            opener = '模型服务暂时不可用。以下仅列出本轮已经取得的结果：'
+            opener = ('模型服务暂时不可用。以下仅列出本轮已经取得的结果：' if has_results
+                      else '模型服务暂时不可用。')
             closer = '未完成的部分可以稍后重试。'
         elif reason == 'tool_call_error':
-            opener = '本轮有一项查询未能执行（查询参数无效）。以下仅列出本轮已经取得的结果：'
+            opener = ('本轮有一项查询未能执行（查询参数无效）。以下仅列出本轮已经取得的结果：'
+                      if has_results else '本轮有一项查询未能执行（查询参数无效）。')
             closer = '可以让我再试一次。'
         elif reason == "no_reliable_numbers":
             # 「未能获取」是诚实的 partial-disclosure 标记（graders._honest_partial_disclosed），
             # 满足 must_mention_source_if_evidence 的无证据分支；不含任何「超时/时间限制」措辞。
-            opener = "抱歉，我未能获取到可靠的具体数字，先按已核实的信息回答："
+            opener = ("抱歉，我未能获取到可靠的具体数字，先按已核实的信息回答：" if has_results
+                      else "抱歉，我未能获取到可靠的具体数字。")
             closer = "如需具体数字，我可以再帮你查证。"
         else:
-            opener = "抱歉，本轮处理耗时较长，我先根据已经拿到的结果给你一个简要回答（可能不完整）："
+            opener = ("抱歉，本轮处理耗时较长，我先根据已经拿到的结果给你一个简要回答（可能不完整）："
+                      if has_results else "抱歉，本轮处理耗时较长，先给你一个简要回答（可能不完整）：")
             closer = "由于时间限制，以上内容可能不完整，你可以让我继续把它补全。"
         lines = [opener]
         # Internal tool identifiers (search_properties, calculate_commute, ...) used to be
@@ -2739,10 +2827,15 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
         elif details_failed:
             lines.append("这次没能查到你问的那套房源的详情（查询未能执行），所以还无法回答；"
                          "之前列出的房源仍然有效。")
+        elif failed_lines:
+            pass          # the failed lookups below say what could not be checked
         elif reason == "tool_call_error" and not searched:
             lines.append("这次的查询未能执行，所以还没能核实你问的内容。")
-        else:
+        elif searched or _asks_for_listings(cm):
             lines.append("目前还没有可以直接展示的房源结果。")
+        elif not has_results and not missing_lines:
+            lines.append("本轮还没有可以展示的结果。")
+        lines.extend(failed_lines)
         for place, score, level in safety_lines[:4]:
             lines.append(f"治安（数据来源 data.police.uk）：{place} 安全评分 {score}/100"
                          + (f"（{level}）" if level else "") + "。")
@@ -2751,12 +2844,13 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             lines.extend("- " + m for m in missing_lines)
         lines.append(closer)
     else:
+        results_lead = " These are the results already obtained this turn:" if has_results else ""
         if reason == 'provider_error':
-            opener = 'The model service is temporarily unavailable. These are the results already obtained this turn:'
+            opener = 'The model service is temporarily unavailable.' + results_lead
             closer = 'You can retry the unfinished parts later.'
         elif reason == 'tool_call_error':
-            opener = ("I couldn't run one of the lookups this turn (its request was malformed). "
-                      "These are the results already obtained this turn:")
+            opener = ("I couldn't run one of the lookups this turn (its request was malformed)."
+                      + results_lead)
             closer = 'You can ask me to try again.'
         elif reason == "no_reliable_numbers":
             # "couldn't retrieve" is an honest partial-disclosure marker
@@ -2764,11 +2858,13 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             # must_mention_source_if_evidence — with NO "ran long / cut short / time budget"
             # wording (the turn did not time out).
             opener = ("Sorry — I couldn't retrieve reliable specific figures right now, so "
-                      "here is what I have verified:")
+                      "here is what I have verified:" if has_results else
+                      "Sorry — I couldn't retrieve reliable specific figures right now.")
             closer = "If you want specific figures, I can look them up for you."
         else:
             opener = ("Sorry — this turn ran long, so here is a brief answer from what I have "
-                      "gathered so far (it may be incomplete):")
+                      "gathered so far (it may be incomplete):" if has_results else
+                      "Sorry — this turn ran long, so here is a brief answer (it may be incomplete):")
             closer = ("This answer was cut short by the time budget; let me know and I can "
                       "finish it.")
         lines = [opener]
@@ -2797,10 +2893,17 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
         elif details_failed:
             lines.append("The details lookup for that listing failed this turn, so I can't answer "
                          "that yet; the listings shown earlier are still available.")
+        elif failed_lines:
+            pass          # the failed lookups below say what could not be checked
         elif reason == "tool_call_error" and not searched:
             lines.append("The lookup failed this turn, so I could not check what you asked.")
-        else:
+        elif searched or _asks_for_listings(cm):
+            # Listing results only on a turn about listings (R4-10): a gym or restaurant
+            # question was told "I do not yet have listing results ready to show" (r07 B-F12).
             lines.append("I do not yet have listing results ready to show.")
+        elif not has_results and not missing_lines:
+            lines.append("I do not have a result to show for this yet.")
+        lines.extend(failed_lines)
         for place, score, level in safety_lines[:4]:
             lines.append(f"Safety (source: data.police.uk): {place} scored {score}/100"
                          + (f" ({level})" if level else "") + ".")
@@ -2808,9 +2911,85 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             lines.append("Still outstanding from what you asked for this turn:")
             lines.extend("- " + m for m in missing_lines)
         lines.append(closer)
-    from core.candidate_validation import render_structured_evidence_fallback
-    evidence = render_structured_evidence_fallback(state, language=lang)
     return '\n\n'.join(part for part in ('\n'.join(lines), evidence) if part)
+
+
+# What each read tool is called in a user-facing failure line: (zh, en).
+_LOOKUP_NAMES = {
+    "search_nearby_pois": ("周边设施查询", "nearby-places lookup"),
+    "check_safety": ("治安数据查询", "safety lookup"),
+    "get_transport_info": ("TfL 行程查询", "TfL journey lookup"),
+    "calculate_commute": ("通勤时间计算", "commute calculation"),
+    "calculate_commute_cost": ("通勤费用计算", "commute cost calculation"),
+    "get_weather": ("天气查询", "weather lookup"),
+    "compare_or_rank_areas": ("区域比较", "area comparison"),
+}
+# The dimension a failed tool leaves unverified, and the line that says so (zh, en).
+_FAILED_DIMENSION = {
+    "check_safety": ("safety", "治安数据尚未完成核查", "Safety has not been verified yet"),
+    "search_nearby_pois": ("nearby", "周边设施未能查到", "Nearby amenities could not be checked"),
+    "calculate_commute": ("commute", "通勤时间尚未核算", "Commute time has not been calculated yet"),
+    "get_transport_info": ("commute", "通勤时间尚未核算", "Commute time has not been calculated yet"),
+    "calculate_commute_cost": ("commute", "通勤时间尚未核算", "Commute time has not been calculated yet"),
+}
+
+
+def _lookup_target(artifact: dict) -> str:
+    """What a failed lookup was FOR, from its own echoed request ("gym near Camden Road, N7")."""
+    raw = artifact.get("raw_data") if isinstance(artifact.get("raw_data"), dict) else {}
+    tool = artifact.get("tool")
+    place = str(raw.get("address") or raw.get("area") or raw.get("location")
+                or raw.get("requested_location") or "").strip()
+    if tool == "search_nearby_pois":
+        kinds = ", ".join(str(t).replace("_", " ") for t in (raw.get("requested_types") or [])[:4])
+        return f"{kinds} near {place}" if kinds and place else (place or kinds)
+    if tool in ("get_transport_info", "calculate_commute", "calculate_commute_cost"):
+        def _end(key):
+            value = raw.get(f"{key}_address") or raw.get(key)
+            return str((value.get("input") if isinstance(value, dict) else value) or "").strip()
+        origin, target = _end("from"), _end("to")
+        return f"{origin} to {target}" if origin and target else ""
+    return place
+
+
+def _failed_lookup_lines(executed: list, lang: str) -> tuple[list, set]:
+    """One line per kind of read that RAN this turn and failed, naming what it was for, and
+    the tools whose dimension those lines already cover. Search, details, web search and
+    memory have their own wording above and are not repeated here."""
+    failed: dict[str, list[str]] = {}
+    for artifact in executed:
+        tool = artifact.get("tool")
+        raw = artifact.get("raw_data")
+        if tool not in _LOOKUP_NAMES:
+            continue
+        if not (artifact.get("success") is False
+                or (isinstance(raw, dict) and raw.get("success") is False)):
+            continue
+        targets = failed.setdefault(tool, [])
+        target = _lookup_target(artifact)
+        if target and target not in targets:
+            targets.append(target)
+    lines, covered = [], set()
+    for tool, targets in failed.items():
+        zh_name, en_name = _LOOKUP_NAMES[tool]
+        shown = targets[:4]
+        if lang == "zh":
+            what = f"{zh_name}（{'；'.join(shown)}）" if shown else zh_name
+            line = f"本轮的{what}失败了，所以没能核实。"
+            if tool == "search_nearby_pois":
+                line += "查询失败不代表附近没有。"
+        else:
+            plural = len(shown) > 1
+            what = f"The {en_name}{'s' if plural else ''}" + (f" ({'; '.join(shown)})" if shown else "")
+            line = f"{what} failed this turn, so I could not check {'them' if plural else 'it'}."
+            if tool == "search_nearby_pois":
+                line += " A failed lookup does not mean there are none nearby."
+        if tool in _FAILED_DIMENSION:
+            _dim, zh_status, en_status = _FAILED_DIMENSION[tool]
+            line = (f"{zh_status}：{line}" if lang == "zh" else f"{en_status}: {line[0].lower()}{line[1:]}")
+            covered.add(tool)
+        lines.append(line)
+    return lines, covered
 
 
 def _deterministic_wrap_answer(state: AgentState) -> str:
@@ -3026,7 +3205,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         remaining = deadline_monotonic - time.monotonic()
         if remaining <= 0:
             raise asyncio.TimeoutError("LLM turn deadline exhausted before dispatch")
-        task = asyncio.ensure_future(call.ainvoke(prompt_messages))
+        # Every tool call answered exactly once before the provider sees it (r10 6e02119f).
+        task = asyncio.ensure_future(call.ainvoke(_provider_transcript(prompt_messages)))
         try:
             done, _pending = await asyncio.wait([task], timeout=remaining)
         except BaseException:
@@ -3592,6 +3772,16 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                             ",".join(_ungrounded))
         except Exception as exc:
             logger.error("fc_loop.ground_hard_constraints_failed type=%s", type(exc).__name__)
+        # Soft preferences and the safety flag the model supplies must come from the user's
+        # words or saved facts, never from a reflection (R4-12).
+        try:
+            from core.preference_grounding import ground_soft_signals
+            p, _ungrounded_soft = ground_soft_signals(p, state)
+            if _ungrounded_soft:
+                logger.info("fc_loop.ungrounded_soft_signals fields=%s",
+                            ",".join(_ungrounded_soft))
+        except Exception as exc:
+            logger.error("fc_loop.ground_soft_signals_failed type=%s", type(exc).__name__)
         try:
             from core.tools.search_properties import _extract_area, area_list_edit, bare_city_downgrades
             # An add/remove edit is already folded into `acc` above; reading "Also search in
@@ -3708,6 +3898,12 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             p['areas'] = [acc['area']]
         if cd and not acc.get('no_commute'):
             p['commute_destination'] = cd
+        # A destination / location the user withdrew is not re-supplied by the model from the
+        # conversation it remembers (R4-14); one this message names again stays.
+        from core.constraint_updates import drop_withdrawn_places
+        p, _withdrawn = drop_withdrawn_places(p, acc, p.get("current_message") or "")
+        if _withdrawn:
+            logger.info("fc_loop.withdrawn_places_dropped fields=%s", ",".join(_withdrawn))
         if acc.get('no_commute'):
             # REMOVE the commute filters; never set them to None. SearchPropertiesInput is
             # strict and validates against the authored schema, where max_commute_time is
@@ -3725,6 +3921,15 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         if commute_query_forbidden(p['current_message']):
             p['no_commute'] = True
             p.pop('max_commute_time', None)
+        # A sensitive detail never travels as a preference; a housing need it names travels
+        # as that requirement (NEW-E).
+        try:
+            from core.preference_grounding import apply_preference_policy
+            p, _policy_changed = apply_preference_policy(p)
+            if _policy_changed:
+                logger.info("fc_loop.sensitive_preferences_replaced")
+        except Exception as exc:
+            logger.error("fc_loop.preference_policy_failed type=%s", type(exc).__name__)
         # Harness-supplied params cross the same strict input contract as the model's: an
         # explicit None is a validation failure there, not "unset". strip_null_args already
         # ran on the MODEL's arguments; this covers every value injected after it.
@@ -5182,6 +5387,23 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             content, tainted = _derived_toolmsg(name, result)
             tainted_any = tainted_any or tainted
             messages.append(ToolMessage(content=content, tool_call_id=tcid, name=name))
+
+        # A malformed sibling of this batch's calls (arguments not valid JSON) is in
+        # invalid_tool_calls, never in the batch, yet the provider requires a result for its
+        # id: answer it as not run, so the model can re-issue it (r10 6e02119f).
+        _answered_ids = {getattr(m, "tool_call_id", None) for m in messages
+                         if isinstance(m, ToolMessage)}
+        for _bad in list(getattr(ai, "invalid_tool_calls", None) or []):
+            if not isinstance(_bad, dict) or not _bad.get("id") or _bad["id"] in _answered_ids:
+                continue
+            _bad_name = str(_bad.get("name") or "unknown")
+            logger.warning("fc_loop.invalid_tool_call_in_batch name=%s diag=%s",
+                           _bad_name[:40], _invalid_call_diagnostics([_bad]))
+            artifacts.append(_artifact(
+                turn, _bad_name, None, "", success=False,
+                error="not run: arguments were not valid JSON", denied=True, elapsed_ms=0))
+            messages.append(ToolMessage(content=_malformed_call_result(_bad_name),
+                                        tool_call_id=_bad["id"], name=_bad_name))
 
         if prepared_specialists is not None and prepared_specialists.plan.tasks:
             from core.specialist_runtime import build_specialist_results

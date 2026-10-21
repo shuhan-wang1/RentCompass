@@ -615,6 +615,75 @@ def update_search_criteria(accumulated: dict, new_criteria: dict) -> dict:
     return protect_confirmed_criteria(result, accumulated)
 
 
+# A withdrawal bound to the amenity mention itself ("I don't need a balcony", "no parking"),
+# never to the whole clause, so "a balcony isn't needed but a gym is" keeps the gym.
+_AMENITY_NEGATED_BEFORE_RE = re.compile(
+    r"(?:\b(?:don.t|do not|doesn.t|does not|no longer)\s+(?:need|want|care about)|\bno need for|"
+    r"\bno|\bwithout)\s+(?:(?:a|an|the|any|my)\s+)?(?:\w+\s+)?$|(?:不需要|不用|不要)\s*$", re.I)
+
+
+def _soft_amenity_updates(message: str, soft_preferences: list) -> list | None:
+    """The soft-preference list after this message's amenity nice-to-haves, or None.
+
+    "Nice-to-have: a balcony, but it's not essential." went only into user_preferences, so the
+    recap said "balcony is a nice-to-have" while view_state.criteria and the search held no
+    balcony (stress A-04). The reading is extract_preferences_from_message's own (whole-word,
+    requirement-only); accessibility features keep their dedicated handling above. A later
+    "I don't need a balcony after all" removes the stored nice-to-have."""
+    from core.tools.search_properties import _ACCESSIBILITY_FEATURES
+    current = list(soft_preferences or [])
+    stated = extract_preferences_from_message(message or '', {'soft_preferences': []})
+    names = {str(v)[len('Would like '):] for v in current + list(stated.get('soft_preferences') or [])
+             if str(v).startswith('Would like ')} - set(_ACCESSIBILITY_FEATURES)
+    withdrawn = set()
+    for name in names:
+        for match in re.finditer(r"(?<![A-Za-z])" + re.escape(name) + r"(?![A-Za-z])", message or '', re.I):
+            if (_feature_retracted_here(message, match.start(), match.end())
+                    or _AMENITY_NEGATED_BEFORE_RE.search(message[max(0, match.start() - 50):match.start()])):
+                withdrawn.add(name)
+                break
+    updated = [v for v in current if str(v)[len('Would like '):] not in withdrawn
+               or not str(v).startswith('Would like ')]
+    for value in stated.get('soft_preferences') or []:
+        name = value[len('Would like '):] if value.startswith('Would like ') else ''
+        if name in names and name not in withdrawn and value not in updated:
+            updated.append(value)
+    return updated if updated != current else None
+
+
+def _withdraw_criteria_topics(accumulated: dict, message: str) -> dict:
+    """Clear every slot of a topic the user withdrew as a whole (R4-14).
+
+    'location' clears where to live and the commute destination, 'area' only where to live,
+    'commute' the destination and limit (and records no_commute). Each clear is recorded in
+    constraint_sources, so a later search echo cannot fill the slot back in. Returns the
+    SAME object when nothing changes. A place named later in the same message is applied
+    afterwards by the caller, as usual."""
+    from core.constraint_updates import withdrawn_topics
+    topics = withdrawn_topics(message)
+    if not topics:
+        return accumulated
+    cleared: dict = {}
+    if topics & {'location', 'area'}:
+        cleared.update(area=None, areas=[])
+    if topics & {'location', 'commute'}:
+        cleared.update(commute_destination=None, destination=None)
+    if 'commute' in topics:
+        cleared.update(no_commute=True, max_travel_time=None)
+    changed = [key for key, value in cleared.items()
+               if key not in accumulated or accumulated.get(key) != value]
+    if not changed:
+        return accumulated
+    result = {k: (list(v) if isinstance(v, list) else v) for k, v in accumulated.items()}
+    sources = dict(result.get('constraint_sources') or {})
+    for key in changed:
+        result[key] = cleared[key]
+        sources[key] = {'source': 'user_message', 'value': cleared[key], 'text': message[:800]}
+    result['constraint_sources'] = sources
+    logger.info("criteria.topics_withdrawn topics=%s", ",".join(sorted(topics)))
+    return result
+
+
 def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
                                      apply_relative_budget: bool = True,
                                      _reaffirmed: bool = False) -> dict:
@@ -638,6 +707,16 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     """
     if not current_message:
         return accumulated
+    if not _reaffirmed:
+        # "Forget everything about location" / "never mind the commute" (R4-14), read on the
+        # raw text: a withdrawal is exactly what scoped_update_text removes as a reference.
+        withdrawn = _withdraw_criteria_topics(accumulated, current_message)
+        from core.constraint_updates import without_withdrawals
+        remainder = without_withdrawals(current_message)
+        if remainder != current_message:
+            accumulated, current_message = withdrawn, remainder
+            if not re.search(r'[0-9A-Za-z\u4e00-\u9fff]', current_message):
+                return accumulated
     from core.constraint_updates import housing_update_text
     # ``_reaffirmed``: the text is already the explicit feature requirement extracted below.
     # Gating it through housing_update_text AGAIN can return '' again and recurse forever:
@@ -735,6 +814,14 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         if 'max_budget' not in result or result.get('max_budget') is not None:
             result['max_budget'] = None
             changed = True
+    # "my budget could stretch to £2,100 for the right place" keeps the ceiling (the budget
+    # extractor skips it) and is kept beside it as the user's own soft note (stress A-08).
+    from core.constraint_updates import conditional_stretch_notes
+    for note in conditional_stretch_notes(current_message):
+        existing = result.setdefault('soft_preferences', [])
+        if note not in existing:
+            existing.append(note)
+            changed = True
 
     # A place can be residential in general but a workplace in this sentence.
     # Persist that distinction before the LLM plans tools so all calls see the
@@ -813,6 +900,14 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
             or (message_destination or {}).get('name')
             or known_destination
         )
+        from core.constraint_updates import replaces_destination
+        if (destination and result.get('commute_destination')
+                and result.get('commute_destination') != destination and not labelled_destination
+                and not replaces_destination(current_message, (message_destination or {}).get('name')
+                                             or destination)):
+            # "…, and I study part-time at Birkbeck." in a background turn named another place
+            # the user goes; it did not move the commute destination (stress A-08).
+            destination = None
         if destination and (
             result.get('commute_destination') != destination
             or result.get('destination') != destination
@@ -893,6 +988,15 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
             changed = True
         if result.get('max_travel_time') is not None:
             result['max_travel_time'] = None
+            changed = True
+        # Nothing is left to commute to: "Never mind about commute." kept King's Cross in
+        # view_state for the rest of the conversation (NEW-4). Lifting only the LIMIT keeps it.
+        from core.constraint_updates import commute_withdrawal_drops_destination
+        previous_destination = result.get('commute_destination')
+        if commute_withdrawal_drops_destination(current_message) and previous_destination:
+            result['commute_destination'] = None
+            if result.get('destination') == previous_destination:
+                result['destination'] = None
             changed = True
 
     # D (listing-advice contract): a move-in date stated THIS turn ("move in from
@@ -1008,6 +1112,10 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         if text not in existing:
             existing.append(text)
             changed = True
+    soft_amenities = _soft_amenity_updates(current_message, result.get('soft_preferences') or [])
+    if soft_amenities is not None:
+        result['soft_preferences'] = soft_amenities
+        changed = True
 
     from core.constraint_updates import cleared_fields
     for field in cleared_fields(current_message):
@@ -4062,6 +4170,16 @@ def _make_execute_tool_node(tool_registry):
                         "Hard-constraint grounding unavailable",
                         extra={"error_type": type(_e).__name__},
                     )
+                # Soft preferences / the safety flag must come from the user, not a
+                # reflection (R4-12) — same rule as fc_loop's executor.
+                try:
+                    from core.preference_grounding import ground_soft_signals
+                    params, _ungrounded_soft = ground_soft_signals(params, state)
+                except Exception as _e:
+                    logger.warning(
+                        "Soft-signal grounding unavailable",
+                        extra={"error_type": type(_e).__name__},
+                    )
                 # 1a: a city switch stated THIS turn must WIN over the accumulated area
                 # (post-search area freeze). _apply_explicit_criteria_updates has normally
                 # already folded it into accumulated['area'] in the extract_preferences
@@ -4127,6 +4245,13 @@ def _make_execute_tool_node(tool_registry):
                 _rl = extracted_context.get('reply_language')
                 if _rl and not params.get('reply_language'):
                     params['reply_language'] = _rl
+                # A sensitive detail travels only as the housing requirement it names (NEW-E).
+                try:
+                    from core.preference_grounding import apply_preference_policy
+                    params, _ = apply_preference_policy(params)
+                except Exception as _e:
+                    logger.warning("Preference policy unavailable",
+                                   extra={"error_type": type(_e).__name__})
                 # A protected-but-cleared criterion arrives here as None; the strict input
                 # contract rejects an explicit null, so a cleared value is sent as absent.
                 from core.strict_schema import strip_null_args
@@ -4361,7 +4486,44 @@ def _fc_artifact_observation(state: AgentState) -> Optional[str]:
     return "\n\n".join(pieces)
 
 
+def _failed_lookups_note(state: AgentState) -> str:
+    """Every lookup of this fc turn that ran and FAILED, for the rewrite prompt."""
+    lines = [line for a in state.get("tool_artifacts") or [] for line in _failed_lookup_observation(a)]
+    if not lines:
+        return ""
+    return "FAILED LOOKUPS THIS TURN (data about the attempts, not results):\n" + "\n".join(lines)
+
+
+def _failed_lookup_observation(artifact: dict) -> list:
+    """A lookup that ran and FAILED, as a fact the rewrite must keep.
+
+    Failed artifacts carry no data, and leaving them out entirely let the critic's rewrite
+    turn "the nearby-places lookup failed twice … not a finding that there are no gyms" into
+    "the search results I have don't cover gyms" (r11 97bdde65): the rewrite never knew a gym
+    lookup had run. The failure is stated, with what the lookup was for; no data is added."""
+    if not isinstance(artifact, dict) or artifact.get("success") is not False and not any(
+            artifact.get(flag) for flag in ("timed_out", "abandoned", "outcome_unknown")):
+        return []
+    if artifact.get("tool") in (None, "ask_user", "remember", "recall_memory"):
+        return []
+    raw = artifact.get("raw_data") if isinstance(artifact.get("raw_data"), dict) else {}
+    about = {k: raw[k] for k in ("address", "area", "location", "query", "requested_types",
+                                 "failed_types", "service_status") if raw.get(k)}
+    return [f"[{artifact.get('tool', 'tool')}#{artifact.get('turn', '')} FAILED] This lookup ran "
+            "and did not complete, so it is a failed lookup: not an empty result and not a "
+            "gap in coverage. "
+            + json.dumps({"error": artifact.get("error") or raw.get("error"), **about},
+                         ensure_ascii=False, default=str)]
+
+
 def _build_generation_prompt(state: AgentState) -> str:
+    """The generation prompt, plus the lookups of this turn that ran and failed (r11 97bdde65)."""
+    prompt = _build_generation_prompt_body(state)
+    note = _failed_lookups_note(state)
+    return f"{prompt}\n\n{note}" if note else prompt
+
+
+def _build_generation_prompt_body(state: AgentState) -> str:
     """Assemble the response-generation prompt from state.
 
     Shared by ``generate_response`` and the critic's regeneration pass so both
@@ -4868,6 +5030,21 @@ def _has_usable_retrieval_evidence(state: AgentState, artifacts: list) -> bool:
     return False
 
 
+def _lookup_request_echo(artifact: dict) -> list:
+    """The radius a lookup reports it searched, as evidence even when the lookup FAILED.
+
+    "I tried twice to look up gyms within 800m of the Camden Road listing, and both lookups
+    failed" quotes the request, not an external fact. Failed artifacts contribute no data, so
+    "800m" was an unsupported number and the critic hard-replaced three honest failure answers
+    (and the "best value" part one of them answered) with the generic fallback (r07 B-F12)."""
+    raw = artifact.get("raw_data") if isinstance(artifact, dict) else None
+    if not isinstance(raw, dict):
+        return []
+    radii = {raw.get(key) for key in ("requested_radius_m", "radius_m", "user_requested_radius_m")}
+    return [{f"{artifact.get('tool', 'tool')}#request": f"radius {value:g} m"}
+            for value in radii if isinstance(value, (int, float)) and not isinstance(value, bool)]
+
+
 def _collect_grounding_evidence(state: AgentState, tool_name: str) -> list:
     """Everything the generator was shown, as an evidence surface for the critic.
 
@@ -4906,6 +5083,7 @@ def _collect_grounding_evidence(state: AgentState, tool_name: str) -> list:
     # fc_loop tool_artifacts: successful, non-empty raw_data joins the evidence, per-artifact
     # labeled "tool#turn". Failed/empty ones are skipped (not evidence).
     for a in state.get("tool_artifacts") or []:
+        pieces.extend(_lookup_request_echo(a))
         if not _artifact_usable(a):
             continue
         label = f"{a.get('tool', 'tool')}#{a.get('turn', '')}"
@@ -5213,6 +5391,8 @@ def _make_critic_node():
                 final,
                 failed_lookups=failed_lookups,
                 retrieved_evidence=retrieved_evidence,
+                shown_listings=ec.get("view_results") or ec.get("last_results_full")
+                or ec.get("recommended_registry"),
                 user_message=ec.get("current_message") or _current_message(
                     state.get("user_query") or ""),
                 reply_language=_reply_language_from_ctx(

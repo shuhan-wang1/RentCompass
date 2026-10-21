@@ -126,6 +126,31 @@ _FIRST_PERSON_STATEMENT = re.compile(
     r"smoke|keep)|i'm|i've|im\s|my\s|we\s+(?:have|are|own)|we're)\b", re.I)
 
 
+# A message that asks not to be remembered (r07 optout1: "Please do not store or remember
+# anything about me in this chat — no memory at all. …", "… Please do not store that."). The
+# reply promised nothing would be kept, while the turn log kept the message and the extractor was
+# free to store facts from it. Such a turn is logged without its content and nothing is extracted.
+_STORE_VERB = (r"(?:store|save|remember|memori[sz]e|record|log|"
+               r"(?:write|note|jot)\s+(?:(?:it|this|that)\s+)?down|"
+               r"keep\s+(?:this|that|it|any|anything|everything|a\s+(?:record|note|log)|records?|"
+               r"notes?|track|my\s+\w+|(?:any(?:thing)?\s+)?(?:about|of)\s+me))")
+_DO_NOT_REMEMBER = re.compile(
+    r"(?:^|[.,;:!?—–\n]\s*|\b(?:please|and|but|so|just|also|then)\s+)(?:please\s+)?"
+    r"(?:do\s+not|don'?t|dont|never|no\s+need\s+to)\s+(?:(?:ever|even|actually)\s+)?"
+    + _STORE_VERB + r"\b|"
+    r"\bno\s+memory\b|\boff\s+the\s+record\b|"
+    r"\bnot\s+(?:to\s+)?(?:be\s+)?(?:stored|saved|remembered|recorded)\b(?!\s*\])|"
+    r"(?:请不要|不要|别|不用|请勿|不准|不许)(?:帮我|给我)?(?:记住|记下|记录|保存|存储|存下|存档|记)", re.I)
+
+
+def do_not_remember_requested(user_msg: str) -> bool:
+    """True when the user's own message asks that it not be remembered."""
+    return bool(_DO_NOT_REMEMBER.search(str(user_msg or "")[:_REDACT_MAX_CHARS]))
+
+
+_OPTED_OUT_LOG = "User asked: [message not stored at the user's request]"
+
+
 # The criteria slots a turn can change, with the keys they live under in
 # ``accumulated_search_criteria``. Deterministic: derived from the system's criteria state,
 # never from assistant prose (R2-06 stands).
@@ -276,6 +301,145 @@ def _superseded_text(text: str, changes: dict) -> str | None:
         if pattern is not None and pattern.search(out):
             out = pattern.sub(lambda m: (m.group(1) or "") + f"{new_value:,}", out)
     return out if out != text else None
+
+
+# ── Bounds the user stated (stress A-08) ─────────────────────────────────────
+# "my budget is at most £1,900" was consolidated into "Budget: up to £2,100 per month rent for
+# the right place" after the user said "my budget could stretch to £2,100 for the right place":
+# a conditional stretch replaced the ceiling, and the next search used 2,100. A stored ceiling
+# (rent or commute minutes) is only loosened, or dropped, when the user's message states the new
+# ceiling without a condition.
+# Bounded number shapes ("1,900", "1900", "2.1k"): an open [\d,]+ backtracked quadratically on
+# a long "1,1,1,…" run.
+_BOUND_MONEY = re.compile(
+    r"£\s{0,3}((?:\d{1,3}(?:,\d{3}){1,3}|\d{1,7})(?:\.\d{1,2})?)(?![\d,])\s{0,3}(k\b)?|"
+    r"(?<![\d,.])((?:\d{1,3}(?:,\d{3}){1,3}|\d{3,7})(?:\.\d{1,2})?)(?![\d,])\s{0,3}(?:pcm|p/m|per\s+month|"
+    r"a\s+month|/\s*month|pw|p/w|per\s+week|a\s+week|/\s*week|英镑|镑)", re.I)
+_BOUND_MINUTES = re.compile(r"\b(\d{1,3})\s*-?\s*(?:min(?:ute)?s?\b|分钟)", re.I)
+_COMMUTE_TERM = re.compile(r"\b(?:commut\w*|travel\w*|journey|door[\s-]to[\s-]door)\b|通勤|路程", re.I)
+# A conditional or tentative bound: "could stretch to", "for the right place", "if needed".
+_SOFT_BOUND = re.compile(
+    r"\b(?:stretch\w*|flex\w*|negotiable|could|might|maybe|possibly|perhaps|if|"
+    r"at\s+a\s+push|for\s+the\s+right|willing\s+to|would\s+consider|wiggle\s+room|leeway)\b|"
+    r"如果|可以商量|可商量|灵活|弹性|放宽|上浮|浮动|勉强|实在不行|必要时|合适的话|稍微", re.I)
+_BOUND_REMOVED = re.compile(
+    r"\b(?:no|cancel|remove|drop|forget|without|ignore|scrap)\s+(?:the\s+|my\s+|any\s+|a\s+)?"
+    r"(?:budget|price|rent|commute)(?:\s+(?:limit|cap|ceiling|max(?:imum)?))?\b|"
+    r"取消预算|不限预算|没有预算|不限通勤", re.I)
+_BUDGET_WORD = re.compile(r"\b(?:budget|rent|price|spend|afford|pcm)\b|预算|租金|价格|房租", re.I)
+_BOUND_CLAUSE = re.compile(r"[,;!?，；。！？\n]|\.(?!\d)|\b(?:but|though|although)\b", re.I)
+
+
+def _money_amounts(text: str) -> list:
+    values = []
+    for match in _BOUND_MONEY.finditer(str(text or "")):
+        raw = match.group(1) or match.group(3)
+        try:
+            value = float(raw.replace(",", ""))
+        except (AttributeError, ValueError):
+            continue
+        values.append(value * 1000 if match.group(2) else value)
+    return values
+
+
+def _row_bounds(text: str) -> dict:
+    """``{"money": highest rent figure, "minutes": highest commute minutes}`` a row states."""
+    value = str(text or "")[:_PREFERENCE_MAX_CHARS * 4]
+    bounds = {}
+    money = _money_amounts(value)
+    if money:
+        bounds["money"] = max(money)
+    if _COMMUTE_TERM.search(value):
+        minutes = [int(m.group(1)) for m in _BOUND_MINUTES.finditer(value)]
+        if minutes:
+            bounds["minutes"] = max(minutes)
+    return bounds
+
+
+def _clauses(text: str) -> list:
+    return [part for part in _BOUND_CLAUSE.split(str(text or "")[:_REDACT_MAX_CHARS]) if part.strip()]
+
+
+def _loosened_bound(old: str, new: str) -> str | None:
+    """The bound kind ("money"/"minutes") that ``new`` loosens relative to ``old``, or None.
+
+    Looser means a higher ceiling, the ceiling gone from the row, or a new condition on it
+    ("could stretch", "flexible") the old row did not carry."""
+    before, after = _row_bounds(old), _row_bounds(new)
+    for kind, old_value in before.items():
+        new_value = after.get(kind)
+        if new_value is None or new_value > old_value:
+            return kind
+        if _SOFT_BOUND.search(str(new or "")) and not _SOFT_BOUND.search(str(old or "")):
+            return kind
+    return None
+
+
+def _firm_bound_stated(user_msg: str, kind: str, value=None) -> bool:
+    """True when the user's message states a ``kind`` ceiling (``value`` when given) with no
+    condition attached, or removes that ceiling outright."""
+    msg = str(user_msg or "")
+    if value is None and _BOUND_REMOVED.search(msg) and not _SOFT_BOUND.search(msg):
+        return True
+    for clause in _clauses(msg):
+        if kind == "money":
+            amounts = _money_amounts(clause)
+            if not amounts and _BUDGET_WORD.search(clause):
+                # "budget 2100": a bare figure counts only beside a budget word (never a year).
+                amounts = [float(n.replace(",", "")) for n in
+                           re.findall(r"(?<![\d,.])(\d{1,3}(?:,\d{3}){1,3}|\d{3,7})(?![\d,])", clause)]
+        else:
+            amounts = [int(m.group(1)) for m in _BOUND_MINUTES.finditer(clause)]
+        if not amounts or _SOFT_BOUND.search(clause):
+            continue
+        if value is None or any(abs(float(a) - float(value)) < 1 for a in amounts):
+            return True
+    return False
+
+
+def _incidental_place(user_msg: str, place: str) -> bool:
+    """True when every mention of ``place`` in the message is about someone else ("my friend
+    lives in Peckham"), so it is not the user's own search area."""
+    name = str(place or "").split(",")[0].strip()
+    if not name:
+        return False
+    pattern = re.compile(r"(?<![A-Za-z])" + re.escape(name) + r"(?![A-Za-z])", re.I)
+    seen = False
+    for clause in _clauses(user_msg):
+        for match in pattern.finditer(clause):
+            seen = True
+            before = clause[:match.start()]
+            other = None
+            for other in _THIRD_PARTY.finditer(before):
+                pass
+            if other is None or re.search(r"\b(?:i|i'm|i've|me|we|us|our)\b|我", before[other.end():], re.I):
+                return False
+    return seen
+
+
+def user_stated_changes(changes: dict, user_msg: str) -> dict:
+    """The criteria changes a memory row may be superseded by: the ones the user's message
+    states as their own (stress A-08). "my friend lives in Peckham" moved the area slot to
+    Peckham and "my budget could stretch to £2,100 for the right place" moved the budget to
+    2,100; neither is a new criterion of the user's, so neither rewrites what memory holds."""
+    out = dict(changes or {})
+    area = out.get("area")
+    if area and isinstance(area.get("to"), list):
+        before = {str(a).lower() for a in area.get("from") or []}
+        added = [b for b in area["to"] if str(b).lower() not in before]
+        if added and all(_incidental_place(user_msg, b) for b in added):
+            out.pop("area")
+    budget = out.get("budget")
+    if budget:
+        try:
+            raised = float(budget.get("to")) > float(budget.get("from"))
+        except (TypeError, ValueError):
+            raised = False
+        if raised and not _firm_bound_stated(user_msg, "money", budget.get("to")) and any(
+                _SOFT_BOUND.search(clause) for clause in _clauses(user_msg)
+                if _money_amounts(clause) or _BUDGET_WORD.search(clause)):
+            out.pop("budget")
+    return out
 
 
 def _now_iso():
@@ -631,6 +795,97 @@ _SENSITIVE_INFERENCE_RE = re.compile(
     r"行动不便|残疾|身体状况", re.I)
 
 
+# ── Reflection wording (R4-12) ────────────────────────────────────────────────
+# r06: "pet-friendliness (cat) and area safety are deal-breakers, not nice-to-haves" for a user who
+# said "I have a cat" and once asked whether the area was safe; the next search carried both as
+# preferences. r08: "User has a firm, non-negotiable set of core criteria …". A reflection is the
+# assistant's guess: it may use a word that turns a preference into a requirement (or a stated
+# limit into a flexible one) only when the user's own messages used that word, and it never
+# says the user stated something.
+_ESCALATION_TERMS = tuple((key, re.compile(pattern, re.I)) for key, pattern in (
+    ("non-negotiable", r"\bnon[\s-]?negotiables?\b|\bnot\s+negotiable\b"),
+    ("deal-breaker", r"\bdeal[\s-]?breakers?\b"),
+    ("must", r"\bmusts?\b"),
+    ("firm", r"\bfirm(?:ly)?\b"),
+    ("hard", r"\bhard\s+(?:\w+\s+)?(?:requirements?|constraints?|limits?|lines?|rules?|ceilings?|"
+             r"caps?|cut[\s-]?offs?|stops?|filters?|criteria|criterion|anchors?|conditions?|musts?)\b"),
+    ("strict", r"\bstrict(?:ly)?\b"),
+    ("absolute", r"\babsolute(?:ly)?\b"),
+    ("essential", r"\bessentials?\b"),
+    ("mandatory", r"\bmandatory\b|\bobligatory\b"),
+    ("required", r"\brequired\b"),
+    ("critical", r"\bcritical\b|\bcrucial\b|\bvital\b|\bindispensable\b|\bimperative\b"),
+    ("insist", r"\binsist\w*"),
+    ("compromise", r"\b(?:no|not|never|won'?t|will\s+not|cannot|can'?t|without|rather\s+than)\s+"
+                   r"(?:\w+\s+)?compromis\w*|\buncompromising\b"),
+    ("non-starter", r"\bnon[\s-]?starters?\b|\bno[\s-]go\b|\bred\s+lines?\b"),
+    ("priority", r"\b(?:top|highest|first|number[\s-]one|overriding|main|primary|biggest)\s+priorit\w*|"
+                 r"\btakes?\s+priority\b|\bcomes?\s+first\b"),
+    ("core", r"\b(?:key|core|fixed|stable|fundamental|main|primary|dominant|decisive|central)\s+(?:\w+\s+)?"
+             r"(?:requirements?|constraints?|criteria|criterion|anchors?|conditions?|filters?|factors?|"
+             r"drivers?)\b"),
+    # Softening a stated limit is the same inference in the other direction.
+    ("negotiable", r"(?<!non-)(?<!non )(?<!not )\bnegotiable\b"),
+    ("flexible", r"\bflex\w*"),
+    ("stretch", r"\bstretch\w*"),
+    ("relax", r"\brelax(?:e|es|ed|ing)?\s+(?:\w+\s+){0,2}(?:budget|price|rent|constraints?|limits?|"
+              r"ceilings?|caps?|requirements?|criteria)\b"),
+    ("willing", r"\bwilling\s+to\s+(?:go|pay|spend|stretch|flex|exceed|compromise)\b"),
+    ("soft", r"\bsoft\s+(?:limits?|ceilings?|caps?|budgets?|targets?|constraints?)\b"),
+    ("leeway", r"\bwiggle\s+room\b|\bleeway\b"),
+    ("zh-must", r"必须|务必|一定要|非得|非.{1,6}不可"),
+    ("zh-hard", r"硬性|硬指标|硬条件|硬约束|刚需|刚性"),
+    ("zh-bottom", r"底线|红线|一票否决"),
+    ("zh-nonneg", r"不可妥协|不能妥协|绝不妥协|没得商量|不容商量|不可协商|不能商量|不可商量|没有商量"),
+    ("zh-critical", r"不可或缺|必不可少|至关重要|决定性|首要|最重要|最核心|关键要求|核心要求"),
+    ("zh-absolute", r"绝对"),
+    ("zh-flex", r"可以商量|可商量|灵活|弹性|放宽|上浮|浮动"),
+))
+# An inference worded as the user's own statement: "the user stated", "they insisted on", "the
+# user's own request said".
+_ATTRIBUTION_RE = re.compile(
+    r"\b(?:the\s+)?(?:user|they|he|she)(?:'s)?\s+(?:has\s+|have\s+|had\s+)?(?:\w+ly\s+)?"
+    r"(?:said|says|stated|states|told|tells|insisted|insists|specified|specifies|"
+    r"made\s+(?:it\s+)?clear|confirmed|confirms|emphasi[sz]ed|emphasi[sz]es|stressed|stresses|"
+    r"declared|declares|asked\s+for|asks\s+for|requested|requests|demanded|demands|"
+    r"mentioned|mentions)\b|"
+    r"\bexplicitly\b|\b(?:as|per)\s+(?:stated|requested|specified|instructed)\b|"
+    r"\baccording\s+to\s+the\s+user\b|"
+    r"\b(?:user|their|his|her)(?:'s)?\s+own\s+(?:words|request|statement|message)s?\b|"
+    r"用户(?:已经|已|曾经|曾|明确|亲口|反复|一再)?(?:说过|说|表示|表明|要求|强调|提到|声明|指出|坚持)",
+    re.I)
+# Shown with every reflection the model reads (format_for_prompt, recall_memory).
+INFERENCE_NOTE = ("tentative inference by the assistant (a guess that may be wrong); "
+                  "not said or saved by the user")
+
+
+def reflection_rejection(text: str, user_words: str = "") -> str | None:
+    """Why a reflection may not be stored or shown, or None.
+
+    ``user_words`` is what the user actually wrote; an escalation word it also contains is the
+    user's own and may stay ("pets must be allowed" -> "a cat-friendly landlord seems to be a
+    must")."""
+    value = str(text or "")
+    said = str(user_words or "")
+    for key, pattern in _ESCALATION_TERMS:
+        if pattern.search(value) and not pattern.search(said):
+            return f"escalation:{key}"
+    if _ATTRIBUTION_RE.search(value):
+        return "attribution"
+    return None
+
+
+def presentable_memories(mems) -> list:
+    """The memory records a prompt may show.
+
+    Rows written before R4-12 were never checked, so a reflection is shown only when its
+    wording passes :func:`reflection_rejection` against the stated memories beside it."""
+    items = [m for m in (mems or []) if isinstance(m, dict)]
+    stated = "\n".join(str(m.get("text") or "") for m in items if m.get("mtype") != "reflection")
+    return [m for m in items
+            if m.get("mtype") != "reflection" or not reflection_rejection(m.get("text"), stated)]
+
+
 _RATIONALE_PAREN = re.compile(r"\s*\(([^()]{1,160})\)")
 _RATIONALE_TAIL = re.compile(
     r"\s*[,;:–—-]?\s*\b(?:because|since|so\s+that|in\s+order\s+to|as\s+(?:they|she|he|the\s+user)|"
@@ -956,10 +1211,11 @@ class AgentMemory:
         except Exception:
             return []
 
-    def _consolidate(self, facts, session_id, user_id, changes=None):
+    def _consolidate(self, facts, session_id, user_id, changes=None, user_msg=""):
         if not facts:
             return
         existing, seen, protected = [], set(), set()
+        texts = {}
         try:
             res = self.col.query(
                 query_texts=facts, n_results=4,
@@ -972,6 +1228,7 @@ class AgentMemory:
                     meta = ((metas or [])[position] if position < len(metas or []) else None) or {}
                     if i not in seen:
                         seen.add(i)
+                        texts[i] = d
                         explicit = meta.get("source") == SOURCE_EXPLICIT
                         existing.append({"id": i, "text": d,
                                          "kind": "saved" if explicit else "auto"})
@@ -1013,6 +1270,21 @@ class AgentMemory:
                     if ev == "UPDATE" and text in facts:
                         self.add(text, "semantic", session_id, user_id, importance=7,
                                  extra_meta={"source": SOURCE_AUTO})
+                    continue
+                loosened = None
+                if ev in ("UPDATE", "DELETE") and oid in texts:
+                    loosened = _loosened_bound(texts[oid], text if ev == "UPDATE" else "")
+                if loosened and not _firm_bound_stated(
+                        user_msg, loosened,
+                        _row_bounds(text).get(loosened) if ev == "UPDATE" else None):
+                    # A stored ceiling is never loosened by a conditional statement ("could
+                    # stretch to £2,100 for the right place"): the row stays, and the user's own
+                    # statement of the stretch is added beside it (stress A-08).
+                    print(f"[memory] consolidate kept_bound kind={loosened} event={ev}")
+                    for fact in facts:
+                        if loosened in _row_bounds(fact):
+                            self.add(fact, "semantic", session_id, user_id, importance=7,
+                                     extra_meta={"source": SOURCE_AUTO})
                     continue
                 if ev == "ADD" and text:
                     self.add(text, "semantic", session_id, user_id, importance=7,
@@ -1125,12 +1397,21 @@ class AgentMemory:
                     {"idempotency_key": idempotency_key}, {"user_id": user_id}]})
                 if existing and existing.get("ids"):
                     return True
+            opted_out = do_not_remember_requested(user_msg)
             # Sensitive categories are redacted BEFORE anything is written or extracted
             # (A-09): the episodic log, the fact extractor and the reflections built on
             # them all see the redacted text only.
             user_msg, _sensitive = redact_sensitive(user_msg)
             assistant_msg, _ = redact_sensitive(assistant_msg)
             ep = f"User asked: {(user_msg or '').strip()[:300]}"
+            if opted_out:
+                # The user asked for this message not to be kept: the log records that a turn
+                # happened, not what it said, and nothing is extracted from it. A field it names
+                # ("don't remember my budget") is still erased across layers, as add() would.
+                fields = erasure_request_fields(user_msg)
+                if fields:
+                    self.forget_fact(user_id, fields)
+                ep = _OPTED_OUT_LOG
             if tool_used:
                 ep += f"  [assistant used: {tool_used}]"
             # Branch provenance for the episodic layer only (semantic/reflection global).
@@ -1154,21 +1435,24 @@ class AgentMemory:
             # The turn's criteria CHANGES (system state, labelled, never assistant prose)
             # let an elliptical correction ("Make that Poplar") supersede the old value
             # instead of being stored beside it (R3-02).
-            changes = _sanitize_changes(criteria_changes)
+            # Only a change the user's message states as their own criterion supersedes what
+            # memory holds (stress A-08: "my friend lives in Peckham" is not a new area).
+            changes = user_stated_changes(_sanitize_changes(criteria_changes), user_msg)
             self._turn_local.turn_id = turn_id
             try:
-                if changes:
+                if changes and not opted_out:
                     self._supersede_slot_facts(changes, user_id, turn_id)
-                if not _is_trivial_for_extraction(user_msg):
+                if not opted_out and not _is_trivial_for_extraction(user_msg):
                     # Semantic facts come from the USER message only, on every turn (R2-06):
                     # the assistant's text — a recall answer, a reflection it quoted, a
                     # suggestion — is never a statement by the user. (Taint A+ asked for this
                     # on tainted turns only; it now holds everywhere.)
                     if changes:
                         self._consolidate(self._extract_facts(user_msg, "", changes),
-                                          session_id, user_id, changes)
+                                          session_id, user_id, changes, user_msg=user_msg)
                     else:
-                        self._consolidate(self._extract_facts(user_msg, ""), session_id, user_id)
+                        self._consolidate(self._extract_facts(user_msg, ""), session_id, user_id,
+                                          user_msg=user_msg)
             finally:
                 self._turn_local.turn_id = None
             self.maybe_reflect(session_id, user_id)
@@ -1225,6 +1509,11 @@ class AgentMemory:
             recent = self.col.get(where={"user_id": user_id})
             docs = recent.get("documents", []) or []
             metas = recent.get("metadatas", []) or []
+            # What the user actually wrote: the turn log of their own messages (R4-12).
+            user_words = "\n".join(
+                str(docs[i]) for i in range(len(docs))
+                if ((metas[i] if i < len(metas) else None) or {}).get("mtype") == "episodic"
+                and ((metas[i] if i < len(metas) else None) or {}).get("role") == "user")
             # Reflections are built from what the user said and asked, never from earlier
             # reflections: feeding them back escalated "pet-friendliness is a key
             # requirement" to "a non-negotiable dealbreaker" in two minutes (R2-06).
@@ -1242,17 +1531,32 @@ class AgentMemory:
             )
             newest = order[-REFLECT_CORPUS_SIZE:]
             corpus = "\n".join(f"- {docs[i]}" for i in newest)
+            # R4-12: an insight is the assistant's tentative guess. The prompt asks for that
+            # wording; reflection_rejection enforces it, because the prompt alone did not.
             prompt = (
-                "Given the following memories about a user's housing search, synthesise 1-3 concise, "
-                "higher-level insights about what this user really wants or needs (patterns, priorities, "
-                'trade-offs). Return STRICT JSON: {"insights": ["..."]}.\n\n'
+                "Given the following memories about a user's housing search, write 1-3 short, "
+                "TENTATIVE observations about what this user may want (patterns, trade-offs). They "
+                "are your own guesses, not things the user said, so word each one as a guess "
+                "(\"seems to\", \"may\", \"probably\"). Never call anything a requirement, a "
+                "priority or a limit the user set; never use the words non-negotiable, deal-breaker, "
+                "must, firm, strict, essential, hard constraint or top priority, and never call a "
+                "stated limit flexible, negotiable or stretchable, unless the user used that word "
+                "themselves. Never write that the user said, stated, insisted on or asked for "
+                "something. Keep every number exactly as the user gave it, and never combine an "
+                'older value with a newer one. Return STRICT JSON: {"insights": ["..."]}.\n\n'
                 f"{corpus}\n\nJSON: "
             )
             data = _extract_json(call_ollama(prompt, timeout=60) or "") or {}
+            rejected = 0
             for ins in (data.get("insights") or [])[:3]:
                 if (isinstance(ins, str) and ins.strip() and not contains_sensitive(ins)
                         and not _SENSITIVE_INFERENCE_RE.search(ins)):
+                    if reflection_rejection(ins, user_words):
+                        rejected += 1
+                        continue
                     self.add(ins.strip(), "reflection", session_id, user_id, importance=8)
+            if rejected:
+                print(f"[memory] reflect rejected_wording={rejected}")
         except Exception as e:
             print(f"[memory] reflect error_type={type(e).__name__}")
 
@@ -1378,22 +1682,37 @@ class AgentMemory:
         except Exception:
             pass
 
-    def format_for_prompt(self, mems) -> str:
+    def format_for_prompt(self, mems, saved_total=None) -> str:
         """The memory block. Reflections are the assistant's own INFERENCES and are labelled
         and listed apart: they were recalled as "everything I have saved" and applied as
-        search preferences (R2-06/R2-20)."""
+        search preferences (R2-06/R2-20). They are labelled TENTATIVE, and one whose wording
+        escalates or attributes is not shown at all (R4-12).
+
+        ``saved_total`` (a recall question): how many saved facts the user has, so the block
+        says whether it lists all of them. "Here is everything I have stored" listed 19 of 25
+        (R4-13)."""
+        mems = presentable_memories(mems)
         if not mems:
             return ""
         tag = {"semantic": "FACT", "episodic": "PAST"}
         stated = [f"[{tag.get(m.get('mtype'), 'MEM')}] {m['text']}" for m in mems
                   if m.get("mtype") != "reflection"]
         inferred = [f"[INFERENCE] {m['text']}" for m in mems if m.get("mtype") == "reflection"]
-        block = "What I remember about this user:\n" + "\n".join(stated) if stated else ""
+        header = "What I remember about this user:"
+        if saved_total is not None:
+            shown = sum(1 for m in mems if m.get("mtype") == "semantic")
+            header = (f"What I remember about this user (all {saved_total} saved facts are "
+                      "listed):" if shown >= saved_total else
+                      f"What I remember about this user (showing {shown} of {saved_total} saved "
+                      "facts; this list is NOT complete, so never say it is everything you have "
+                      "stored):")
+        block = header + "\n" + "\n".join(stated) if stated else ""
         if inferred:
             block = (block + "\n" if block else "") + (
-                "The assistant's own inferences (NOT said or saved by the user; never apply them "
-                "as search filters or preferences, never present them as things the user told "
-                "you or asked to save):\n" + "\n".join(inferred))
+                "The assistant's own inferences: TENTATIVE guesses that may be wrong, NOT said or "
+                "saved by the user (never apply them as search filters or preferences, never "
+                "present them as things the user told you or asked to save, and never describe "
+                "them as the user's requirements, limits or priorities):\n" + "\n".join(inferred))
         return block
 
     def stats(self) -> dict:

@@ -273,6 +273,26 @@ def _truncate_lines_to_cap(text: str, token_cap: float) -> str:
     return "\n".join(kept)
 
 
+# R4-13: a memory block cut for space read as the whole store, and the answer said "everything
+# I have stored". The cut is stated inside the block.
+_MEMORY_CUT_NOTE = ("[{n} more remembered line(s) were cut for space, so this memory list is "
+                    "INCOMPLETE: never say it is everything you have stored.]")
+
+
+def _truncate_memory_to_cap(text: str, token_cap: float) -> str:
+    """:func:`_truncate_lines_to_cap` for the memory block, ending with a line that says how
+    many lines were cut. A cap too small for that line falls back to the plain cut."""
+    if estimate_tokens(text) <= token_cap:
+        return text
+    total = len(text.split("\n"))
+    note_cost = estimate_tokens(_MEMORY_CUT_NOTE.format(n=total))
+    if note_cost > token_cap:
+        return _truncate_lines_to_cap(text, token_cap)
+    kept = _truncate_lines_to_cap(text, token_cap - note_cost)
+    note = _MEMORY_CUT_NOTE.format(n=total - (len(kept.split("\n")) if kept else 0))
+    return f"{kept}\n{note}" if kept else note
+
+
 def _truncate_chars_to_cap(text: str, token_cap: float) -> str:
     """Keep the longest character prefix of ``text`` under ``token_cap`` tokens."""
     if estimate_tokens(text) <= token_cap:
@@ -750,7 +770,7 @@ def assemble(*, user_message: str, history: Optional[List[Dict[str, str]]],
 
     # (2) cap memory_block at 25% of budget, cutting whole lines from the END.
     if mem:
-        mem = _truncate_lines_to_cap(mem, token_budget * 0.25)
+        mem = _truncate_memory_to_cap(mem, token_budget * 0.25)
         result = compose(n_turns, mem, summ)
         if estimate_tokens(result) <= token_budget:
             return result
@@ -895,7 +915,7 @@ def assemble_messages(*, user_message: str,
 
     # (2) cap memory_block at 25% of budget (whole lines from the END).
     if mem:
-        mem = _truncate_lines_to_cap(mem, token_budget * 0.25)
+        mem = _truncate_memory_to_cap(mem, token_budget * 0.25)
         msgs = build(n_turns, mem, summary, sections)
         if total_tokens(msgs) <= token_budget:
             return msgs

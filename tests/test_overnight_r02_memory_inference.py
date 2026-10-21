@@ -46,10 +46,12 @@ def harness(tmp_path, monkeypatch):
             facts = json.loads(prompt.split("NEW FACTS:\n", 1)[1].split("\n\nJSON:", 1)[0])
             return json.dumps({"ops": [{"event": "ADD", "id": None, "text": f} for f in facts]})
         if '"insights"' in prompt:
-            escalated = "dealbreaker" in prompt.split("JSON:")[0]
+            # R4-12: escalating wording is never stored, so the first reflection is tentative;
+            # it would escalate only if it were fed back into the next reflection's corpus.
+            escalated = "seems to matter" in prompt
             return json.dumps({"insights": [
                 "Pet-friendliness is a non-negotiable dealbreaker" if escalated
-                else "Pet-friendliness is a key requirement, likely a dealbreaker"]})
+                else "Pet-friendliness seems to matter to this user"]})
         return "5"
 
     monkeypatch.setattr(am_mod, "call_ollama", fake_llm)
@@ -104,14 +106,14 @@ def test_r2_06_reflections_are_not_built_from_reflections(harness):
     reflections = _docs(memory, "u_loop", "reflection")
     assert reflections and not any("non-negotiable" in r for r in reflections)
     corpus_prompts = [p for p in prompts if '"insights"' in p]
-    assert all("likely a dealbreaker" not in p for p in corpus_prompts)
+    assert all("seems to matter" not in p for p in corpus_prompts)
 
 
 def test_r2_06_inferences_are_labelled_apart_in_the_prompt(harness):
     memory, _prompts = harness
     block = memory.format_for_prompt([
         {"text": "I have a cat and I work at Canary Wharf", "mtype": "semantic"},
-        {"text": "Pet-friendliness is a key requirement", "mtype": "reflection"},
+        {"text": "Pet-friendliness seems to matter to this user", "mtype": "reflection"},
     ])
     stated, inferred = block.split("The assistant's own inferences", 1)
     assert "[FACT] I have a cat" in stated and "Pet-friendliness" not in stated

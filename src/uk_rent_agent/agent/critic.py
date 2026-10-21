@@ -539,23 +539,63 @@ def _evidenced_arithmetic(answer: str, evidence_money, supported: set) -> set:
     return exact
 
 
-def _successful_numeric_evidence(evidence: Any) -> str:
-    """Serialize only successful evidence, excluding failed/unknown tool outcomes."""
+def _failed_outcome(evidence: Any) -> bool:
+    return isinstance(evidence, dict) and (evidence.get("success") is False or any(
+        evidence.get(flag) for flag in ("timed_out", "abandoned", "outcome_unknown", "denied")))
+
+
+# A numeric leaf is evidence of a figure only with its unit, which only its KEY carries:
+# compare_or_rank_areas returns ``"commute_minutes": 27``, and with numbers dropped every
+# minute figure of an area answer was "unsupported", so the critic regenerated an honest
+# answer into one that called a failed gym lookup a coverage gap (r11 97bdde65).
+_KEY_UNITS = (
+    (re.compile(r"(?:^|_)(?:minutes?|mins?)$|duration", re.I), "minutes"),
+    (re.compile(r"(?:^|_)(?:km|kilomet(?:er|re)s?)$", re.I), "km"),
+    (re.compile(r"(?:^|_)miles?$", re.I), "miles"),
+    (re.compile(r"(?:^|_)(?:m|metres?|meters?)$", re.I), "m"),
+)
+
+
+def _numeric_leaf_text(key: Any, value: Any) -> str:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return ""
+    for pattern, unit in _KEY_UNITS:
+        if pattern.search(str(key or "")):
+            return f"{value:g} {unit}"
+    return ""
+
+
+def _successful_numeric_evidence(evidence: Any, key: Any = "") -> str:
+    """Serialize only successful evidence, excluding failed/unknown tool outcomes. A
+    numeric leaf is written with the unit its key names ("27 minutes")."""
     if isinstance(evidence, (list, tuple)):
-        return " ".join(_successful_numeric_evidence(item) for item in evidence)
+        return " ".join(_successful_numeric_evidence(item, key) for item in evidence)
     if isinstance(evidence, dict):
-        if evidence.get("success") is False or any(
-                evidence.get(flag) for flag in ("timed_out", "abandoned", "outcome_unknown", "denied")):
+        if _failed_outcome(evidence):
             return ""
         if "raw_data" in evidence:
             return _successful_numeric_evidence(evidence.get("raw_data"))
         return " ".join(
-            _successful_numeric_evidence(value) for value in evidence.values()
+            _successful_numeric_evidence(value, child_key) for child_key, value in evidence.items()
             if not isinstance(value, (bytes, bytearray))
         )
     if isinstance(evidence, str):
         return evidence
-    return ""
+    return _numeric_leaf_text(key, evidence)
+
+
+def _successful_evidence(evidence: Any) -> Any:
+    """``evidence`` with failed/unknown tool outcomes taken out, structure kept (so money
+    keys such as ``rent.median`` still read as money)."""
+    if isinstance(evidence, (list, tuple)):
+        return [_successful_evidence(item) for item in evidence if not _failed_outcome(item)]
+    if isinstance(evidence, dict):
+        if _failed_outcome(evidence):
+            return {}
+        if "raw_data" in evidence:
+            return _successful_evidence(evidence.get("raw_data"))
+        return {k: _successful_evidence(v) for k, v in evidence.items() if not _failed_outcome(v)}
+    return evidence
 
 
 def _unit_numbers(text: str) -> set[float]:
@@ -585,14 +625,37 @@ def unsupported_external_numbers(response: str, evidence: Any, user_text: str = 
     # presented as a measured fact here. Final response assembly still applies the
     # stricter per-listing commute guard to any user-facing commute judgment.
     asserted_response = re.sub(r"\bwould\b[^.!?\n]*", "", response or "", flags=re.IGNORECASE)
-    unit_unsupported = any(not any(abs(value - known) <= 0.01 for known in allowed)
-                          for value in _unit_numbers(asserted_response))
+    unit_unsupported = [value for value in _unit_numbers(asserted_response)
+                        if not any(abs(value - known) <= 0.01 for known in allowed)]
+    # Arithmetic on this turn's measured routes is not an external number: "4 minutes x 2
+    # journeys x 5 days = 40 minutes a week" (Holloway 25, Kentish Town 21) was graded
+    # unsupported and the answer regenerated with the "Unverified" footer (r13 2264a2d5), and so
+    # was the chained "3 x 2 = 6 …, and 6 x 5 = 30 …" (r14 95f29d0b). One definition, shared
+    # with the commute redactor (uk_rent_agent.agent.commute_arithmetic), pair rule included.
+    from uk_rent_agent.agent import commute_arithmetic as arithmetic
+    routes = arithmetic.named_routes(_successful_evidence(evidence))
+    days = arithmetic.days_stated(response)            # N-day weeks the answer states
+    user_days = arithmetic.days_stated(user_text)      # the user's own office days win over 5
+    # The user's own limit is a reference point too: "about 5 minutes to spare" under a stated
+    # 25-minute cap with Stratford measured at 20.
+    limits = arithmetic.durations(user_text)
     if unit_unsupported:
+        unit_unsupported = [value for value in unit_unsupported
+                            if not arithmetic.supported_in_text(value, asserted_response, routes, days,
+                                                                known=allowed, caps=limits,
+                                                                user_days=user_days)]
+    if unit_unsupported:
+        return True
+    # ... and a saving that does NOT derive is unsupported even in "would save you …" prose,
+    # or stated in hours ("3 hours a week over Camden"), which the unit scan never sees: the
+    # critic agrees with the redactor (r14 item 3).
+    if len(routes) >= 2 and arithmetic.unsupported_arithmetic(response or "", routes, days, known=allowed,
+                                                              limits=limits, user_days=user_days):
         return True
     # The live critic supplies the current user message. Keep the legacy direct
     # evaluate_grounding helper compatible when that context is intentionally absent.
     return bool(user_text and unsupported_reply_prices(
-        response or "", [successful, user_text]))
+        response or "", [_successful_evidence(evidence), user_text]))
 
 # ── station-name grounding ─────────────────────────────────────────────────
 # THE LEGITIMATE NAME UNIVERSE, enumerated. Every source of a real station/place name
@@ -1101,13 +1164,18 @@ _FAILURE_STATEMENT = re.compile(
     r"不可用|失败|无法|没能|未能", re.I)
 
 
+_LIST_ITEM = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+")
+
+
 def _without_unsupported_money(response: str, supported: set) -> str:
     """``response`` minus each sentence quoting a money figure that ``supported`` lacks.
 
     A bullet or line that loses every sentence goes with them; headings and figure-free
-    sentences stay. Linear in the text."""
-    lines = []
-    for line in str(response or "").split("\n"):
+    sentences stay. A lead-in whose whole list went goes too: "The listings I checked
+    were:" shipped followed by nothing (r07 38299e93, B-F9). Linear in the text."""
+    lines: list[str | None] = []      # None marks a line that was withdrawn
+    source = str(response or "").split("\n")
+    for line in source:
         if not _money_mentions(line):
             lines.append(line)
             continue
@@ -1122,12 +1190,33 @@ def _without_unsupported_money(response: str, supported: set) -> str:
         rebuilt = "".join(kept).rstrip()
         if re.search(r"[0-9A-Za-z\u4e00-\u9fff]", re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", rebuilt)):
             lines.append(rebuilt)
-    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+        else:
+            lines.append(None)
+    for index, line in enumerate(lines):
+        if line is None or not line.rstrip().endswith((":", "：")):
+            continue
+        following = [j for j in range(index + 1, len(source)) if source[j].strip()]
+        block = []
+        for j in following:
+            if not _LIST_ITEM.match(source[j]):
+                break
+            block.append(j)
+        if block and all(lines[j] is None for j in block):
+            lines[index] = None
+    kept_lines = [line for line in lines if line is not None]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(kept_lines)).strip()
+
+
+def _shown_listing_money(shown_listings: Any) -> list[tuple[float, str]]:
+    """The prices of the listings an earlier turn showed, from the server's own rows."""
+    rows = [row for row in (shown_listings or [])[:50] if isinstance(row, dict)]
+    return _evidence_money_mentions([{"price": row.get("price")} for row in rows if row.get("price")])
 
 
 def enforce_no_evidence_numeric_contract(response: str, *, retrieved_evidence: Any,
                                         user_message: str = "", reply_language: str = "",
-                                        failed_lookups: Optional[list] = None) -> str:
+                                        failed_lookups: Optional[list] = None,
+                                        shown_listings: Optional[list] = None) -> str:
     """Fail closed on external money claims when retrieval returned no usable data.
 
     The current user message is an explicit provenance source: repeating ``£900/month``
@@ -1140,12 +1229,17 @@ def enforce_no_evidence_numeric_contract(response: str, *, retrieved_evidence: A
     service is currently unavailable…" was replaced whole by the generic template because
     the draft also quoted £50 and £50,000 (R3-04). ``failed_lookups`` (e.g. ["web search"])
     names the retrieval that failed; the answer says so when it does not already.
+
+    ``shown_listings`` are the server-held rows of the listings an earlier turn showed (the
+    conversation's ``view_results``). Their prices are tool output, not external figures:
+    "Which of these is closest to a tube station?" lost its list of the four listings and
+    their rents when every nearby lookup of the turn failed (r07 38299e93).
     """
     if evidence_usable(retrieved_evidence) or not has_specific_price_claims(response):
         return response
     user_money = _evidence_money_mentions({"user_message": user_message})
     supported = set()
-    for value, unit in user_money:
+    for value, unit in user_money + _shown_listing_money(shown_listings):
         supported |= _derivations(value, unit)
     unsupported = [value for value, _unit in _money_mentions(response)
                    if not _close_to_any(value, supported)]

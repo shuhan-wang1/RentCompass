@@ -370,11 +370,23 @@ async def compare_or_rank_areas_impl(
         + "）、总和为 1：" + _fmt_weights(weights, is_zh) + "。各分项最优的区域为 100 分；差距至少按 "
         "30 分钟通勤跨度和最高中位租金 20% 的租金跨度计算，小差距不会被放大。",
     ))
-    if not commute_available:
+    if not commute_available and destination is None:
         notes.append(_L(
             is_zh,
             "No commute destination was given, so commute is excluded and commute_minutes is null.",
             "未提供通勤目的地，已排除通勤维度，commute_minutes 为空。",
+        ))
+    unrouted = [c["name"] for c in candidates if c["commute_minutes"] is None]
+    if destination is not None and unrouted:
+        # A commute that could not be computed is unknown, not zero: the area stays in the
+        # ranking, scored on rent, after every area scored on both (r10 b1e1ee91).
+        notes.append(_L(
+            is_zh,
+            "Commute time to the destination could not be computed for: %s (the destination "
+            "could not be located or routing was unavailable). These are ranked on rent only, "
+            "after any area scored on both, and commute_minutes is null." % ", ".join(unrouted),
+            "以下区域无法计算到目的地的通勤时间：%s（目的地无法定位或路线服务不可用）。它们仅按租金评分，"
+            "排在同时有租金和通勤评分的区域之后，commute_minutes 为空。" % "、".join(unrouted),
         ))
     if low_sample_names:
         notes.append(_L(

@@ -1,0 +1,309 @@
+{
+ "r10_385542cc_draft": {
+  "request_id": "385542cc321f4f308aa37db6ab4092c4",
+  "stage": "agent draft (last AIMessage)",
+  "state": {
+   "accumulated_search_criteria": {
+    "amenities_of_interest": [],
+    "destination": null,
+    "max_budget": null,
+    "max_travel_time": null,
+    "property_features": [],
+    "soft_preferences": []
+   },
+   "candidate_validation": {},
+   "extracted_context": {
+    "current_message": "What have you saved about me? List everything.",
+    "reply_language": "en"
+   },
+   "memory_context": "What I remember about this user (all 3 saved facts are listed):\n[FACT] Please remember that I need a washing machine and I prefer east-facing flats.\n[FACT] The user has a cat named Biscuit and needs a pet-friendly (pets allowed) home.\n[FACT] The user's maximum commute time is 35 minutes and their rent budget is at most £1,800 per month.",
+   "tool_artifacts": [],
+   "user_query": "What have you saved about me? List everything."
+  },
+  "text": "Here's everything I have saved about you:\n\n1. You need a washing machine and prefer east-facing flats.\n2. You have a cat named Biscuit and need a pet-friendly (pets allowed) home.\n3. Your maximum commute time is 35 minutes and your rent budget is at most £1,800 per month.\n\nThat's all three saved facts. Beyond what you've explicitly asked me to remember, this service also automatically keeps a short log of your requests and extracts durable details you mention (budget, areas, commute, needs) across conversations, so some of the above may have come from that as well.\n\nWant me to update or remove any of these, or shall I search for pet-friendly flats within £1,800 a month and a 35-minute commute?"
+ },
+ "r10_bb5cdb25_critic": {
+  "request_id": "bb5cdb258a294e4fb7fb5712ee86ec7e",
+  "stage": "critic output (checkpoint 1f1cd138-8f61-6a44-8006-89184df15a00)",
+  "state": {
+   "accumulated_search_criteria": {
+    "amenities_of_interest": [],
+    "commute_destination": "Canary Wharf, London E14 5AB",
+    "constraint_sources": {
+     "commute_destination": {
+      "source": "user_message",
+      "text": "Which is the better commute to Canary Wharf, Stratford or Bow, and is either under 25 minutes?",
+      "value": "Canary Wharf, London E14 5AB"
+     },
+     "destination": {
+      "source": "user_message",
+      "text": "Which is the better commute to Canary Wharf, Stratford or Bow, and is either under 25 minutes?",
+      "value": "Canary Wharf, London E14 5AB"
+     },
+     "max_travel_time": {
+      "source": "user_message",
+      "text": "Which is the better commute to Canary Wharf, Stratford or Bow, and is either under 25 minutes?",
+      "value": 25
+     },
+     "no_commute": {
+      "source": "user_message",
+      "text": "Which is the better commute to Canary Wharf, Stratford or Bow, and is either under 25 minutes?",
+      "value": false
+     }
+    },
+    "destination": "Canary Wharf, London E14 5AB",
+    "max_budget": null,
+    "max_travel_time": 25,
+    "no_commute": false,
+    "property_features": [],
+    "soft_preferences": []
+   },
+   "candidate_validation": {},
+   "extracted_context": {
+    "current_message": "Which is the better commute to Canary Wharf, Stratford or Bow, and is either under 25 minutes?",
+    "reply_language": "en"
+   },
+   "memory_context": "",
+   "tool_artifacts": [
+    {
+     "error": null,
+     "raw_data": {
+      "basis": "tfl_journey_plan",
+      "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+      "changes_count": 0,
+      "duration_category": "Medium (20-45 min)",
+      "duration_minutes": 20,
+      "from_address": "Stratford, London",
+      "is_acceptable": true,
+      "mode": "transit",
+      "route_legs": [
+       {
+        "duration_minutes": 4,
+        "from": "walk inside building, LONDON",
+        "lines": [],
+        "mode": "walking",
+        "summary": "Walk to Stratford Station",
+        "to": "Stratford Underground Station"
+       },
+       {
+        "duration_minutes": 9,
+        "from": "Stratford Underground Station",
+        "lines": [
+         "Jubilee"
+        ],
+        "mode": "tube",
+        "summary": "Jubilee line to Canary Wharf",
+        "to": "Canary Wharf Underground Station"
+       },
+       {
+        "duration_minutes": 7,
+        "from": "Canary Wharf Underground Station",
+        "lines": [],
+        "mode": "walking",
+        "summary": "Walk to 1 CANADA SQUARE, LONDON",
+        "to": "1 CANADA SQUARE, LONDON"
+       }
+      ],
+      "route_source": "TfL Journey Planner",
+      "route_summary": "Walk to Stratford Underground Station (4 min) -> Tube Jubilee to Canary Wharf Underground Station (9 min) -> Walk to 1 CANADA SQUARE, LONDON (7 min)",
+      "success": true,
+      "to_address": "Canary Wharf, London E14 5AB"
+     },
+     "success": true,
+     "tool": "calculate_commute"
+    },
+    {
+     "error": null,
+     "raw_data": {
+      "basis": "tfl_journey_plan",
+      "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+      "changes_count": 0,
+      "duration_category": "Medium (20-45 min)",
+      "duration_minutes": 29,
+      "from_address": "Bow, London",
+      "is_acceptable": true,
+      "mode": "transit",
+      "route_legs": [
+       {
+        "duration_minutes": 14,
+        "from": "106B TREDEGAR ROAD, LONDON",
+        "lines": [],
+        "mode": "walking",
+        "summary": "Walk to Bow Church Station",
+        "to": "Bow Church DLR Station"
+       },
+       {
+        "duration_minutes": 9,
+        "from": "Bow Church DLR Station",
+        "lines": [
+         "DLR"
+        ],
+        "mode": "dlr",
+        "summary": "DLR to Canary Wharf DLR Station",
+        "to": "Canary Wharf DLR Station"
+       },
+       {
+        "duration_minutes": 6,
+        "from": "Canary Wharf DLR Station",
+        "lines": [],
+        "mode": "walking",
+        "summary": "Walk to 1 CANADA SQUARE, LONDON",
+        "to": "1 CANADA SQUARE, LONDON"
+       }
+      ],
+      "route_source": "TfL Journey Planner",
+      "route_summary": "Walk to Bow Church DLR Station (14 min) -> Dlr DLR to Canary Wharf DLR Station (9 min) -> Walk to 1 CANADA SQUARE, LONDON (6 min)",
+      "success": true,
+      "to_address": "Canary Wharf, London E14 5AB"
+     },
+     "success": true,
+     "tool": "calculate_commute"
+    }
+   ],
+   "user_query": "Which is the better commute to Canary Wharf, Stratford or Bow, and is either under 25 minutes?"
+  },
+  "text": "**Commute comparison: Stratford vs Bow to Canary Wharf**\n\nBased on the TfL Journey Planner data gathered for both locations, here is how they compare for a commute to 1 Canada Square, Canary Wharf (E14 5AB):\n\n**Stratford — 20 minutes, no changes**\n- Walk to Stratford Underground Station: 4 min\n- Jubilee line to Canary Wharf Underground Station: 9 min\n- Walk to 1 Canada Square: 7 min\n- Total: 20 minutes, 0 changes\n\n**Bow — 29 minutes, no changes**\n- Walk to Bow Church DLR Station: 14 min\n- DLR to Canary Wharf DLR Station: 9 min\n- Walk to 1 Canada Square: 6 min\n- Total: 29 minutes, 0 changes\n\n**Which is better?**\nStratford is the clearly better commute: 20 minutes versus 29 minutes, a difference of 9 minutes each way. Both routes are direct with no interchanges, but Stratford's advantage comes from a much shorter walk to the station (4 min vs 14 min) and a faster Jubilee line leg. Over a five-day week, Stratford saves roughly 90 minutes of commuting compared with Bow.\n\n**Is either under 25 minutes?**\nYes — Stratford at 20 minutes is comfortably under 25 minutes. Bow at 29 minutes is not; it sits above the 25-minute threshold, largely because of the 14-minute walk to Bow Church DLR Station.\n\n**Practical note**\nThe Bow figure is measured from 106B Tredegar Road, so your actual walk time will depend on exactly where in Bow you live — a property closer to Bow Church DLR Station or Bromley-by-Bow would shorten that leg considerably. If a sub-25-minute commute is a hard requirement, Stratford is the safer choice on the data available.\n\nThe search results above don't include rent or fare figures, so I can't compare costs here. If you'd like, I can look up live TfL fares for either route — just ask. For rent levels in these areas, rightmove.co.uk and zoopla.co.uk are the places to check.\n\nPlease double-check the exact prices against the source listing.\n\nUnverified: any figure above that does not come from this turn's tool results is an unconfirmed estimate — please check it before relying on it."
+ },
+ "r10_bb5cdb25_draft": {
+  "request_id": "bb5cdb258a294e4fb7fb5712ee86ec7e",
+  "stage": "agent draft (last AIMessage)",
+  "state": {
+   "accumulated_search_criteria": {
+    "amenities_of_interest": [],
+    "commute_destination": "Canary Wharf, London E14 5AB",
+    "constraint_sources": {
+     "commute_destination": {
+      "source": "user_message",
+      "text": "Which is the better commute to Canary Wharf, Stratford or Bow, and is either under 25 minutes?",
+      "value": "Canary Wharf, London E14 5AB"
+     },
+     "destination": {
+      "source": "user_message",
+      "text": "Which is the better commute to Canary Wharf, Stratford or Bow, and is either under 25 minutes?",
+      "value": "Canary Wharf, London E14 5AB"
+     },
+     "max_travel_time": {
+      "source": "user_message",
+      "text": "Which is the better commute to Canary Wharf, Stratford or Bow, and is either under 25 minutes?",
+      "value": 25
+     },
+     "no_commute": {
+      "source": "user_message",
+      "text": "Which is the better commute to Canary Wharf, Stratford or Bow, and is either under 25 minutes?",
+      "value": false
+     }
+    },
+    "destination": "Canary Wharf, London E14 5AB",
+    "max_budget": null,
+    "max_travel_time": 25,
+    "no_commute": false,
+    "property_features": [],
+    "soft_preferences": []
+   },
+   "candidate_validation": {},
+   "extracted_context": {
+    "current_message": "Which is the better commute to Canary Wharf, Stratford or Bow, and is either under 25 minutes?",
+    "reply_language": "en"
+   },
+   "memory_context": "",
+   "tool_artifacts": [
+    {
+     "error": null,
+     "raw_data": {
+      "basis": "tfl_journey_plan",
+      "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+      "changes_count": 0,
+      "duration_category": "Medium (20-45 min)",
+      "duration_minutes": 20,
+      "from_address": "Stratford, London",
+      "is_acceptable": true,
+      "mode": "transit",
+      "route_legs": [
+       {
+        "duration_minutes": 4,
+        "from": "walk inside building, LONDON",
+        "lines": [],
+        "mode": "walking",
+        "summary": "Walk to Stratford Station",
+        "to": "Stratford Underground Station"
+       },
+       {
+        "duration_minutes": 9,
+        "from": "Stratford Underground Station",
+        "lines": [
+         "Jubilee"
+        ],
+        "mode": "tube",
+        "summary": "Jubilee line to Canary Wharf",
+        "to": "Canary Wharf Underground Station"
+       },
+       {
+        "duration_minutes": 7,
+        "from": "Canary Wharf Underground Station",
+        "lines": [],
+        "mode": "walking",
+        "summary": "Walk to 1 CANADA SQUARE, LONDON",
+        "to": "1 CANADA SQUARE, LONDON"
+       }
+      ],
+      "route_source": "TfL Journey Planner",
+      "route_summary": "Walk to Stratford Underground Station (4 min) -> Tube Jubilee to Canary Wharf Underground Station (9 min) -> Walk to 1 CANADA SQUARE, LONDON (7 min)",
+      "success": true,
+      "to_address": "Canary Wharf, London E14 5AB"
+     },
+     "success": true,
+     "tool": "calculate_commute"
+    },
+    {
+     "error": null,
+     "raw_data": {
+      "basis": "tfl_journey_plan",
+      "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+      "changes_count": 0,
+      "duration_category": "Medium (20-45 min)",
+      "duration_minutes": 29,
+      "from_address": "Bow, London",
+      "is_acceptable": true,
+      "mode": "transit",
+      "route_legs": [
+       {
+        "duration_minutes": 14,
+        "from": "106B TREDEGAR ROAD, LONDON",
+        "lines": [],
+        "mode": "walking",
+        "summary": "Walk to Bow Church Station",
+        "to": "Bow Church DLR Station"
+       },
+       {
+        "duration_minutes": 9,
+        "from": "Bow Church DLR Station",
+        "lines": [
+         "DLR"
+        ],
+        "mode": "dlr",
+        "summary": "DLR to Canary Wharf DLR Station",
+        "to": "Canary Wharf DLR Station"
+       },
+       {
+        "duration_minutes": 6,
+        "from": "Canary Wharf DLR Station",
+        "lines": [],
+        "mode": "walking",
+        "summary": "Walk to 1 CANADA SQUARE, LONDON",
+        "to": "1 CANADA SQUARE, LONDON"
+       }
+      ],
+      "route_source": "TfL Journey Planner",
+      "route_summary": "Walk to Bow Church DLR Station (14 min) -> Dlr DLR to Canary Wharf DLR Station (9 min) -> Walk to 1 CANADA SQUARE, LONDON (6 min)",
+      "success": true,
+      "to_address": "Canary Wharf, London E14 5AB"
+     },
+     "success": true,
+     "tool": "calculate_commute"
+    }
+   ],
+   "user_query": "Which is the better commute to Canary Wharf, Stratford or Bow, and is either under 25 minutes?"
+  },
+  "text": "Stratford is the better commute, and it is the only one of the two under 25 minutes.\n\n**Stratford: 20 minutes** (TfL Journey Planner)\n- Walk to Stratford Underground Station: 4 min\n- Jubilee line to Canary Wharf: 9 min\n- Walk to Canary Square: 7 min\n- No changes\n\n**Bow: 29 minutes** (TfL Journey Planner)\n- Walk to Bow Church DLR Station: 14 min\n- DLR to Canary Wharf DLR Station: 9 min\n- Walk to Canary Square: 6 min\n- No changes\n\nSo Stratford meets your 25-minute limit with about 5 minutes to spare, while Bow comes in roughly 4 minutes over. The main difference is the walk to the station: 4 minutes in Stratford versus 14 minutes in Bow, even though the in-transit time is identical at 9 minutes on both routes.\n\nOne caveat: these are measured from the area centres, not from a specific flat. A property on the far side of Bow, or closer to Bromley-by-Bow or Devons Road, could shift the walk considerably, so it is worth checking the exact address once you have a listing in mind.\n\nWould you like me to search for actual listings in Stratford (or both areas) within your 25-minute commute limit?"
+ }
+}

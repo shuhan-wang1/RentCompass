@@ -4,6 +4,7 @@ Web Search Module - 使用 SearXNG 本地实例进行网络搜索
 替代 DuckDuckGo，提供更稳定和可控的搜索能力
 """
 
+import contextvars
 import os
 import requests
 import time
@@ -14,6 +15,21 @@ from .cache_service import get_from_cache, set_to_cache, create_cache_key
 
 WEB_SEARCH_CACHE_TTL_SECONDS = 6 * 60 * 60
 _WEB_SEARCH_CACHE_VERSION = "web-search-v2"
+
+
+# Set ONLY around the web_search tool's own searches: the search the agent runs because the
+# user asked a question it needs the web for (core.tools.web_search). Searches other tools
+# issue internally (area research in recommend_areas, the POI web fallback in maps_service)
+# and anything in a background job never set it, so they never bypass the cooldown (R4-16).
+USER_REQUESTED_SEARCH: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "rentcompass_user_requested_search", default=False)
+
+
+def _float_env(name: str, default: float) -> float:
+    try:
+        return max(0.0, float(os.getenv(name, str(default))))
+    except (TypeError, ValueError):
+        return default
 
 
 class SearchSnippet(str):
@@ -89,6 +105,13 @@ class SearXNGSearch:
         self._health_lock = threading.Lock()
         self._unavailable_until = 0.0
         self.cooldown_seconds = 15.0
+        # A user-requested search during the cooldown gets ONE bounded probe: a single
+        # request, no retry, a short deadline, and at most one probe per interval across all
+        # callers, so an outage is never hammered (R4-16).
+        self.probe_interval_seconds = _float_env("SEARXNG_PROBE_INTERVAL_S", 5.0)
+        self.probe_deadline_seconds = _float_env("SEARXNG_PROBE_DEADLINE_S", 8.0)
+        self._last_probe_at = float("-inf")
+        self._last_failure: dict = {}
         
         # 🆕 数据源策略：根据查询类型使用不同的搜索引擎
         # 对于事实性查询（租房信息、政策、学校等），只使用Google以确保结果质量
@@ -109,8 +132,34 @@ class SearXNGSearch:
         with self._health_lock:
             if status == 'unavailable':
                 self._unavailable_until = time.monotonic() + self.cooldown_seconds
+                if attempts:
+                    self._last_failure = {'at': time.monotonic(), 'attempts': list(attempts)}
             elif status in ('healthy', 'empty', 'filtered_empty', 'degraded'):
                 self._unavailable_until = 0.0
+
+    def _cooldown_decision(self, user_requested: bool) -> tuple[bool, bool]:
+        """``(cooling_down, probe)``. Takes the probe slot when one is granted."""
+        with self._health_lock:
+            now = time.monotonic()
+            cooling_down = self._unavailable_until > now
+            probe = bool(cooling_down and user_requested
+                         and now - self._last_probe_at >= self.probe_interval_seconds)
+            if probe:
+                self._last_probe_at = now
+            return cooling_down, probe
+
+    def _cooldown_health(self) -> dict:
+        """The cooldown result, with the real attempts that opened it: "cooldown,
+        attempt_count 0" alone hid that the same search had just made two (r07 B-F8)."""
+        health = {'provider': 'SearXNG', 'service_status': 'unavailable',
+                  'reason': 'cooldown', 'attempt_count': 0, 'attempts': []}
+        with self._health_lock:
+            failure = dict(self._last_failure)
+        if failure.get('attempts'):
+            health['cooldown_after'] = {
+                'seconds_ago': round(max(0.0, time.monotonic() - failure['at']), 1),
+                'attempts': failure['attempts']}
+        return health
     
     def _detect_query_intent(self, query: str) -> str:
         """
@@ -181,13 +230,13 @@ class SearXNGSearch:
         if max_results is None:
             max_results = self.default_max_results
 
-        with self._health_lock:
-            cooling_down = self._unavailable_until > time.monotonic()
-        if cooling_down:
-            self._health_local.value = {'provider': 'SearXNG', 'service_status': 'unavailable',
-                                       'reason': 'cooldown', 'attempt_count': 0, 'attempts': []}
+        cooling_down, probe = self._cooldown_decision(bool(USER_REQUESTED_SEARCH.get()))
+        if cooling_down and not probe:
+            self._health_local.value = self._cooldown_health()
             return []
-        deadline = time.monotonic() + min(12.0, max(0.0, float(self.timeout) * 2))
+        deadline = time.monotonic() + (
+            min(self.probe_deadline_seconds, float(self.timeout)) if probe
+            else min(12.0, max(0.0, float(self.timeout) * 2)))
         diagnostics = []
 
         intent = self._detect_query_intent(query)
@@ -216,6 +265,10 @@ class SearXNGSearch:
             params,
             {key: value for key, value in params.items() if key != "engines"},
         ]
+        if probe:
+            # One request with SearXNG's own enabled engines: the probe decides whether the
+            # service is back, it is not a second full search.
+            request_variants = request_variants[1:]
         data: Dict = {}
         results: List[Dict] = []
         for attempt, request_params in enumerate(request_variants, 1):
@@ -235,7 +288,8 @@ class SearXNGSearch:
                     # A scalar timeout applies once to connect and once to
                     # read. Split the remaining budget across both phases and
                     # the remaining retry, so the worker stays bounded.
-                    timeout=min(float(self.timeout), remaining / (2 * (3 - attempt))),
+                    timeout=min(float(self.timeout),
+                                remaining / (2 if probe else 2 * (3 - attempt))),
                 )
                 response.raise_for_status()
                 data = response.json()
@@ -290,7 +344,8 @@ class SearXNGSearch:
                     f"{len(unresponsive)}"
                 )
             status = diagnostics[-1]['status'] if diagnostics else 'unavailable'
-            self._record_health(status, diagnostics, result_count=0)
+            self._record_health(status, diagnostics, result_count=0,
+                                **({'reason': 'cooldown_probe'} if probe else {}))
             return []
 
         pre_filter_count = len(results)
@@ -315,7 +370,8 @@ class SearXNGSearch:
         status = ('degraded' if any(item['status'] in ('unavailable', 'degraded')
                                     for item in diagnostics) else
                   'healthy' if formatted_results else 'filtered_empty')
-        self._record_health(status, diagnostics, result_count=len(formatted_results))
+        self._record_health(status, diagnostics, result_count=len(formatted_results),
+                            **({'reason': 'cooldown_probe'} if probe else {}))
         return formatted_results
 
     def _filter_authoritative_sources(self, results: List[Dict]) -> List[Dict]:

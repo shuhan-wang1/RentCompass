@@ -2642,7 +2642,12 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
     # back to the honest line, never become a silent claim (E11 invented "about 15-20 min"
     # exactly where a dimension had no usable evidence).
     satisfied_tools = {a.get("tool") for a in executed if a.get("success")}
-    missing_lines = _missing_requested_dimension_lines(cm, satisfied_tools, lang)
+    # A lookup that RAN and failed is named as failed, with what it was for (R4-10): "Nearby
+    # amenities have not been looked up yet" after two failed gym lookups was untrue, and the
+    # answer never said which lookup failed (r07 B-F12).
+    failed_lines, failed_dimension_tools = _failed_lookup_lines(executed, lang)
+    missing_lines = _missing_requested_dimension_lines(
+        cm, satisfied_tools | failed_dimension_tools, lang)
 
     recs = []
     for a in reversed(artifacts):
@@ -2698,20 +2703,30 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             level = raw.get("safety_level") or ""
             safety_lines.append((str(place), raw.get("safety_score"), str(level)))
 
+    # A preamble that promises results ("These are the results already obtained this turn:")
+    # is printed only when a result follows it; it was followed by nothing (r06 e373e422,
+    # acceptance NEW-7).
+    from core.candidate_validation import render_structured_evidence_fallback
+    evidence = render_structured_evidence_fallback(state, language=lang)
+    has_results = bool(recs or empty_raw is not None or safety_lines or str(evidence or "").strip())
     if lang == "zh":
         if reason == 'provider_error':
-            opener = '模型服务暂时不可用。以下仅列出本轮已经取得的结果：'
+            opener = ('模型服务暂时不可用。以下仅列出本轮已经取得的结果：' if has_results
+                      else '模型服务暂时不可用。')
             closer = '未完成的部分可以稍后重试。'
         elif reason == 'tool_call_error':
-            opener = '本轮有一项查询未能执行（查询参数无效）。以下仅列出本轮已经取得的结果：'
+            opener = ('本轮有一项查询未能执行（查询参数无效）。以下仅列出本轮已经取得的结果：'
+                      if has_results else '本轮有一项查询未能执行（查询参数无效）。')
             closer = '可以让我再试一次。'
         elif reason == "no_reliable_numbers":
             # 「未能获取」是诚实的 partial-disclosure 标记（graders._honest_partial_disclosed），
             # 满足 must_mention_source_if_evidence 的无证据分支；不含任何「超时/时间限制」措辞。
-            opener = "抱歉，我未能获取到可靠的具体数字，先按已核实的信息回答："
+            opener = ("抱歉，我未能获取到可靠的具体数字，先按已核实的信息回答：" if has_results
+                      else "抱歉，我未能获取到可靠的具体数字。")
             closer = "如需具体数字，我可以再帮你查证。"
         else:
-            opener = "抱歉，本轮处理耗时较长，我先根据已经拿到的结果给你一个简要回答（可能不完整）："
+            opener = ("抱歉，本轮处理耗时较长，我先根据已经拿到的结果给你一个简要回答（可能不完整）："
+                      if has_results else "抱歉，本轮处理耗时较长，先给你一个简要回答（可能不完整）：")
             closer = "由于时间限制，以上内容可能不完整，你可以让我继续把它补全。"
         lines = [opener]
         # Internal tool identifiers (search_properties, calculate_commute, ...) used to be
@@ -2739,10 +2754,15 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
         elif details_failed:
             lines.append("这次没能查到你问的那套房源的详情（查询未能执行），所以还无法回答；"
                          "之前列出的房源仍然有效。")
+        elif failed_lines:
+            pass          # the failed lookups below say what could not be checked
         elif reason == "tool_call_error" and not searched:
             lines.append("这次的查询未能执行，所以还没能核实你问的内容。")
-        else:
+        elif searched or _asks_for_listings(cm):
             lines.append("目前还没有可以直接展示的房源结果。")
+        elif not has_results and not missing_lines:
+            lines.append("本轮还没有可以展示的结果。")
+        lines.extend(failed_lines)
         for place, score, level in safety_lines[:4]:
             lines.append(f"治安（数据来源 data.police.uk）：{place} 安全评分 {score}/100"
                          + (f"（{level}）" if level else "") + "。")
@@ -2751,12 +2771,13 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             lines.extend("- " + m for m in missing_lines)
         lines.append(closer)
     else:
+        results_lead = " These are the results already obtained this turn:" if has_results else ""
         if reason == 'provider_error':
-            opener = 'The model service is temporarily unavailable. These are the results already obtained this turn:'
+            opener = 'The model service is temporarily unavailable.' + results_lead
             closer = 'You can retry the unfinished parts later.'
         elif reason == 'tool_call_error':
-            opener = ("I couldn't run one of the lookups this turn (its request was malformed). "
-                      "These are the results already obtained this turn:")
+            opener = ("I couldn't run one of the lookups this turn (its request was malformed)."
+                      + results_lead)
             closer = 'You can ask me to try again.'
         elif reason == "no_reliable_numbers":
             # "couldn't retrieve" is an honest partial-disclosure marker
@@ -2764,11 +2785,13 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             # must_mention_source_if_evidence — with NO "ran long / cut short / time budget"
             # wording (the turn did not time out).
             opener = ("Sorry — I couldn't retrieve reliable specific figures right now, so "
-                      "here is what I have verified:")
+                      "here is what I have verified:" if has_results else
+                      "Sorry — I couldn't retrieve reliable specific figures right now.")
             closer = "If you want specific figures, I can look them up for you."
         else:
             opener = ("Sorry — this turn ran long, so here is a brief answer from what I have "
-                      "gathered so far (it may be incomplete):")
+                      "gathered so far (it may be incomplete):" if has_results else
+                      "Sorry — this turn ran long, so here is a brief answer (it may be incomplete):")
             closer = ("This answer was cut short by the time budget; let me know and I can "
                       "finish it.")
         lines = [opener]
@@ -2797,10 +2820,17 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
         elif details_failed:
             lines.append("The details lookup for that listing failed this turn, so I can't answer "
                          "that yet; the listings shown earlier are still available.")
+        elif failed_lines:
+            pass          # the failed lookups below say what could not be checked
         elif reason == "tool_call_error" and not searched:
             lines.append("The lookup failed this turn, so I could not check what you asked.")
-        else:
+        elif searched or _asks_for_listings(cm):
+            # Listing results only on a turn about listings (R4-10): a gym or restaurant
+            # question was told "I do not yet have listing results ready to show" (r07 B-F12).
             lines.append("I do not yet have listing results ready to show.")
+        elif not has_results and not missing_lines:
+            lines.append("I do not have a result to show for this yet.")
+        lines.extend(failed_lines)
         for place, score, level in safety_lines[:4]:
             lines.append(f"Safety (source: data.police.uk): {place} scored {score}/100"
                          + (f" ({level})" if level else "") + ".")
@@ -2808,9 +2838,85 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             lines.append("Still outstanding from what you asked for this turn:")
             lines.extend("- " + m for m in missing_lines)
         lines.append(closer)
-    from core.candidate_validation import render_structured_evidence_fallback
-    evidence = render_structured_evidence_fallback(state, language=lang)
     return '\n\n'.join(part for part in ('\n'.join(lines), evidence) if part)
+
+
+# What each read tool is called in a user-facing failure line: (zh, en).
+_LOOKUP_NAMES = {
+    "search_nearby_pois": ("周边设施查询", "nearby-places lookup"),
+    "check_safety": ("治安数据查询", "safety lookup"),
+    "get_transport_info": ("TfL 行程查询", "TfL journey lookup"),
+    "calculate_commute": ("通勤时间计算", "commute calculation"),
+    "calculate_commute_cost": ("通勤费用计算", "commute cost calculation"),
+    "get_weather": ("天气查询", "weather lookup"),
+    "compare_or_rank_areas": ("区域比较", "area comparison"),
+}
+# The dimension a failed tool leaves unverified, and the line that says so (zh, en).
+_FAILED_DIMENSION = {
+    "check_safety": ("safety", "治安数据尚未完成核查", "Safety has not been verified yet"),
+    "search_nearby_pois": ("nearby", "周边设施未能查到", "Nearby amenities could not be checked"),
+    "calculate_commute": ("commute", "通勤时间尚未核算", "Commute time has not been calculated yet"),
+    "get_transport_info": ("commute", "通勤时间尚未核算", "Commute time has not been calculated yet"),
+    "calculate_commute_cost": ("commute", "通勤时间尚未核算", "Commute time has not been calculated yet"),
+}
+
+
+def _lookup_target(artifact: dict) -> str:
+    """What a failed lookup was FOR, from its own echoed request ("gym near Camden Road, N7")."""
+    raw = artifact.get("raw_data") if isinstance(artifact.get("raw_data"), dict) else {}
+    tool = artifact.get("tool")
+    place = str(raw.get("address") or raw.get("area") or raw.get("location")
+                or raw.get("requested_location") or "").strip()
+    if tool == "search_nearby_pois":
+        kinds = ", ".join(str(t).replace("_", " ") for t in (raw.get("requested_types") or [])[:4])
+        return f"{kinds} near {place}" if kinds and place else (place or kinds)
+    if tool in ("get_transport_info", "calculate_commute", "calculate_commute_cost"):
+        def _end(key):
+            value = raw.get(f"{key}_address") or raw.get(key)
+            return str((value.get("input") if isinstance(value, dict) else value) or "").strip()
+        origin, target = _end("from"), _end("to")
+        return f"{origin} to {target}" if origin and target else ""
+    return place
+
+
+def _failed_lookup_lines(executed: list, lang: str) -> tuple[list, set]:
+    """One line per kind of read that RAN this turn and failed, naming what it was for, and
+    the tools whose dimension those lines already cover. Search, details, web search and
+    memory have their own wording above and are not repeated here."""
+    failed: dict[str, list[str]] = {}
+    for artifact in executed:
+        tool = artifact.get("tool")
+        raw = artifact.get("raw_data")
+        if tool not in _LOOKUP_NAMES:
+            continue
+        if not (artifact.get("success") is False
+                or (isinstance(raw, dict) and raw.get("success") is False)):
+            continue
+        targets = failed.setdefault(tool, [])
+        target = _lookup_target(artifact)
+        if target and target not in targets:
+            targets.append(target)
+    lines, covered = [], set()
+    for tool, targets in failed.items():
+        zh_name, en_name = _LOOKUP_NAMES[tool]
+        shown = targets[:4]
+        if lang == "zh":
+            what = f"{zh_name}（{'；'.join(shown)}）" if shown else zh_name
+            line = f"本轮的{what}失败了，所以没能核实。"
+            if tool == "search_nearby_pois":
+                line += "查询失败不代表附近没有。"
+        else:
+            plural = len(shown) > 1
+            what = f"The {en_name}{'s' if plural else ''}" + (f" ({'; '.join(shown)})" if shown else "")
+            line = f"{what} failed this turn, so I could not check {'them' if plural else 'it'}."
+            if tool == "search_nearby_pois":
+                line += " A failed lookup does not mean there are none nearby."
+        if tool in _FAILED_DIMENSION:
+            _dim, zh_status, en_status = _FAILED_DIMENSION[tool]
+            line = (f"{zh_status}：{line}" if lang == "zh" else f"{en_status}: {line[0].lower()}{line[1:]}")
+            covered.add(tool)
+        lines.append(line)
+    return lines, covered
 
 
 def _deterministic_wrap_answer(state: AgentState) -> str:

@@ -4993,6 +4993,21 @@ def _has_usable_retrieval_evidence(state: AgentState, artifacts: list) -> bool:
     return False
 
 
+def _lookup_request_echo(artifact: dict) -> list:
+    """The radius a lookup reports it searched, as evidence even when the lookup FAILED.
+
+    "I tried twice to look up gyms within 800m of the Camden Road listing, and both lookups
+    failed" quotes the request, not an external fact. Failed artifacts contribute no data, so
+    "800m" was an unsupported number and the critic hard-replaced three honest failure answers
+    (and the "best value" part one of them answered) with the generic fallback (r07 B-F12)."""
+    raw = artifact.get("raw_data") if isinstance(artifact, dict) else None
+    if not isinstance(raw, dict):
+        return []
+    radii = {raw.get(key) for key in ("requested_radius_m", "radius_m", "user_requested_radius_m")}
+    return [{f"{artifact.get('tool', 'tool')}#request": f"radius {value:g} m"}
+            for value in radii if isinstance(value, (int, float)) and not isinstance(value, bool)]
+
+
 def _collect_grounding_evidence(state: AgentState, tool_name: str) -> list:
     """Everything the generator was shown, as an evidence surface for the critic.
 
@@ -5031,6 +5046,7 @@ def _collect_grounding_evidence(state: AgentState, tool_name: str) -> list:
     # fc_loop tool_artifacts: successful, non-empty raw_data joins the evidence, per-artifact
     # labeled "tool#turn". Failed/empty ones are skipped (not evidence).
     for a in state.get("tool_artifacts") or []:
+        pieces.extend(_lookup_request_echo(a))
         if not _artifact_usable(a):
             continue
         label = f"{a.get('tool', 'tool')}#{a.get('turn', '')}"

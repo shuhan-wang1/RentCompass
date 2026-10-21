@@ -627,17 +627,29 @@ def unsupported_external_numbers(response: str, evidence: Any, user_text: str = 
     asserted_response = re.sub(r"\bwould\b[^.!?\n]*", "", response or "", flags=re.IGNORECASE)
     unit_unsupported = [value for value in _unit_numbers(asserted_response)
                         if not any(abs(value - known) <= 0.01 for known in allowed)]
+    # Arithmetic on this turn's measured routes is not an external number: "4 minutes x 2
+    # journeys x 5 days = 40 minutes a week" (Holloway 25, Kentish Town 21) was graded
+    # unsupported and the answer regenerated with the "Unverified" footer (r13 2264a2d5), and so
+    # was the chained "3 x 2 = 6 …, and 6 x 5 = 30 …" (r14 95f29d0b). One definition, shared
+    # with the commute redactor (uk_rent_agent.agent.commute_arithmetic), pair rule included.
+    from uk_rent_agent.agent import commute_arithmetic as arithmetic
+    routes = arithmetic.named_routes(_successful_evidence(evidence))
+    days = arithmetic.days_stated(user_text) | arithmetic.days_stated(response)
+    # The user's own limit is a reference point too: "about 5 minutes to spare" under a stated
+    # 25-minute cap with Stratford measured at 20.
+    limits = arithmetic.durations(user_text)
     if unit_unsupported:
-        # Arithmetic on this turn's measured routes is not an external number: "4 minutes x 2
-        # journeys x 5 days = 40 minutes a week" (Holloway 25, Kentish Town 21) was graded
-        # unsupported and the answer regenerated with the "Unverified" footer (r13 2264a2d5).
-        # Same definition as the commute redactor (uk_rent_agent.agent.commute_arithmetic).
-        from uk_rent_agent.agent import commute_arithmetic as arithmetic
-        measured = arithmetic.route_minutes(_successful_evidence(evidence))
-        days = arithmetic.days_stated(user_text) | arithmetic.days_stated(response)
+        points = list(routes) + [{"labels": [], "minutes": float(v)} for v in limits]
         unit_unsupported = [value for value in unit_unsupported
-                            if not arithmetic.supported_in_text(value, asserted_response, measured, days)]
+                            if not arithmetic.supported_in_text(value, asserted_response, points, days,
+                                                                known=allowed)]
     if unit_unsupported:
+        return True
+    # ... and a saving that does NOT derive is unsupported even in "would save you …" prose,
+    # or stated in hours ("3 hours a week over Camden"), which the unit scan never sees: the
+    # critic agrees with the redactor (r14 item 3).
+    if len(routes) >= 2 and arithmetic.unsupported_arithmetic(response or "", routes, days, known=allowed,
+                                                              limits=limits):
         return True
     # The live critic supplies the current user message. Keep the legacy direct
     # evaluate_grounding helper compatible when that context is intentionally absent.

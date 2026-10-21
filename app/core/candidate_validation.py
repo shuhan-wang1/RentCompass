@@ -2282,7 +2282,9 @@ def _compares_measured_routes(fragment: str, context: str, pool: list) -> bool:
 _COMPARED_WITH = re.compile(
     r"\b(?:than|compared\s+(?:with|to)|versus|vs\.?|relative\s+to|"
     # "near-identical overall score to Camden" (r12 8573f129)
-    r"(?:identical|similar|close|comparable|equal|level|equivalent)\s+(?:[\w'’-]+\s+){0,3}?(?:to|with))"
+    r"(?:identical|similar|close|comparable|equal|level|equivalent)\s+(?:[\w'’-]+\s+){0,3}?(?:to|with)|"
+    # "Its 25-minute commute is nearly as fast as Kentish Town's" (r14 95f29d0b)
+    r"as\s+(?:fast|quick|short|long|slow|good)\s+as)"
     r"\s+(?:the\s+|that\s+(?:of|in)\s+)?", re.I)
 
 
@@ -2373,56 +2375,33 @@ _COMPARISON_CUE = re.compile(
     r"\b(?:versus|vs\.?|over|than|compared|saves?|saving|difference|quicker|faster|shorter|longer|"
     r"slower|less|more|instead\s+of)\b", re.I)
 _SUPERLATIVE = re.compile(r"\b(?:fastest|quickest|shortest)\b|\b(?:slowest|longest)\b", re.I)
-# A difference the line quotes as its base: "12 minutes each way", "4 minutes slower than X",
-# or the minutes operand of a product.
-_BASE_FIGURE = re.compile(
-    r"(?<![\d.])(\d+(?:\.\d+)?)\s*(?:minutes?|mins?)\s+(?:each\s+way|one\s+way|per\s+(?:trip|journey)|"
-    r"(?:slower|faster|quicker|shorter|longer|less|more)\b)", re.I)
-
-
 @functools.lru_cache(maxsize=256)
-def _line_has_wrong_base(line: str, measured: tuple) -> bool:
-    """A base figure the line quotes ("12 minutes each way", a product's minutes operand)
-    that is not a difference of two measured routes. Once per line (the B-01 class)."""
-    bases = [float(m.group(1)) for m in _BASE_FIGURE.finditer(line)]
-    bases += [p["operands"][0][0] for p in _arithmetic.products(line)]
-    return any(not _arithmetic.is_difference(value, measured) and value not in measured for value in bases)
+def _line_has_wrong_base(line: str, measured: tuple, days: tuple) -> bool:
+    """A base figure the line quotes that is not a difference of two measured routes. Once
+    per line (the B-01 class)."""
+    return _arithmetic._bases(line, list(measured), set(days))[1]
 
 
-def _route_after(text: str, start: int, routes: list) -> dict | None:
-    """The measured route named right after ``start`` as what is compared with ("… a week
-    over Holloway", "versus Camden"), up to the next figure."""
-    segment = text[start:]
-    next_figure = re.search(r"\d", segment)
-    segment = segment[:next_figure.start()] if next_figure else segment
-    match = re.search(r"\b(?:over|versus|vs\.?|than|compared\s+(?:with|to)|against)\s+(.{1,60})", segment, re.I)
-    if not match:
-        return None
-    named = [r for r in routes if any(_label_in(label, match.group(1)) for label in r.get("labels") or [])]
-    return named[0] if len(named) == 1 else None
-
-
-def _route_before(text: str, end: int, routes: list) -> dict | None:
-    """The measured route named last before ``end`` ("Kentish Town is fastest at 21 minutes")."""
-    best, best_at = None, -1
-    head = _label_key(text[:end])
-    for route in routes:
-        for label in route.get("labels") or []:
-            key = _label_key(label)
-            at = f" {head} ".rfind(f" {key} ") if key else -1
-            if at > best_at:
-                best, best_at = route, at
-    return best
+@functools.lru_cache(maxsize=512)
+def _sentence_of(line: str, fragment: str) -> str:
+    """The sentence of ``line`` that holds ``fragment``."""
+    probe = fragment.strip()[:40]
+    for sentence in _arithmetic.sentences(line):
+        if probe and probe in sentence:
+            return sentence
+    return line
 
 
 def _arithmetic_evidenced(fragment: str, *, context: str, previous_clause: str, line: str,
                           pool: list, days: set, subject: dict | None) -> bool:
-    """Arithmetic on this turn's measured routes, in any notation (r13 2264a2d5): the
-    difference of two measured routes, that difference x 2 / x days / x 2 x days, and an
-    explicit product whose operands are evidenced and whose result is right. Every figure
-    of the clause must be one of these, or the measured time of the route named right before
-    it; any other verdict, a wrong product, or a wrong base figure on the line fails it."""
-    routes = [route for route in pool if route.get("minutes") is not None and route.get("labels")]
+    """Arithmetic on this turn's measured routes, in any notation, by THE shared rule
+    (``uk_rent_agent.agent.commute_arithmetic.check_figures``, also the critic's): differences
+    of the PAIR the text names or implies, their x2 / x days / x2 x days totals, products and
+    subtraction steps whose operands are evidenced, chained steps included (r13 2264a2d5, r14
+    95f29d0b). The redactor adds what only it judges: no other verdict may ride along, and
+    "the fastest" must be the fastest."""
+    routes = [{"labels": list(route.get("labels") or []), "minutes": route["minutes"]}
+              for route in pool if route.get("minutes") is not None and route.get("labels")]
     measured = sorted({route["minutes"] for route in routes})
     if len(measured) < 2:
         return False
@@ -2433,77 +2412,64 @@ def _arithmetic_evidenced(fragment: str, *, context: str, previous_clause: str, 
     label = line[:80].split(":", 1)[0] if ":" in line[:80] else ""
     scope = f"{label} {previous_clause} {context} {text}"
     if not (_DAY_PERIOD.search(scope) or _WEEK_PERIOD.search(scope) or _COMPARISON_CUE.search(scope)
-            or _arithmetic.products(text)):
+            or _arithmetic.products(text) or _arithmetic.subtractions(text)):
         return False      # no arithmetic here: cheap exit, before any line-wide work
-    # Consistency: a base figure on this line that is NOT a measured difference takes every
-    # total on the line with it; a correct total is never removed for want of a base.
-    if _line_has_wrong_base(line, tuple(measured)):
+    if _line_has_wrong_base(line, tuple(measured), tuple(sorted(days))):
+        return False      # consistency: a wrong base takes the line's totals with it
+    plain = _OVER_A_PERIOD.sub(" ", _ROUTE_COMPARATIVE.sub(" ", _SUPERLATIVE.sub(" ", text)))
+    plain = re.sub(r"\b(?:over|than|versus|vs\.?|against)\s+(?:[A-Z][\w'’-]*\s*){1,3}", " ", plain)
+    plain = _arithmetic.SUBTRACTION.sub(" ", plain)
+    if _PASS_VERDICT.search(plain) or _FAIL_VERDICT.search(plain) or _duration_bounds(text):
         return False
-    covered: list[tuple[int, int]] = []
-    results: list[float] = []
-    label_target = _route_after(label, 0, routes) if label else None
-    for product in _arithmetic.products(text):
-        target = _route_after(text, product["span"][1], routes) or label_target
-        involving = (target or {}).get("minutes")
-        if not _arithmetic.product_is_correct(product, measured, days, involving=None):
-            return False
-        if involving is not None and not _arithmetic.product_is_correct(product, measured, days, involving):
-            return False
-        covered.append(product["span"])
-        results.append(product["result"])
-    rest = text
-    for start, end in sorted(covered, reverse=True):
-        rest = rest[:start] + " " * (end - start) + rest[end:]
-    # A restatement of a product's result in other units: "= 120 minutes (2 hours)".
-    context_results = [p["result"] for p in _arithmetic.products(context)
-                       if _arithmetic.product_is_correct(p, measured, days)]
-    plain = _OVER_A_PERIOD.sub(" ", _ROUTE_COMPARATIVE.sub(" ", _SUPERLATIVE.sub(" ", rest)))
-    plain = re.sub(r"\b(?:over|than|versus|vs\.?)\s+(?:[A-Z][\w'’-]*\s*){1,3}", " ", plain)
-    if _PASS_VERDICT.search(plain) or _FAIL_VERDICT.search(plain) or _duration_bounds(rest):
-        return False
-    period = bool(_DAY_PERIOD.search(scope) or _WEEK_PERIOD.search(scope))
-    comparison = bool(_COMPARISON_CUE.search(scope))
-    hedged = bool(_ROUGHLY.search(text))
-    arithmetic_seen = bool(covered)
-    positions = [(m.start(), m.end(), float(m.group(1)) * 60 + float(m.group(2) or 0))
-                 for m in _HOURS_AND_MINUTES.finditer(rest)]
-    masked = _HOURS_AND_MINUTES.sub(lambda m: " " * len(m.group()), rest)
-    positions += [(m.start(), m.end(), float(m.group(1))) for m in _arithmetic.MINUTES.finditer(masked)]
-    words = masked.lower()
-    for phrase, value in _arithmetic.DURATION_WORDS:
-        at = words.find(phrase)
-        if at >= 0:
-            positions.append((at, at + len(phrase), value))
-            words = words[:at] + " " * len(phrase) + words[at + len(phrase):]
-    if not positions and not covered:
-        return False
-    for start, end, value in sorted(positions):
-        target = _route_after(rest, end, routes) or label_target
-        involving = (target or {}).get("minutes")
-        if any(abs(value - result) < 0.5 for result in results + context_results):
-            arithmetic_seen = True
-            continue
-        if period and _arithmetic.is_derived_total(value, measured, days, hedged=hedged, involving=involving):
-            arithmetic_seen = True
-            continue
-        if comparison and _arithmetic.is_difference(value, measured, involving):
-            arithmetic_seen = True
-            continue
-        owner = _route_before(rest, start, routes) or subject
-        if owner is not None and owner.get("minutes") is not None and abs(owner["minutes"] - value) < 1e-9:
-            continue
-        return False
-    if not arithmetic_seen:
-        return False          # plain journey times are the ordinary per-route check's business
-    superlative = _SUPERLATIVE.search(rest)
+    sentence = _sentence_of(line, text) if text.strip() else line
+    subject_route = None
+    if subject is not None and subject.get("minutes") is not None and subject.get("labels"):
+        subject_route = {"labels": list(subject["labels"]), "minutes": subject["minutes"]}
+    ok, seen = _arithmetic.check_figures(text, sentence=f"{previous_clause} {sentence}", line=line,
+                                         label=label, context=context, routes=routes, days=days,
+                                         subject=subject_route)
+    if not (ok and seen):
+        return False      # plain journey times are the ordinary per-route check's business
+    superlative = _SUPERLATIVE.search(text)
     if superlative:
-        owner = _route_before(rest, superlative.start(), routes) or subject
-        if owner is None or owner.get("minutes") is None:
+        owner = _arithmetic._route_before(text, superlative.start(), routes) or subject_route
+        if owner is None:
             return False
         fastest = superlative.group().lower() in ("fastest", "quickest", "shortest")
         if owner["minutes"] != (measured[0] if fastest else measured[-1]):
             return False
     return True
+
+
+def _owned_by_named_routes(fragment: str, bindings: list, caps: set) -> bool:
+    """Each figure is the measured time of the route named right before it: ", versus Camden
+    at about 36 minutes" after "The quickest is Kentish Town at about 22 minutes" (r14
+    95f29d0b) is Camden's own 36, not a claim about the clause's subject."""
+    text = str(fragment or "")
+    figures = list(_MINUTE_VALUE.finditer(text))
+    if not figures:
+        return False
+    key = f" {_label_key(text)} "
+    for index, figure in enumerate(figures):
+        head = f" {_label_key(text[:figure.start()])} "
+        best, best_at = None, -1
+        for binding in bindings:
+            if binding.get("members") or binding.get("minutes") is None:
+                continue
+            for label in binding.get("labels") or []:
+                at = head.rfind(f" {_label_key(label)} ") if _label_key(label) else -1
+                if at > best_at:
+                    best, best_at = binding, at
+        if best is None:
+            return False
+        # The claim runs from the route's name to the next figure, so "… 23 minutes to
+        # Stratford" keeps the place it travels to.
+        stop = figures[index + 1].start() if index + 1 < len(figures) else len(text)
+        start = max((m.start() for label in best["labels"] if _label_key(label)
+                     for m in re.finditer(re.escape(str(label)), text[:figure.start()], re.I)), default=None)
+        if start is None or not _claim_is_evidenced(text[start:stop], best, caps):
+            return False
+    return bool(key.strip())
 
 
 def _shared_by_every_route(fragment: str, pool: list) -> bool:
@@ -2767,6 +2733,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 return True
             if _arithmetic_evidenced(fragment, context=context, previous_clause=previous_clause,
                                      line=line, pool=pool, days=answer_days, subject=effective):
+                return True
+            if values and _owned_by_named_routes(fragment, bindings, caps):
                 return True
             target = _comparison_target(fragment, bindings)
             if target is not None and not values:

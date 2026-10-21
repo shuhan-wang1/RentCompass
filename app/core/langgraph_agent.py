@@ -615,6 +615,42 @@ def update_search_criteria(accumulated: dict, new_criteria: dict) -> dict:
     return protect_confirmed_criteria(result, accumulated)
 
 
+# A withdrawal bound to the amenity mention itself ("I don't need a balcony", "no parking"),
+# never to the whole clause, so "a balcony isn't needed but a gym is" keeps the gym.
+_AMENITY_NEGATED_BEFORE_RE = re.compile(
+    r"(?:\b(?:don.t|do not|doesn.t|does not|no longer)\s+(?:need|want|care about)|\bno need for|"
+    r"\bno|\bwithout)\s+(?:(?:a|an|the|any|my)\s+)?(?:\w+\s+)?$|(?:不需要|不用|不要)\s*$", re.I)
+
+
+def _soft_amenity_updates(message: str, soft_preferences: list) -> list | None:
+    """The soft-preference list after this message's amenity nice-to-haves, or None.
+
+    "Nice-to-have: a balcony, but it's not essential." went only into user_preferences, so the
+    recap said "balcony is a nice-to-have" while view_state.criteria and the search held no
+    balcony (stress A-04). The reading is extract_preferences_from_message's own (whole-word,
+    requirement-only); accessibility features keep their dedicated handling above. A later
+    "I don't need a balcony after all" removes the stored nice-to-have."""
+    from core.tools.search_properties import _ACCESSIBILITY_FEATURES
+    current = list(soft_preferences or [])
+    stated = extract_preferences_from_message(message or '', {'soft_preferences': []})
+    names = {str(v)[len('Would like '):] for v in current + list(stated.get('soft_preferences') or [])
+             if str(v).startswith('Would like ')} - set(_ACCESSIBILITY_FEATURES)
+    withdrawn = set()
+    for name in names:
+        for match in re.finditer(r"(?<![A-Za-z])" + re.escape(name) + r"(?![A-Za-z])", message or '', re.I):
+            if (_feature_retracted_here(message, match.start(), match.end())
+                    or _AMENITY_NEGATED_BEFORE_RE.search(message[max(0, match.start() - 50):match.start()])):
+                withdrawn.add(name)
+                break
+    updated = [v for v in current if str(v)[len('Would like '):] not in withdrawn
+               or not str(v).startswith('Would like ')]
+    for value in stated.get('soft_preferences') or []:
+        name = value[len('Would like '):] if value.startswith('Would like ') else ''
+        if name in names and name not in withdrawn and value not in updated:
+            updated.append(value)
+    return updated if updated != current else None
+
+
 def _withdraw_criteria_topics(accumulated: dict, message: str) -> dict:
     """Clear every slot of a topic the user withdrew as a whole (R4-14).
 
@@ -1060,6 +1096,10 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         if text not in existing:
             existing.append(text)
             changed = True
+    soft_amenities = _soft_amenity_updates(current_message, result.get('soft_preferences') or [])
+    if soft_amenities is not None:
+        result['soft_preferences'] = soft_amenities
+        changed = True
 
     from core.constraint_updates import cleared_fields
     for field in cleared_fields(current_message):

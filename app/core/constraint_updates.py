@@ -119,7 +119,9 @@ def mention_is_requirement(text: str, start: int, end: int) -> bool:
     if re.search(r'\b(?:must|should|can) not (?:be )?(?:treated|assumed|considered|taken)|'
                  r'\bdoes not (?:mean|prove|guarantee)|不能(?:视为|证明)|不代表', clause, re.I):
         return False
-    if re.search(r'(?:not(?: a| an)?|no|without|remove|exclude|avoid|delete|don.t want)\s+(?:\w+\s+){0,3}$'
+    # "I don't need a balcony after all" recorded "Must have balcony" (stress A-04 replay).
+    if re.search(r'(?:not(?: a| an)?|no|without|remove|exclude|avoid|delete|don.t want'
+                 r'|(?:don.t|do not|doesn.t|does not) need|no need for)\s+(?:\w+\s+){0,3}$'
                  r'|(?:不(?:要|是|需要|想|考虑)|取消|删除|移除|去掉|排除)[^，。；;!?]{0,14}$', before, re.I):
         return False
     if re.search(r'是否|有没有|能否|\b(?:does it|is there|are there|do they|can you explain)\b', clause, re.I):

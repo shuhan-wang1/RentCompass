@@ -200,7 +200,9 @@ def ground_soft_signals(params: dict, state: dict, *, saved_facts=None
         loader = saved_facts or saved_fact_texts
         evidence = evidence + list(loader((state or {}).get("user_id")) or [])
     dropped: list[str] = []
-    kept = [v for v in prefs if preference_is_traceable(v, evidence)]
+    slots = _hard_slot_words(p, (state or {}).get("accumulated_search_criteria") or {})
+    kept = [v for v in prefs
+            if preference_is_traceable(v, evidence) and not _restates_hard_slot(v, slots)]
     if len(kept) != len(prefs):
         dropped.append("accumulated_preferences")
     if kept:
@@ -211,6 +213,34 @@ def ground_soft_signals(params: dict, state: dict, *, saved_facts=None
         p.pop("care_about_safety", None)
         dropped.append("care_about_safety")
     return p, dropped
+
+
+def _hard_slot_words(params: dict, accumulated: dict) -> set[str]:
+    words: set[str] = set()
+    for source in (params, accumulated):
+        for key in ("area", "commute_destination", "location"):
+            if isinstance(source.get(key), str):
+                words |= _words(source[key])
+        for value in source.get("areas") or []:
+            if isinstance(value, str):
+                words |= _words(value)
+    return words
+
+
+def _restates_hard_slot(preference: str, slot_words: set[str]) -> bool:
+    """True for a "preference" that only repeats the area or destination ("Islington",
+    "commute to King's Cross under 30 minutes"). It goes stale the moment the user switches
+    area, and the stress round's view_state still listed "Islington" after the switch to
+    Camden (A-04). A preference naming anything else ("quiet street in Islington",
+    "near Camden market") is not a restatement."""
+    residue = str(preference or "").lower()
+    commute = dict(_CONCEPT_RES)["commute"]
+    residue = commute.sub(" ", residue)
+    if any(pattern.search(residue) for _name, pattern in _CONCEPT_RES):
+        return False
+    content = {w for w in _words(residue)
+               if w not in _GENERIC_WORDS and not w.isdigit() and len(w) >= 3}
+    return bool(content) and content <= slot_words
 
 
 # ── NEW-E: sensitive details become a requirement or nothing ──────────────────────────

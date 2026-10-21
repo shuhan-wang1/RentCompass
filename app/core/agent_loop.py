@@ -457,6 +457,78 @@ def _invalid_call_diagnostics(calls) -> str:
     return ";".join(out)[:500] or "-"
 
 
+_UNANSWERED_CALL_ERROR = (
+    "not run: no result was recorded for this {name} call this turn. Call it again if you "
+    "still need it, or answer from the results above and say what you could not check.")
+_MALFORMED_CALL_ERROR = (
+    "not run: the arguments of this {name} call were not valid JSON. Call {name} again with "
+    "valid JSON arguments if you still need it, or answer from the results above.")
+
+
+def _malformed_call_result(name: str) -> str:
+    return json.dumps({"success": False, "data": None,
+                       "error": _MALFORMED_CALL_ERROR.format(name=name)}, ensure_ascii=False)
+
+
+def _provider_transcript(messages) -> list:
+    """The messages as a provider may receive them: every tool call answered exactly once.
+
+    An assistant message's tool calls INCLUDE its ``invalid_tool_calls`` once serialised
+    (langchain-openai sends both), so a malformed sibling of a valid call left an id with no
+    tool result, and DeepSeek answered the next plan call with 400 "insufficient tool messages
+    following tool_calls message" (r10 6e02119f: search_nearby_pois ran,
+    compare_or_rank_areas had unquoted JSON, the user got "model service unavailable"). Here:
+
+    * a malformed call is sent as a call with empty arguments (its malformed text is never
+      echoed back), and a call with no result gets a "not run" result;
+    * a duplicate result for one id, or a result with no call before it, is dropped.
+
+    The state transcript is not modified; this is the view each model call receives."""
+    msgs = list(messages or [])
+    out: list = []
+    i = 0
+    while i < len(msgs):
+        m = msgs[i]
+        if isinstance(m, ToolMessage):
+            i += 1          # no assistant tool call before it: a provider rejects an orphan
+            continue
+        invalid = list(getattr(m, "invalid_tool_calls", None) or []) if isinstance(m, AIMessage) else []
+        calls = list(getattr(m, "tool_calls", None) or []) if isinstance(m, AIMessage) else []
+        if not (calls or invalid):
+            out.append(m)
+            i += 1
+            continue
+        if invalid:
+            calls = calls + [{"name": str(c.get("name") or "unknown"), "args": {},
+                              "id": c.get("id"), "type": "tool_call"}
+                             for c in invalid if isinstance(c, dict) and c.get("id")]
+            m = m.model_copy(update={"tool_calls": calls, "invalid_tool_calls": []})
+        malformed = {c.get("id") for c in invalid if isinstance(c, dict)}
+        j = i + 1
+        answered: dict = {}
+        ids = [c.get("id") for c in calls if c.get("id")]
+        while j < len(msgs) and isinstance(msgs[j], ToolMessage):
+            tcid = getattr(msgs[j], "tool_call_id", None)
+            if tcid in ids and tcid not in answered:
+                answered[tcid] = msgs[j]
+            j += 1
+        out.append(m)
+        for call in calls:
+            tcid = call.get("id")
+            if not tcid:
+                continue
+            if tcid in answered:
+                out.append(answered[tcid])
+                continue
+            name = str(call.get("name") or "unknown")
+            content = (_malformed_call_result(name) if tcid in malformed else json.dumps(
+                {"success": False, "data": None,
+                 "error": _UNANSWERED_CALL_ERROR.format(name=name)}, ensure_ascii=False))
+            out.append(ToolMessage(content=content, tool_call_id=tcid, name=name))
+        i = j
+    return out
+
+
 def _has_invalid_call_nudge(messages) -> bool:
     return any(
         isinstance(getattr(m, "additional_kwargs", None), dict)
@@ -2065,7 +2137,8 @@ def _descaffold_for_wrap(messages: list) -> list:
             name = getattr(m, "name", None) or "tool"
             out.append(_low_privilege_data_message(f"tool_result:{name}", m.content))
             continue
-        if isinstance(m, AIMessage) and getattr(m, "tool_calls", None):
+        if isinstance(m, AIMessage) and (getattr(m, "tool_calls", None)
+                                         or getattr(m, "invalid_tool_calls", None)):
             content = m.content if isinstance(m.content, str) else ""
             text = content.strip()
             if text:
@@ -3132,7 +3205,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         remaining = deadline_monotonic - time.monotonic()
         if remaining <= 0:
             raise asyncio.TimeoutError("LLM turn deadline exhausted before dispatch")
-        task = asyncio.ensure_future(call.ainvoke(prompt_messages))
+        # Every tool call answered exactly once before the provider sees it (r10 6e02119f).
+        task = asyncio.ensure_future(call.ainvoke(_provider_transcript(prompt_messages)))
         try:
             done, _pending = await asyncio.wait([task], timeout=remaining)
         except BaseException:
@@ -5313,6 +5387,23 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             content, tainted = _derived_toolmsg(name, result)
             tainted_any = tainted_any or tainted
             messages.append(ToolMessage(content=content, tool_call_id=tcid, name=name))
+
+        # A malformed sibling of this batch's calls (arguments not valid JSON) is in
+        # invalid_tool_calls, never in the batch, yet the provider requires a result for its
+        # id: answer it as not run, so the model can re-issue it (r10 6e02119f).
+        _answered_ids = {getattr(m, "tool_call_id", None) for m in messages
+                         if isinstance(m, ToolMessage)}
+        for _bad in list(getattr(ai, "invalid_tool_calls", None) or []):
+            if not isinstance(_bad, dict) or not _bad.get("id") or _bad["id"] in _answered_ids:
+                continue
+            _bad_name = str(_bad.get("name") or "unknown")
+            logger.warning("fc_loop.invalid_tool_call_in_batch name=%s diag=%s",
+                           _bad_name[:40], _invalid_call_diagnostics([_bad]))
+            artifacts.append(_artifact(
+                turn, _bad_name, None, "", success=False,
+                error="not run: arguments were not valid JSON", denied=True, elapsed_ms=0))
+            messages.append(ToolMessage(content=_malformed_call_result(_bad_name),
+                                        tool_call_id=_bad["id"], name=_bad_name))
 
         if prepared_specialists is not None and prepared_specialists.plan.tasks:
             from core.specialist_runtime import build_specialist_results

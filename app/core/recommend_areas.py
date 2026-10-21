@@ -315,6 +315,7 @@ def _validate_one(
     max_commute: int,
     excludes: set[str],
     compute_commute: bool = True,
+    keep_unrouted: bool = False,
 ) -> dict | None:
     """VALIDATE one LLM candidate against real data (blocking). Returns a finished
     item dict on success, or None if any check fails. Never raises.
@@ -377,18 +378,20 @@ def _validate_one(
         if compute_commute:
             # Commute mode: a geocodable centroid AND a within-cap commute are BOTH
             # required (legacy recommend_areas() semantics, unchanged).
-            if not geo:
+            # ``keep_unrouted`` (an area the CALLER named): a commute that could not be
+            # computed leaves the area in, unscored on commute, rather than out (r10 b1e1ee91).
+            if not geo and not keep_unrouted:
                 print(f"[AREA_RECO] drop candidate; name_chars={len(str(name))} reason=not_geocodable")
                 return None
-            centroid = [geo["lat"], geo["lng"]]
+            centroid = [geo["lat"], geo["lng"]] if geo else None
             mins = commute_minutes(
                 destination, dest_coords,
                 origin_address=name, origin_geo=geo, london=london,
-            )
-            if mins is None or mins > max_commute:
+            ) if geo else None
+            if (mins is None and not keep_unrouted) or (mins is not None and mins > max_commute):
                 print(f"[AREA_RECO] drop candidate; name_chars={len(str(name))} reason=commute_limit")
                 return None
-            commute_val = int(mins)
+            commute_val = int(mins) if mins is not None else None
         else:
             # No-commute mode: geocode is best-effort (centroid only) and never a
             # gate; no commute is computed or capped.
@@ -480,8 +483,13 @@ async def generate_candidate_areas(
             dest_coords = await _run_blocking(loop, geocode_address, geo_target)
         if not dest_coords:
             print(f"[AREA_RECO] could not geocode destination; destination_chars={len(str(destination))}")
-            return []
-        if london is None:
+            if not candidate_names:
+                return []
+            # Areas the caller named are still ranked on rent; their commute is unknown
+            # (r10 b1e1ee91: eight named areas came back as no_data).
+            no_commute_mode = True
+            london = bool(london)
+        elif london is None:
             london = in_london(dest_coords)
     else:
         # City-only: still resolve the canonical city for the contamination guard,
@@ -523,9 +531,10 @@ async def generate_candidate_areas(
 
     # ---- Validate every candidate concurrently against real data ----
     compute_commute = not no_commute_mode
+    validate = functools.partial(_validate_one, keep_unrouted=bool(candidate_names))
     tasks = [
         loop.run_in_executor(
-            None, _validate_one, c, destination, dest_coords,
+            None, validate, c, destination, dest_coords,
             city, london, max_commute, excludes, compute_commute,
         )
         for c in candidates

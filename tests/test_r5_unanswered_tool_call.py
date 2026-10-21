@@ -162,3 +162,70 @@ def test_r10_the_wrap_up_view_drops_a_malformed_only_call():
     rows = agent_loop._descaffold_for_wrap([HumanMessage(content=MESSAGE), only_bad])
     deepseek_check(rows)
     assert not any(getattr(m, "invalid_tool_calls", None) for m in rows)
+
+
+# ── Secondary (r10 b1e1ee9180e54f958dc8d0f907f83d4d) ─────────────────────────────────
+# compare_or_rank_areas with eight caller-named areas came back no_data. Not the osm outage:
+# the tool never calls Overpass. The destination "Camden Road Station, London N7" did not
+# geocode (Nominatim answered 200 with no match, fault group "geocode" ok), and the candidate
+# core returned [] for a destination it could not locate, so areas with cached rent data were
+# never ranked. Caller-named areas now rank on rent with an unknown commute.
+R10_AREAS = ["Camden", "Islington", "Holloway", "Kentish Town", "Finsbury Park", "Archway",
+             "Tufnell Park", "Highbury"]
+
+
+def _offline_places(monkeypatch, geocode, commute):
+    import core.recommend_areas as ra
+    slug = lambda name: name.strip().lower().replace(" ", "-")  # noqa: E731
+    monkeypatch.setattr(ra, "classify_place", lambda name: {
+        "slug": slug(name), "city": "london", "kind": "area", "address": None})
+    monkeypatch.setattr(ra, "resolve_location", lambda name: (slug(name), "london"))
+    monkeypatch.setattr(ra, "is_destination", lambda place: False)
+    monkeypatch.setattr(ra, "geocode_address", geocode)
+    monkeypatch.setattr(ra, "commute_minutes", commute)
+    return ra
+
+
+def test_r10_named_areas_rank_on_rent_when_the_destination_cannot_be_located(monkeypatch):
+    from core import area_stats
+    from core.tools.compare_or_rank_areas import compare_or_rank_areas_impl
+
+    _offline_places(monkeypatch,
+                    lambda addr: None if "Camden Road Station" in addr else {"lat": 51.55, "lng": -0.12},
+                    lambda *a, **k: (_ for _ in ()).throw(AssertionError("no destination to route to")))
+    medians = {"holloway": 1650.0, "archway": 1700.0, "camden": 2100.0}
+
+    def aggregate(slugs, budget=None):
+        out = {}
+        for s in slugs:
+            st = dict(area_stats._empty())
+            if s in medians:
+                st.update(min=medians[s] - 200, max=medians[s] + 200, median=medians[s],
+                          sample_size=12, freshness_days=1)
+            out[s] = st
+        return out
+    monkeypatch.setattr(area_stats, "aggregate", aggregate)
+    result = asyncio.run(compare_or_rank_areas_impl(
+        candidate_areas=list(R10_AREAS), city="London", destination="Camden Road Station, London N7",
+        limit=8, priorities=["value"], reply_language="en"))
+
+    assert result["status"] != "no_data"
+    names = [a["name"] for a in result["areas"]]
+    assert names[:3] == ["Holloway", "Archway", "Camden"]      # ranked on rent
+    assert set(names) == set(R10_AREAS)                        # none silently dropped
+    assert all(a["commute_minutes"] is None for a in result["areas"])
+    notes = " ".join(result["explanation_notes"])
+    assert "could not be computed" in notes and "No commute destination was given" not in notes
+
+
+def test_r10_a_named_area_without_a_route_ranks_after_the_routed_ones(monkeypatch):
+    import core.recommend_areas as ra
+    _offline_places(monkeypatch, lambda addr: {"lat": 51.55, "lng": -0.12},
+                    lambda destination, coords, origin_address=None, **k:
+                    None if origin_address == "Archway" else (25 if origin_address == "Holloway" else 70))
+    out = asyncio.run(ra.generate_candidate_areas(
+        "Camden Road Station, London N7", city="london", dest_coords={"lat": 51.55, "lng": -0.12},
+        london=True, candidate_names=["Holloway", "Archway", "Camden"], max_commute_time=45))
+    by_slug = {i["slug"]: i["commute_minutes"] for i in out}
+    # Unknown commute: kept, unscored on commute. A known commute over the cap: still dropped.
+    assert by_slug == {"holloway": 25, "archway": None}

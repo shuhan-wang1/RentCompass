@@ -354,11 +354,14 @@ def test_area_recommendation_logs_redact_destination_and_errors(
     )
     monkeypatch.setattr(areas, "geocode_address", lambda value: None)
 
-    assert asyncio.run(
+    # An unlocatable destination is logged without its text. A caller-named area is still
+    # returned, with no commute (r10 b1e1ee91), rather than dropped.
+    named = asyncio.run(
         areas.generate_candidate_areas(
             SENTINEL, city="London", candidate_names=["Camden"]
         )
-    ) == []
+    )
+    assert [(item["name"], item["commute_minutes"]) for item in named] == [("Camden", None)]
 
     monkeypatch.setattr(areas, "_looks_empty", lambda value: True)
     monkeypatch.setattr(areas, "get_search_snippets", lambda *args: "")

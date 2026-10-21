@@ -23,12 +23,18 @@ def recall_memory_impl(query: str, n: int = 6,
     if _valid_user_id(user_id) is None:
         return {"success": False, "count": 0, "memories": [], "formatted": "",
                 "error": "user_id is required to recall per-user memory"}
-    mems = _mem().retrieve(query, session_id=session_id, user_id=user_id, n=int(n))
+    from rag.agent_memory import INFERENCE_NOTE, presentable_memories
+    store = _mem()
+    # A reflection reaches the model labelled as a tentative inference, and one whose wording
+    # escalates or attributes is not returned (R4-12).
+    mems = presentable_memories(store.retrieve(query, session_id=session_id, user_id=user_id,
+                                               n=int(n)))
     return {
         "success": True,
         "count": len(mems),
-        "memories": mems,
-        "formatted": _mem().format_for_prompt(mems),
+        "memories": [dict(m, note=INFERENCE_NOTE) if m.get("mtype") == "reflection" else m
+                     for m in mems],
+        "formatted": store.format_for_prompt(mems),
     }
 
 

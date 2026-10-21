@@ -631,6 +631,97 @@ _SENSITIVE_INFERENCE_RE = re.compile(
     r"行动不便|残疾|身体状况", re.I)
 
 
+# ── Reflection wording (R4-12) ────────────────────────────────────────────────
+# r06: "pet-friendliness (cat) and area safety are deal-breakers, not nice-to-haves" for a user who
+# said "I have a cat" and once asked whether the area was safe; the next search carried both as
+# preferences. r08: "User has a firm, non-negotiable set of core criteria …". A reflection is the
+# assistant's guess: it may use a word that turns a preference into a requirement (or a stated
+# limit into a flexible one) only when the user's own messages used that word, and it never
+# says the user stated something.
+_ESCALATION_TERMS = tuple((key, re.compile(pattern, re.I)) for key, pattern in (
+    ("non-negotiable", r"\bnon[\s-]?negotiables?\b|\bnot\s+negotiable\b"),
+    ("deal-breaker", r"\bdeal[\s-]?breakers?\b"),
+    ("must", r"\bmusts?\b"),
+    ("firm", r"\bfirm(?:ly)?\b"),
+    ("hard", r"\bhard\s+(?:\w+\s+)?(?:requirements?|constraints?|limits?|lines?|rules?|ceilings?|"
+             r"caps?|cut[\s-]?offs?|stops?|filters?|criteria|criterion|anchors?|conditions?|musts?)\b"),
+    ("strict", r"\bstrict(?:ly)?\b"),
+    ("absolute", r"\babsolute(?:ly)?\b"),
+    ("essential", r"\bessentials?\b"),
+    ("mandatory", r"\bmandatory\b|\bobligatory\b"),
+    ("required", r"\brequired\b"),
+    ("critical", r"\bcritical\b|\bcrucial\b|\bvital\b|\bindispensable\b|\bimperative\b"),
+    ("insist", r"\binsist\w*"),
+    ("compromise", r"\b(?:no|not|never|won'?t|will\s+not|cannot|can'?t|without|rather\s+than)\s+"
+                   r"(?:\w+\s+)?compromis\w*|\buncompromising\b"),
+    ("non-starter", r"\bnon[\s-]?starters?\b|\bno[\s-]go\b|\bred\s+lines?\b"),
+    ("priority", r"\b(?:top|highest|first|number[\s-]one|overriding|main|primary|biggest)\s+priorit\w*|"
+                 r"\btakes?\s+priority\b|\bcomes?\s+first\b"),
+    ("core", r"\b(?:key|core|fixed|stable|fundamental|main|primary|dominant|decisive|central)\s+(?:\w+\s+)?"
+             r"(?:requirements?|constraints?|criteria|criterion|anchors?|conditions?|filters?|factors?|"
+             r"drivers?)\b"),
+    # Softening a stated limit is the same inference in the other direction.
+    ("negotiable", r"(?<!non-)(?<!non )(?<!not )\bnegotiable\b"),
+    ("flexible", r"\bflex\w*"),
+    ("stretch", r"\bstretch\w*"),
+    ("relax", r"\brelax(?:e|es|ed|ing)?\s+(?:\w+\s+){0,2}(?:budget|price|rent|constraints?|limits?|"
+              r"ceilings?|caps?|requirements?|criteria)\b"),
+    ("willing", r"\bwilling\s+to\s+(?:go|pay|spend|stretch|flex|exceed|compromise)\b"),
+    ("soft", r"\bsoft\s+(?:limits?|ceilings?|caps?|budgets?|targets?|constraints?)\b"),
+    ("leeway", r"\bwiggle\s+room\b|\bleeway\b"),
+    ("zh-must", r"必须|务必|一定要|非得|非.{1,6}不可"),
+    ("zh-hard", r"硬性|硬指标|硬条件|硬约束|刚需|刚性"),
+    ("zh-bottom", r"底线|红线|一票否决"),
+    ("zh-nonneg", r"不可妥协|不能妥协|绝不妥协|没得商量|不容商量|不可协商|不能商量|不可商量|没有商量"),
+    ("zh-critical", r"不可或缺|必不可少|至关重要|决定性|首要|最重要|最核心|关键要求|核心要求"),
+    ("zh-absolute", r"绝对"),
+    ("zh-flex", r"可以商量|可商量|灵活|弹性|放宽|上浮|浮动"),
+))
+# An inference worded as the user's own statement: "the user stated", "they insisted on", "the
+# user's own request said".
+_ATTRIBUTION_RE = re.compile(
+    r"\b(?:the\s+)?(?:user|they|he|she)(?:'s)?\s+(?:has\s+|have\s+|had\s+)?(?:\w+ly\s+)?"
+    r"(?:said|says|stated|states|told|tells|insisted|insists|specified|specifies|"
+    r"made\s+(?:it\s+)?clear|confirmed|confirms|emphasi[sz]ed|emphasi[sz]es|stressed|stresses|"
+    r"declared|declares|asked\s+for|asks\s+for|requested|requests|demanded|demands|"
+    r"mentioned|mentions)\b|"
+    r"\bexplicitly\b|\b(?:as|per)\s+(?:stated|requested|specified|instructed)\b|"
+    r"\baccording\s+to\s+the\s+user\b|"
+    r"\b(?:user|their|his|her)(?:'s)?\s+own\s+(?:words|request|statement|message)s?\b|"
+    r"用户(?:已经|已|曾经|曾|明确|亲口|反复|一再)?(?:说过|说|表示|表明|要求|强调|提到|声明|指出|坚持)",
+    re.I)
+# Shown with every reflection the model reads (format_for_prompt, recall_memory).
+INFERENCE_NOTE = ("tentative inference by the assistant (a guess that may be wrong); "
+                  "not said or saved by the user")
+
+
+def reflection_rejection(text: str, user_words: str = "") -> str | None:
+    """Why a reflection may not be stored or shown, or None.
+
+    ``user_words`` is what the user actually wrote; an escalation word it also contains is the
+    user's own and may stay ("pets must be allowed" -> "a cat-friendly landlord seems to be a
+    must")."""
+    value = str(text or "")
+    said = str(user_words or "")
+    for key, pattern in _ESCALATION_TERMS:
+        if pattern.search(value) and not pattern.search(said):
+            return f"escalation:{key}"
+    if _ATTRIBUTION_RE.search(value):
+        return "attribution"
+    return None
+
+
+def presentable_memories(mems) -> list:
+    """The memory records a prompt may show.
+
+    Rows written before R4-12 were never checked, so a reflection is shown only when its
+    wording passes :func:`reflection_rejection` against the stated memories beside it."""
+    items = [m for m in (mems or []) if isinstance(m, dict)]
+    stated = "\n".join(str(m.get("text") or "") for m in items if m.get("mtype") != "reflection")
+    return [m for m in items
+            if m.get("mtype") != "reflection" or not reflection_rejection(m.get("text"), stated)]
+
+
 _RATIONALE_PAREN = re.compile(r"\s*\(([^()]{1,160})\)")
 _RATIONALE_TAIL = re.compile(
     r"\s*[,;:–—-]?\s*\b(?:because|since|so\s+that|in\s+order\s+to|as\s+(?:they|she|he|the\s+user)|"
@@ -1225,6 +1316,11 @@ class AgentMemory:
             recent = self.col.get(where={"user_id": user_id})
             docs = recent.get("documents", []) or []
             metas = recent.get("metadatas", []) or []
+            # What the user actually wrote: the turn log of their own messages (R4-12).
+            user_words = "\n".join(
+                str(docs[i]) for i in range(len(docs))
+                if ((metas[i] if i < len(metas) else None) or {}).get("mtype") == "episodic"
+                and ((metas[i] if i < len(metas) else None) or {}).get("role") == "user")
             # Reflections are built from what the user said and asked, never from earlier
             # reflections: feeding them back escalated "pet-friendliness is a key
             # requirement" to "a non-negotiable dealbreaker" in two minutes (R2-06).
@@ -1242,17 +1338,32 @@ class AgentMemory:
             )
             newest = order[-REFLECT_CORPUS_SIZE:]
             corpus = "\n".join(f"- {docs[i]}" for i in newest)
+            # R4-12: an insight is the assistant's tentative guess. The prompt asks for that
+            # wording; reflection_rejection enforces it, because the prompt alone did not.
             prompt = (
-                "Given the following memories about a user's housing search, synthesise 1-3 concise, "
-                "higher-level insights about what this user really wants or needs (patterns, priorities, "
-                'trade-offs). Return STRICT JSON: {"insights": ["..."]}.\n\n'
+                "Given the following memories about a user's housing search, write 1-3 short, "
+                "TENTATIVE observations about what this user may want (patterns, trade-offs). They "
+                "are your own guesses, not things the user said, so word each one as a guess "
+                "(\"seems to\", \"may\", \"probably\"). Never call anything a requirement, a "
+                "priority or a limit the user set; never use the words non-negotiable, deal-breaker, "
+                "must, firm, strict, essential, hard constraint or top priority, and never call a "
+                "stated limit flexible, negotiable or stretchable, unless the user used that word "
+                "themselves. Never write that the user said, stated, insisted on or asked for "
+                "something. Keep every number exactly as the user gave it, and never combine an "
+                'older value with a newer one. Return STRICT JSON: {"insights": ["..."]}.\n\n'
                 f"{corpus}\n\nJSON: "
             )
             data = _extract_json(call_ollama(prompt, timeout=60) or "") or {}
+            rejected = 0
             for ins in (data.get("insights") or [])[:3]:
                 if (isinstance(ins, str) and ins.strip() and not contains_sensitive(ins)
                         and not _SENSITIVE_INFERENCE_RE.search(ins)):
+                    if reflection_rejection(ins, user_words):
+                        rejected += 1
+                        continue
                     self.add(ins.strip(), "reflection", session_id, user_id, importance=8)
+            if rejected:
+                print(f"[memory] reflect rejected_wording={rejected}")
         except Exception as e:
             print(f"[memory] reflect error_type={type(e).__name__}")
 
@@ -1381,7 +1492,9 @@ class AgentMemory:
     def format_for_prompt(self, mems) -> str:
         """The memory block. Reflections are the assistant's own INFERENCES and are labelled
         and listed apart: they were recalled as "everything I have saved" and applied as
-        search preferences (R2-06/R2-20)."""
+        search preferences (R2-06/R2-20). They are labelled TENTATIVE, and one whose wording
+        escalates or attributes is not shown at all (R4-12)."""
+        mems = presentable_memories(mems)
         if not mems:
             return ""
         tag = {"semantic": "FACT", "episodic": "PAST"}
@@ -1391,9 +1504,10 @@ class AgentMemory:
         block = "What I remember about this user:\n" + "\n".join(stated) if stated else ""
         if inferred:
             block = (block + "\n" if block else "") + (
-                "The assistant's own inferences (NOT said or saved by the user; never apply them "
-                "as search filters or preferences, never present them as things the user told "
-                "you or asked to save):\n" + "\n".join(inferred))
+                "The assistant's own inferences: TENTATIVE guesses that may be wrong, NOT said or "
+                "saved by the user (never apply them as search filters or preferences, never "
+                "present them as things the user told you or asked to save, and never describe "
+                "them as the user's requirements, limits or priorities):\n" + "\n".join(inferred))
         return block
 
     def stats(self) -> dict:

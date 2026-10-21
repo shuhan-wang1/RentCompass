@@ -24,7 +24,7 @@ import math
 from typing import Any, Dict, List, Optional, Tuple
 
 from core.tool_system import Tool
-from core.web_search import get_search_snippets
+from core.web_search import USER_REQUESTED_SEARCH, get_search_snippets
 from uk_rent_agent.agent.critic import evidence_usable as _evidence_usable
 
 
@@ -524,6 +524,19 @@ def _preflight_sub_queries(
     return prepared, None, dropped
 
 
+def _user_requested_snippets(query: str, count: int):
+    """``get_search_snippets`` for a search THIS tool runs for the user's question.
+
+    The mark lets the search client spend one bounded probe when a cooldown is open
+    (R4-16); it is set in the worker thread's own copied context and reset at once, so it
+    never reaches a nested tool's internal searches."""
+    token = USER_REQUESTED_SEARCH.set(True)
+    try:
+        return get_search_snippets(query, count)
+    finally:
+        USER_REQUESTED_SEARCH.reset(token)
+
+
 async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) -> dict:
     """Run a plain web search or a bounded batch of safe, read-only sibling tools."""
     registry = _tool_registry
@@ -572,7 +585,7 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
                 if tool_name == "web_search_only":
                     search_query = params.get("query", query)
                     web_result = await asyncio.to_thread(
-                        get_search_snippets, search_query, 5
+                        _user_requested_snippets, search_query, 5
                     )
                     health = getattr(web_result, 'service_health', None)
                     if isinstance(health, dict):
@@ -635,7 +648,7 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
             # (review3 R1-M1). A plain search is web_search's own capability, so it is
             # inside whatever grant dispatched this call.
             logger.info("Executing plain web search query_chars=%d", query_meta["length"])
-            web_result = await asyncio.to_thread(get_search_snippets, query, 5)
+            web_result = await asyncio.to_thread(_user_requested_snippets, query, 5)
             health = getattr(web_result, 'service_health', None)
             if isinstance(health, dict):
                 search_health['web_search'] = health

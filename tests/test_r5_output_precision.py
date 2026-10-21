@@ -191,3 +191,54 @@ def test_rent_correction_still_applies_to_the_sentence_naming_the_listing():
     out = bind_listing_links("Prices range from £2400 to £2650 per month. "
                              "Parkway, London, NW1 is £2,999/month.", entities)
     assert out == "Prices range from £2400 to £2650 per month. Parkway, London, NW1 is £2650/month."
+
+
+# ── a restated user limit is a constraint, not a measured journey ─────────────────────
+
+def _with_saved_fact(name):
+    """The recorded state, with the saved semantic row in the memory block as
+    ``AgentMemory.format_for_prompt`` renders it ("[FACT] …")."""
+    case = CORPUS[name]
+    state = case["state"]
+    block = f"What I remember about this user:\n[FACT] {case['saved_fact']}\n{state.get('memory_context') or ''}"
+    return case["text"], dict(state, memory_context=block)
+
+
+def test_recall_keeps_the_users_saved_commute_limit():
+    """r07 inst-A turn 26 (A-F10): "What is my budget, my pet name, my max commute …" lost
+    "**Max commute:** 35 minutes" and got the Note; the user saved "my maximum commute is 35
+    minutes" in an earlier conversation."""
+    text, state = _with_saved_fact("r07A_55581058_draft")
+    assert "- **Max commute:** 35 minutes. You cycle to work" in text
+    out = validate_commute_response(text, state)
+    assert out == text
+    assert NOTE_EN not in out
+    assert validate_commute_response("Your maximum commute is 35 minutes.", state) == \
+        "Your maximum commute is 35 minutes."
+
+
+def test_an_inference_alone_does_not_make_a_limit():
+    """The recorded block carried the 35 minutes only in an [INFERENCE] line: the assistant's
+    own inference is never user-stated evidence (R2-06), so the restatement still goes."""
+    case = CORPUS["r07A_55581058_draft"]
+    assert "[INFERENCE]" in case["state"]["memory_context"]
+    assert "35 minutes" not in validate_commute_response(case["text"], case["state"])
+
+
+def test_a_saved_limit_never_licenses_a_journey_time():
+    text, state = _with_saved_fact("r07A_55581058_draft")
+    for invented in ("Kingsland Road takes 35 minutes to Canary Wharf.",
+                     "- Commute from Hackney: 35 minutes.",
+                     "- **Max commute:** 40 minutes."):
+        assert "minutes" not in validate_commute_response(invented, state), invented
+
+
+def test_a_cap_figure_is_not_a_measured_route_time():
+    """Pre-existing: with Stratford measured at 29 and a 35-minute cap, "Stratford: 35
+    minutes" was kept because 35 was a cap. The limit, stated as a limit, still stands."""
+    text, state = _case("r06_099518b9_draft")
+    state = dict(state, accumulated_search_criteria=dict(
+        state.get("accumulated_search_criteria") or {}, max_travel_time=35))
+    assert "35 minutes" not in validate_commute_response("- Stratford: 35 minutes to Canary Wharf.", state)
+    for kept in ("- Stratford: 29 minutes to Canary Wharf.", "Stratford is within your 35-minute limit."):
+        assert validate_commute_response(kept, state) == kept

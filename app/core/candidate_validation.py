@@ -999,9 +999,53 @@ def _known_commute_caps(state: dict) -> set[float]:
         r"(?:within|under|at most|no more than|maximum of)\s*(\d+(?:\.\d+)?)\s*[-–]?\s*(?:minutes?|mins?)",
         r"(\d+(?:\.\d+)?)\s*[-–]?\s*(?:minutes?|mins?)\s*(?:commute\s+)?(?:cap|limit|maximum)",
         r"(\d+(?:\.\d+)?)\s*分钟\s*(?:以内|之内|上限|为上限)",
-    ):
+    ) + _COMMUTE_LIMIT_PATTERNS:
         caps.update(float(value) for value in re.findall(pattern, current, re.I) if float(value) > 0)
+    # ... and so is one the user stated earlier and saved: a [FACT]/[PAST] line of the memory
+    # block, a semantic/episodic row a recall returned, or the user's own earlier message in
+    # this conversation. "Max commute: 35 minutes" in a recall answer restates the saved
+    # "The user's maximum commute is 35 minutes." and was withdrawn as an unmeasured journey
+    # (r07 inst-A turn 26, A-F10). Never the assistant's [INFERENCE] lines or its own prose.
+    for text in _user_stated_texts(state):
+        for pattern in _COMMUTE_LIMIT_PATTERNS:
+            caps.update(float(value) for value in re.findall(pattern, text, re.I) if float(value) > 0)
     return caps
+
+
+# A commute LIMIT stated in words that name the commute ("my maximum commute is 35 minutes",
+# "commute of no more than 40 mins", "通勤不超过35分钟").
+_COMMUTE_LIMIT_PATTERNS = (
+    r"\b(?:max(?:imum)?|longest)\s+(?:commute|commuting\s+time|travel(?:ling)?\s+time|journey(?:\s+time)?)"
+    r"(?:\s+time)?\s*(?:is|of|=|:|would\s+be|should\s+be)?\s*(?:about\s+|around\s+)?"
+    r"(\d{1,3}(?:\.\d+)?)\s*[-–]?\s*(?:minutes?|mins?)\b",
+    r"\b(?:commute|travel\s+time|journey(?:\s+time)?)\s+(?:limit|cap|ceiling|maximum)\s*(?:is|of|=|:)?\s*"
+    r"(\d{1,3}(?:\.\d+)?)\s*[-–]?\s*(?:minutes?|mins?)\b",
+    r"\b(\d{1,3}(?:\.\d+)?)[-\s]?(?:minutes?|mins?)\s+(?:max(?:imum)?|limit)\s+(?:on\s+the\s+)?(?:commute|journey|travel)",
+    r"\b(?:commute|journey|travel\s+time)\b[^.;\n]{0,30}?\b(?:no\s+more\s+than|at\s+most|up\s+to|within|under|"
+    r"less\s+than|no\s+longer\s+than)\s*(\d{1,3}(?:\.\d+)?)\s*[-–]?\s*(?:minutes?|mins?)\b",
+    r"通勤[^。；\n]{0,8}?(?:最长|最多|不超过|不要超过|上限|以内|之内)[^。；\n]{0,4}?(\d{1,3})\s*分钟",
+    r"通勤[^。；\n]{0,8}?(\d{1,3})\s*分钟\s*(?:以内|之内|为上限|上限)",
+)
+
+
+def _user_stated_texts(state: dict) -> list[str]:
+    """User-stated or user-saved text of this turn: never the assistant's inferences."""
+    texts: list[str] = []
+    for line in str(state.get("memory_context") or "").splitlines()[:200]:
+        if re.match(r"\s*\[(?:FACT|PAST)\]", line):
+            texts.append(line)
+    for artifact in state.get("tool_artifacts") or []:
+        if not (isinstance(artifact, dict) and artifact.get("tool") == "recall_memory"
+                and artifact.get("success") is True):
+            continue
+        raw = artifact.get("raw_data") if isinstance(artifact.get("raw_data"), dict) else {}
+        for memory in (raw.get("memories") or [])[:100]:
+            if isinstance(memory, dict) and memory.get("mtype") in ("semantic", "episodic"):
+                texts.append(str(memory.get("text") or ""))
+    for turn in ((state.get("extracted_context") or {}).get("history") or [])[-20:]:
+        if isinstance(turn, dict):
+            texts.append(str(turn.get("user") or (turn.get("content") if turn.get("role") == "user" else "") or ""))
+    return [text[:2000] for text in texts if text]
 
 
 def _label_in_text(label: object, normalized_text: str) -> bool:
@@ -1325,7 +1369,8 @@ def _preference_commute_reference(fragment: str, caps: set, *, context: bool = F
         return False
     if (re.search(r"\b(?:is|are|was|were|has)\s+(?:(?:about|around|roughly)\s+)?\d+\s*(?:minutes?|mins?)|"
                   r"(?:是|需要)\s*\d+\s*分钟", fragment, re.I)
-            and not re.search(r"(?:limit|cap|maximum|requirement|target|上限|要求|目标)\s*(?:is|为|是|[:：])\s*\d+",
+            and not re.search(r"(?:limit|cap|maximum|requirement|target|上限|要求|目标)\s*(?:is|为|是|[:：])\s*\d+|"
+                              r"\b(?:max(?:imum)?|longest)\s+(?:commute|journey|travel)(?:\s+time)?\s+is\s+\d+",
                               fragment, re.I)):
         return False
     if re.search(r"\b(?:it|this|that|the\s+(?:flat|property|listing|journey|route|commute|trip))\b.{0,35}"
@@ -1333,6 +1378,13 @@ def _preference_commute_reference(fragment: str, caps: set, *, context: bool = F
                  r"(?:这套|该房源|该路线|此行程).{0,20}(?:以内|之内|超过|小于)", fragment, re.I):
         return False
     return True
+
+
+# A label or clause that names the user's commute LIMIT ("Max commute:", "your maximum
+# commute is"), as opposed to a journey.
+_LIMIT_LABEL = re.compile(
+    r"\b(?:max(?:imum)?|longest|limit\s+on\s+(?:the\s+|your\s+)?)\s*(?:commute|commuting|travel|journey)|"
+    r"\b(?:commute|travel|journey)(?:\s+time)?\s+(?:limit|cap|ceiling|maximum)\b|最长通勤|通勤上限", re.I)
 
 
 def _clean_commute_fragments(text: str) -> tuple[str, bool]:
@@ -2190,7 +2242,8 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
     bounded = _bound_is_evidenced(fragment, binding["minutes"])
     if bounded is not None:
         return bounded
-    allowed = {binding["minutes"]} | set(binding.get("alt_minutes") or []) | caps
+    own = {binding["minutes"]} | set(binding.get("alt_minutes") or [])   # the route's figures
+    allowed = own | caps
     # A leg's own duration is part of the same measurement, but only for a leg this claim
     # names by line or mode — "(6 min)" attached to "Northern line to Moorgate". A claim
     # about the WHOLE trip may not borrow one: a whole-trip word ("the journey takes 6
@@ -2210,14 +2263,17 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
             # destination only inside an enumerated itinerary.
             if not _arrives_at_destination(leg, binding) or id(binding) in itinerary:
                 allowed.add(leg["minutes"])
+                own.add(leg["minutes"])
         if id(binding) in itinerary:
             # Inside an enumerated itinerary, "then that line to King's Cross St Pancras
             # (11 min)" names the leg by where it arrives (R2-25).
             target = _TARGET.search(_without_abbreviation_dots(scope))
             if target:
                 hay_target = _label_key(target.group(1))
-                allowed.update(leg["minutes"] for leg in binding.get("legs") or []
-                               if any(_key_in(place, hay_target) for place in leg["places"]))
+                arrived = {leg["minutes"] for leg in binding.get("legs") or []
+                           if any(_key_in(place, hay_target) for place in leg["places"])}
+                allowed.update(arrived)
+                own.update(arrived)
     if any(not any(abs(value - permitted) < 1e-9 for permitted in allowed)
            for value in values):
         # A measured pair may also carry the straight-line estimate another tool returned;
@@ -2238,7 +2294,13 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
             return False  # a verdict with no limit to measure it against
         meets = all(binding["minutes"] <= cap + 1e-9 for cap in against)
         return meets if asserts_pass else not meets
-    # No verdict: the fragment merely carries a figure, and that figure checked out above.
+    # No verdict: the fragment merely carries a figure, and that figure checked out above. A
+    # figure that is only the user's LIMIT is not this route's journey time: "Stratford: 35
+    # minutes to Canary Wharf" with Stratford measured at 29 and a 35-minute limit stated was
+    # kept as if measured. It stands only where the clause names the limit as a limit.
+    if not all(any(abs(value - figure) < 1e-9 for figure in own) for value in values):
+        return bool(_LIMIT_LABEL.search(f"{fragment} {heading}") or re.search(
+            r"\b(?:limit|cap|ceiling|maximum|max|target|requirement)\b|上限|要求", fragment, re.I))
     return bool(values)
 
 
@@ -2325,7 +2387,9 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             whole line: line-wide scope let one clause license another's figure, and cost
             O(fragments x line) (the B-01 class again). ``sentence_marked``: the sentence
             carries an estimate marker ("estimated", "roughly")."""
-            if _preference_commute_reference(fragment, caps, context=preference_line):
+            if _preference_commute_reference(
+                    fragment, caps, context=preference_line or bool(
+                        _LIMIT_LABEL.search(heading) or _LIMIT_LABEL.search(fragment))):
                 return True
             if _quotes_source_text(fragment, source_texts):
                 return True

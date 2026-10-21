@@ -1101,13 +1101,18 @@ _FAILURE_STATEMENT = re.compile(
     r"不可用|失败|无法|没能|未能", re.I)
 
 
+_LIST_ITEM = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+")
+
+
 def _without_unsupported_money(response: str, supported: set) -> str:
     """``response`` minus each sentence quoting a money figure that ``supported`` lacks.
 
     A bullet or line that loses every sentence goes with them; headings and figure-free
-    sentences stay. Linear in the text."""
-    lines = []
-    for line in str(response or "").split("\n"):
+    sentences stay. A lead-in whose whole list went goes too: "The listings I checked
+    were:" shipped followed by nothing (r07 38299e93, B-F9). Linear in the text."""
+    lines: list[str | None] = []      # None marks a line that was withdrawn
+    source = str(response or "").split("\n")
+    for line in source:
         if not _money_mentions(line):
             lines.append(line)
             continue
@@ -1122,12 +1127,33 @@ def _without_unsupported_money(response: str, supported: set) -> str:
         rebuilt = "".join(kept).rstrip()
         if re.search(r"[0-9A-Za-z\u4e00-\u9fff]", re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", rebuilt)):
             lines.append(rebuilt)
-    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+        else:
+            lines.append(None)
+    for index, line in enumerate(lines):
+        if line is None or not line.rstrip().endswith((":", "：")):
+            continue
+        following = [j for j in range(index + 1, len(source)) if source[j].strip()]
+        block = []
+        for j in following:
+            if not _LIST_ITEM.match(source[j]):
+                break
+            block.append(j)
+        if block and all(lines[j] is None for j in block):
+            lines[index] = None
+    kept_lines = [line for line in lines if line is not None]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(kept_lines)).strip()
+
+
+def _shown_listing_money(shown_listings: Any) -> list[tuple[float, str]]:
+    """The prices of the listings an earlier turn showed, from the server's own rows."""
+    rows = [row for row in (shown_listings or [])[:50] if isinstance(row, dict)]
+    return _evidence_money_mentions([{"price": row.get("price")} for row in rows if row.get("price")])
 
 
 def enforce_no_evidence_numeric_contract(response: str, *, retrieved_evidence: Any,
                                         user_message: str = "", reply_language: str = "",
-                                        failed_lookups: Optional[list] = None) -> str:
+                                        failed_lookups: Optional[list] = None,
+                                        shown_listings: Optional[list] = None) -> str:
     """Fail closed on external money claims when retrieval returned no usable data.
 
     The current user message is an explicit provenance source: repeating ``£900/month``
@@ -1140,12 +1166,17 @@ def enforce_no_evidence_numeric_contract(response: str, *, retrieved_evidence: A
     service is currently unavailable…" was replaced whole by the generic template because
     the draft also quoted £50 and £50,000 (R3-04). ``failed_lookups`` (e.g. ["web search"])
     names the retrieval that failed; the answer says so when it does not already.
+
+    ``shown_listings`` are the server-held rows of the listings an earlier turn showed (the
+    conversation's ``view_results``). Their prices are tool output, not external figures:
+    "Which of these is closest to a tube station?" lost its list of the four listings and
+    their rents when every nearby lookup of the turn failed (r07 38299e93).
     """
     if evidence_usable(retrieved_evidence) or not has_specific_price_claims(response):
         return response
     user_money = _evidence_money_mentions({"user_message": user_message})
     supported = set()
-    for value, unit in user_money:
+    for value, unit in user_money + _shown_listing_money(shown_listings):
         supported |= _derivations(value, unit)
     unsupported = [value for value, _unit in _money_mentions(response)
                    if not _close_to_any(value, supported)]

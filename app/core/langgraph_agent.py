@@ -5338,6 +5338,8 @@ def _make_critic_node():
                 final,
                 failed_lookups=failed_lookups,
                 retrieved_evidence=retrieved_evidence,
+                shown_listings=ec.get("view_results") or ec.get("last_results_full")
+                or ec.get("recommended_registry"),
                 user_message=ec.get("current_message") or _current_message(
                     state.get("user_query") or ""),
                 reply_language=_reply_language_from_ctx(

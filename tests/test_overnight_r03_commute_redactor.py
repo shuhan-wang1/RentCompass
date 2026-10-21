@@ -63,9 +63,21 @@ def test_unclosed_bracket_case_drops_the_whole_sentence():
     assert "I can try the journey again from that exact point" in out
 
 
+def _without_shown_listings(state):
+    """The state minus the server-held rows of the listings an earlier turn showed."""
+    context = {k: v for k, v in (state.get("extracted_context") or {}).items()
+               if k not in ("view_results", "last_results_full")}
+    return {**state, "extracted_context": context}
+
+
 def test_chinese_bracket_fragment_is_gone():
     draft, state = _case("r05_zh_bracket_fragment")
-    out = validate_commute_response(draft, state)
+    # The ~20 minutes is King Square's own estimate in the listings the user is looking at
+    # (view_results: "~20 min to King's Cross (estimated, unverified)"), quoted as an
+    # estimate: nothing is withdrawn (R4-09, r07 97b3d456).
+    assert validate_commute_response(draft, state) == draft
+    # Without that evidence the claim goes, and it leaves no bracket fragment (R3-01).
+    out = validate_commute_response(draft, _without_shown_listings(state))
     assert "并非实际查询到的行程时间）" not in out
     assert "是一套一居室整租公寓（1 bed flat）。" in out
     assert "20 分钟" not in out
@@ -81,7 +93,11 @@ def test_chinese_list_item_does_not_keep_a_tail():
 
 def test_english_list_item_ends_cleanly():
     draft, state = _case("r05_en_bracket_fragment")
-    out = validate_commute_response(draft, state)
+    # Gloucester Avenue's 24 minutes is its routed travel_time and Highgate West Hill's
+    # "roughly 28 minutes … an estimate" its estimated one, both in the listings shown
+    # (view_results): nothing is withdrawn (R4-09).
+    assert validate_commute_response(draft, state) == draft
+    out = validate_commute_response(draft, _without_shown_listings(state))
     assert "not a verified journey time)." not in out
     assert "1. Highgate West Hill, London, N6 — £2,000/month, 1-bed flat." in out
     assert "28 minutes" not in out and "24 minutes" not in out
@@ -160,7 +176,7 @@ def test_note_only_when_visible_text_was_removed_and_never_twice(name):
 
 
 def test_note_present_before_is_kept_once():
-    draft, state = _case("r05_en_bracket_fragment")
+    draft, state = _case("r2_01c_unclosed_bracket")
     out = validate_commute_response(draft, state)
     assert out.count(NOTE_EN) == 1
     twice = validate_commute_response(out + "\n\nPlease double-check the exact prices.", state)

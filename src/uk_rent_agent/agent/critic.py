@@ -625,8 +625,18 @@ def unsupported_external_numbers(response: str, evidence: Any, user_text: str = 
     # presented as a measured fact here. Final response assembly still applies the
     # stricter per-listing commute guard to any user-facing commute judgment.
     asserted_response = re.sub(r"\bwould\b[^.!?\n]*", "", response or "", flags=re.IGNORECASE)
-    unit_unsupported = any(not any(abs(value - known) <= 0.01 for known in allowed)
-                          for value in _unit_numbers(asserted_response))
+    unit_unsupported = [value for value in _unit_numbers(asserted_response)
+                        if not any(abs(value - known) <= 0.01 for known in allowed)]
+    if unit_unsupported:
+        # Arithmetic on this turn's measured routes is not an external number: "4 minutes x 2
+        # journeys x 5 days = 40 minutes a week" (Holloway 25, Kentish Town 21) was graded
+        # unsupported and the answer regenerated with the "Unverified" footer (r13 2264a2d5).
+        # Same definition as the commute redactor (uk_rent_agent.agent.commute_arithmetic).
+        from uk_rent_agent.agent import commute_arithmetic as arithmetic
+        measured = arithmetic.route_minutes(_successful_evidence(evidence))
+        days = arithmetic.days_stated(user_text) | arithmetic.days_stated(response)
+        unit_unsupported = [value for value in unit_unsupported
+                            if not arithmetic.supported_in_text(value, asserted_response, measured, days)]
     if unit_unsupported:
         return True
     # The live critic supplies the current user message. Keep the legacy direct

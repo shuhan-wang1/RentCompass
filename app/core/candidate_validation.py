@@ -10,6 +10,7 @@ structured fields and explicitly linked tool evidence.
 from __future__ import annotations
 
 import asyncio
+import functools
 import math
 import os
 import re
@@ -2343,13 +2344,15 @@ def _recapitalise(rebuilt: str, original: str) -> str:
     return re.sub(r"(^\s*|[.!?]\s+)([a-z])", fix, rebuilt)
 
 
-_WORD_NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7}
-_DAY_PERIOD = re.compile(r"\b(?:a|per|each|every)\s+day\b|\bdaily\b|\breturn\s+trip\b|\bround\s+trip\b", re.I)
-_WEEK_PERIOD = re.compile(r"\b(?:a|per|each|every)\s+week\b|\bweekly\b|\bweek\b", re.I)
-_ROUGHLY = re.compile(r"\b(?:roughly|about|around|approximately|approx\.?|nearly|almost|just\s+(?:over|under)|"
-                      r"some|close\s+to)\b|~|≈", re.I)
-_HOURS_AND_MINUTES = re.compile(
-    r"(?<![\d.])(\d{1,2}(?:\.\d)?)\s*(?:hours?|hrs?|h)\b(?:\s*(?:and\s+)?(\d{1,2})\s*(?:minutes?|mins?)\b)?", re.I)
+from uk_rent_agent.agent import commute_arithmetic as _arithmetic  # noqa: E402
+
+# One definition of arithmetic on measured journey times, shared with the critic.
+_WORD_NUMBERS = _arithmetic.WORD_NUMBERS
+_DAY_PERIOD = _arithmetic.DAY_PERIOD
+_WEEK_PERIOD = _arithmetic.WEEK_PERIOD
+_ROUGHLY = _arithmetic.HEDGE
+_HOURS_AND_MINUTES = _arithmetic.HOURS_AND_MINUTES
+_durations_in = _arithmetic.durations
 
 
 def _office_days(state: dict) -> set:
@@ -2359,69 +2362,148 @@ def _office_days(state: dict) -> set:
     if isinstance(value, (int, float)) and not isinstance(value, bool) and 0 < value <= 7:
         days.add(float(value))
     current = str((state.get("extracted_context") or {}).get("current_message") or "")
-    for match in re.finditer(r"\b([1-7]|one|two|three|four|five|six|seven)[\s-]*days?\s+(?:a|per)\s+week",
-                             current, re.I):
-        word = match.group(1).lower()
-        days.add(float(_WORD_NUMBERS.get(word, word if word.isdigit() else 0)))
+    days |= _arithmetic.days_stated(current)
     return {d for d in days if d}
 
 
-def _durations_in(text: str) -> list:
-    """Every journey duration a fragment states, in minutes: "2 hours 20 minutes" is one 140."""
-    text = str(text or "")
-    found = []
-    for match in _HOURS_AND_MINUTES.finditer(text):
-        found.append(float(match.group(1)) * 60 + float(match.group(2) or 0))
-    rest = _HOURS_AND_MINUTES.sub(" ", text)
-    found.extend(_minute_claim_values(rest))
-    words = " ".join(rest.lower().split())
-    for phrase, value in _DURATION_WORDS:
-        if phrase in words:
-            found.append(value)
-            words = words.replace(phrase, " ")
-    return found
-
-
 _OVER_A_PERIOD = re.compile(
-    r"\b(?:over|across|during|in|for)\s+(?:a|an|the|one|your)\s+(?:[\w-]+\s+){0,2}?(?:day|week|month|year)\b", re.I)
+    r"\b(?:over|across|during|in|for)\s+(?:a|an|the|one|your|five|four|three|two|\d)\s+"
+    r"(?:[\w-]+\s+){0,2}?(?:days?|weeks?|months?|years?|trips?|journeys?)\b", re.I)
+_COMPARISON_CUE = re.compile(
+    r"\b(?:versus|vs\.?|over|than|compared|saves?|saving|difference|quicker|faster|shorter|longer|"
+    r"slower|less|more|instead\s+of)\b", re.I)
+_SUPERLATIVE = re.compile(r"\b(?:fastest|quickest|shortest)\b|\b(?:slowest|longest)\b", re.I)
+# A difference the line quotes as its base: "12 minutes each way", "4 minutes slower than X",
+# or the minutes operand of a product.
+_BASE_FIGURE = re.compile(
+    r"(?<![\d.])(\d+(?:\.\d+)?)\s*(?:minutes?|mins?)\s+(?:each\s+way|one\s+way|per\s+(?:trip|journey)|"
+    r"(?:slower|faster|quicker|shorter|longer|less|more)\b)", re.I)
 
 
-def _derived_commute_total(fragment: str, line: str, differences: set, office_days: set | None,
-                           previous_clause: str = "") -> bool:
-    """A daily or weekly time saving derived from a measured difference quoted on the same
-    line: "14 minutes each way, so about 28 minutes a day, roughly 2 hours 20 minutes a week on
-    a five-day commute" (r12 53bfec0e; Kentish Town 21, Camden 35). The saving is the
-    difference x 2 a day (there and back), x 2 x the commuting days a week (5, the user's own
-    office days, or the N-day week the line names). "roughly"/"about" allow 10% (at least 2
-    minutes); otherwise the figure must be exact. The base difference must itself be quoted on
-    the line, so a total never stands while the figure it comes from is withdrawn."""
-    # "Over a five-day week, Stratford saves roughly 90 minutes" names its period one clause
-    # earlier, in the same sentence.
-    scope = f"{previous_clause} {fragment}"
-    day, week = bool(_DAY_PERIOD.search(scope)), bool(_WEEK_PERIOD.search(scope))
-    if not (day or week):
+@functools.lru_cache(maxsize=256)
+def _line_has_wrong_base(line: str, measured: tuple) -> bool:
+    """A base figure the line quotes ("12 minutes each way", a product's minutes operand)
+    that is not a difference of two measured routes. Once per line (the B-01 class)."""
+    bases = [float(m.group(1)) for m in _BASE_FIGURE.finditer(line)]
+    bases += [p["operands"][0][0] for p in _arithmetic.products(line)]
+    return any(not _arithmetic.is_difference(value, measured) and value not in measured for value in bases)
+
+
+def _route_after(text: str, start: int, routes: list) -> dict | None:
+    """The measured route named right after ``start`` as what is compared with ("… a week
+    over Holloway", "versus Camden"), up to the next figure."""
+    segment = text[start:]
+    next_figure = re.search(r"\d", segment)
+    segment = segment[:next_figure.start()] if next_figure else segment
+    match = re.search(r"\b(?:over|versus|vs\.?|than|compared\s+(?:with|to)|against)\s+(.{1,60})", segment, re.I)
+    if not match:
+        return None
+    named = [r for r in routes if any(_label_in(label, match.group(1)) for label in r.get("labels") or [])]
+    return named[0] if len(named) == 1 else None
+
+
+def _route_before(text: str, end: int, routes: list) -> dict | None:
+    """The measured route named last before ``end`` ("Kentish Town is fastest at 21 minutes")."""
+    best, best_at = None, -1
+    head = _label_key(text[:end])
+    for route in routes:
+        for label in route.get("labels") or []:
+            key = _label_key(label)
+            at = f" {head} ".rfind(f" {key} ") if key else -1
+            if at > best_at:
+                best, best_at = route, at
+    return best
+
+
+def _arithmetic_evidenced(fragment: str, *, context: str, previous_clause: str, line: str,
+                          pool: list, days: set, subject: dict | None) -> bool:
+    """Arithmetic on this turn's measured routes, in any notation (r13 2264a2d5): the
+    difference of two measured routes, that difference x 2 / x days / x 2 x days, and an
+    explicit product whose operands are evidenced and whose result is right. Every figure
+    of the clause must be one of these, or the measured time of the route named right before
+    it; any other verdict, a wrong product, or a wrong base figure on the line fails it."""
+    routes = [route for route in pool if route.get("minutes") is not None and route.get("labels")]
+    measured = sorted({route["minutes"] for route in routes})
+    if len(measured) < 2:
         return False
-    values = _durations_in(fragment)
-    plain = _OVER_A_PERIOD.sub(" ", _ROUTE_COMPARATIVE.sub(" ", fragment))   # "over a week" is no verdict
-    if not values or _PASS_VERDICT.search(plain) or _FAIL_VERDICT.search(plain):
+    text = str(fragment or "")
+    if not (_arithmetic.MINUTES.search(text) or _HOURS_AND_MINUTES.search(text)
+            or any(phrase in text.lower() for phrase, _v in _arithmetic.DURATION_WORDS)):
         return False
-    quoted = {round(v, 2) for v in _minute_claim_values(_HOURS_AND_MINUTES.sub(" ", line))}
-    bases = {d for d in differences if d in quoted and d > 0}
-    if not bases:
+    label = line[:80].split(":", 1)[0] if ":" in line[:80] else ""
+    scope = f"{label} {previous_clause} {context} {text}"
+    if not (_DAY_PERIOD.search(scope) or _WEEK_PERIOD.search(scope) or _COMPARISON_CUE.search(scope)
+            or _arithmetic.products(text)):
+        return False      # no arithmetic here: cheap exit, before any line-wide work
+    # Consistency: a base figure on this line that is NOT a measured difference takes every
+    # total on the line with it; a correct total is never removed for want of a base.
+    if _line_has_wrong_base(line, tuple(measured)):
         return False
-    days = {5.0} | set(office_days or ())
-    for match in re.finditer(r"\b([1-7]|one|two|three|four|five|six|seven)[\s-]*days?\b", line, re.I):
-        word = match.group(1).lower()
-        days.add(float(_WORD_NUMBERS.get(word, word if word.isdigit() else 0)))
-    allowed = set()
-    for base in bases:
-        if day:
-            allowed.add(base * 2)
-        if week:
-            allowed.update(base * 2 * d for d in days if d)
-    loose = bool(_ROUGHLY.search(fragment))
-    return all(any(abs(value - target) <= (max(2.0, 0.1 * target) if loose else 0.5)
-                   for target in allowed) for value in values)
+    covered: list[tuple[int, int]] = []
+    results: list[float] = []
+    label_target = _route_after(label, 0, routes) if label else None
+    for product in _arithmetic.products(text):
+        target = _route_after(text, product["span"][1], routes) or label_target
+        involving = (target or {}).get("minutes")
+        if not _arithmetic.product_is_correct(product, measured, days, involving=None):
+            return False
+        if involving is not None and not _arithmetic.product_is_correct(product, measured, days, involving):
+            return False
+        covered.append(product["span"])
+        results.append(product["result"])
+    rest = text
+    for start, end in sorted(covered, reverse=True):
+        rest = rest[:start] + " " * (end - start) + rest[end:]
+    # A restatement of a product's result in other units: "= 120 minutes (2 hours)".
+    context_results = [p["result"] for p in _arithmetic.products(context)
+                       if _arithmetic.product_is_correct(p, measured, days)]
+    plain = _OVER_A_PERIOD.sub(" ", _ROUTE_COMPARATIVE.sub(" ", _SUPERLATIVE.sub(" ", rest)))
+    plain = re.sub(r"\b(?:over|than|versus|vs\.?)\s+(?:[A-Z][\w'’-]*\s*){1,3}", " ", plain)
+    if _PASS_VERDICT.search(plain) or _FAIL_VERDICT.search(plain) or _duration_bounds(rest):
+        return False
+    period = bool(_DAY_PERIOD.search(scope) or _WEEK_PERIOD.search(scope))
+    comparison = bool(_COMPARISON_CUE.search(scope))
+    hedged = bool(_ROUGHLY.search(text))
+    arithmetic_seen = bool(covered)
+    positions = [(m.start(), m.end(), float(m.group(1)) * 60 + float(m.group(2) or 0))
+                 for m in _HOURS_AND_MINUTES.finditer(rest)]
+    masked = _HOURS_AND_MINUTES.sub(lambda m: " " * len(m.group()), rest)
+    positions += [(m.start(), m.end(), float(m.group(1))) for m in _arithmetic.MINUTES.finditer(masked)]
+    words = masked.lower()
+    for phrase, value in _arithmetic.DURATION_WORDS:
+        at = words.find(phrase)
+        if at >= 0:
+            positions.append((at, at + len(phrase), value))
+            words = words[:at] + " " * len(phrase) + words[at + len(phrase):]
+    if not positions and not covered:
+        return False
+    for start, end, value in sorted(positions):
+        target = _route_after(rest, end, routes) or label_target
+        involving = (target or {}).get("minutes")
+        if any(abs(value - result) < 0.5 for result in results + context_results):
+            arithmetic_seen = True
+            continue
+        if period and _arithmetic.is_derived_total(value, measured, days, hedged=hedged, involving=involving):
+            arithmetic_seen = True
+            continue
+        if comparison and _arithmetic.is_difference(value, measured, involving):
+            arithmetic_seen = True
+            continue
+        owner = _route_before(rest, start, routes) or subject
+        if owner is not None and owner.get("minutes") is not None and abs(owner["minutes"] - value) < 1e-9:
+            continue
+        return False
+    if not arithmetic_seen:
+        return False          # plain journey times are the ordinary per-route check's business
+    superlative = _SUPERLATIVE.search(rest)
+    if superlative:
+        owner = _route_before(rest, superlative.start(), routes) or subject
+        if owner is None or owner.get("minutes") is None:
+            return False
+        fastest = superlative.group().lower() in ("fastest", "quickest", "shortest")
+        if owner["minutes"] != (measured[0] if fastest else measured[-1]):
+            return False
+    return True
 
 
 def _shared_by_every_route(fragment: str, pool: list) -> bool:
@@ -2595,6 +2677,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
     """
     bindings = list(bindings or [])
     caps = set(caps or ())
+    # Commuting days a week for derived totals: 5, the user's own, or an N-day week the answer states.
+    answer_days = {5.0} | set(office_days or ()) | _arithmetic.days_stated(text)
     itinerary = _itinerary_bindings(text, bindings + ([default_binding] if default_binding else []))
     removed = removed if removed is not None else []
     # Every route/area/listing of this turn that carries a figure. A clause attributable to
@@ -2620,7 +2704,10 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
     measured = sorted({c["minutes"] for c in pool if c.get("minutes") is not None})[:40]
     differences = {round(abs(a - b), 2) for i, a in enumerate(measured) for b in measured[i + 1:]}
     lines: list[str] = []
-    for line in str(text or "").split("\n"):
+    source_lines = str(text or "").split("\n")
+    produced_at: list[int] = []        # len(lines) before each source line was processed
+    for line in source_lines:
+        produced_at.append(len(lines))
         removed_before_line = len(removed)
         bullet = _BULLET_PREFIX.match(line)
         prefix = bullet.group(1) if bullet else ""
@@ -2678,8 +2765,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             if (values and differences and comparative
                     and all(round(value, 2) in differences for value in values)):
                 return True
-            if differences and _derived_commute_total(fragment, line, differences, office_days,
-                                                      previous_clause=previous_clause):
+            if _arithmetic_evidenced(fragment, context=context, previous_clause=previous_clause,
+                                     line=line, pool=pool, days=answer_days, subject=effective):
                 return True
             target = _comparison_target(fragment, bindings)
             if target is not None and not values:
@@ -2942,7 +3029,10 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             if within:
                 if (_LEANING_CONTINUATION.match(fragment)
                         and (_CAVEAT_ON_PREVIOUS.search(fragment)
-                             or _CONCLUSION_ON_PREVIOUS.match(fragment))):
+                             or _CONCLUSION_ON_PREVIOUS.match(fragment)
+                             # "If commute is your priority, <withdrawn> — but confirm rents
+                             # there first": the condition lost its main clause (r13).
+                             or _CONDITIONAL_LEAD.match("".join(kept[sentence_start:])))):
                     continuation_broken = True
                 # "Features: and the listing says ..." - a coordinator left at the front.
                 fragment = _LEADING_COORDINATOR.sub(r"\1", fragment)
@@ -2972,11 +3062,16 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
         if re.fullmatch(r"[*_#\s]*[^:：\n]{1,40}[:：]\s*[*_]*\s*", rebuilt) and not _MINUTE_TOKEN.search(rebuilt):
             rebuilt = ""         # "Cheapest route:" with nothing left after it (R1-10)
         label = original_body.split(":", 1)[0] if ":" in original_body[:80] else ""
-        if label.strip() and rebuilt.strip(" .:：;*") == label.strip(" .:：;*"):
-            # Everything after the label went: "- Versus Camden (35 min)." shipped as a stub
-            # bullet (r12 53bfec0e). The bullet goes whole.
+        if (label.strip() and len(re.findall(r"[\w'’-]+", label)) <= 6
+                and rebuilt.strip(" .:：;*") == label.strip(" .:：;*")):
+            # Everything after a bare label went: "- Versus Camden (35 min)." shipped as a stub
+            # bullet (r12 53bfec0e). The bullet goes whole. A complete sentence before the
+            # colon ("If you want the better balance of rent and travel, Stratford wins") is
+            # not a label and stays (r13 control 3709647b).
             rebuilt = ""
         rebuilt = re.sub(r"(?<=\S) {2,}(?=\S)", " ", rebuilt)
+        # "If commute is your priority,confirm rents" (r13): a kept comma keeps its space.
+        rebuilt = re.sub(r"(?<=[A-Za-z)])([,;])(?=[A-Za-z])", r"\1 ", rebuilt)
         # Tidy up after removal: no doubled or dangling separators.
         rebuilt = re.sub(r"([,，；;、:：])\s*(?=[,，；;、:：])", "", rebuilt)
         rebuilt = re.sub(r"^[\s,，；;、]+", "", rebuilt)
@@ -3000,11 +3095,35 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
         # The emphasis check reads the WHOLE line: "**Heading" matches the bullet prefix "*".
         lines.append(_balance_emphasis(prefix + rebuilt, line))
 
+    lines = _without_orphaned_lead_ins(source_lines, produced_at, lines)
     result = "\n".join(lines)
     result = re.sub(r"\n{3,}", "\n\n", result).strip()
     if not _HAS_CONTENT.search(result):
         return None
     return result
+
+
+def _without_orphaned_lead_ins(source: list, produced_at: list, lines: list) -> list:
+    """Drop a kept lead-in ending in ":" whose entire list was withdrawn: "the weekly saving
+    from choosing Kentish Town over the others is:" shipped with no bullets under it (r13)."""
+    ends = produced_at[1:] + [len(lines)]
+    kept = [ends[i] > produced_at[i] for i in range(len(source))]
+    drop: set[int] = set()
+    for i, line in enumerate(source):
+        if not kept[i] or not line.rstrip().rstrip("*_ ").endswith((":", "：")):
+            continue
+        block = []
+        for j in range(i + 1, len(source)):
+            if not source[j].strip():
+                if block:
+                    break
+                continue
+            if not _BULLET_PREFIX.match(source[j]) or not re.match(r"^\s*(?:[-*•]|\d+[.)])\s", source[j]):
+                break
+            block.append(j)
+        if block and not any(kept[j] for j in block):
+            drop.add(produced_at[i])
+    return [line for index, line in enumerate(lines) if index not in drop]
 
 
 
@@ -3032,6 +3151,8 @@ _CAVEAT_ON_PREVIOUS = re.compile(
 _CONCLUSION_ON_PREVIOUS = re.compile(
     r"^\s*(?:so|therefore|hence|thus)\b[^.;!?]*\b(?:that|this|it|these|those)\b|^\s*(?:所以|因此)", re.I)
 _MONEY_FIGURE = re.compile(r"[£$€]\s*\d")
+_CONDITIONAL_LEAD = re.compile(
+    r"^\s*[*_]*\s*(?:if|when|unless|should|whether|assuming|provided)\b[^.!?]*[,，]\s*$", re.I)
 # What is left of a destination split at its comma: "London E14 5AB", "E8", "London".
 _ADDRESS_TAIL = re.compile(
     r"\s*(?:(?:Greater\s+)?London|(?:[A-Z][A-Za-z'’&-]+\s+){0,3}[A-Z]{1,2}\d[A-Z\d]?(?:\s*\d[A-Z]{2})?)\s*")

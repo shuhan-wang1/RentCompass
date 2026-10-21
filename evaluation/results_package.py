@@ -310,6 +310,7 @@ GRADER_SET_FILES: Tuple[str, ...] = (
     "evaluation/metrics/graders.py",
     "src/uk_rent_agent/__init__.py",
     "src/uk_rent_agent/agent/__init__.py",
+    "src/uk_rent_agent/agent/commute_arithmetic.py",   # critic's derived-minutes rule (r13)
     "src/uk_rent_agent/agent/contracts.py",
     "src/uk_rent_agent/agent/critic.py",
     "src/uk_rent_agent/agent/state.py",

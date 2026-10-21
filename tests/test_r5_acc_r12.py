@@ -68,7 +68,9 @@ def test_arithmetic_that_does_not_follow_is_removed():
     for line, wrong, gone in (
             (CAMDEN, CAMDEN.replace("roughly 2 hours 20 minutes", "roughly 3 hours"), "3 hours"),
             (CAMDEN, CAMDEN.replace("about 28 minutes a day", "about 40 minutes a day"), "40 minutes"),
-            (HOLLOWAY, HOLLOWAY.replace("roughly half an hour", "roughly an hour"), "an hour a week")):
+            # 60 would follow from Holloway-Camden (11 min x 5 = 55, "roughly"); 3 hours follows
+            # from no pair of measured routes.
+            (HOLLOWAY, HOLLOWAY.replace("roughly half an hour", "roughly 3 hours"), "3 hours a week")):
         out = validate_commute_response(text.replace(line, wrong), state)
         assert gone not in out, wrong
         assert out.count(NOTE_EN) == 1
@@ -77,7 +79,8 @@ def test_arithmetic_that_does_not_follow_is_removed():
 
 def test_a_total_never_stands_without_the_difference_it_comes_from():
     """A wrong base difference goes, and so does everything derived from it; a bullet left
-    with only its label is dropped, never shipped as a stub ("- Versus Camden (35 min).")."""
+    with only its label is dropped, never shipped as a stub ("- Versus Camden (35 min)."). A
+    correct total with no base on its line stays."""
     text, state = _case("r12_53bfec0e_draft")
     wrong_base = CAMDEN.replace("14 minutes each way, so about 28 minutes a day, roughly 2 hours 20",
                                 "12 minutes each way, so about 24 minutes a day, roughly 2 hours")
@@ -85,9 +88,11 @@ def test_a_total_never_stands_without_the_difference_it_comes_from():
     assert "Versus Camden" not in out
     assert HOLLOWAY in out
     _no_fragments(out)
+    # acc-r13 owner rule: a CORRECT total stands without its base figure on the line, as long
+    # as both routes' measured minutes are in this turn's evidence (Holloway 24, Kentish Town 21).
     no_base = HOLLOWAY.replace("3 minutes each way, about 6 minutes a day, ", "")
     out = validate_commute_response(text.replace(HOLLOWAY, no_base), state)
-    assert "Versus Holloway" not in out
+    assert no_base in out
     _no_fragments(out)
 
 

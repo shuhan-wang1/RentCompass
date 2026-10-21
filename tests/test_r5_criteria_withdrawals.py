@@ -125,7 +125,8 @@ def test_r4_14_withdrawing_the_commute_clears_the_destination(message):
     assert after["area"] == "Islington"
 
 
-@pytest.mark.parametrize("message", ["Remove the commute limit.", "取消通勤时间"])
+@pytest.mark.parametrize("message", ["Remove the commute limit.", "取消通勤时间",
+                                     "Forget about the commute time."])
 def test_r4_14_lifting_only_the_limit_keeps_the_destination(message):
     acc = {"area": "Islington", "commute_destination": "King's Cross", "destination": "King's Cross",
            "max_travel_time": 30, "no_commute": False}

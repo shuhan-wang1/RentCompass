@@ -619,7 +619,8 @@ def commute_withdrawal_drops_destination(text: str) -> bool:
     commute to (NEW-4); "remove the commute limit" / "取消通勤时间" keep the destination for the
     per-listing travel times."""
     return not re.search(
-        r'\bcommut\w*\s+(?:time\s+)?(?:limit|filter|cap|max(?:imum)?|threshold)s?\b|\btime\s+limit\b'
+        r'\bcommut\w*\s+(?:times?|durations?|limits?|filters?|caps?|max(?:imum)?|thresholds?)\b'
+        r'|\btime\s+limit\b'
         r'|通勤(?:时间|时长)|时间限制|不限制通勤', str(text or ''), re.I)
 
 

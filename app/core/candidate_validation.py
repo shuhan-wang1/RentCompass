@@ -1973,6 +1973,38 @@ _SAVING_HEADER = re.compile(
     r"\b(?:time\s+saved|saved|saves?|saving|faster|quicker|slower|difference|gap|versus|vs\.?|compared)\b", re.I)
 
 
+# The user's own limit, restated as a criterion: "Your criteria are saved: studio, up to
+# £2,000/month, within 25 minutes of Old Street." (r19 a81297be) — nothing is said to BE within it.
+_BARE_LIMIT = re.compile(
+    r"^\s*(?:and\s+|with\s+|plus\s+)?(?:a\s+commute\s+(?:of\s+)?)?(?:within|under|up\s+to|inside|no\s+more\s+than|"
+    r"at\s+most|max(?:imum)?(?:\s+of)?)\s+(?:about\s+)?\d{1,3}\s*(?:minutes?|mins?)(?:['’]?\s+(?:commute|travel))?"
+    r"(?:\s+(?:of|to|from)\s+(?P<place>[^.,;!?]+?))?\s*$", re.I)
+_WORKPLACE_WORDS = re.compile(r"^(?:(?:your\s+|the\s+)?(?:work|office|workplace|job|campus|university|school))$", re.I)
+
+
+def _restates_user_limit(fragment: str, bindings: list, user_destinations: list | None) -> bool:
+    """A clause that is ONLY the user's limit, to the user's own destination (or "work"), with no
+    listing, area or route as its subject. ``_preference_commute_reference`` still requires the
+    figure to be the user's cap and still rejects "this flat … within …"."""
+    match = _BARE_LIMIT.match(str(fragment or ""))
+    if not match:
+        return False
+    place = (match.group("place") or "").strip()
+    if place and not _WORKPLACE_WORDS.match(place) and not any(
+            _label_key(label) and _label_key(label) == _label_key(place) for label in user_destinations or []):
+        return False      # "within 25 minutes of Bank" when the user works at Old Street
+    named = _line_binding(fragment, bindings)
+    return named is None or not (named.get("labels") or named.get("members"))
+
+
+def _user_commute_destinations(state: dict) -> list:
+    criteria = state.get("accumulated_search_criteria") or {}
+    labels: list = []
+    for key in ("commute_destination", "destination"):
+        labels.extend(_place_labels(criteria.get(key)))
+    return list(dict.fromkeys(labels))
+
+
 def _per_period_line(line: str, fragment: str) -> bool:
     """The line is a per-day/week/month figure ("- Per office day: …", "Per week (3 office
     days): …") or the clause itself names a period."""
@@ -2510,7 +2542,7 @@ def _arithmetic_evidenced(fragment: str, *, context: str, previous_clause: str, 
         return False
     text = str(fragment or "")
     if not (_arithmetic.MINUTES.search(text) or _HOURS_AND_MINUTES.search(text)
-            or _arithmetic.JOURNEY_COUNT.search(text)
+            or _arithmetic.JOURNEY_COUNT.search(text) or _arithmetic.products(text)
             or any(phrase in text.lower() for phrase, _v in _arithmetic.DURATION_WORDS)):
         return False
     label = line[:80].split(":", 1)[0] if ":" in line[:80] else ""
@@ -2756,7 +2788,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                            preference_context: bool = False,
                            source_texts: list[str] | None = None,
                            removed: list | None = None,
-                           office_days: set | None = None) -> str | None:
+                           office_days: set | None = None,
+                           user_destinations: list | None = None) -> str | None:
     """Drop the unverifiable commute assertions and keep everything else.
 
     Price, area, availability and an honest caveat are all still true and still useful when
@@ -2806,11 +2839,28 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
     differences = {round(abs(a - b), 2) for i, a in enumerate(measured) for b in measured[i + 1:]}
     lines: list[str] = []
     source_lines = str(text or "").split("\n")
+    # Period tables (rows = periods, columns = routes or the saving) are judged cell by cell by
+    # the shared rule; a row with a wrong cell goes whole, never as a "—" placeholder row, and a
+    # table that loses every row goes with its header (r19 de1fba15).
+    table_rows = _arithmetic.period_table_rows(
+        text, [{"labels": list(c.get("labels") or []), "minutes": c["minutes"],
+                "mode": c.get("mode") or "transit"} for c in pool if c.get("minutes") is not None],
+        user_days=user_days, answer_days=answer_days)
+    tables_kept: dict = {}
     produced_at: list[int] = []        # len(lines) before each source line was processed
     block_binding = None                # the listing a header line names, for its bullets
     block_minutes = False               # an earlier line of this paragraph/list quoted a journey time
     for line in source_lines:
         produced_at.append(len(lines))
+        row_verdict = table_rows.get(len(produced_at) - 1)
+        if row_verdict is not None:
+            tables_kept.setdefault(row_verdict["table"], False)
+            if row_verdict["ok"]:
+                tables_kept[row_verdict["table"]] = True
+                lines.append(line)
+            else:
+                removed.append(line)
+            continue
         in_timed_block = block_minutes
         block_minutes = bool(line.strip()) and (block_minutes or bool(_MINUTE_TOKEN.search(line)))
         removed_before_line = len(removed)
@@ -2873,7 +2923,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             carries an estimate marker ("estimated", "roughly")."""
             if _preference_commute_reference(
                     fragment, caps, context=preference_line or bool(
-                        _LIMIT_LABEL.search(heading_now[0]) or _LIMIT_LABEL.search(fragment))):
+                        _LIMIT_LABEL.search(heading_now[0]) or _LIMIT_LABEL.search(fragment))
+                    or _restates_user_limit(fragment, bindings, user_destinations)):
                 return True
             if _quotes_source_text(fragment, source_texts):
                 return True
@@ -3104,6 +3155,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
         address_tail_open = False    # the last clause was withdrawn and ended at a comma
         withdrawn_this_sentence = False  # a clause of the CURRENT sentence was withdrawn
         gap_lost = False             # a withdrawn clause took the only blank before the next kept one
+        withdrawn_values: set = set()  # the figures this line's withdrawn clauses stated
 
         line_index = len(produced_at) - 1
         heads_a_list = (not list_item and bool(re.match(r"^\s*(?:\*\*|#{1,4}\s)", line))
@@ -3186,6 +3238,9 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             period_claim = bool(figure_context and _period_total(claim) and not monetary_or_independent)
             if _MINUTE_TOKEN.search(fragment):
                 figure_context = True
+            # "…, 38 x 3 = 114 a week" after the line's journey figures is journey arithmetic too.
+            period_claim = period_claim or bool(figure_context and _arithmetic.products(claim)
+                                                and not monetary_or_independent)
             asserts = period_claim or (_asserts_commute(claim) or
                        (commute_context and not _COMMUTE_WORD.search(claim)
                         and (_FIT_WORD.search(_without_money_or_weather(claim))
@@ -3222,6 +3277,12 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 drop = True
             if not drop and withdrawn_this_sentence and _SO_TOTAL_AFTER_DROP.match(fragment):
                 drop = True
+            if not drop and withdrawn_values and any(
+                    any(abs(value - gone) < 1e-9 for value, _unit in product["operands"] for gone in withdrawn_values)
+                    for product in _arithmetic.products(claim)):
+                # A step on a withdrawn figure goes with it: "19 minutes each way, so 38 minutes a
+                # day, 38 x 3 = 114 a week" shipped "- Per day: 38 x 3 = 114 a week" (r19 W3b).
+                drop = True
             if (not drop and address_tail_open and _ADDRESS_TAIL.fullmatch(fragment)):
                 # "35 min to Canary Wharf, London E14 5AB": the comma split the destination,
                 # and the withdrawn clause left "Commute: London E14 5AB." (r07 97b3d456).
@@ -3233,6 +3294,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 # The blank that separated this clause from what follows goes with it; the next
                 # kept clause must still be spaced ("£2,250/month.I'm mentioning…", r18 1787af1e).
                 gap_lost = gap_lost or bool(re.search(r"\s", fragment[:1] + separator))
+                withdrawn_values.update(_minute_claim_values(fragment))
+                withdrawn_values.update(p["result"] for p in _arithmetic.products(fragment))
                 if _MINUTE_TOKEN.search(fragment) and any(_named_legs(fragment, route) for route in itinerary_routes):
                     # A leg of an enumerated itinerary is wrong: what is left ("a short walk, the
                     # 476 bus.") is no longer the route the planner returned, so the sentence goes
@@ -3346,6 +3409,10 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             rebuilt += "。" if zh else "."
         rebuilt = _recapitalise(rebuilt, original_body)
 
+        if line.lstrip().startswith("|") and rebuilt.strip():
+            cells = [c.strip(" *_") for c in rebuilt.strip().strip("|").split("|")]
+            if len(cells) > 1 and all(c in ("", "—", "–", "-") for c in cells[1:]):
+                rebuilt = ""      # "| Per week | — | — | — |" reads as data; the row goes (r19)
         if not rebuilt.strip():
             # The line was nothing but a commute claim; drop it, prefix included. A blank
             # separator line in the original stays blank so paragraphs do not fuse.
@@ -3358,6 +3425,11 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
         # The emphasis check reads the WHOLE line: "**Heading" matches the bullet prefix "*".
         lines.append(_balance_emphasis(prefix + rebuilt, line))
 
+    emptied = {produced_at[header + offset] for header, kept_any in tables_kept.items() if not kept_any
+               for offset in (0, 1) if header + offset < len(produced_at)}
+    if emptied:
+        lines = [line for index, line in enumerate(lines) if index not in emptied]
+        produced_at = [at - sum(1 for e in emptied if e < at) for at in produced_at]
     lines = _without_orphaned_lead_ins(source_lines, produced_at, lines)
     result = "\n".join(lines)
     result = re.sub(r"\n{3,}", "\n\n", result).strip()
@@ -4031,7 +4103,7 @@ def _validate_commute_response(response: str, state: dict, *, note_present: bool
         text, zh=zh, bindings=bindings, caps=_known_commute_caps(state),
         default_binding=default, preference_context=memory_reference,
         source_texts=_listing_source_texts(state), removed=removed,
-        office_days=_office_days(state))
+        office_days=_office_days(state), user_destinations=_user_commute_destinations(state))
     if redacted is None:
         fallback = render_structured_evidence_fallback(state, language=language)
         if not fallback and len(original.strip()) >= _LEDGER_FALLBACK_MIN_CHARS:

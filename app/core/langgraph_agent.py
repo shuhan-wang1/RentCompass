@@ -4233,6 +4233,13 @@ def _make_execute_tool_node(tool_registry):
                 _switched_area = (_switched_areas[0] if len(_switched_areas) == 1 else
                                   None if len(_switched_areas) > 1 else
                                   _extract_area(params.get('current_message') or ''))
+                from core.tools.search_properties import names_place_as_workplace
+                if (_switched_area and len(_switched_areas) <= 1
+                        and (params.get('area') or accumulated.get('area'))
+                        and names_place_as_workplace(params.get('current_message') or '',
+                                                     _switched_area)):
+                    # A workplace never replaces a known home area (r19 e54b1945).
+                    _switched_areas, _switched_area = [], None
                 if _switched_areas:
                     params['area'], params['areas'] = _switched_areas[0], _switched_areas
                 if _switched_area:

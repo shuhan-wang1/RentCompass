@@ -1,0 +1,397 @@
+{
+ "r19_de1fba15": {
+  "checkpoint": "1f1cddda-8017-62e6-8007-5edf179a63ca",
+  "critic_text": null,
+  "message": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a week and a month would the faster one save me?",
+  "raw_draft": "Here's the comparison, measured by the TfL Journey Planner (fastest itinerary for each area centre to Liverpool Street):\n\n**Stratford — 20 minutes, no changes**\n- Walk 4 min to Stratford Underground Station\n- Central line, 9 min, direct to Liverpool Street\n- Walk 7 min to the office\n\n**Bow — 28 minutes, 1 change**\n- Walk 13 min to Bow Road Underground Station\n- District line 1 min to Mile End, then Central line 6 min to Liverpool Street\n- Walk 7 min to the office\n\n**Time saved by choosing Stratford (8 minutes faster each way)**\n\n| | Stratford | Bow | Saving |\n|---|---|---|---|\n| Per one-way trip | 20 min | 28 min | 8 min |\n| Per office day (return) | 40 min | 56 min | 16 min |\n| Per week (3 office days) | 2 h 00 min | 2 h 48 min | **48 min** |\n| Per month (approx. 13 office days) | 8 h 40 min | 12 h 08 min | **about 3 h 28 min** |\n\nSo Stratford saves you roughly **48 minutes a week** and **about 3.5 hours a month** on your three office days. It's also a simpler journey — a single direct Central line ride versus a change at Mile End, which matters on busy mornings.\n\nTwo caveats worth knowing: these times are from each area's centre, not a specific flat, so an individual property could be a few minutes better or worse depending on where it sits relative to the station. And the Bow figure includes a fairly long 13-minute walk to Bow Road, so a flat closer to Mile End or Bromley-by-Bow could narrow the gap.\n\nWant me to look at actual listings in either area within a budget, or check fares for both routes?",
+  "request_id": "de1fba1591074edd9a612070a65da19b",
+  "shipped": "Here's the comparison, measured by the TfL Journey Planner (fastest itinerary for each area centre to Liverpool Street):\n\n**Stratford — 20 minutes, no changes**\n- Walk 4 min to Stratford Underground Station\n- Central line, 9 min, direct to Liverpool Street\n- Walk 7 min to the office\n\n**Bow — 28 minutes, 1 change**\n- Walk 13 min to Bow Road Underground Station\n- District line 1 min to Mile End, then Central line 6 min to Liverpool Street\n- Walk 7 min to the office\n\n**Time saved by choosing Stratford (8 minutes faster each way)**\n\n| | Stratford | Bow | Saving |\n|---|---|---|---|\n| Per one-way trip | 20 min | 28 min | — |\n| Per week (3 office days) | — | — | — |\n| Per month (approx. 13 office days) | — | — | **about 3 h 28 min** |\n\nSo Stratford saves you roughly **48 minutes a week** and **about 3.5 hours a month** on your three office days. It's also a simpler journey — a single direct Central line ride versus a change at Mile End, which matters on busy mornings.\n\nTwo caveats worth knowing: these times are from each area's centre, not a specific flat, so an individual property could be a few minutes better or worse depending on where it sits relative to the station. And the Bow figure includes a fairly long 13-minute walk to Bow Road, so a flat closer to Mile End or Bromley-by-Bow could narrow the gap.\n\nWant me to look at actual listings in either area within a budget, or check fares for both routes?\n\nNote: some commute claims could not be verified and have been removed from this answer.",
+  "state": {
+   "accumulated_search_criteria": {
+    "amenities_of_interest": [],
+    "commute_destination": "Liverpool Street",
+    "constraint_sources": {
+     "commute_destination": {
+      "source": "user_message",
+      "text": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a week and a month would the faster one save me?",
+      "value": "Liverpool Street"
+     },
+     "destination": {
+      "source": "user_message",
+      "text": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a week and a month would the faster one save me?",
+      "value": "Liverpool Street"
+     },
+     "no_commute": {
+      "source": "user_message",
+      "text": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a week and a month would the faster one save me?",
+      "value": false
+     },
+     "office_days_per_week": {
+      "source": "user_message",
+      "text": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a week and a month would the faster one save me?",
+      "value": 3
+     }
+    },
+    "destination": "Liverpool Street",
+    "max_budget": null,
+    "max_travel_time": null,
+    "no_commute": false,
+    "office_days_per_week": 3,
+    "property_features": [],
+    "soft_preferences": []
+   },
+   "candidate_validation": {},
+   "extracted_context": {
+    "current_date": "2026-10-22",
+    "current_message": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a week and a month would the faster one save me?",
+    "history": [],
+    "memory_paused": false,
+    "reply_language": "en"
+   },
+   "memory_context": "",
+   "observations": [],
+   "tool_artifacts": [
+    {
+     "elapsed_ms": 3401,
+     "error": null,
+     "params_digest": "88d502d8f6199cd7",
+     "raw_data": {
+      "basis": "tfl_journey_plan",
+      "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+      "changes_count": 0,
+      "duration_category": "Medium (20-45 min)",
+      "duration_minutes": 20,
+      "from_address": "Stratford, London",
+      "is_acceptable": true,
+      "mode": "transit",
+      "route_legs": [
+       {
+        "duration_minutes": 4,
+        "from": "walk inside building, LONDON",
+        "lines": [],
+        "mode": "walking",
+        "summary": "Walk to Stratford Station",
+        "to": "Stratford Underground Station"
+       },
+       {
+        "duration_minutes": 9,
+        "from": "Stratford Underground Station",
+        "lines": [
+         "Central"
+        ],
+        "mode": "tube",
+        "summary": "Central line to Liverpool Street",
+        "to": "Liverpool Street Underground Station"
+       },
+       {
+        "duration_minutes": 7,
+        "from": "Liverpool Street Underground Station",
+        "lines": [],
+        "mode": "walking",
+        "summary": "Walk to 9 BISHOPSGATE ARCADE, LONDON",
+        "to": "9 BISHOPSGATE ARCADE, LONDON"
+       }
+      ],
+      "route_source": "TfL Journey Planner",
+      "route_summary": "Walk to Stratford Underground Station (4 min) -> Tube Central to Liverpool Street Underground Station (9 min) -> Walk to 9 BISHOPSGATE ARCADE, LONDON (7 min)",
+      "success": true,
+      "to_address": "Liverpool Street Station, London"
+     },
+     "success": true,
+     "tool": "calculate_commute",
+     "turn": 1
+    },
+    {
+     "elapsed_ms": 4391,
+     "error": null,
+     "params_digest": "a597a4b74908f5a5",
+     "raw_data": {
+      "basis": "tfl_journey_plan",
+      "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+      "changes_count": 1,
+      "duration_category": "Medium (20-45 min)",
+      "duration_minutes": 28,
+      "from_address": "Bow, London",
+      "is_acceptable": true,
+      "mode": "transit",
+      "route_legs": [
+       {
+        "duration_minutes": 13,
+        "from": "106B TREDEGAR ROAD, LONDON",
+        "lines": [],
+        "mode": "walking",
+        "summary": "Walk to Bow Road Station",
+        "to": "Bow Road Underground Station"
+       },
+       {
+        "duration_minutes": 1,
+        "from": "Bow Road Underground Station",
+        "lines": [
+         "District"
+        ],
+        "mode": "tube",
+        "summary": "District line to Mile End",
+        "to": "Mile End Underground Station"
+       },
+       {
+        "duration_minutes": 6,
+        "from": "Mile End Underground Station",
+        "lines": [
+         "Central"
+        ],
+        "mode": "tube",
+        "summary": "Central line to Liverpool Street",
+        "to": "Liverpool Street Underground Station"
+       },
+       {
+        "duration_minutes": 7,
+        "from": "Liverpool Street Underground Station",
+        "lines": [],
+        "mode": "walking",
+        "summary": "Walk to 9 BISHOPSGATE ARCADE, LONDON",
+        "to": "9 BISHOPSGATE ARCADE, LONDON"
+       }
+      ],
+      "route_source": "TfL Journey Planner",
+      "route_summary": "Walk to Bow Road Underground Station (13 min) -> Tube District to Mile End Underground Station (1 min) -> Tube Central to Liverpool Street Underground Station (6 min) -> Walk to 9 BISHOPSGATE ARCADE, LONDON (7 min)",
+      "success": true,
+      "to_address": "Liverpool Street Station, London"
+     },
+     "success": true,
+     "tool": "calculate_commute",
+     "turn": 1
+    }
+   ],
+   "tool_decision": {},
+   "user_preferences": {
+    "excluded_areas": [],
+    "hard_preferences": [],
+    "required_amenities": [],
+    "safety_concerns": [],
+    "soft_preferences": []
+   },
+   "user_query": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a week and a month would the faster one save me?"
+  }
+ },
+ "r19_ecda0b02": {
+  "checkpoint": "1f1cddde-460d-6f0d-8007-cc493e74e0f7",
+  "critic_text": null,
+  "message": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+  "raw_draft": "The listing source is temporarily down, so I couldn't pull live studios this round. That's a data outage, not a sign that nothing exists at your budget.\n\nYour criteria are saved: studio, up to £2,000/month, within 25 minutes of Old Street.\n\nA couple of things that would help me get results faster once the source is back:\n\n1. Should I widen the search to nearby areas as well (e.g. Islington, Hackney, Bethnal Green, Whitechapel, Clerkenwell)? Studios around Old Street itself at £2,000 are tight, and areas a few stops out usually give more for the money while staying inside 25 minutes.\n2. Do you have a target move-in date?\n\nSay \"try again\" and I'll re-run the search, or tell me which extra areas to include and I'll search those together.",
+  "request_id": "ecda0b028e6b4ad49acd4040d98891da",
+  "shipped": "The OnTheMarket listing source is temporarily unavailable, so current listings could not be verified. Your housing criteria are preserved; this does not show that your budget or area has no properties.",
+  "state": {
+   "accumulated_search_criteria": {
+    "amenities_of_interest": [],
+    "bedrooms": 0,
+    "bedrooms_minimum": false,
+    "budget_period": "month",
+    "commute_destination": "Old Street",
+    "constraint_sources": {
+     "bedrooms": {
+      "source": "user_message",
+      "text": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+      "value": 0
+     },
+     "bedrooms_minimum": {
+      "source": "user_message",
+      "text": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+      "value": false
+     },
+     "budget_period": {
+      "source": "user_message",
+      "text": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+      "value": "month"
+     },
+     "commute_destination": {
+      "source": "user_message",
+      "text": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+      "value": "Old Street"
+     },
+     "destination": {
+      "source": "user_message",
+      "text": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+      "value": "Old Street"
+     },
+     "max_budget": {
+      "source": "user_message",
+      "text": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+      "value": 2000
+     },
+     "max_travel_time": {
+      "source": "user_message",
+      "text": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+      "value": 25
+     },
+     "no_commute": {
+      "source": "user_message",
+      "text": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+      "value": false
+     },
+     "room_type": {
+      "source": "user_message",
+      "text": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+      "value": "studio"
+     }
+    },
+    "destination": "Old Street",
+    "max_budget": 2000,
+    "max_travel_time": 25,
+    "no_commute": false,
+    "property_features": [],
+    "room_type": "studio",
+    "soft_preferences": []
+   },
+   "candidate_validation": {
+    "constraints": {
+     "areas": [
+      "old-street"
+     ],
+     "bedrooms": 0.0,
+     "bedrooms_minimum": false,
+     "commute_destination": "Old Street, Finsbury, London Borough of Islington, Greater London, England, EC1Y 8AF, United Kingdom",
+     "max_budget_monthly": 2000.0,
+     "max_changes": null,
+     "max_commute_minutes": 25.0,
+     "monthly_total_budget": null,
+     "move_in_date": null,
+     "no_commute": false,
+     "office_days_per_week": null,
+     "property_features": [],
+     "room_type": "studio"
+    },
+    "eligible": [],
+    "excluded": [],
+    "statuses": [],
+    "unknown": []
+   },
+   "extracted_context": {
+    "current_date": "2026-10-22",
+    "current_message": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+    "history": [],
+    "memory_paused": false,
+    "reply_language": "en"
+   },
+   "memory_context": "",
+   "observations": [],
+   "tool_artifacts": [
+    {
+     "elapsed_ms": 6227,
+     "error": null,
+     "params_digest": "ca16257bbe93e13b",
+     "raw_data": {
+      "area_recommendations": [],
+      "area_status": {
+       "old-street": "unavailable"
+      },
+      "cache_stats": {
+       "hits": 0,
+       "misses": 1
+      },
+      "candidate_states": [],
+      "candidate_validation": {
+       "constraints": {
+        "areas": [
+         "old-street"
+        ],
+        "bedrooms": 0.0,
+        "bedrooms_minimum": false,
+        "commute_destination": "Old Street, Finsbury, London Borough of Islington, Greater London, England, EC1Y 8AF, United Kingdom",
+        "max_budget_monthly": 2000.0,
+        "max_changes": null,
+        "max_commute_minutes": 25.0,
+        "monthly_total_budget": null,
+        "move_in_date": null,
+        "no_commute": false,
+        "office_days_per_week": null,
+        "property_features": [],
+        "room_type": "studio"
+       },
+       "eligible": [],
+       "excluded": [],
+       "statuses": [],
+       "unknown": []
+      },
+      "commute_evidence": [],
+      "commute_note": "Commute times have not been verified for these listings this round. A narrower area or a specific destination can help complete that check.",
+      "commute_unverified": true,
+      "data_source": "OnTheMarket",
+      "excluded_candidates": [],
+      "incomplete_areas": [
+       "old-street"
+      ],
+      "known_criteria": {
+       "area": "old-street",
+       "areas": [
+        "old-street"
+       ],
+       "bedrooms": 0,
+       "bedrooms_minimum": false,
+       "budget_period": "month",
+       "commute_destination": "Old Street, Finsbury, London Borough of Islington, Greater London, England, EC1Y 8AF, United Kingdom",
+       "max_budget": 2000.0,
+       "max_changes": null,
+       "max_travel_time": 25,
+       "monthly_total_budget": null,
+       "move_in_date": null,
+       "no_commute": false,
+       "office_days_per_week": null,
+       "property_features": [],
+       "room_type": "studio",
+       "soft_preferences": []
+      },
+      "message": "The OnTheMarket listing source is temporarily unavailable, so current listings could not be verified. Your housing criteria are preserved; this does not show that your budget or area has no properties.",
+      "partial": true,
+      "partial_note": "The OnTheMarket listing source is temporarily unavailable, so current listings could not be verified. Your housing criteria are preserved; this does not show that your budget or area has no properties.",
+      "recommendations": [],
+      "retrieval_complete": false,
+      "retrieval_outcome": "source_unavailable",
+      "search_criteria": {
+       "area": "old-street",
+       "areas": [
+        "old-street"
+       ],
+       "bedrooms": 0,
+       "bedrooms_minimum": false,
+       "budget_period": "month",
+       "commute_destination": "Old Street, Finsbury, London Borough of Islington, Greater London, England, EC1Y 8AF, United Kingdom",
+       "destination": "Old Street, Finsbury, London Borough of Islington, Greater London, England, EC1Y 8AF, United Kingdom",
+       "max_budget": 2000.0,
+       "max_changes": null,
+       "max_travel_time": 25,
+       "monthly_total_budget": null,
+       "move_in_date": null,
+       "no_commute": false,
+       "office_days_per_week": null,
+       "property_features": [],
+       "room_type": "studio",
+       "soft_preferences": []
+      },
+      "source_errors": {
+       "old-street": {
+        "status": "unavailable"
+       }
+      },
+      "source_message": "The OnTheMarket listing source is temporarily unavailable, so current listings could not be verified. Your housing criteria are preserved; this does not show that your budget or area has no properties.",
+      "source_status": "unavailable",
+      "status": "no_results",
+      "success": true,
+      "unverified_candidates": []
+     },
+     "success": true,
+     "tool": "search_properties",
+     "turn": 1
+    }
+   ],
+   "tool_decision": {},
+   "user_preferences": {
+    "excluded_areas": [],
+    "hard_preferences": [],
+    "required_amenities": [],
+    "safety_concerns": [],
+    "soft_preferences": []
+   },
+   "user_query": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work."
+  }
+ }
+}

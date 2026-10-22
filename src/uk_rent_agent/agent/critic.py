@@ -475,8 +475,15 @@ def unsupported_reply_prices(response: str, evidence: Any) -> list[float]:
 
     answer = response or ""
     arithmetic = _evidenced_arithmetic(answer, evidence_money, supported)
+    # The stated result of a journey product is minutes, not a weekly rent: "16 × 3 = 48 a
+    # week" (r19). Money is never a product operand there ("£50 x 4" is not one).
+    from uk_rent_agent.agent.commute_arithmetic import products as _journey_products
+    journey_results = [p["span"] for p in _journey_products(answer)]
     unsupported: list[float] = []
-    for value, _unit in _money_mentions(answer):
+    for value, _unit, start, _end in _money_mention_spans(answer):
+        if (any(s0 <= start < s1 for s0, s1 in journey_results)
+                and not _CURRENCY_BEFORE.search(answer[max(0, start - 8):start])):
+            continue
         if _close_to_any(value, supported) or round(value, 2) in arithmetic:
             continue
         if exempt_bounds_and_intervals and not _asserts_price(answer, value):
@@ -621,6 +628,16 @@ def unsupported_external_numbers(response: str, evidence: Any, user_text: str = 
     """
     successful = _successful_numeric_evidence(evidence)
     allowed = _unit_numbers(successful + " " + (user_text or ""))
+    # A period table (rows = periods, columns = routes or the saving) is judged cell by cell by
+    # the shared rule; its rows are not prose sentences (r19 de1fba15).
+    from uk_rent_agent.agent import commute_arithmetic as _table_rule
+    table_rows = _table_rule.period_table_rows(
+        response or "", _table_rule.named_routes(_successful_evidence(evidence)),
+        user_days=_table_rule.days_stated(user_text), answer_days=_table_rule.days_stated(response))
+    if any(not row["ok"] for row in table_rows.values()):
+        return True
+    original_response = response or ""
+    response = _table_rule.without_lines(response or "", table_rows)
     # Hypothetical prose (for example, "would put you 20 minutes...") is not
     # presented as a measured fact here. Final response assembly still applies the
     # stricter per-listing commute guard to any user-facing commute judgment.
@@ -655,7 +672,7 @@ def unsupported_external_numbers(response: str, evidence: Any, user_text: str = 
     # The live critic supplies the current user message. Keep the legacy direct
     # evaluate_grounding helper compatible when that context is intentionally absent.
     return bool(user_text and unsupported_reply_prices(
-        response or "", [_successful_evidence(evidence), user_text]))
+        original_response, [_successful_evidence(evidence), user_text]))
 
 # ── station-name grounding ─────────────────────────────────────────────────
 # THE LEGITIMATE NAME UNIVERSE, enumerated. Every source of a real station/place name

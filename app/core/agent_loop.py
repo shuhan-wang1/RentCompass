@@ -444,7 +444,7 @@ _JSON_ERROR_CLASSES = (
 )
 
 
-def _invalid_call_diagnostics(calls) -> str:
+def _invalid_call_diagnostics(calls, specs=()) -> str:
     """The parse-error CLASS of each malformed tool call, never its content (R3-07).
 
     ``get_property_details`` came back malformed 3/3 for ordinal follow-ups and the log said
@@ -462,8 +462,14 @@ def _invalid_call_diagnostics(calls) -> str:
         if kind is None:
             kind = "none_args" if args is None else ("TypeError" if "TypeError" in error else "other")
         stripped = text.strip()
+        # Which schema parameter failed and how its value starts (r6c): enough to tell an
+        # unquoted value from a single-quoted one in the next round's log, still no text.
+        from core.tool_args_repair import error_position_shape
+        spec = next((sp for sp in specs or () if getattr(sp, "name", None) == call.get("name")), None)
+        allowed = set(((getattr(spec, "input_schema", None) or {}).get("properties") or {})) if spec else set()
         out.append(f"{str(call.get('name') or 'unknown')[:40]}:{kind}:len={len(text)}"
-                   f":obj={int(stripped.startswith('{'))}:closed={int(stripped.endswith('}'))}")
+                   f":obj={int(stripped.startswith('{'))}:closed={int(stripped.endswith('}'))}"
+                   f":{error_position_shape(call, allowed)}")
     return ";".join(out)[:500] or "-"
 
 
@@ -3625,12 +3631,26 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             }, goto='format_output_fc')
         tool_calls = list(getattr(resp, "tool_calls", None) or [])
         invalid_calls = list(getattr(resp, "invalid_tool_calls", None) or [])
+        if invalid_calls:
+            # A flat object with an unquoted, single-quoted or Python-literal value is
+            # repaired when unambiguous; anything else stays malformed (r6c).
+            from core.tool_args_repair import repair_invalid_tool_calls
+            _repaired, _still_invalid = repair_invalid_tool_calls(invalid_calls, specs)
+            if _repaired:
+                logger.info("fc_loop.invalid_tool_calls_repaired count=%d names=%s diag=%s",
+                            len(_repaired), ",".join(sorted({c["name"] for c in _repaired})),
+                            _invalid_call_diagnostics(
+                                [c for c in invalid_calls if c not in _still_invalid], specs))
+                tool_calls = tool_calls + _repaired
+                invalid_calls = _still_invalid
+                resp = resp.model_copy(update={"tool_calls": tool_calls,
+                                               "invalid_tool_calls": invalid_calls})
         if invalid_calls and not tool_calls:
             names = ", ".join(sorted({str(c.get("name") or "unknown") for c in invalid_calls
                                       if isinstance(c, dict)})) or "unknown"
             logger.warning("fc_loop.invalid_tool_calls count=%d names=%s loop_turn=%d diag=%s",
                            len(invalid_calls), names, loop_turn,
-                           _invalid_call_diagnostics(invalid_calls))
+                           _invalid_call_diagnostics(invalid_calls, specs))
             content = getattr(resp, "content", "") or ""
             if not _has_invalid_call_nudge(messages):
                 nudge = HumanMessage(
@@ -3832,6 +3852,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             # widened back to all of London (R1-01).
             kept_city = (switched if switched and bare_city_downgrades(switched, p.get("area"))
                          else None)
+            from core.tools.search_properties import names_place_as_workplace
+            if (switched and (p.get("area") or acc.get("area"))
+                    and names_place_as_workplace(p.get("current_message") or "", switched)):
+                switched = None     # a workplace never replaces a known home area (r19)
         except Exception:
             switched = kept_city = None
         if kept_city:

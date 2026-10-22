@@ -32,12 +32,23 @@ Safety
 * Idempotent: a second run finds nothing to delete, writes no backup and exits 0.
 * Opening the store runs the same idempotent schema check and legacy sync every application
   process runs when it starts. Pools may keep running.
+* Options are matched exactly: ``--appl`` is an error, never ``--apply`` (argparse's prefix
+  matching once turned that typo into a real purge).
+
+Restore
+-------
+``--restore BACKUP.json`` puts back exactly the rows of a backup this tool wrote. It is a dry run
+unless ``--apply`` is given. It refuses a file another tool wrote, and a backup taken from a
+different database than the target. Rows go back through the store API (``add``), which clears
+each id's tombstone. An id that already exists is skipped, so a second restore does nothing.
 
 Usage
 -----
     python3 scripts/purge_escalating_reflections.py app/chroma_db_agent_memory/agent_memory.sqlite3
     python3 scripts/purge_escalating_reflections.py app/chroma_db_agent_memory/agent_memory.sqlite3 --apply
     python3 scripts/purge_escalating_reflections.py <db> --apply --backup /home/shuhan/memory-backups/reflections.json
+    python3 scripts/purge_escalating_reflections.py <db> --restore <backup.json>            # dry run
+    python3 scripts/purge_escalating_reflections.py <db> --restore <backup.json> --apply
 """
 from __future__ import annotations
 
@@ -45,6 +56,7 @@ import argparse
 import hashlib
 import json
 import os
+import sqlite3
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -59,6 +71,7 @@ from rag.sqlite_memory_store import _NATIVE_DB_NAME  # noqa: E402
 
 EXIT_OK = 0
 EXIT_ERROR = 2
+TOOL = "scripts/purge_escalating_reflections.py"
 _DELETE_BATCH = 200
 _EXCERPT_CHARS = 90
 
@@ -103,7 +116,7 @@ def find_rejected(memory: AgentMemory) -> tuple[list, dict]:
 
 def _write_backup(path: Path, root: Path, doomed: list) -> None:
     payload = {
-        "tool": "scripts/purge_escalating_reflections.py",
+        "tool": TOOL,
         "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "database": str(root / _NATIVE_DB_NAME),
         "rows": [{"id": row["id"], "document": row["text"], "metadata": row["metadata"],
@@ -196,20 +209,114 @@ def purge(db: Path, *, apply: bool, backup: Path | None, out=None) -> int:
     return EXIT_OK
 
 
+def _backup_rows(payload, root: Path) -> list:
+    """The rows of a backup this tool wrote for the database at ``root``; raises otherwise."""
+    if not isinstance(payload, dict) or payload.get("tool") != TOOL:
+        raise RuntimeError(f"not a backup written by {TOOL}; refusing to restore it")
+    target = (root / _NATIVE_DB_NAME).resolve()
+    source = payload.get("database")
+    if not isinstance(source, str) or Path(source).expanduser().resolve() != target:
+        raise RuntimeError(f"the backup was taken from {source!r}, not {str(target)!r}; "
+                           "refusing to restore it into a different database")
+    rows = payload.get("rows")
+    if not isinstance(rows, list):
+        raise RuntimeError("the backup has no row list")
+    seen = set()
+    for row in rows:
+        if (not isinstance(row, dict) or not isinstance(row.get("id"), str) or not row["id"]
+                or not isinstance(row.get("document"), str)
+                or not isinstance(row.get("metadata"), dict)
+                or row["metadata"].get("mtype") != "reflection" or row["id"] in seen):
+            raise RuntimeError("the backup holds a row this tool never deletes, or a malformed "
+                               "or duplicated row; refusing to restore any of it")
+        seen.add(row["id"])
+    return rows
+
+
+def restore(db: Path, backup_file: Path, *, apply: bool, out=None) -> int:
+    out = out or sys.stdout
+    try:
+        root = _memory_root(db)
+        backup_file = backup_file.expanduser()
+        rows = _backup_rows(json.loads(backup_file.read_text(encoding="utf-8")), root)
+        memory = AgentMemory(db_path=str(root))
+        existing = set(memory.col.get(ids=[row["id"] for row in rows]).get("ids") or [])
+    except Exception as exc:
+        out.write(f"error: {type(exc).__name__}: {exc}\nNothing was restored.\n")
+        return EXIT_ERROR
+
+    todo = [row for row in rows if row["id"] not in existing]
+    out.write(f"database          : {root / _NATIVE_DB_NAME}\n")
+    out.write(f"backup            : {backup_file}\n")
+    for row in rows:
+        verb = "SKIP (exists)" if row["id"] in existing else "RESTORE"
+        out.write(f"{verb} {row['id']}  user#{_user_tag(row['metadata'].get('user_id'))}  "
+                  f"\"{_excerpt(row['document'])}\"\n")
+    out.write(f"rows in backup    : {len(rows)}\n")
+    out.write(f"to restore        : {len(todo)}\n")
+    out.write(f"already present   : {len(rows) - len(todo)}\n")
+    if not todo:
+        out.write("nothing to do.\n")
+        return EXIT_OK
+    if not apply:
+        out.write("DRY RUN: nothing was restored. Re-run with --apply to restore these rows.\n")
+        return EXIT_OK
+
+    restored_ids, raced = [], 0
+    try:
+        with memory._lock:
+            for row in todo:
+                try:
+                    # The store's own add(): the row is native again and its tombstone is
+                    # cleared, so neither the legacy sync nor a later purge sees it as deleted.
+                    memory.col.add(documents=[row["document"]], metadatas=[row["metadata"]],
+                                   ids=[row["id"]])
+                    restored_ids.append(row["id"])
+                except sqlite3.IntegrityError:
+                    raced += 1            # written by someone else since the check: keep theirs
+        got = memory.col.get(ids=[row["id"] for row in todo])
+    except Exception as exc:
+        out.write(f"error: restore failed after {len(restored_ids)} rows: "
+                  f"{type(exc).__name__}: {exc}\n"
+                  "Re-run to finish; rows already restored are skipped.\n")
+        return EXIT_ERROR
+    present = dict(zip(got.get("ids") or [], zip(got.get("documents") or [],
+                                                  got.get("metadatas") or [])))
+    out.write(f"restored          : {len(restored_ids)}\n")
+    if raced:
+        out.write(f"skipped (raced)   : {raced}\n")
+    wanted = {row["id"]: (row["document"], row["metadata"]) for row in todo}
+    missing = [rid for rid in wanted if rid not in present]
+    changed = [rid for rid in restored_ids if present.get(rid) != wanted[rid]]
+    if missing or changed:
+        out.write(f"error: after the restore {len(missing)} rows are missing and "
+                  f"{len(changed)} differ from the backup.\n")
+        return EXIT_ERROR
+    return EXIT_OK
+
+
 def main(argv=None) -> int:
+    # allow_abbrev=False: "--appl" must be an error, never a silent "--apply".
     parser = argparse.ArgumentParser(
+        allow_abbrev=False,
         description="Delete reflection rows whose wording the R4-12 guard rejects "
-                    "(dry run by default).")
+                    "(dry run by default), or restore them from this tool's backup.")
     parser.add_argument(
         "db", nargs="?", type=Path,
         default=REPO_ROOT / "app" / "chroma_db_agent_memory" / _NATIVE_DB_NAME,
         help="agent_memory.sqlite3, or the directory holding it")
     parser.add_argument("--apply", action="store_true",
-                        help="delete the rows (default: dry run)")
+                        help="delete (or, with --restore, restore) the rows (default: dry run)")
     parser.add_argument("--backup", type=Path, default=None,
                         help="where to write the JSON backup (default: beside the database); "
                              "an existing file is never overwritten")
+    parser.add_argument("--restore", type=Path, default=None, metavar="BACKUP.json",
+                        help="put back the rows of a backup this tool wrote for this database")
     args = parser.parse_args(argv)
+    if args.restore is not None:
+        if args.backup is not None:
+            parser.error("--backup is for a purge; --restore reads the backup it is given")
+        return restore(args.db, args.restore, apply=args.apply)
     return purge(args.db, apply=args.apply, backup=args.backup)
 
 

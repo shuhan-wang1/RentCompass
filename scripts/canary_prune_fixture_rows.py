@@ -177,7 +177,9 @@ def prune(path: str, *, apply: bool, backup_dir: Optional[str],
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    # allow_abbrev=False: a typo such as "--appl" is an error, never a silent "--apply".
     ap = argparse.ArgumentParser(
+        allow_abbrev=False,
         description="Remove test-fixture rows from a canary telemetry log.")
     ap.add_argument("log", help="path to the canary jsonl log")
     ap.add_argument("--apply", action="store_true",

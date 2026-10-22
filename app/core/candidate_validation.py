@@ -1171,7 +1171,8 @@ def _repair_abbreviation_breaks(text: str) -> str:
                   r"\1 ", str(text or ""))
 
 
-def _guard_text_parts(text: str, *, sentences: bool = False) -> list[str]:
+def _guard_text_parts(text: str, *, sentences: bool = False,
+                      separators: list[str] | None = None) -> list[str]:
     """Split genuine clauses/sentences, retaining punctuation inside facts and names.
 
     The clause form retains alternating separators like re.split's capturing group;
@@ -1217,8 +1218,12 @@ def _guard_text_parts(text: str, *, sentences: bool = False) -> list[str]:
         parts.append(text[start:match.start()])
         if not sentences:
             parts.append(match.group())
+        elif separators is not None:
+            separators.append(match.group())   # what followed that sentence ("\n\n", " ", ";")
         start = match.end()
     parts.append(text[start:])
+    if sentences and separators is not None:
+        separators.append("")
     return parts
 
 
@@ -3897,6 +3902,27 @@ _COUNT_LEAD_IN = re.compile(
     r"reminders)\b[^.!?]{0,60}[.!?:]\s*$", re.I)
 
 
+# What a sentence ASSERTS about the listing being live, without the clauses that assert
+# nothing (r07 9f5e1f70): an indirect question ("Ask the agent whether the flat is still
+# available"), a question ("Is the property still available, and from what date?") and an
+# offer of a future lookup ("I can also fetch live TfL fare and journey information").
+# "It is still available — want me to book?" keeps its claim; so does "I can confirm it is
+# still available" (confirm is not an offer of a lookup).
+_INDIRECT_QUESTION = re.compile(r"\b(?:whether|if)\b[^.;!?,—–:()]*", re.I)
+_LOOKUP_OFFER = re.compile(
+    r"\b(?:I|we)\s+(?:can|could|will|['’]ll|would\s+be\s+happy\s+to|am\s+happy\s+to|['’]m\s+happy\s+to)"
+    r"\s+(?:also\s+)?(?:re-?)?(?:fetch|pull|get|check|look\s+up|run|bring\s+up|show)\b[^.;!?,—–:()]*", re.I)
+
+
+def _asserted_part(sentence: str) -> str:
+    body = sentence.rstrip(" \t*_)]")
+    if body.endswith(("?", "？")):
+        # the question is its last clause: what follows the last stop, dash or colon before it
+        cut = max(body.rfind(mark, 0, len(body) - 1) for mark in ".;!?。！？—–:")
+        sentence = sentence[:cut + 1]
+    return _INDIRECT_QUESTION.sub(" ", _LOOKUP_OFFER.sub(" ", sentence))
+
+
 def validate_evidence_scope(response: str, state: dict) -> str:
     """Withdraw provenance/scope claims unsupported by the relevant tool's OWN result.
 
@@ -3949,9 +3975,12 @@ def validate_evidence_scope(response: str, state: dict) -> str:
                   "gp": re.compile(r"\bgps?\b|\bdoctors?\b|medical\s+cent(?:er|re)|\bclinics?\b|全科|诊所|医疗中心", re.I)}
     changed: set[str] = set()
     kept = []
+    kept_separators: list[str] = []
     dropped_ordinal = False
     safety_context = False
-    for sentence in _guard_text_parts(text, sentences=True):
+    separators: list[str] = []
+    sentences = _guard_text_parts(text, sentences=True, separators=separators)
+    for sentence, separator in zip(sentences, separators):
         if safety_topic.search(sentence):
             safety_context = True
         elif re.search(r"nearby|amenities|weather|listing details|周边|天气|房源详情", sentence, re.I):
@@ -3962,7 +3991,12 @@ def validate_evidence_scope(response: str, state: dict) -> str:
             r"does\s+not\s+(?:verify|prove|confirm).{0,80}(?:coordinates?|point|used)|"
             r"(?:coordinates?|reference).{0,35}(?:not verified|not confirmed|unknown)|"
             r"(?:safety|police|crime).{0,35}(?:not checked|not verified)|"
-            r"(?:无法|未|不能)(?:确认|核实|证明).{0,25}(?:坐标|参考点)|不能从周边设施查询推断", sentence, re.I))
+            r"(?:无法|未|不能)(?:确认|核实|证明).{0,25}(?:坐标|参考点)|不能从周边设施查询推断|"
+            # "…the geocoded centre of the area, not any particular street or home", "…the EC1V
+            # postcode district centre, not the flat itself", "…不是这套房源的具体门牌坐标" say the
+            # check was NOT on the listing (r07 0b47cbae, d5379b52, 317d972f; r10 04df255b)
+            r"\bnot\s+(?:any\s+particular|a\s+specific|the|this|that)\s+(?:street|home|flat|property|listing|address)\b|"
+            r"不是(?:这套|该|此)?(?:房源|公寓|住宅)", sentence, re.I))
         if safety_context and not point_caveat:
             refs = [(raw.get("reference_point") or (raw.get("crime_data") or {}).get("reference_point") or {})
                     for raw in safety]
@@ -3973,7 +4007,7 @@ def validate_evidence_scope(response: str, state: dict) -> str:
                     for ref in refs) for lat, lon in pairs):
                 drop = True
                 changed.add("safety")
-            if point_claim.search(sentence):
+            if point_claim.search(_asserted_part(sentence)):     # an offer to re-run it asserts nothing
                 # Supplied coordinates establish the queried point, not the identity of a
                 # listing. Only an explicit identity attestation can support that claim.
                 if not refs or not all(ref.get("coordinate_identity_verified") is True for ref in refs):
@@ -3986,8 +4020,12 @@ def validate_evidence_scope(response: str, state: dict) -> str:
             r"\b(?:prices?|rents?|availability)\b[^.;!?]{0,25}\b(?:are|is|remains?|stays?)\s+unverified\b|"
             r"(?:cannot|can't)\s+(?:confirm|verify).{0,35}(?:current|availability|live)|"
             r"current\s+(?:price|rent|availability).{0,20}(?:unknown|unverified)|"
-            r"(?:未|不|无法)(?:能|曾)?(?:实时|核实|确认)|并非实时|不是实时", sentence, re.I))
-        if cache_only and live_claim.search(sentence) and not live_caveat:
+            r"(?:未|不|无法)(?:能|曾)?(?:实时|核实|确认)|并非实时|不是实时|"
+            # "没有实时核实", "未经实时核实" (r07 51baa15d, 948b7745); "实时租金请向中介确认" is the
+            # advice to get the live rent from the agent (r07 d3b985eb)
+            r"(?:没有|没|未经|尚未|并未)(?:经过)?(?:实时|核实)|"
+            r"实时[^，。；,;]{0,8}请(?:先)?(?:向|跟|与|和)?中介(?:确认|核实|询问)", sentence, re.I))
+        if cache_only and live_claim.search(_asserted_part(sentence)) and not live_caveat:
             drop = True
             changed.add("cache")
         no_query_claim = bool(re.search(
@@ -4011,15 +4049,23 @@ def validate_evidence_scope(response: str, state: dict) -> str:
                         changed.add(kind)
         if not drop:
             kept.append(sentence)
+            kept_separators.append(separator)
         else:
             dropped_ordinal = dropped_ordinal or bool(_ORDINAL_LEAD.match(sentence))
+            if kept_separators and "\n" in separator and "\n" not in kept_separators[-1]:
+                # the last sentence of a paragraph went: its paragraph break stays
+                kept_separators[-1] = separator
     if not changed:
         return text
     if dropped_ordinal:
         # "Two things to keep in mind. First, <withdrawn>. Second, …" must not ship as "Two
         # things to keep in mind. Second, …" (r21 0136f2f6): the count goes, and so do the
         # ordinals of the items that stay.
-        kept = [sentence for sentence in kept if not _COUNT_LEAD_IN.match(sentence)]
+        lead_ins = [index for index, sentence in enumerate(kept) if _COUNT_LEAD_IN.match(sentence)]
+        for index in reversed(lead_ins):
+            if index and "\n" in kept_separators[index] and "\n" not in kept_separators[index - 1]:
+                kept_separators[index - 1] = kept_separators[index]
+            del kept[index], kept_separators[index]
         kept = [_ORDINAL_LEAD.sub(lambda m: "", sentence, count=1) for sentence in kept]
         kept = [sentence[:1].upper() + sentence[1:] if sentence[:1].islower() else sentence for sentence in kept]
     notes = []
@@ -4048,7 +4094,12 @@ def validate_evidence_scope(response: str, state: dict) -> str:
     evidence = render_structured_evidence_fallback(state)
     if evidence:
         notes.append(evidence)
-    return "\n".join(part for part in kept + notes if part.strip()).strip()
+    # Paragraphs, list items and line breaks as written (they used to come back one sentence
+    # per line, r07 9f5e1f70); the notes follow as a paragraph of their own.
+    body = "".join(sentence + separator for sentence, separator in zip(kept, kept_separators)).strip()
+    body = re.sub(r"\n{3,}", "\n\n", body)
+    return "\n\n".join(part for part in [body, "\n".join(note for note in notes if note.strip())]
+                       if part.strip()).strip()
 
 
 # Below this a reply is one claim, and the fixed sentence IS the honest answer.

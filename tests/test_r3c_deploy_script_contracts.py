@@ -123,7 +123,7 @@ def test_the_runbook_does_not_hardcode_one_operators_home_directory():
         if re.search(r"/home/[a-z]+/uk_rent_recommendation", line)
     ]
     assert offenders == [], (
-        "the runbook must be usable from a checkout that is not this box's: "
+        "the runbook must be usable from any checkout location: "
         f"{offenders}"
     )
 

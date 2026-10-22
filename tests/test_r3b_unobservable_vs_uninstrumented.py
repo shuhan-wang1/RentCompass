@@ -1,12 +1,12 @@
 """Unmeasurable is not uninstrumented. Four cells, one flag.
 
 The instrumentation gate exists to catch ONE class of defect: telemetry produced by
-a process that was not watching. That is the 2026-07-25 incident — a stale
-``DEEPSEEK_MODEL`` broke both pools for a day and the zero-call records looked
-clean. A turn that CRASHED while the callback observer was attached is not evidence
+a process that was not watching — e.g. a stale ``DEEPSEEK_MODEL`` breaks every
+turn and the zero-call records look clean. A turn that CRASHED while the callback
+observer was attached is not evidence
 of that class: no instrumentation can price a call that never reached its completion
 callback. Charging it as a contract violation held every window containing a crash —
-at the 9.6%-40.9% crash rates in the real logs, that is every window — and a gate
+at realistic crash rates, that is nearly every window — and a gate
 that always holds is a gate operators switch off, which weakens it far more than a
 narrow exemption does.
 

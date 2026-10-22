@@ -29,7 +29,7 @@ from core.langgraph_agent import _apply_explicit_criteria_updates
 from core.tool_args_repair import repair_invalid_tool_calls, repair_tool_arguments
 from tests.test_agent_contract_guards import Chat, _state, _tc
 from tests.test_hard_budget import _install_listings, _row, _run, stub_env  # noqa: F401
-from tests.test_overnight_null_injection import _ValidatingProvider
+from tests.test_qa_null_injection import _ValidatingProvider
 
 # ── 1. a workplace never replaces the home area ─────────────────────────────────────────
 R19_FIRST = "Find me a 1-bed in Hackney under £2,000."

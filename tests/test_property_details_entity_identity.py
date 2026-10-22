@@ -1,6 +1,6 @@
 """get_property_details must not answer about a DIFFERENT property.
 
-HANDOFF §0 defect class, instance N+1: a resolution decision was computed and then
+The recurring defect class, instance N+1: a resolution decision was computed and then
 discarded. `find_property_by_name_or_address` picked `matches[0]` and the tool
 returned it as "the property" with `found: True` and a price, while NOTHING
 compared the requested entity to the returned one — so no caller could tell.

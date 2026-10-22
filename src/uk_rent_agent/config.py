@@ -138,10 +138,10 @@ def _normalize_specialist_token(path: str) -> str:
 # The name an identity's checkpoint database ALREADY has on this deployment
 # ---------------------------------------------------------------------------
 # `docker-compose.yml` derives the candidate pool's file from
-# CANARY_AGENT_ARCH / CANARY_MANAGER_V1_SPECIALISTS. For the identity the fc pool
-# has been running since 2026-07-20 that derivation produces a NEW name, so the
-# next rebuild would have opened an EMPTY database beside the 78 MB
-# `.runtime/checkpoints_fc.sqlite3` the public pool is writing right now. That
+# CANARY_AGENT_ARCH / CANARY_MANAGER_V1_SPECIALISTS. For the original fc identity
+# (fc_loop, specialists=0) that derivation produces a NEW name, so a rebuild
+# would open an EMPTY database beside the existing
+# `.runtime/checkpoints_fc.sqlite3` that identity has been writing. That
 # loses every in-flight graph/HITL resume with no log line saying so, and — the
 # sharp edge — it puts the personal graph state in the old file permanently out
 # of reach of the account-erasure route, which deletes only from

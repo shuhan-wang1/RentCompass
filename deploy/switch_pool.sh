@@ -25,8 +25,8 @@
 #      this clears process-local hot session state so the target rehydrates from the
 #      shared ConversationStore instead of assuming load-balancer stickiness;
 #   4. only the `server 127.0.0.1:PORT;` line inside the upstream block is rewritten —
-#      the rest of the file is byte-identical (the live conf has drifted from the repo
-#      copy, e.g. client_max_body_size, and that drift must survive a switch);
+#      the rest of the file is byte-identical (an installed conf may have drifted from
+#      the repo copy, e.g. client_max_body_size, and that drift must survive a switch);
 #   5. `nginx -t` must pass before any reload;
 #   6. after reload the public endpoint is re-verified for arch AND the full 40-char sha;
 #   7. ANY failure after the write restores the backup, reloads, and re-verifies — the
@@ -88,10 +88,10 @@ bool01() {
 # X-Agent-Specialists is REQUIRED only when the EXPECTED identity has
 # specialists=1.  When 0 is expected an ABSENT header (reported as '' or 'none')
 # counts as 0: every image built before 2026-08-31 omits the header entirely,
-# which is BOTH pools deployed on this host today, and the legacy pool is the
-# standing rollback escape hatch that must not be recreated just to satisfy a
-# header check.  Demanding the header for an expected 0 turned `--to legacy`
-# (the emergency rollback) and update.sh's drain leg into hard failures.
+# and the legacy pool is the standing rollback escape hatch that must not be
+# recreated just to satisfy a header check.  Demanding the header for an
+# expected 0 turned `--to legacy` (the emergency rollback) and update.sh's
+# drain leg into hard failures.
 # Copies: deploy/update.sh, deploy/set_canary_weight.sh, deploy/switch_pool.sh,
 #         deploy/monitoring/rentcompass-monitor.sh
 # Python twin: deploy/probe_pool_answer.py::specialists_match
@@ -291,10 +291,10 @@ FROM_PORT=$(current_port)
 [[ -n "$FROM_PORT" ]] || die "could not find a server line in the '$UPSTREAM_BLOCK' block"
 if [[ "$FROM_PORT" == "$TO_PORT" ]]; then ok "already on $TARGET (127.0.0.1:$TO_PORT)"; exit 0; fi
 
-# The candidate is at STAGE-PAUSE. Pointing public traffic at it is a policy decision,
-# not a mechanical one, so it takes an explicit flag even when everything else is green.
+# Pointing public traffic at the candidate is a rollout-policy decision, not a
+# mechanical one, so it takes an explicit flag even when everything else is green.
 if [[ "$TARGET" == "fc" && "$CONF" == /etc/nginx/* && "$ALLOW_PUBLIC_FC" -ne 1 ]]; then
-  die "refusing to put candidate on the PUBLIC upstream without --allow-public-fc (candidate is at STAGE-PAUSE)"
+  die "refusing to put candidate on the PUBLIC upstream without --allow-public-fc (public candidate exposure is a rollout-policy decision)"
 fi
 
 # --to fc on a single-upstream host is 100% of public traffic, i.e. the same
@@ -334,9 +334,9 @@ if [[ "$TARGET" == "fc" && "$CONF" == /etc/nginx/* ]]; then
   esac
 fi
 
-# R3-M8. This host has exactly TWO pool slots: :5001 is hardcoded `legacy` in
-# docker-compose.yml and :5002 is the single candidate slot. A candidate arch that
-# is not what the slot runs today therefore REPLACES today's production
+# R3-M8. The compose stack has exactly TWO pool slots: :5001 is hardcoded `legacy`
+# in docker-compose.yml and :5002 is the single candidate slot. A candidate arch
+# that is not what the slot runs today therefore REPLACES the slot's current
 # architecture rather than running beside it, and the rollback target stays
 # `legacy` — not the architecture being displaced. Say that out loud before the
 # route moves; the runbook stage table repeats it.
@@ -396,15 +396,14 @@ fi
 # Provenance is directional. A FORWARD switch onto a pool that cannot name its commit is
 # refused. A ROLLBACK onto one is allowed with --allow-unidentified-target, loudly: being
 # unable to prove what you rolled back to beats staying on something known to be broken.
-# CORRECTED 2026-09-06: the public legacy pool USED to report 'unknown', because the
-# compose wiring (`app`'s APP_CANDIDATE_SHA: "${LEGACY_APP_SHA:-}") was INERT until that
-# container was next recreated, and `app` was not recreated while it was the standing
-# escape hatch. THAT PLANNED REBUILD HAS HAPPENED: the 1df0d4f release of 2026-09-03 set
-# LEGACY_APP_SHA in the root .env and recreated `app`, and :5001/ready now answers a full
-# 40-char x-agent-version. So `--to legacy` passes this check unaided, and
-# --allow-unidentified-target is NO LONGER part of the routine rollback command
-# (docs/canary_runbook.md section 0.6). It is now only for a pool that has genuinely lost
-# its stamp: a pre-2026-09 image, or one whose .env pin was cleared. It must never be
+# The legacy pool reports 'unknown' until it is recreated with LEGACY_APP_SHA set in
+# the root .env: the compose wiring (`app`'s APP_CANDIDATE_SHA: "${LEGACY_APP_SHA:-}")
+# is INERT until that container is next recreated. deploy/update.sh sets it on every
+# legacy rebuild, after which :5001/ready answers a full 40-char x-agent-version, so
+# `--to legacy` passes this check unaided and --allow-unidentified-target is NOT part
+# of the routine rollback command (docs/canary_runbook.md section 0.6). It is only for
+# a pool that has genuinely lost its stamp: a pre-2026-09 image, or one whose .env pin
+# was cleared. It must never be
 # pasted on a FORWARD switch — set_canary_weight.sh restricts it to weight 0 precisely
 # because an operator trained to paste it routinely will paste it where it is wrong.
 if [[ ${#t_sha} -ne 40 ]]; then

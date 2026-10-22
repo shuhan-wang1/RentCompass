@@ -1,4 +1,4 @@
-"""Explicit memory requests and privacy of automatic memory (overnight round r01: R1-07, R1-08).
+"""Explicit memory requests and privacy of automatic memory (QA round r01: R1-07, R1-08).
 
 R1-07: "Hi, I want a 1-bed flat in Camden under £2,200 pcm. Please remember that I have a
 cat." — the search result made the batch tainted, the model's paraphrase of the fact was not
@@ -111,7 +111,7 @@ def test_r1_07_a_policy_refusal_is_not_called_a_tool_failure():
 # "User asked: Hi. My name is Priya Raman, …" in the episodic layer while the assistant
 # said "I don't have your name". A self-identifying name is now treated like contact data.
 
-from tests.test_overnight_memory_sensitive import am_mod  # noqa: E402  (pins app/ on sys.path)
+from tests.test_qa_memory_sensitive import am_mod  # noqa: E402  (pins app/ on sys.path)
 
 R108 = ("Hi. My name is Priya Raman, my phone is 07700 900123 and I have asthma. "
         "I want a 1-bed in Camden under £2,000.")

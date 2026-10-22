@@ -5,7 +5,7 @@ that a removal (1) leaves no fragment, (2) never strips a figure this turn's too
 (3) never touches non-commute or system-composed text, and (4) adds the note only when
 visible text actually went — once.
 
-The corpus (``tests/data/overnight_r03_commute_redactor_corpus.json``) holds each turn's
+The corpus (``tests/data/qa_r03_commute_redactor_corpus.json``) holds each turn's
 pre-validation draft plus the state keys the validator reads, exported from the frozen
 round checkpoints.
 """
@@ -23,7 +23,7 @@ from core.agent_loop import (
 from core.candidate_validation import validate_commute_response
 
 CORPUS = json.loads((pathlib.Path(__file__).parent / "data" /
-                     "overnight_r03_commute_redactor_corpus.json").read_text(encoding="utf-8"))
+                     "qa_r03_commute_redactor_corpus.json").read_text(encoding="utf-8"))
 NOTE_EN = "Note: some commute claims could not be verified and have been removed from this answer."
 NOTE_ZH = "注：部分通勤结论缺少可对应的证据，已从回答中移除。"
 

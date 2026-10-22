@@ -453,7 +453,7 @@ def test_an_overpass_failure_is_never_cached(monkeypatch):
 # 6) Round three — shrink the retrieval footprint, and never read a rate-limited
 #    mirror's empty body as "none nearby".
 #
-# Measured from the production host on 2026-07-29, after a day of POI traffic:
+# Measured from a deployment host on 2026-07-29, after a day of POI traffic:
 #   overpass-api.de / lz4 / z  -> ConnectionError within ~1s (DNS resolved fine)
 #   overpass.kumi.systems      -> ReadTimeout at 30s
 #   overpass.osm.ch            -> HTTP 200 in 0.15s with elements=0, even for cafés

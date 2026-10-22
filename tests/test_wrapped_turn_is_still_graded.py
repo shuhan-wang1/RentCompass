@@ -1,6 +1,6 @@
 """A turn with no budget left is the turn most likely to have invented something.
 
-Production, 2026-07-27, one real session, two turns, same user:
+Observed in one real session (2026-07-27), two turns, same user:
 
   * the UNwrapped turn was graded and shipped with the price caveat appended;
   * the SOFT-WRAPPED turn asserted tube lines and journey times for four areas

@@ -22,7 +22,7 @@ from core.constraint_updates import withdrawn_topics
 from core.criteria_contract import reconcile_search_criteria
 from core.langgraph_agent import _apply_explicit_criteria_updates
 from tests.test_agent_contract_guards import _state, _tc
-from tests.test_overnight_null_injection import _ValidatingProvider
+from tests.test_qa_null_injection import _ValidatingProvider
 
 # r07 long1 turn 27 (rid f1632a5b…): view_state.criteria just before the withdrawal.
 _CW = "Canary Wharf, London E14 5AB"

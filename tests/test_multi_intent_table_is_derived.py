@@ -27,7 +27,7 @@ WHAT THE MEASUREMENT FOUND (2026-07-27, mainline 81aa7cf)
 
 3. The reverse merge was REFUSED, with a measurement. Completing the union would push this
    table's intent-only cues (`gym`, `park`, `健身`, `多久`, `多远`, `距离`) into the dimension
-   vocabulary, which BOTH arches read — fc, which holds the public edge, included. Measured with
+   vocabulary, which BOTH arches read — fc included. Measured with
    `park` in the nearby row:
 
        "Find me a 1-bed in Finsbury Park under £1600."  -> fc prints "Nearby amenities have not
@@ -113,7 +113,7 @@ def test_the_router_never_knows_less_than_the_fanout(group, dim, cue, message):
     """THE regression. Legacy's fetcher and legacy's router read the same sentence; on mainline
     the fetcher saw the POI ask and the router did not, so reflect short-circuited and the ask
     was dropped in silence. Silence about a dimension the user asked about is the shape that
-    lets an answer free-associate (HANDOFF §0)."""
+    lets an answer free-associate."""
     fanout = _fanout_dims(message)
     router = _router_groups(message)
     assert dim in fanout, f"{cue!r}: the fan-out no longer cues {dim} — fixture is stale"
@@ -243,7 +243,7 @@ INTENT_ONLY_CUES = {"gym", "park", "健身", "多久", "多远", "距离"}
 @pytest.mark.parametrize("cue", sorted(INTENT_ONLY_CUES))
 def test_router_only_cues_never_become_dimension_cues(cue):
     """The guard against "completing the union" later. Promoting one of these widens the cue set
-    of BOTH arches — including fc, which holds the public edge — and makes a fetcher fire and an
+    of BOTH arches — fc included — and makes a fetcher fire and an
     apology print for a dimension nobody asked about."""
     for dim, cues, _tools in dimensions.DIMENSION_CUES:
         assert cue not in cues, (

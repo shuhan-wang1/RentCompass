@@ -30,7 +30,7 @@ tests/test_execution_plan.py::test_commute_dimension_dropped_when_no_destination
 depends on "is it safe …" cueing safety), and it fails safe: a cue that fires yields a fetch
 or an honest "not done yet" line, while a cue that misses yields silence, and silence about a
 dimension the user asked about is the shape that lets an answer free-associate. But it does
-WIDEN fc's cue set by those six cues, and fc holds the public edge, so section 3 pins the
+WIDEN fc's cue set by those six cues, so section 3 pins the
 merged vocabulary literally — narrowing it later has to be deliberate, with this test red in
 front of it.
 """

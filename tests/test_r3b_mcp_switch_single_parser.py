@@ -67,10 +67,10 @@ def _probe(tmp_path: Path, **env_overrides):
         "CANARY_LOG_PATH": "off",
         "PYTHONIOENCODING": "utf-8",
         # Every runtime state file whose default lives under the checkout's .runtime/
-        # (bind-mounted into the live pools on the production box). With only the
-        # conversation DB redirected, each probe's `import app` opened the LIVE
-        # .runtime/auth.sqlite3 and rate_limits.sqlite3 (round r01 watcher: transient
-        # -wal/-shm files appeared beside them during the suite).
+        # (which a deployment may bind-mount into its running pools). With only the
+        # conversation DB redirected, each probe's `import app` opened the checkout's
+        # .runtime/auth.sqlite3 and rate_limits.sqlite3 (transient -wal/-shm files
+        # appeared beside them during the suite).
         "TMPDIR": str(tmp_path),
         "ENABLE_CHECKPOINTER": "0",
         "BACKGROUND_JOBS_ENABLED": "0",

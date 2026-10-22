@@ -1,4 +1,4 @@
-"""Zone 1 stations must not be priced as Zone 2 (overnight round r01: R1-09, ledger B-03).
+"""Zone 1 stations must not be priced as Zone 2 (QA round r01: R1-09, ledger B-03).
 
 calculate_commute_cost King's Cross / Euston Station / Paddington Station -> Canary Wharf
 returned from_zone 2 and recommended a "Zone 2 Monthly Travelcard" (£128.70), which does not

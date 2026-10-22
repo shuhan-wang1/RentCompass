@@ -20,7 +20,7 @@ describing what a wrong answer looks like. ``graders.grade_case``'s pass gate us
 in a comment, that "the constraints encode each case's plain-language failure_conditions".
 Nothing checked that. Trace a row like G14's "Claims everything or nothing was deleted"
 through every mechanism the case declares and none of them can fail on it: the row documents
-a failure mode and the corpus cannot detect it. That is HANDOFF §0's recurring shape — a
+a failure mode and the corpus cannot detect it. That is the recurring shape — a
 value is computed, stored where a reader could find it, and then never asserted on — with
 the prose in the place of the value. An unenforceable row is worse than no row, because it
 reads as coverage: a reviewer looking for "does the corpus test X?" finds X in writing.

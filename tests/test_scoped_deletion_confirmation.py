@@ -22,7 +22,7 @@ checker. Trace each mechanism against that failure mode:
 So the answer "Everything has been deleted — your £1400/month budget and your Camden
 preference were both removed" scored **3/3, a full pass**, while doing the one thing the
 case exists to detect. The kept value is located in the answer and its POLARITY is never
-asserted on: HANDOFF §0's recurring shape, one field over from ``no_fabricated_number``.
+asserted on: the recurring shape, one field over from ``no_fabricated_number``.
 
 THE STANCE (stated before measuring, §3.5). A case whose true memory state is MIXED — one
 item deleted, one kept — requires the answer's asserted state to match the partition, and

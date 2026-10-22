@@ -1144,7 +1144,7 @@ def _canonical_poi_args(batch: list) -> dict:
 
 
 # How many types one merged call may carry. Each type is its own Overpass round-trip inside
-# one deadline, and the public mirrors rate-limited this host after a day of POI traffic — so
+# one deadline, and the public mirrors rate-limit a host that sends a day of POI traffic — so
 # this is a request-volume knob, not only a latency one. Three covers "supermarket, convenience
 # + one more" (what these questions actually ask) and leaves the budget room for a slow mirror.
 _POI_MERGE_MAX_TYPES = int(os.getenv("POI_MERGE_MAX_TYPES", "3"))
@@ -1955,7 +1955,7 @@ async def _validate_commute_off_loop(text: str, state: dict) -> str:
 def _turn_ceiling_s() -> float:
     """The whole-turn ceiling a wrapped turn must close inside (FC_TURN_CEILING_S).
 
-    The owner's position on 2026-07-26 is that a complex question legitimately takes longer
+    The product position (2026-07-26) is that a complex question legitimately takes longer
     and the ceiling may be raised. Raising it is ONE knob, not two: soft-wrap and final
     reserve have to move together or the invariant `soft_wrap + reserve <= ceiling` breaks
     silently, so both derive from this value unless individually overridden.
@@ -1966,7 +1966,7 @@ def _turn_ceiling_s() -> float:
     Neither threshold is edited here. A ceiling above 30s means those two gates will report
     breaches that are a consequence of a product decision rather than a regression, and the
     report must be read with that in mind. Changing the gate numbers to match is a separate,
-    pre-registered decision (HANDOFF §3.5) and is NOT done by setting this variable.
+    pre-registered decision and is NOT done by setting this variable.
     """
     try:
         return float(os.getenv("FC_TURN_CEILING_S", "30.0"))
@@ -2253,7 +2253,7 @@ def _rec_summary_line(rec: dict) -> str:
 # Consumer 2 exists because, until 2026-07-26, the whole of consumer 1 was the only thing this
 # table drove: the loop knew "the user asked about safety and we never fetched it" and used
 # that knowledge exclusively to write an apology on a path reached only after the turn had
-# already blown its budget. That is instance #12 of the HANDOFF §0 defect class — a value
+# already blown its budget. That is instance #12 of the "computed but never acted on" defect class — a value
 # computed, stored where a reader could find it, and never acted on. The source guards in
 # tests/test_dimension_fanout.py and tests/test_dimension_table_is_shared.py fail the build if
 # a second cue table appears in EITHER arch.
@@ -2332,7 +2332,7 @@ def _missing_requested_dimension_lines(message: str, executed_tools: set, lang: 
     return lines
 
 
-# ─── plan-time dimension fan-out (HANDOFF §0 instance #12) ──────────────────────────────
+# ─── plan-time dimension fan-out (defect-class instance #12) ────────────────────────────
 # Repo-wide only 12.4% of tool batches held >=2 tools, so a 4-dimension request trickled one
 # read out per LLM round-trip and ran out of budget before it reached the third — E1 answered a
 # 4-tool request from search_properties alone, E5 narrated the remaining work and stopped, and
@@ -2416,7 +2416,7 @@ def _dimension_read_args(dim: str, ctx: dict, message: str) -> Optional[dict]:
 
     Deliberately area-level, never listing-level: the harness can resolve which AREA the user
     is searching, but picking one listing out of a result set and asserting its address is the
-    subject of the answer is HANDOFF §0 instance #8 in a new place. Per-listing refinement
+    subject of the answer is defect-class instance #8 in a new place. Per-listing refinement
     stays the model's job on a later hop; the harness's job is to make sure the dimension has
     real, sourced evidence instead of invented minutes.
     """
@@ -3714,7 +3714,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     "messages": messages + [resp], "loop_turn": loop_turn,
                     "tool_artifacts": artifacts,
                 }, goto="format_output_fc")
-            # Plan-time dimension fan-out (HANDOFF §0 instance #12). The model is already
+            # Plan-time dimension fan-out (defect-class instance #12). The model is already
             # opening a batch; every OTHER dimension this message cues, that nothing has
             # attempted yet and whose args are derivable, goes into the SAME batch so it runs
             # concurrently on its own pool worker instead of costing another LLM round-trip
@@ -3731,7 +3731,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             }, goto="execute_tools")
 
         # Plain text -> the model considers the turn answerable. LAST CHANCE to complete a
-        # dimension it dropped (HANDOFF §0 instance #12, part 2): if the message cues a
+        # dimension it dropped (defect-class instance #12, part 2): if the message cues a
         # dimension, nothing has attempted it, its args are derivable AND budget remains,
         # FETCH it now instead of committing to an answer that either omits it (E1), promises
         # it (E5) or invents it (E11). If any gate says no we fall through unchanged — the

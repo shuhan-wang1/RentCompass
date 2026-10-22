@@ -11,7 +11,7 @@ is what I have verified:" appearing in exactly those three retained answer bodie
 recorded ``soft_wrapped=False``. Every counter the project has for "did the user get
 boilerplate instead of an answer" is denominated in soft wraps, so this path was invisible to
 all of them, and the record accordingly states that the canned-template fallback is gone. It
-is not. HANDOFF §0's defect class: a value produced and never asserted on.
+is not. The recurring defect class: a value produced and never asserted on.
 
 These tests pin the COUNTER only. The replacement's behaviour is deliberately unchanged —
 reworking it is a behaviour change needing its own hypothesis and gate

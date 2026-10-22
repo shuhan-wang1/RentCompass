@@ -46,7 +46,7 @@ Usage
 -----
     python3 scripts/purge_escalating_reflections.py app/chroma_db_agent_memory/agent_memory.sqlite3
     python3 scripts/purge_escalating_reflections.py app/chroma_db_agent_memory/agent_memory.sqlite3 --apply
-    python3 scripts/purge_escalating_reflections.py <db> --apply --backup /home/shuhan/memory-backups/reflections.json
+    python3 scripts/purge_escalating_reflections.py <db> --apply --backup ~/memory-backups/reflections.json
     python3 scripts/purge_escalating_reflections.py <db> --restore <backup.json>            # dry run
     python3 scripts/purge_escalating_reflections.py <db> --restore <backup.json> --apply
 """

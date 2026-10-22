@@ -32,9 +32,8 @@ def llm_max_retries() -> int:
 # --------------------------------------------------------------------------- #
 # DeepSeek retired these on 2026-07-24. They now return HTTP 400 ("The supported API
 # model names are deepseek-v4-pro or deepseek-v4-flash") at REQUEST time, which /health
-# cannot see: on 2026-07-24 a stale ``DEEPSEEK_MODEL=deepseek-chat`` in the deployment env
-# overrode three correct source defaults and both pools served 400s for a full day without
-# a single alarm.
+# cannot see: a stale ``DEEPSEEK_MODEL=deepseek-chat`` in a deployment env overrides
+# correct source defaults, and every turn then fails with a 400 without a single alarm.
 #
 # NEVER REMOVE AN ENTRY. A name that was retired once is never valid again; the only cost
 # of keeping it is one string comparison per model construction.

@@ -31,9 +31,9 @@ MOVE_CMD="${CANARY_MOVE_CMD:-sudo mv}"
 CURL_CMD="${CANARY_CURL_CMD:-curl}"
 CURL_OPTS="${CANARY_CURL_OPTS:--sk}"
 # `-`, NOT `:-`, on every URL: an explicitly EMPTY override must stay empty and be
-# refused below.  With `:-` an empty value silently resolved to the REAL live pools
-# — the exact shape of the incident that motivated the CANARY_ANSWER_PROBE_CMD
-# hardening, and the way two real billed turns were driven from a rehearsal.
+# refused below.  With `:-` an empty value would silently resolve to the REAL
+# pools — the same shape the CANARY_ANSWER_PROBE_CMD hardening guards against,
+# and a way to drive real billed turns from a rehearsal.
 PUBLIC_URL="${CANARY_PUBLIC_URL-https://127.0.0.1/ready}"
 LEGACY_URL="${CANARY_LEGACY_URL-http://127.0.0.1:5001/ready}"
 CANDIDATE_URL="${CANARY_CANDIDATE_URL-http://127.0.0.1:5002/ready}"
@@ -104,10 +104,10 @@ bool01() {
 # X-Agent-Specialists is REQUIRED only when the EXPECTED identity has
 # specialists=1.  When 0 is expected an ABSENT header (reported as '' or 'none')
 # counts as 0: every image built before 2026-08-31 omits the header entirely,
-# which is BOTH pools deployed on this host today, and the legacy pool is the
-# standing rollback escape hatch that must not be recreated just to satisfy a
-# header check.  Demanding the header for an expected 0 turned `--to legacy`
-# (the emergency rollback) and update.sh's drain leg into hard failures.
+# and the legacy pool is the standing rollback escape hatch that must not be
+# recreated just to satisfy a header check.  Demanding the header for an
+# expected 0 turned `--to legacy` (the emergency rollback) and update.sh's
+# drain leg into hard failures.
 # Copies: deploy/update.sh, deploy/set_canary_weight.sh, deploy/switch_pool.sh,
 #         deploy/monitoring/rentcompass-monitor.sh
 # Python twin: deploy/probe_pool_answer.py::specialists_match
@@ -305,10 +305,10 @@ if [[ "$WEIGHT" == 100 ]]; then
 fi
 
 # --allow-unidentified-target relaxes the SHA check ONLY, and only on the way down.
-# CORRECTED 2026-09-06: it is no longer routine. The legacy pool answered 'unknown' until
-# the 1df0d4f release of 2026-09-03 set LEGACY_APP_SHA in the root .env and recreated
-# `app`; :5001/ready now states a full 40-char commit, so both the weight-0 controller and
-# switch_pool.sh --to legacy verify provenance unaided. Pass this flag only when a pool has
+# It is not routine: once `app` has been recreated with LEGACY_APP_SHA set in the root
+# .env (deploy/update.sh does this on every legacy rebuild), :5001/ready states a full
+# 40-char commit, so both the weight-0 controller and switch_pool.sh --to legacy verify
+# provenance unaided. Pass this flag only when a pool has
 # genuinely lost its stamp (a pre-2026-09 image, or a cleared .env pin). The weight-0
 # restriction below is what stops the habit leaking onto an ESCALATION, where "I cannot
 # prove what I am exposing traffic to" is exactly the wrong thing to wave through.
@@ -360,9 +360,8 @@ verify_local() { # label url want_arch want_specialists configured_sha allow_unk
 
 run_answer_probe() { # base_url want_arch want_specialists -> stdout, probe rc
   # `--expect-specialists 0` is passed for legacy exactly as verify_local does.
-  # CORRECTED 2026-09-06 on two counts. (1) The legacy pool no longer omits
-  # X-Agent-Specialists: the 1df0d4f release of 2026-09-03 rebuilt it and :5001
-  # now answers `0`. (2) The exemption was never narrowed to arch 'legacy' after
+  # (1) A rebuilt legacy pool sends X-Agent-Specialists: 0; an older image
+  # omits it. (2) The exemption was never narrowed to arch 'legacy' after
   # R3-H1 widened it: probe_pool_answer.py::specialists_match accepts an absent
   # header for ANY pool whose EXPECTED identity is specialists=0, which is what
   # keeps the rollback usable against an image that has not been rebuilt.
@@ -385,8 +384,8 @@ verify_answer() { # label base_url want_arch want_specialists
     note "WARNING: this is NOT deploy/probe_pool_answer.py; $label is being proven by a substitute"
   fi
   # /ready proves identity and dependency wiring; it cannot prove the pool can
-  # ANSWER. A stale model name kept both pools green on /ready for a day on
-  # 2026-07-25, so one real turn is driven before any cohort is exposed.
+  # ANSWER. A stale model name can keep a pool green on /ready while every
+  # turn fails, so one real turn is driven before any cohort is exposed.
   out="$(run_answer_probe "$base" "$want_arch" "$want_specialists")" || rc=$?
   printf '     %s\n' "$out"
   # Exit 2 = the pool asked a clarifying question: a real reply that can carry no

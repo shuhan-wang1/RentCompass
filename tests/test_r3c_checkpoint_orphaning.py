@@ -5,9 +5,9 @@ THE DEFECT (R3-H2). `docker-compose.yml` was changed to derive the fc pool's
 
     /app/.runtime/checkpoints_${CANARY_AGENT_ARCH:-fc_loop}_specialists-${CANARY_MANAGER_V1_SPECIALISTS:-0}.sqlite3
 
-With the real root `.env` — which contains no `CANARY_*` key at all — that
-interpolates to `checkpoints_fc_loop_specialists-0.sqlite3`, a DIFFERENT file from
-the 78 MB `.runtime/checkpoints_fc.sqlite3` the public pool is writing right now.
+With a root `.env` that contains no `CANARY_*` key at all, that interpolates to
+`checkpoints_fc_loop_specialists-0.sqlite3`, a DIFFERENT file from the existing
+`.runtime/checkpoints_fc.sqlite3` the original fc identity has been writing.
 The next deploy would have opened an empty database beside it. Two consequences,
 neither of which logs anything:
 

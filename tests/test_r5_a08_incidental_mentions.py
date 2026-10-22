@@ -24,7 +24,7 @@ from core.constraint_updates import without_third_party_clauses
 from core.langgraph_agent import _apply_explicit_criteria_updates
 from core.tools.search_properties import _extract_area, _extract_budget
 from tests.test_agent_contract_guards import _state, _tc
-from tests.test_overnight_null_injection import _ValidatingProvider
+from tests.test_qa_null_injection import _ValidatingProvider
 
 A08_MESSAGE = (
     "More background, still nothing to search: I prefer the Overground to buses, I need fast "

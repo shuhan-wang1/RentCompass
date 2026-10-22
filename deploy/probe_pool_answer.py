@@ -5,9 +5,9 @@ Why this exists
 ---------------
 `/ready` verifies dependencies and `X-Agent-*` identity headers, and
 `set_canary_weight.sh::verify_local` verifies those headers before exposing a
-cohort.  Neither proves the pool can produce a real answer.  On 2026-07-25 a
-stale ``DEEPSEEK_MODEL`` in ``app/.env`` broke BOTH pools for a day while
-`/ready` stayed green: the readiness LLM check only asserts that a credential
+cohort.  Neither proves the pool can produce a real answer.  A stale
+``DEEPSEEK_MODEL`` in ``app/.env`` can break every turn of a pool while
+`/ready` stays green: the readiness LLM check only asserts that a credential
 string is non-empty (``connectivity: "not_probed"`` in
 ``src/uk_rent_agent/web/asgi.py::_check_llm_configuration``).  A greeting cannot
 detect it either — ``app/core/agent_loop.py::guard_node`` answers greetings,
@@ -31,8 +31,8 @@ So this probe drives ONE real turn through ``POST /api/alex`` and asserts:
 return the canary record: ``app/app.py`` emits it to the ``CANARY_LOG_PATH``
 JSONL sink only, so it is readable only where that file is mounted.
 
-(6) exists because of a class this probe used to score as a PASS.  On 2026-09-03
-a live fc follow-up turn ended in a 105-character *"Let me search for actual
+(6) exists because of a class this probe used to score as a PASS: an fc
+follow-up turn that ended in a 105-character *"Let me search for actual
 one-bedroom listings…"* stub with ``llm_calls=1`` and ``tool_batches=0``: the
 announced tool call was never made.  It carries NO canned/fallback marker, so
 every marker-based check — this probe and the monitor alike — read it as a real
@@ -183,10 +183,9 @@ def announced_tool(message: str) -> str:
 # Requiring it for an expected 0 made the emergency rollback and the deploy drain
 # refuse against the very images they exist to protect.
 #
-# CORRECTED 2026-09-06: the 1df0d4f release of 2026-09-03 rebuilt both pools, and
-# :5001 and :5002 now DO send `X-Agent-Specialists: 0`.  The exemption stays —
-# it is the compatibility path for a pool that has not been rebuilt — but it no
-# longer describes this host.  A candidate expected to run specialists=1 must
+# Rebuilt pools DO send `X-Agent-Specialists: 0`.  The exemption stays — it is
+# the compatibility path for a pool that has not been rebuilt.  A candidate
+# expected to run specialists=1 must
 # still state it: that is the header the manager_v1 rollout is gated on, and no
 # exemption applies there.
 LEGACY_ARCH = "legacy"

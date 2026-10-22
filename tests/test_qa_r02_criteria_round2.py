@@ -80,7 +80,7 @@ def test_r2_14_a_model_area_the_user_named_is_recognised():
 def test_r2_14_injection_keeps_the_user_named_area(monkeypatch):
     """"how about Kew?" (a place no table knows): the model's area reaches the tool instead of
     the accumulated one."""
-    from tests.test_overnight_null_injection import _run, _strict_null_args
+    from tests.test_qa_null_injection import _run, _strict_null_args
     from tests.test_agent_contract_guards import _state
 
     monkeypatch.setenv("DEEPSEEK_STRICT", "1")

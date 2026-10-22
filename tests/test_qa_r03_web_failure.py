@@ -14,7 +14,7 @@ import pathlib
 from uk_rent_agent.agent.critic import enforce_no_evidence_numeric_contract, no_reliable_data_message
 
 CASE = json.loads((pathlib.Path(__file__).parent / "data" /
-                   "overnight_r03_web_failure_draft.json").read_text(encoding="utf-8"))
+                   "qa_r03_web_failure_draft.json").read_text(encoding="utf-8"))
 
 
 def _evidence():

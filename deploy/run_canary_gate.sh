@@ -59,8 +59,8 @@ WEIGHT_SCRIPT="${CANARY_GATE_WEIGHT_SCRIPT:-$HERE/set_canary_weight.sh}"
 
 # INTERPRETER RESOLUTION — do not shorten this to `python`.
 # ---------------------------------------------------------------------------
-# The default used to be a bare `python`, which does not exist on this host (or on
-# any modern Debian/Ubuntu image: PEP 394 leaves `python` unversioned and the
+# The default used to be a bare `python`, which does not exist on any modern
+# Debian/Ubuntu image (PEP 394 leaves `python` unversioned and the
 # distro ships `python3` only). The wrapper then died with 127 BEFORE running the
 # report, so: no verdict, no rollback on a zero-tolerance breach, and a driver that
 # branches on "non-zero means bad" silently read the missing interpreter as a HOLD.
@@ -69,14 +69,13 @@ WEIGHT_SCRIPT="${CANARY_GATE_WEIGHT_SCRIPT:-$HERE/set_canary_weight.sh}"
 # Order: explicit override, then the ambient PYTHON, then a repo virtualenv, then
 # python3, then python.
 #
-# On THIS host neither `$REPO/.venv` nor `$REPO/venv` exists, so resolution falls
-# through to `python3` — and that is fine, because `scripts/canary_report.py` and
+# Where neither `$REPO/.venv` nor `$REPO/venv` exists, resolution falls through to
+# `python3` — and that is fine, because `scripts/canary_report.py` and
 # `scripts/canary_cost.py` are stdlib-only by design (the closed-loop contract test
 # depends on it). The venv entries are kept for hosts that do have one; they are not
-# a statement that the report needs one here. The project's working interpreter on
-# this box is `/tmp/rentcompass-venv/bin/python`, which is NOT searched because it is
-# outside the repo — pass `CANARY_GATE_PYTHON=/tmp/rentcompass-venv/bin/python` if
-# you want it (docs/canary_runbook.md section 0.10).
+# a statement that the report needs one. An interpreter outside the repo is NOT
+# searched — pass `CANARY_GATE_PYTHON=/path/to/python` if you want one
+# (docs/canary_runbook.md section 0.10).
 _gate_python() {
   local candidate
   for candidate in "${CANARY_GATE_PYTHON:-}" "${PYTHON:-}" \

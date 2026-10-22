@@ -33,7 +33,7 @@ from core.preference_grounding import (
     ground_soft_signals, preference_is_traceable, split_sensitive_preferences,
     stored_soft_preferences,
 )
-from tests.test_overnight_null_injection import _ValidatingProvider
+from tests.test_qa_null_injection import _ValidatingProvider
 from tests.test_agent_contract_guards import _state, _tc
 
 

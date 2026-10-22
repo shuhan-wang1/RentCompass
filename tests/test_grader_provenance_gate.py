@@ -5,11 +5,11 @@ WHAT WAS BROKEN
 ``evaluation/rescore.py`` computed ``grader_sha256`` in ``_evaluator_identity`` and put it
 in the report, and its identity gate refused a run only on ``case_contract_sha256``. So the
 evaluator's own identity was stamped where a reader could find it and asserted on nowhere —
-HANDOFF §0's defect class verbatim.
+the "computed but never asserted on" defect class verbatim.
 
 It bit for real. In the 2026-07-24 grader repair the SAME retained evidence scored fc 59/98
 under one grader and 74/98 under the next, with ``case_contract_sha256`` byte-identical for
-part of that move (HANDOFF §3.14/§3.15). And it is on disk: ``/home/shuhan/fp-results/``
+part of that move. And it is on disk: the retained fp-results directory
 holds one paired round, ``idp98_r{1,2,3}_{base,cand}``, where the base arms recorded
 ``grader_sha256`` ``c25a027d04…`` and the cand arms ``4cf33e0553…`` — ONE contract
 (``7f1ead524c…``), TWO graders — and ``rescore.py`` printed their ``scored`` columns side by
@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -451,15 +452,19 @@ def test_rescore_no_longer_rolls_its_own_git_probe():
 # =========================================================================== #
 # the real stored rounds, read-only, when this checkout can see them
 # =========================================================================== #
-IDP98 = Path("/home/shuhan/fp-results")
+# The retained fp-results directory lives outside the repo; set this to read it.
+_IDP98_DIR = os.environ.get("RENTCOMPASS_FP_RESULTS_DIR", "")
+IDP98 = Path(_IDP98_DIR) if _IDP98_DIR else None
 
 
 @pytest.mark.parametrize("base,cand", [("idp98_r1_base", "idp98_r1_cand"),
                                        ("idp98_r2_base", "idp98_r2_cand"),
                                        ("idp98_r3_base", "idp98_r3_cand")])
 def test_the_real_paired_round_really_did_record_two_graders(base, cand):
-    """Primary source, not a report about it. Skips in the container, where
-    ``/home/shuhan/fp-results`` is not mounted."""
+    """Primary source, not a report about it. Skips in the container, where the
+    fp-results directory is not mounted (RENTCOMPASS_FP_RESULTS_DIR unset)."""
+    if IDP98 is None:
+        pytest.skip("RENTCOMPASS_FP_RESULTS_DIR is not set")
     bm, cm = IDP98 / base / "manifest.json", IDP98 / cand / "manifest.json"
     if not (bm.exists() and cm.exists()):
         pytest.skip("retained fp-results round not mounted here")

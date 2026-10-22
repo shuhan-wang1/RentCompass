@@ -1,4 +1,4 @@
-"""Legacy-arch + tool defects found by the 2026-09-03 post-deploy round (F4).
+"""Legacy-arch + tool defects found by a post-release test round (F4).
 
 Covered here, one section per finding:
 

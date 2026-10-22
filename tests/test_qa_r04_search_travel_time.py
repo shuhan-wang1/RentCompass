@@ -14,7 +14,7 @@ import pathlib
 from core.candidate_validation import validate_commute_response
 
 CASE = json.loads((pathlib.Path(__file__).parent / "data" /
-                   "overnight_r04_search_travel_time.json").read_text(encoding="utf-8"))
+                   "qa_r04_search_travel_time.json").read_text(encoding="utf-8"))
 NOTE = "Note: some commute claims could not be verified and have been removed from this answer."
 
 

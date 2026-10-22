@@ -2,8 +2,8 @@
 # Rehearse switch_pool.sh against a PRIVATE nginx instance.
 #
 # Runs as an ordinary user, in its own prefix, on a loopback high port. It never reads
-# /etc/nginx, never needs root, and never touches public traffic — so the fc candidate,
-# which is at STAGE-PAUSE, is never momentarily exposed. The logic exercised is the
+# /etc/nginx, never needs root, and never touches public traffic — so a candidate
+# pool is never momentarily exposed. The logic exercised is the
 # real script: only CONF / TEST_CMD / RELOAD_CMD / VERIFY_URL / health-URL / write are
 # injected, exactly as they would be pointed at the live conf in production.
 #
@@ -50,9 +50,9 @@ upstream rentcompass_app {
 
     server {
         listen 127.0.0.1:$PORT;
-        # DRIFT MARKER — stands in for the live conf's client_max_body_size 15m, which
+        # DRIFT MARKER — stands in for an installed conf whose client_max_body_size
         # has drifted from the repo copy (256k). A switch that rewrote the whole file
-        # would silently erase production drift; this line proves it does not.
+        # would silently erase that drift; this line proves it does not.
         client_max_body_size 15m;
         location / {
             proxy_pass http://rentcompass_app;

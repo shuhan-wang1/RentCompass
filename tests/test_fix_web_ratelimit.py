@@ -28,16 +28,15 @@ bucket, because the client controls every element except the last.
 Rightmost is correct under both nginx configurations in play, which is why the rule is
 not "accept only a single address":
 
-  * the nginx INSTALLED on this box
-    (`/etc/nginx/sites-available/rentcompass.co.uk.conf:49`, and
-    `/etc/nginx/proxy_params:3`) sets `X-Forwarded-For $proxy_add_x_forwarded_for` —
+  * an installed nginx vhost that predates the repo template (or the distro's
+    `/etc/nginx/proxy_params`) may set `X-Forwarded-For $proxy_add_x_forwarded_for` —
     an APPEND, so the header arrives as `<what the client sent>, <real peer>`;
   * `deploy/nginx/*.conf` IN THIS REPO sets `X-Forwarded-For $remote_addr` — a
     REPLACE, so the header is exactly one address.
 
 Both put the trustworthy value last. (An earlier revision of this fix rejected
 multi-element chains, which would have silently fallen back to `remote_addr` for every
-request behind the appending config that is actually deployed.)
+request behind an appending config.)
 
 In the deployed configuration nothing is lost by the empty default: docker-compose
 runs uvicorn with `--proxy-headers`, so `remote_addr` has ALREADY been rewritten to

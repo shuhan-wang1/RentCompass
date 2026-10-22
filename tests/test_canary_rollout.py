@@ -1,4 +1,4 @@
-"""Canary-rollout in-repo support (Shuhan's design, 2026-07-20).
+"""Canary-rollout in-repo support (2026-07-20 design).
 
 Covers the four contract points:
   1. Sticky per-conversation arch assignment persisted at CREATION and immutable across turns.

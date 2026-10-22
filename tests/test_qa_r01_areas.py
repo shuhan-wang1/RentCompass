@@ -1,4 +1,4 @@
-"""Area resolution and area-list edits (overnight round r01: R1-01, R1-02).
+"""Area resolution and area-list edits (QA round r01: R1-01, R1-02).
 
 R1-01: "伦敦<neighbourhood>附近…" resolved to the bare city — 肖迪奇 / 国王十字 were not in
 ``_ZH_AREA_MAP`` and an English neighbourhood inside Chinese text ("伦敦Camden Town附近") was
@@ -22,7 +22,7 @@ from core.tools.search_properties import (
     _extract_area, _extract_areas, area_list_edit, bare_city_downgrades,
 )
 from tests.test_agent_contract_guards import _state, _tc
-from tests.test_overnight_null_injection import _ValidatingProvider, _strict_null_args
+from tests.test_qa_null_injection import _ValidatingProvider, _strict_null_args
 
 
 @pytest.fixture(autouse=True)

@@ -3,7 +3,7 @@
 The old script hardcoded `docker compose up -d --build app` and health-checked
 :5001. That was right only while nginx pointed at the legacy pool. Once the public
 upstream moved to fc (:5002) the script rebuilt a pool nobody was served by and
-still printed "Healthy ✅  Live at https://rentcompass.co.uk:8443" — a green deploy
+still printed "Healthy ✅  Live" — a green deploy
 that changed nothing the public could see, while silently recreating `app`, the
 standing rollback escape hatch, on every run.
 

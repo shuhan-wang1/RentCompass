@@ -18,7 +18,7 @@ from core.agent_loop import build_fc_nodes
 from core.langgraph_agent import _apply_explicit_criteria_updates
 from core.tools.search_properties import _extract_budget
 from tests.test_agent_contract_guards import _state, _tc
-from tests.test_overnight_null_injection import _ValidatingProvider
+from tests.test_qa_null_injection import _ValidatingProvider
 
 R21 = ("What would a 6-week deposit and the first month's rent come to for a £1,950/month flat "
        "in Hackney? Find me one under £2,000 too.")

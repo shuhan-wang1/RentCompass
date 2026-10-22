@@ -1,4 +1,4 @@
-"""A conditional offer is not an announced lookup (overnight round r01: R1-16).
+"""A conditional offer is not an announced lookup (QA round r01: R1-16).
 
 An out-of-scope refusal ("I can't search for a flat in Paris … If you'd rather skip those, say
 'go ahead' and I'll search Stratford on your budget alone.") was nudged as an announced-but-

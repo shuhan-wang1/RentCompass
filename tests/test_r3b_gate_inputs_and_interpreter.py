@@ -1,7 +1,7 @@
 """The gate has to be able to START, and it has to read only the logs.
 
 R2-8 / R3-M1.  ``deploy/run_canary_gate.sh`` defaulted its interpreter to a bare
-``python``. There is no ``python`` on this host — PEP 394 leaves the unversioned
+``python``. A modern Debian/Ubuntu host has no ``python`` — PEP 394 leaves the unversioned
 name optional and the distro ships ``python3`` — so the wrapper exited 127 before
 the report ran: no verdict, and, on a zero-tolerance breach, no automatic
 weight-0 rollback. A driver that branches on "non-zero is bad" reads that 127 as a

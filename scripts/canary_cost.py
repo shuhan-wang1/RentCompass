@@ -369,9 +369,9 @@ def compute_cost(
         # extra bucket on top of them (core/turn_observations._usage_from_token_usage
         # says so at the point of capture). Charging `input_tokens` at the full rate
         # AND `cache_read_tokens` at the cached rate therefore billed the cached
-        # tokens twice — 246 784 of the fc arm's 286 751 post-deploy input tokens are
-        # cache reads, so the old formula overstated that window's input cost by ~86%
-        # of it. It never showed up because the only price table shipped was
+        # tokens twice — in a window where most input tokens are cache reads, the old
+        # formula overstated the input cost by most of the cached share. It never
+        # showed up because the only price table shipped was
         # unverified and every total was null; it would have gone live with the first
         # verified table. Charge the MISS at the full rate and the HIT at the cached
         # rate, and floor the difference at 0 so an inconsistent record (cache_read >

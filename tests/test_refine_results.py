@@ -594,12 +594,12 @@ def test_end_to_end_widening_still_reaches_the_search_tool(lga, monkeypatch):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# §5  fc_loop — THE ARCH ACTUALLY SERVING PUBLIC TRAFFIC
+# §5  fc_loop — THE CANDIDATE ARCHITECTURE
 # ---------------------------------------------------------------------------
-# The public edge was cut over to fc_loop on 2026-07-26 (deploy/switch_pool.sh;
-# deploy/monitoring/rentcompass-monitor.sh now defaults MON_EXPECTED_PUBLIC_ARCH to
-# fc_loop). A fix that only lands in the legacy graph changes nothing for a real user,
-# so the interception is pinned on BOTH architectures — and pinned to produce the
+# The public edge can serve fc_loop (deploy/switch_pool.sh; the monitor derives
+# MON_EXPECTED_PUBLIC_ARCH from the route). A fix that only lands in the legacy graph
+# changes nothing for a user on the candidate, so the interception is pinned on BOTH
+# architectures — and pinned to produce the
 # IDENTICAL answer, because legacy is the rollback target and a rollback must not
 # change what the product says.
 # ═══════════════════════════════════════════════════════════════════════════

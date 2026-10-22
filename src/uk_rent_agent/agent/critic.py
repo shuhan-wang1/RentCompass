@@ -1331,6 +1331,11 @@ def _string_has_real_content(text: str) -> bool:
 _EVIDENCE_CONTENT_KEYS = (
     "results", "content", "snippets", "answer", "text", "message",
     "data", "detailed_data", "recommendations", "properties",
+    # A search that matched nothing inside the budget but returned real over-budget listings
+    # retrieved content: "Highgate West Hill … £2,000/month … 1.6 miles" quoted its own row
+    # and was flagged because the empty recommendations list made the whole result unusable
+    # (r18 640bdda0).
+    "over_budget_alternatives",
 )
 
 

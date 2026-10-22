@@ -79,3 +79,68 @@ def test_a_single_routes_headroom_against_the_cap_is_checked_not_flagged(headroo
     mutated = text.replace("roughly 12 minutes of headroom", f"{headroom} of headroom")
     assert bool(unsupported_external_numbers(mutated, evidence, message)) is (not ok)
     assert (f"{headroom} of headroom" in validate_commute_response(mutated, state)) is ok
+
+
+# ── money and distance: what the critic may count as evidence (r6d) ────────────────────
+# r18_adce1322 "What do you remember about me?" (no tools; memory block "[FACT] Budget £2,000").
+# r18_640bdda0 a Camden search with no match inside £1,800 and one over-budget alternative
+#   (Highgate West Hill £2,000/month, distance_miles 1.6); the persona's unrelated sensitive
+#   details are scrubbed from the fixture.
+# r20_1419b01e "Tell me more about Arbutus Street in Haggerston." (no tools); its £2,200 was only
+#   ever in an earlier answer's text, never in a server-held row.
+
+
+def _flags(case, text=None, state=None):
+    state = state or case["state"]
+    return bool(unsupported_external_numbers(text or case["raw_draft"], _collect_grounding_evidence(state, ""),
+                                             case["message"]))
+
+
+def test_a_recalled_budget_is_evidence_for_restating_it():
+    case = R18["r18_adce1322"]
+    assert "- Your budget is £2,000" in case["raw_draft"]
+    assert not _flags(case)
+    assert validate_commute_response(case["raw_draft"], case["state"]) == case["raw_draft"]
+    assert _flags(case, case["raw_draft"].replace("- Your budget is £2,000", "- Your budget is £2,500"))
+
+
+def test_an_inference_is_no_evidence_for_a_budget():
+    import copy
+    case = R18["r18_adce1322"]
+    state = copy.deepcopy(case["state"])
+    state["memory_context"] = "\n".join(line for line in state["memory_context"].splitlines()
+                                        if "[FACT] Budget" not in line)
+    assert "£2,000" in state["memory_context"]                     # only in an [INFERENCE] line now
+    assert _flags(case, state=state)
+
+
+HIGHGATE = ("- **Highgate West Hill, London N6** — 1-bed flat, **£2,000/month**. That's £200 over your budget, "
+            "so it's not within what you can afford. It's also about 1.6 miles from central Camden.")
+
+
+@pytest.mark.parametrize("old,new,ok", [
+    ("£200 over your budget", "£200 over your budget", True),
+    # wrong over-budget figure (not £300: the price pool's standing x1-36 fan-out derives it
+    # from a £15 fee, 15 x 20 — a documented trade-off of that pool, not of this rule)
+    ("£200 over your budget", "£260 over your budget", False),
+    ("**£2,000/month**", "**£2,100/month**", False),                  # wrong price
+    ("about 1.6 miles", "about 2.4 miles", False),                    # a distance no tool gave
+])
+def test_an_over_budget_alternatives_own_row_is_evidence(old, new, ok):
+    case = R18["r18_640bdda0"]
+    assert HIGHGATE in case["raw_draft"]
+    text = case["raw_draft"].replace(old, new)
+    assert _flags(case, text) is (not ok)
+
+
+def test_an_earlier_answers_price_is_no_evidence_but_a_held_row_is():
+    import copy
+    case = CORPUS["r20_1419b01e"]
+    assert "its monthly price of £2,200" in case["raw_draft"]
+    assert _flags(case)                         # the £2,200 is in no server-held row this turn
+    state = copy.deepcopy(case["state"])
+    state["extracted_context"]["view_results"] = list(state["extracted_context"].get("view_results") or []) + [
+        {"address": "Arbutus Street, Haggerston, London, E8", "price": "£2200/month",
+         "budget_status": "⚠️ Over budget by £200"}]
+    assert not _flags(case, state=state)
+    assert _flags(case, case["raw_draft"].replace("£2,200", "£2,450"), state=state)   # wrong price

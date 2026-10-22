@@ -13,7 +13,7 @@
 #   bash deploy/retire_legacy_agent_memory.sh
 set -euo pipefail
 
-REPO_DIR="${RETIRE_MEMORY_REPO_DIR:-/home/shuhan/uk_rent_recommendation}"
+REPO_DIR="${RETIRE_MEMORY_REPO_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 PIN_ENV="${DEPLOY_PIN_ENV:-/etc/rentcompass/deploy.env}"
 PYTHON_CMD="${RETIRE_MEMORY_PYTHON:-/usr/bin/python3}"
 DOCKER_CMD="${RETIRE_MEMORY_DOCKER:-docker}"

@@ -3,12 +3,12 @@
 
 Why this exists
 ---------------
-`.runtime/logs/canary-legacy.jsonl` on this host carries 121 rows that no pool
-ever wrote: 89 `canary.turn` records stamped with the fixture shas `shaLEGACY` /
-`shaSER`, and 32 `canary.arch_mismatch` events with no `ts`, no `request_id` and
-no `telemetry_schema_version`. They came from tests pointed at the live sink.
-They cost the report twice: the fixture shas inflate the "window mixes N
-candidate builds" list, and the 32 undated events can be placed in no window, so
+A canary telemetry log such as `.runtime/logs/canary-legacy.jsonl` can carry rows
+that no pool ever wrote: `canary.turn` records stamped with the fixture shas
+`shaLEGACY` / `shaSER`, and `canary.arch_mismatch` events with no `ts`, no
+`request_id` and no `telemetry_schema_version`. They come from tests pointed at the
+live sink. They cost the report twice: the fixture shas inflate the "window mixes N
+candidate builds" list, and the undated events can be placed in no window, so
 every run reports them as records that would be silently dropped.
 
 What it will NOT do
@@ -23,9 +23,9 @@ fixture, by one of exactly two tests:
 
 Anything else is kept, including rows this script cannot parse. An unparseable
 line may be a truncated write of a record that carried a real violation, and
-deleting evidence to tidy a log is the opposite of the job. The 1560 short-sha
-rows and the 1222 `unknown`-sha rows are GENUINE production turns and are never
-touched — they are also where every zero-tolerance counter in the file lives, so
+deleting evidence to tidy a log is the opposite of the job. Short-sha rows and
+`unknown`-sha rows are GENUINE production turns and are never touched — they are
+also where every zero-tolerance counter in the file lives, so
 pruning fixtures changes no gate verdict. Do not run this expecting one to move.
 
 Safety
@@ -46,7 +46,7 @@ Safety
 Usage
 -----
     python3 scripts/canary_prune_fixture_rows.py .runtime/logs/canary-legacy.jsonl
-    python3 scripts/canary_prune_fixture_rows.py <log> --apply --backup-dir /home/shuhan/canary-backups
+    python3 scripts/canary_prune_fixture_rows.py <log> --apply --backup-dir ~/canary-backups
 """
 from __future__ import annotations
 

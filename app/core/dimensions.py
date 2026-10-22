@@ -41,11 +41,11 @@ side:
     depends on "is it safe …" cueing safety);
   * it fails SAFE. A cue that fires produces a fetch (legacy) or an honest "not done yet"
     line (fc). A cue that misses produces silence, and silence about a dimension the user
-    asked about is the shape that lets an answer free-associate (HANDOFF §0: E11's invented
+    asked about is the shape that lets an answer free-associate (E11's invented
     "about 15-20 min to Canary Wharf").
 
-The union WIDENS fc's cue set by those six cues; that is a real behaviour change on the arch
-currently holding the public edge and is flagged for the owner, not hidden here.
+The union WIDENS fc's cue set by those six cues; that is a real behaviour change for fc and is
+flagged here, not hidden.
 ``tests/test_dimension_table_is_shared.py`` pins the merged vocabulary literally, so a future
 narrowing has to be a deliberate act with a failing test in front of it.
 
@@ -74,8 +74,8 @@ direction is one-way ON PURPOSE — a deliberate non-union:
     real name" (tools/get_property_details.py ``_FILLER_TOKENS``). Measured: with `park` in the
     nearby row, a plain listings search in an area whose NAME ends in Park — Finsbury Park,
     Queen's Park — and a question about a flat's `parking` both make fc emit its nearby-amenities
-    apology line and make legacy dispatch a POI fan-out wave, on BOTH arches, fc holding the
-    public edge, for a dimension the user never mentioned. A cue that fires wrongly is cheap for
+    apology line and make legacy dispatch a POI fan-out wave, on BOTH arches, for a dimension
+    the user never mentioned. A cue that fires wrongly is cheap for
     a ROUTER (one extra reflect hop) and expensive for a FETCHER (a wave, plus a false line in
     the answer); that asymmetry is why the containment is one-way and not a union.
     (The apology text is deliberately NOT quoted here — see

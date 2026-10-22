@@ -1,19 +1,18 @@
 """The monitor that guards production must be the monitor that is in git — asserted, not promised.
 
-THE DEFECT. `rentcompass-monitor.sh` exists in three places, and on 2026-07-27 all three
-were different builds:
+THE DEFECT. `rentcompass-monitor.sh` exists in three places, and all three can silently
+become different builds:
 
     A  deploy/monitoring/rentcompass-monitor.sh   git — nominally the source of truth
     B  /usr/local/bin/rentcompass-monitor.sh      the stable copy the systemd timer runs
-    C  /home/shuhan/uk_rent_recommendation/…      the pinned production tree
+    C  <deploy checkout>/deploy/monitoring/…      the pinned production tree
 
-Measured sha256 prefixes that day: A `43f05af09a29`, B `678073d06356`, C `4a4273ccb9d8`.
-B is what actually guarded production, and it was NEITHER of the other two. The A/B split
+B is what actually guards production, and it can be NEITHER of the other two. The A/B split
 is deliberate (the tracked unit's ExecStart names C, and an untracked override.conf
 redirects it to B, so a frozen deploy pin cannot hold the monitor hostage) — but nothing
-compared them, so "which of these three is guarding production" was unanswerable, and the
-improvements that stop the monitor screaming a false alarm every five minutes lived only
-in an untracked root-owned file. A rebuild would have silently reverted production to C.
+compared them, so "which of these three is guarding production" was unanswerable, and
+monitor fixes could live only in an untracked root-owned file. A rebuild would silently
+revert production to C.
 
 The knowledge that this had happened DID already exist — as prose, in the docstring of
 tests/test_monitor_legacy_pin_alert.py ("NOTE FOR THE DEPLOYER: the repo copy is NOT what
@@ -45,10 +44,10 @@ So the guard is three mechanisms, each load-bearing where the others cannot reac
      comparison, and it runs ONLY on the box — skipped in CI, honestly, rather than
      faked.
 
-``test_the_installed_copy_matches_the_committed_script`` IS RED ON THIS BOX TODAY, by
-design: production is genuinely diverged, and a guard that went green while the defect it
-names is still present would be worse than no guard. It turns green when the operator runs
-the one install command in deploy/monitoring/README.md.
+``test_the_installed_copy_matches_the_committed_script`` IS RED on a box whose installed
+copy has diverged, by design: a guard that went green while the defect it names is still
+present would be worse than no guard. It turns green when the operator runs the one install
+command in deploy/monitoring/README.md.
 """
 from __future__ import annotations
 
@@ -220,10 +219,9 @@ def test_computing_the_provenance_can_never_fail_a_run(tmp_path):
 # 3. The declared-build alert: inert by default, real when declared
 # ═══════════════════════════════════════════════════════════════════
 #
-# The constraint from b67f1fa still holds: today's steady state must stay at EXACTLY ONE
-# genuine alert (`canary-legacy.jsonl missing`). An alert that is always on is an alert
-# nobody reads — this file's own MON_EXPECTED_PUBLIC_ARCH comment records that happening,
-# and 365 false alarms were fired after the 2026-07-26 cutover before it was caught.
+# The constraint from b67f1fa still holds: an undeclared build must add NOTHING to the
+# steady state. An alert that is always on is an alert nobody reads — this file's own
+# MON_EXPECTED_PUBLIC_ARCH comment records that happening after a cutover.
 
 _DRIFT_ANCHOR = "monitor build drift"
 _GOOD = "7c7e7f9217ef" + "0" * 52
@@ -252,7 +250,7 @@ def _run_drift(block: str, *, self_sha: str, expected: str, prev: str = "") -> s
 
 
 def test_stays_silent_when_no_build_is_declared(drift_block):
-    """TODAY'S STATE. MON_EXPECTED_SRC_SHA is unset, so this must add nothing to the
+    """THE DEFAULT STATE. MON_EXPECTED_SRC_SHA is unset, so this must add nothing to the
     steady state — the `src=` token in the log carries the information instead."""
     assert _run_drift(drift_block, self_sha="7c7e7f9217ef", expected="") == ""
 
@@ -293,7 +291,7 @@ def test_the_declared_build_is_compared_only_against_an_explicit_declaration():
     $REPO/deploy/monitoring/rentcompass-monitor.sh. The pinned production tree is
     deliberately older than the installed copy — that asymmetry is why override.conf
     exists — so comparing against it would page sev3 every five minutes about the
-    intended arrangement, reproducing the 2026-07-26 false alarm in a new place."""
+    intended arrangement, reproducing the post-cutover false alarm in a new place."""
     block = _extract_block(_DRIFT_ANCHOR)
     assert "$REPO" not in block, (
         "the build-drift check reads $REPO; the pinned tree is intentionally stale, so "
@@ -326,9 +324,9 @@ def test_the_drift_checker_compares_all_three_copies_and_the_execstart():
 
 @_on_the_box
 def test_the_installed_copy_matches_the_committed_script():
-    """THE GUARD THAT WAS MISSING. Red on this box today (installed 678073d06356 vs
-    committed) and green after the documented install command — which is the correct
-    behaviour for a guard whose subject is genuinely broken."""
+    """THE GUARD THAT WAS MISSING. Red on a box whose installed copy has diverged from
+    the committed one, and green after the documented install command — which is the
+    correct behaviour for a guard whose subject is genuinely broken."""
     installed = _sha256(_INSTALLED)
     committed = _sha256(_MONITOR)
     assert installed == committed, (
@@ -382,9 +380,15 @@ def test_the_readme_explains_why_the_tracked_unit_is_overridden():
     assert "override.conf" in doc
     assert "ExecStart" in doc
     unit = _UNIT.read_text(encoding="utf-8")
-    assert "/home/shuhan/uk_rent_recommendation/deploy/monitoring/rentcompass-monitor.sh" in unit, (
-        "the tracked unit's ExecStart changed; the README's explanation of the override "
-        "now describes something that is no longer true")
+    execstart = re.findall(r"^ExecStart=(\S+)", unit, flags=re.MULTILINE)
+    assert len(execstart) == 1, f"expected exactly one ExecStart in the tracked unit, got {execstart}"
+    assert execstart[0].endswith("/deploy/monitoring/rentcompass-monitor.sh"), (
+        "the tracked unit's ExecStart no longer names the monitor inside the deploy tree; "
+        "the README's explanation of the override now describes something that is no longer "
+        f"true: {execstart[0]}")
+    assert execstart[0] != str(_INSTALLED) and not execstart[0].startswith("/usr/local/bin/"), (
+        "the tracked unit already names the stable copy, so the override.conf the README "
+        "documents would be redundant")
 
 
 def test_the_readme_documents_the_provenance_token():

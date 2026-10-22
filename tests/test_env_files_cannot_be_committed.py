@@ -1,37 +1,29 @@
 """No env-shaped file may ever be stageable in this PUBLIC repo — backups included.
 
-Found 2026-07-26 by reading the deploy tree, not by a test. Two files were sitting in
-`/home/shuhan/uk_rent_recommendation` (production):
+Operators copy an env file aside before a cutover (`./.env.bak-pre-<sha>`,
+`app/.env.bak-pre-<change>`), and such a copy holds whatever the live file held — a
+production SEARXNG_SECRET, or a model name the provider has since retired.
 
-  * `./.env.bak-pre-042c477` — held the **current production SEARXNG_SECRET** in plaintext.
-  * `app/.env.bak-pre-v4flash` — held `DEEPSEEK_MODEL="deepseek-chat"`, the value the
-    provider retired on 2026-07-24, which silently broke both pools for a full day.
+`.gitignore` used to match `.env`, `.env.local` and `**/.env` — the live files, and nothing
+else. A backup matched no pattern, so it was untracked but **not ignored**: one `git add -A`
+from being committed to a public repository. That is not a hypothetical failure mode — a
+`git add -A` has swept an untracked package into this repo before, and PR #8 exists because
+`deploy/searxng-settings.yml.example` once carried a real-looking 64-hex secret that turned
+the secret scan red.
 
-`.gitignore` matched `.env`, `.env.local` and `**/.env` — the live files, and nothing else.
-Neither backup matched any pattern, so both were untracked but **not ignored**: one
-`git add -A` from being committed to a public repository. That is not a hypothetical failure
-mode here — commit `af65e40` is a documented `git add -A` contamination of this same repo,
-and PR #8 exists because `deploy/searxng-settings.yml.example` once carried a real-looking
-64-hex secret that turned the secret scan red.
-
-Verified at the time: `git log --all -S<secret>` was empty and neither path had ever been
-tracked, so the exposure was prospective and no rotation was needed. The files were archived
-out of the tree and the pattern hole was closed.
-
-This is the same defect class as the other seven instances (a value produced, left where a
-reader could find it, never asserted on) with one difference: the "value" is a secret, and
-the reader would have been the public. So the fix is a SOURCE GUARD, not a cleanup — the
-cleanup removes today's two files, this file stops the ninth.
+This is the same defect class as the others (a value produced, left where a reader could
+find it, never asserted on) with one difference: the "value" is a secret, and the reader
+would have been the public. So the fix is a SOURCE GUARD, not a cleanup — a cleanup removes
+today's files, this file stops the next one.
 
 **The same hole, a second artifact.** `.gitignore` had exactly one rule for evidence trees,
 `.runtime/`, which with its trailing slash matches that one directory and nothing else — so
-the six `.runtime-*/` per-experiment trees currently sitting untracked in the production tree
-matched nothing either. That is not a new risk, it is the *already-realised* one: af65e40 swept
-a 3469-line untracked results package in, and the response was to add
-`/evaluation/results/schema_compaction_ab_2026-07-22/` — the instance, by name. Naming
-instances is how this repo reached seven of one class. Both artifact families are covered here
-because they are one hole in one file: every rule matched an exact live path, and every
-operator-created sibling of that path was stageable.
+the `.runtime-*/` per-experiment trees an operator creates matched nothing either. That is
+not a new risk, it is the *already-realised* one: a `git add -A` swept an untracked results
+package in, and the response was to add `/evaluation/results/schema_compaction_ab_2026-07-22/`
+— the instance, by name. Naming instances does not stop the class. Both artifact families
+are covered here because they are one hole in one file: every rule matched an exact live
+path, and every operator-created sibling of that path was stageable.
 
 Note on method: `git` is NOT available to these tests. The suite runs in the
 `uk-rent-agent:bench-git` image with the worktree bind-mounted at `/patched`, and a git
@@ -60,25 +52,24 @@ GITIGNORE = REPO / ".gitignore"
 _TRACKED_EXAMPLES = {".env.example", "app/.env.example"}
 
 # Filenames an operator plausibly creates. Each MUST be ignored. The dated and sha-suffixed
-# forms are the ones that actually occurred; the rest are the same habit spelled differently.
+# forms are the ones operators actually make; the rest are the same habit spelled differently.
 _MUST_BE_IGNORED = (
     ".env",
     ".env.local",
     ".env.bak",
-    ".env.bak-pre-042c477",          # the real file, with the live SEARXNG_SECRET
+    ".env.bak-pre-abc1234",          # a pre-cutover copy, live SEARXNG_SECRET and all
     ".env.save",
     ".env.orig",
     ".env.old",
     ".env.2026-07-26",
     ".env~",
     "app/.env",
-    "app/.env.bak-pre-v4flash",      # the real file, with the retired DEEPSEEK_MODEL
+    "app/.env.bak-pre-modelswap",    # a pre-change copy, e.g. a retired DEEPSEEK_MODEL
     "app/.env.production",
     "deploy/.env.backup",
 )
 
-# Evidence/runtime trees an operator creates per experiment. All six `.runtime-*` names below
-# are real: they are sitting untracked in the production tree as of 2026-07-26.
+# Evidence/runtime trees an operator creates per experiment, in the shapes they take.
 _RUNTIME_MUST_BE_IGNORED = (
     ".runtime/x.jsonl",
     ".runtime-fpon/x.jsonl",
@@ -90,7 +81,7 @@ _RUNTIME_MUST_BE_IGNORED = (
     ".runtime-anything-later/x.json",
 )
 
-# Evidence packages that ARE committed provenance (HANDOFF §6) and must stay tracked. The
+# Evidence packages that ARE committed provenance and must stay tracked. The
 # `.runtime*` scoping exists so that broadening the rule above cannot silently drop these.
 _COMMITTED_PROVENANCE = (
     "evaluation/results/live_routed_98",
@@ -167,10 +158,11 @@ def _ignored(path: str) -> bool:
 
 @pytest.mark.parametrize("path", _MUST_BE_IGNORED)
 def test_every_env_variant_is_ignored(path):
-    """Fails on the pre-2026-07-26 .gitignore for every `.bak`/dated/`~` form.
+    """Fails on the pre-fix .gitignore for every `.bak`/dated/`~` form.
 
-    Before the fix the block was `.env` + `.env.local` + `**/.env`, so `.env.bak-pre-042c477`
-    — the file that actually held the production secret — matched nothing.
+    Before the fix the block was `.env` + `.env.local` + `**/.env`, so a pre-cutover backup
+    such as `.env.bak-pre-abc1234` — exactly the file that holds a production secret —
+    matched nothing.
     """
     assert _ignored(path), (
         f"{path!r} is not ignored, so it can be staged into a PUBLIC repo. "
@@ -206,8 +198,7 @@ def test_no_env_backup_is_sitting_in_the_tree():
     # A live `.env` / `app/.env` is legitimate in a deployment tree; a *backup* is not.
     backups = [s for s in strays if not s.endswith(("/.env", ".env"))]
     assert not backups, (
-        f"env backups present in the tree: {backups}. Archive them outside the repo "
-        "(see /home/shuhan/fp-results/env-archive-2026-07-26/WHY.txt for the precedent)."
+        f"env backups present in the tree: {backups}. Archive them outside the repo."
     )
 
 
@@ -215,12 +206,12 @@ def test_no_env_backup_is_sitting_in_the_tree():
 def test_every_runtime_evidence_tree_is_ignored(path):
     """Fails on the pre-fix .gitignore for every `.runtime-*` sibling.
 
-    `.runtime/` matched one directory. af65e40 is the realised version of this: a `git add -A`
-    swept an untracked 3469-line results package in, and the fix named that one directory.
+    `.runtime/` matched one directory. The realised version of this: a `git add -A` swept an
+    untracked results package in, and the fix named that one directory.
     """
     assert _ignored(path), (
-        f"{path!r} is not ignored. Evidence trees are retained on disk and never committed "
-        "(HANDOFF §6); af65e40 is what happens when one is stageable."
+        f"{path!r} is not ignored. Evidence trees are retained on disk and never committed; "
+        "a stageable one is one `git add -A` away from the repo."
     )
 
 

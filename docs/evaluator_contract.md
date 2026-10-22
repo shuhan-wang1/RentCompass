@@ -91,8 +91,7 @@ constraint TYPES, so picking a winner is its own contract decision:
 
 Measured offline against **retained evidence only** — the six `idp98` rounds (98 cases ×
 3 repeats × 2 arms = 588 gradings). Nothing re-executed: no model, no tools, no network,
-no API spend. Tool: `/home/shuhan/fp-results/scripts/contract_delta.py`; report:
-`/home/shuhan/fp-results/contract_delta_2026-07-23.json`.
+no API spend. (The delta tool and its JSON report were kept outside the repository.)
 
 | run | product | old | new |
 |---|---|---|---|
@@ -142,8 +141,7 @@ from the accident.
 ## Deliberately excluded
 
 * ~~**`no_false_retrieval_provenance`**~~ — **NO LONGER EXCLUDED as of 2026-07-26.** Ported on
-  `feat/false-retrieval-provenance-port` as the deliberate, named exception HANDOFF §5 called
-  for: `claims_no_retrieval` was taken from `hardening/correctness-only` (`critic.py:557`)
+  `feat/false-retrieval-provenance-port` as a deliberate, named exception: `claims_no_retrieval` was taken from `hardening/correctness-only` (`critic.py:557`)
   **byte-identical and alone**, appended at end of file, with the schema enum entry and the H3
   guard-case amendment. **It carries no dependency on that branch's fail-closed critic
   fallback** (the A14 regression) — the predicate's whole closure is `re` plus two literal cue
@@ -161,7 +159,7 @@ from the accident.
 ## Audit it yourself
 
 ```bash
-cd /home/shuhan/telemetry-v2-layer-b
+cd <repo>
 
 # no product code, and no new product import.
 # NOTE: both invariants hold for `eval/evaluator-contract` as taken, and that is what they
@@ -178,12 +176,9 @@ git diff f053508 eval/evaluator-contract -- evaluation/ \
 python -m pytest tests/test_case_contract_consistency.py -q
 
 # the offline suite
-docker run --rm -v /home/shuhan/telemetry-v2-layer-b:/patched uk-rent-agent:bench-git bash -c '
+docker run --rm -v "$PWD":/patched uk-rent-agent:bench-git bash -c '
 cd /patched && OPENAI_API_KEY=dummy HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
 python -m pytest tests/ -q -p no:cacheprovider'
 ```
 
-Expected: both greps print nothing · `1785 passed, 3 skipped` (mainline: 1710).
-
-Re-run the contract delta (no API spend) with `contract_delta.py score` once per tree and
-`compare` across the two dumps; `git worktree add` a detached `f053508` for the old side.
+Expected: both greps print nothing and the suite passes.

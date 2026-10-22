@@ -7,7 +7,7 @@ extracted FROM THE SHIPPED FILE by text and evaluated in isolation under `bash`.
 real block, not a transcription — a copy of the condition would pass no matter what the script
 said, which is the same defect the rest of this changeset is about.
 
-TWO CHANGES UNDER TEST (2026-07-27).
+TWO CHANGES UNDER TEST.
 
 1. A CORRECTED COMMENT, no behaviour change. The "legacy pool cannot state its commit" alert
    was explained as "APP_CANDIDATE_SHA is unset for the 'app' service". That became false when
@@ -17,10 +17,9 @@ TWO CHANGES UNDER TEST (2026-07-27).
    the right trigger, so only the prose moved.
 
 2. A NEW ALERT, symmetric with the fc pool's FC_CANARY_SHA pin-mismatch check, which had no
-   legacy counterpart. The constraint on adding it was that today's steady state must stay at
-   EXACTLY ONE genuine alert (`canary-legacy.jsonl missing` — the legacy pool serves nothing,
-   so it writes no telemetry). ``test_stays_silent_in_todays_steady_state`` is that
-   constraint, and ``test_stays_silent_while_the_pin_is_set_but_the_container_is_not_recreated``
+   legacy counterpart. The constraint on adding it was that it must add NOTHING to the
+   steady state before the legacy pin is set. ``test_stays_silent_before_the_legacy_pin_is_set``
+   is that constraint, and ``test_stays_silent_while_the_pin_is_set_but_the_container_is_not_recreated``
    is the one that would have made this unsafe: setting LEGACY_APP_SHA without recreating
    `app` is the DOCUMENTED intermediate state, l_ver stays 'unknown', and a naive symmetric
    check would page sev3 every five minutes about an intended condition. That is the exact
@@ -33,8 +32,8 @@ the unit's own ExecStart points at a deploy tree pinned to an old commit. These 
 effect only after that copy is re-installed.
 
 That note used to be the ONLY record of that fact, which made it a promise rather than a
-guard — and on 2026-07-27 all three copies were measured to be three different builds while
-this docstring sat here being accurate and changing nothing. The assertion now exists:
+guard — the three copies drifted into three different builds while this docstring sat here
+being accurate and changing nothing. The assertion now exists:
 tests/test_monitor_install_provenance.py compares the installed copy against the committed
 one (and against what systemd actually resolved), the monitor leads every status line with
 `src=<hash>` so the running build is readable from monitor.log, and
@@ -94,15 +93,15 @@ def pin_block():
 
 
 # ═══════════════════════════════════════════════════════════════════
-# 1. The new alert must be INERT in today's steady state
+# 1. The new alert must be INERT before the legacy pin is set
 # ═══════════════════════════════════════════════════════════════════
 
-def test_stays_silent_in_todays_steady_state(pin_block, tmp_path):
-    """TODAY: LEGACY_APP_SHA absent from the root .env, legacy answers 'unknown'. Two
-    independent reasons this cannot fire — the steady state stays at its one genuine alert."""
+def test_stays_silent_before_the_legacy_pin_is_set(pin_block, tmp_path):
+    """LEGACY_APP_SHA absent from the root .env, legacy answers 'unknown'. Two
+    independent reasons this cannot fire — the steady state gains no alert."""
     out = _run_block(pin_block, env_text="FC_CANARY_SHA=%s\n" % _SHA_A, tmp_path=tmp_path,
                      l_code="200", l_ver="unknown")
-    assert out == "", f"the new check fires in the CURRENT steady state: {out!r}"
+    assert out == "", f"the new check fires before the legacy pin is set: {out!r}"
 
 
 def test_stays_silent_while_the_pin_is_set_but_the_container_is_not_recreated(pin_block,

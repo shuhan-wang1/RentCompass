@@ -7,7 +7,7 @@ them have no completed tool result. Its ONLY consumer in the whole repo was
 turn had already blown its time budget or the wrap-up LLM call had failed. So the loop knew
 "the user asked about safety and we never fetched it" and used that knowledge exclusively to
 write an apology. It never ran on the normal path and it never caused the fetch. That is
-HANDOFF §0 instance #12: a value computed, stored where a reader could find it, never acted on.
+Defect-class instance #12: a value computed, stored where a reader could find it, never acted on.
 
 The three measured consequences, from the round of record
 (`.runtime/round-8793c0b-internal-2026-07-25/eval/sweep`), are pinned here as regressions:

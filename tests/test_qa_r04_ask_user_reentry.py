@@ -39,7 +39,7 @@ def test_execution_failure_log_names_the_frame_not_the_content():
         boom()
     except UnboundLocalError as exc:
         location = app_module._exception_location(exc)
-    assert location.startswith("test_overnight_r04_ask_user_reentry.py:") and location.endswith(":boom")
+    assert location.startswith("test_qa_r04_ask_user_reentry.py:") and location.endswith(":boom")
     from uk_rent_agent.observability import JsonFormatter
     record = logging.LogRecord("app", logging.ERROR, __file__, 1, "agent.turn.execution_failed", (), None)
     record.error_type = "UnboundLocalError"

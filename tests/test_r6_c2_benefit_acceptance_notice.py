@@ -29,7 +29,7 @@ from core.preference_grounding import (
     render_unsupported_requirement_notice,
 )
 from tests.test_agent_contract_guards import _state, _tc
-from tests.test_overnight_null_injection import _ValidatingProvider
+from tests.test_qa_null_injection import _ValidatingProvider
 
 DSS_REQUEST = "Find me a 1-bed in Hackney under £1,500 where the landlord accepts DSS / housing benefit."
 # What a model plausibly sends for it: the requirement as a feature and as a preference.

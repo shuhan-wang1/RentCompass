@@ -17,7 +17,7 @@ read as a preference. Every assertion fails against
      one the model applied was "supported" — B7 shipped £5,192.31 where the statute
      gives £6,230.77 and `no_fabricated_number` saw nothing wrong.
   5. `_field_to_kind` had no row resolving to the `safety_score` claim kind, so
-     `no_fabricated_number[safety_score]` was an unconditional pass (HANDOFF §0 #4).
+     `no_fabricated_number[safety_score]` was an unconditional pass (defect-class instance #4).
   7. `_number_asserts_field_value` threshold-filtered only money and minutes, so a
      DISTANCE could never be a bound — E6's "None within 500m" was graded as an
      asserted distance.
@@ -600,7 +600,7 @@ def test_the_grader_does_not_import_the_products_statute():
 # ══════════════════════════════════════════════════════════════════════════════
 # Item 5 (added by the coordinator) — `safety_score` must be a REACHABLE kind
 # ══════════════════════════════════════════════════════════════════════════════
-# HANDOFF §0 instance #4 is a fabricated safety score: `check_safety` scored
+# Defect-class instance #4 is a fabricated safety score: `check_safety` scored
 # `100 - n//2` with no denominator and shipped "Hackney: 9 crimes, 96/100 Very Safe"
 # against a real 1,657/month. The FORMULA was fixed and is pinned by
 # tests/test_safety_scoring.py — but an invented score in the ANSWER TEXT was still
@@ -666,7 +666,7 @@ def test_a_grounded_safety_score_is_not_flagged():
 
 
 def test_an_invented_safety_score_is_flagged():
-    """Direction B, in the shape of HANDOFF §0 #4."""
+    """Direction B, in the shape of defect-class instance #4."""
     answer = "Hackney: 9 crimes, **92/100** -- rated Very Safe."
     r = _fab_score(answer, [{"tool": "check_safety", "data": {"safety_score": 34}}])
     assert not r.passed, r.detail

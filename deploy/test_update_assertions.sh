@@ -8,8 +8,8 @@
 #
 # The defect being guarded against is not "the script is broken" but "the script
 # succeeds against the wrong pool". The old update.sh printed
-# "Healthy ✅ Live at https://rentcompass.co.uk:8443" after rebuilding :5001
-# while the public upstream had been on :5002 for days. So the assertions below
+# "Healthy ✅ Live" after rebuilding :5001 while the public upstream
+# pointed at :5002. So the assertions below
 # are mostly about WHICH pool got deployed and whether success is claimed on
 # anything less than the pinned commit actually answering.
 set -u
@@ -99,8 +99,7 @@ grep -q "compose up -d app$" "$CALLS" 2>/dev/null && [ "$port" = 5001 ] && { sha
 [ "$sha" = "DOWN" ] && exit 1
 printf 'HTTP/1.1 200 OK\r\nx-agent-arch: %s\r\nx-agent-version: %s\r\n' "$arch" "$sha"
 # R3-M7. A pool still running the pre-2026-08-31 image sends NO
-# X-Agent-Specialists header at all — which is BOTH containers on the production
-# box today (the header does not exist in origin/main). Listing a port in
+# X-Agent-Specialists header at all. Listing a port in
 # FAKE_NO_SPECIALISTS_PORTS models that; the header appears as soon as the pool
 # has been recreated on this release's image, so a scenario can rehearse the real
 # upgrade transition: old container without the header -> drain -> new one with it.
@@ -185,8 +184,8 @@ run_update() {                 # run_update [args...]
 
 # ══════════════════════════════════════════════════════════════════════════
 echo "--- 1. auto-target follows the PUBLIC upstream, not a hardcoded pool ---"
-# The exact production shape on 2026-07-28: nginx on :5002 (fc), both pools on
-# the old commit. The old script rebuilt `app` here and called it a success.
+# The shape that broke the old script: nginx on :5002 (fc), both pools on the
+# old commit. The old script rebuilt `app` here and called it a success.
 setup 5002 old-legacy-sha old-fc-sha
 run_update; CALLS_TXT="$(cat "$CALLS")"
 check   "exit 0"                                   0 "$RC"
@@ -559,9 +558,9 @@ contains "$CALLS_TXT" "switch --to legacy"          "and returns only after lega
 teardown
 echo
 
-echo "--- 8. R3-M7: pools that predate X-Agent-Specialists (TODAY'S CONTAINERS) ---"
-# The header does not exist in origin/main, so NEITHER deployed container emits
-# it. Every fake in this harness used to send `x-agent-specialists: 0` for both
+echo "--- 8. R3-M7: pools that predate X-Agent-Specialists (UN-REBUILT CONTAINERS) ---"
+# Images built before the header existed do not emit it. Every fake in this
+# harness used to send `x-agent-specialists: 0` for both
 # ports unconditionally, which is why R3-H1 — the new equality check refusing the
 # emergency rollback and the drain — was green across 124 assertions.
 setup 5002 old-legacy-sha old-fc-sha

@@ -131,10 +131,10 @@ class OverpassEmpty(OverpassError):
 
 
 # ─── Mirror health + request pacing ──────────────────────────────────────────
-# Measured 2026-07-29, from the production host: overpass-api.de, lz4 and z all refused the
+# Measured 2026-07-29, from a deployment host: overpass-api.de, lz4 and z all refused the
 # connection within ~1s (DNS resolved fine), kumi.systems read-timed-out at 30s, and osm.ch
 # answered HTTP 200 with elements=0 even for cafés within 1 km of Leicester Square. The public
-# mirrors had started rate-limiting this IP after a day of POI traffic.
+# mirrors had started rate-limiting that host after a day of POI traffic.
 #
 # Two costs made that outage far worse than it had to be. Every query re-walked the whole
 # mirror pool from the top, so each POI type paid the same connection refusals and the same

@@ -6,9 +6,9 @@
 #
 # It DOES make one out-of-band provider call, at most hourly (check 10). That is
 # deliberate: the constraint that made this script safe is the same constraint
-# that made it blind. On 2026-07-24 a retired DEEPSEEK_MODEL made the provider
-# reject every real question for a day while the process stayed healthy, and
-# checks 1-9 would all have stayed green. The probe talks to the provider
+# that made it blind. A retired DEEPSEEK_MODEL makes the provider reject every
+# real question while the process stays healthy, and checks 1-9 would all stay
+# green. The probe talks to the provider
 # DIRECTLY -- never through /api/* -- so it can see that class without writing a
 # single row into .runtime/logs/canary-<arch>.jsonl.
 #
@@ -22,11 +22,11 @@
 #     See PROVENANCE below — that token is what makes install drift visible.
 #
 # PROVENANCE, and the defect it closes. This file exists in more than one place, and
-# on 2026-07-27 all three copies were DIFFERENT:
+# the copies can silently become DIFFERENT builds:
 #
 #   deploy/monitoring/rentcompass-monitor.sh   in git — nominally the source of truth
 #   /usr/local/bin/rentcompass-monitor.sh      the deliberate stable copy the timer runs
-#   $REPO/deploy/monitoring/…                  the pinned production tree, 6 days behind
+#   $REPO/deploy/monitoring/…                  the pinned production tree, often older
 #
 # The split is INTENTIONAL: the unit's own ExecStart names the pinned tree, and an
 # override.conf redirects it to /usr/local/bin precisely so a frozen deploy pin cannot
@@ -50,7 +50,21 @@
 #     bash deploy/monitoring/rentcompass-monitor.sh
 set -u
 
-REPO="${MON_REPO:-/home/shuhan/uk_rent_recommendation}"
+# The deploy checkout. MON_REPO wins. Otherwise a copy run from inside a checkout uses
+# that checkout, and the stable /usr/local/bin copy asks the running legacy container
+# which directory compose started it from (a read-only label lookup).
+REPO="${MON_REPO:-}"
+if [ -z "$REPO" ]; then
+  _self_dir="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
+  if [ -n "$_self_dir" ] && [ -f "$_self_dir/../../docker-compose.yml" ]; then
+    REPO="$(cd "$_self_dir/../.." && pwd)"
+  else
+    REPO="$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' \
+      uk-rent-app 2>/dev/null)"
+    case "$REPO" in /*) ;; *) REPO="" ;; esac
+  fi
+fi
+REPO="${REPO:-/srv/uk_rent_recommendation}"
 RUNTIME="${MON_RUNTIME:-$REPO/.runtime}"
 LOG_FILE="${MON_LOG:-/var/log/rentcompass/monitor.log}"
 # KNOWN BLIND SPOT, documented deliberately rather than fixed: /run is tmpfs, so a
@@ -90,8 +104,8 @@ SELF_SHA="$(sha256sum "$0" 2>/dev/null | awk '{print substr($1,1,12)}')"
 
 # Optional DECLARED intent, same idiom as MON_EXPECTED_PUBLIC_ARCH below: if the
 # installer tells us which build it installed, a mismatch is an error. Deliberately
-# INERT when unset, which is today's state — so this cannot add a second alert to a
-# steady state that is meant to sit at exactly one. It is NOT compared against
+# INERT when unset — so this cannot add an always-on alert to a steady state that
+# is meant to be quiet. It is NOT compared against
 # $REPO/deploy/monitoring/, and that omission is the whole point: the pinned production
 # tree is deliberately older than the installed copy, so keying on it would page every
 # five minutes about the intended arrangement. Only an explicit declaration counts.
@@ -128,10 +142,9 @@ declare -A NOW
 # 0) INSTALL DRIFT: is the copy running the copy the installer declared? -----
 # Fires only when MON_EXPECTED_SRC_SHA is declared (see above), and then only once per
 # state change, because a wrong build is a standing condition and re-reporting a standing
-# condition every five minutes is how the 2026-07-26 public-arch alert trained everyone
-# to ignore it. sev3: an unexpected monitor build means every OTHER check in this file is
-# of unknown vintage, which is exactly the failure that let a stale copy scream a false
-# alarm 365 times after the fc cutover.
+# condition every five minutes trains everyone to ignore it. sev3: an unexpected monitor
+# build means every OTHER check in this file is of unknown vintage, which is exactly the
+# failure that lets a stale copy keep firing a false alarm after a cutover.
 NOW["src_sha"]="$SELF_SHA"
 if [ -n "$EXPECTED_SRC_SHA" ] && [ "$SELF_SHA" != "unknown" ] \
    && [ "${EXPECTED_SRC_SHA:0:12}" != "$SELF_SHA" ] \
@@ -151,9 +164,9 @@ probe() {
 }
 
 # 1) PUBLIC edge must serve the arch we intend --------------------------------
-# This check used to hard-code "legacy" and treat anything else as a leak. On 2026-07-26 the
-# owner deliberately cut the public edge over to fc_loop, so that assertion started firing
-# sev3 every five minutes about the intended state. An alert that is always on is an alert
+# This check used to hard-code "legacy" and treat anything else as a leak, so a deliberate
+# cutover of the public edge to the candidate made it fire sev3 every five minutes about
+# the intended state. An alert that is always on is an alert
 # that gets ignored, which is how the next real one is missed -- the same reasoning that
 # demoted provider 429s to sev4.
 #
@@ -185,10 +198,10 @@ bool01() {
 # X-Agent-Specialists is REQUIRED only when the EXPECTED identity has
 # specialists=1.  When 0 is expected an ABSENT header (reported as '' or 'none')
 # counts as 0: every image built before 2026-08-31 omits the header entirely,
-# which is BOTH pools deployed on this host today, and the legacy pool is the
-# standing rollback escape hatch that must not be recreated just to satisfy a
-# header check.  Demanding the header for an expected 0 turned `--to legacy`
-# (the emergency rollback) and update.sh's drain leg into hard failures.
+# and the legacy pool is the standing rollback escape hatch that must not be
+# recreated just to satisfy a header check.  Demanding the header for an
+# expected 0 turned `--to legacy` (the emergency rollback) and update.sh's
+# drain leg into hard failures.
 # Copies: deploy/update.sh, deploy/set_canary_weight.sh, deploy/switch_pool.sh,
 #         deploy/monitoring/rentcompass-monitor.sh
 # Python twin: deploy/probe_pool_answer.py::specialists_match
@@ -298,7 +311,7 @@ NOW["ver_legacy"]="$l_ver"; NOW["ver_fc"]="$f_ver"
 
 # The edge must be serving the pool we think it is serving -- compared against the pool
 # named by MON_EXPECTED_PUBLIC_ARCH, not always legacy. This assertion shipped hard-coded to
-# the legacy pool and started false-alarming the moment the edge moved to fc: the same
+# the legacy pool and started false-alarming the moment the edge moved to the candidate: the same
 # assumption, in the check written to catch that assumption. Declared intent, one place.
 case "$p_arch" in
   "$CANDIDATE_ARCH") _exp_code="$f_code"; _exp_ver="$f_ver" ;;
@@ -326,22 +339,20 @@ if [ "$f_code" = "200" ] && [ -r "$REPO/.env" ]; then
   fi
 fi
 
-# The legacy pool still answers 'unknown', but NOT because the knob is missing any more.
-# CORRECTED 2026-07-27: this comment used to say "APP_CANDIDATE_SHA is unset for the 'app'
-# service". That stopped being true when the `app` service was wired with
+# The legacy pool answers 'unknown' when it cannot name its commit. The `app` service is
+# wired with
 #   APP_CANDIDATE_SHA: "${LEGACY_APP_SHA:-}"
 # (docker-compose.yml; DEFAULTING `:-`, deliberately not `:?` like app-fc, so a missing value
-# can never block the rollback target from starting). The wiring is INERT today for two
-# independent reasons, and both must clear before the pool can name its commit:
-#   1. LEGACY_APP_SHA is not set in the root .env, so the container gets "", which app.py
+# can never block the rollback target from starting). The wiring stays INERT until two
+# independent conditions both clear:
+#   1. LEGACY_APP_SHA must be set in the root .env; unset, the container gets "", which app.py
 #      reads as indistinguishable from unset and falls through to the git probe -> "unknown";
-#   2. even once it IS set, the running `app` container predates the wiring, and ops
-#      deliberately does not recreate it — it is the standing escape hatch while fc_loop
-#      holds the public edge. It picks the value up at the next PLANNED rebuild.
-# The ALERT LOGIC below is unchanged and still correct: it fires on the OBSERVED header value
-# ('unknown'/'none'), which is the thing that actually blocks `switch_pool.sh --to legacy`,
-# not on the configuration that produces it. Warn once per state change, not every five
-# minutes. Only the explanation was wrong.
+#   2. the `app` container must have been recreated since. It is the standing rollback
+#      escape hatch, so it is not recreated just for this; it picks the value up at the next
+#      PLANNED rebuild (deploy/update.sh sets LEGACY_APP_SHA on every legacy rebuild).
+# The ALERT LOGIC below fires on the OBSERVED header value ('unknown'/'none'), which is the
+# thing that actually blocks `switch_pool.sh --to legacy`, not on the configuration that
+# produces it. Warn once per state change, not every five minutes.
 if [ "$l_code" = "200" ] && { [ "$l_ver" = "unknown" ] || [ "$l_ver" = "none" ]; } \
    && [ "${PREV[ver_legacy]:-}" != "$l_ver" ]; then
   emit_alert 4 "legacy pool cannot state its commit (x-agent-version: $l_ver) — set LEGACY_APP_SHA in the root .env and recreate 'app' at the next planned rebuild"
@@ -349,11 +360,10 @@ fi
 
 # Symmetry with the fc pin check above: once the legacy pool CAN name its commit, it must be
 # the commit the compose .env pins, or the rollback target is not the image anyone believes
-# it is. Added 2026-07-27; deliberately INERT in today's steady state, which is exactly one
-# genuine alert (canary-legacy.jsonl missing, because the legacy pool serves no traffic and
-# therefore writes no telemetry). It cannot fire today for two independent reasons:
-#   * LEGACY_APP_SHA is absent from the root .env, so $pinned is empty; and
-#   * l_ver is 'unknown', which is EXCLUDED below.
+# it is. It is deliberately INERT until the legacy pool can name a real commit, for two
+# independent reasons:
+#   * while LEGACY_APP_SHA is absent from the root .env, $pinned is empty; and
+#   * an l_ver of 'unknown' is EXCLUDED below.
 # That exclusion is not belt-and-braces, it is the contract: "the pool cannot state its
 # commit" already has its own alert immediately above, and this check must not double-report
 # it. In particular, setting LEGACY_APP_SHA WITHOUT recreating the container — the documented
@@ -387,11 +397,11 @@ for c in uk-rent-app uk-rent-app-fc uk-rent-searxng uk-rent-valkey; do
   fi
 done
 
-# 5) host free memory (11GB box, no swap -> OOM risk) ------------------------
+# 5) host free memory (OOM risk) ---------------------------------------------
 mem_avail="$(free -m | awk '/^Mem:/{print $7}')"
 summary+="mem_avail=${mem_avail:-?}MB "
 if [ -n "${mem_avail:-}" ] && [ "$mem_avail" -lt "$MEM_FREE_MIN_MB" ] 2>/dev/null; then
-  emit_alert 3 "host available memory ${mem_avail}MB < ${MEM_FREE_MIN_MB}MB (no swap — OOM risk)"
+  emit_alert 3 "host available memory ${mem_avail}MB < ${MEM_FREE_MIN_MB}MB (OOM risk)"
 fi
 
 # 6) disk --------------------------------------------------------------------
@@ -432,22 +442,22 @@ for name in canary-legacy "canary-$CANDIDATE_ARCH"; do
   delta=$(( lines - prevl ))
   summary+="$name=${lines}(+${delta})@${mtime:-?} "
 
-  # Deliberately NOT alerting on zero growth. The site sees ~2 conversations/day
-  # against 288 runs/day, so "no traffic" and "broken" are indistinguishable in
-  # telemetry growth -- an alert here would fire almost every run. Check 10 is what
-  # covers the broken case, by generating its own signal instead of waiting for one.
+  # Deliberately NOT alerting on zero growth. On a low-traffic site (against 288
+  # runs/day), "no traffic" and "broken" are indistinguishable in telemetry growth --
+  # an alert here would fire almost every run. Check 10 is what covers the broken
+  # case, by generating its own signal instead of waiting for one.
   #
-  # A DECREASE is unambiguous and is the real failure: on 2026-07-25 a log was moved
-  # out from under the running container, which kept appending to the moved inode
-  # while .runtime/logs/ sat empty. Records were being written where nothing would
-  # aggregate them, and nothing would have said so.
+  # A DECREASE is unambiguous and is the real failure: a log moved out from under the
+  # running container keeps receiving appends on the moved inode while .runtime/logs/
+  # sits empty. Records are then written where nothing will aggregate them, and
+  # nothing would say so.
   if [ "$delta" -lt 0 ]; then
     emit_alert 3 "telemetry log $name.jsonl SHRANK by $(( -delta )) lines ($prevl -> $lines) — rotated, truncated, or moved out from under the running pool"
   fi
 done
 
 # 10) OUT-OF-BAND PROVIDER PROBE --------------------------------------------
-# The 2026-07-24 class: a retired model name makes the provider reject every real
+# The retired-model class: a retired model name makes the provider reject every real
 # question while the process stays ready, never restarts, and answers /ready
 # 200. Checks 1-9 are all blind to it -- see the header.
 #
@@ -455,7 +465,7 @@ done
 # theatre:
 #
 #   1. The model name is resolved FROM THE LIVE CONTAINER, through the same
-#      import the serving process uses -- never from the repo. The incident WAS a
+#      import the serving process uses -- never from the repo. That failure IS a
 #      divergence between container env and repo, so a repo-reading probe reports
 #      green all day. This mirrors the pattern the compose file already uses for
 #      searxng, whose healthcheck verifies the JSON API is enabled rather than
@@ -466,9 +476,8 @@ done
 #      request cannot redirect its own telemetry. 24 synthetic turns/day would
 #      invalidate every future p50 and pass-rate. Not negotiable.
 #
-# Cost: one completion with max_tokens=1, at most hourly. At the rates derived
-# from the 2026-07-25 round (uncached input $0.139/M) this is far below a cent
-# per month.
+# Cost: one completion with max_tokens=1, at most hourly. At an uncached input
+# rate of ~$0.139/M this is far below a cent per month.
 PROVIDER_PROBE_EVERY_S="${MON_PROVIDER_PROBE_EVERY_S:-3600}"
 case "$p_arch" in
   "$CANDIDATE_ARCH") _default_probe_container=uk-rent-app-fc ;;
@@ -506,8 +515,8 @@ try:
     with urllib.request.urlopen(req, timeout=30) as r:
         print("OK %s %s" % (r.status, DEEPSEEK_MODEL))
 except urllib.error.HTTPError as e:
-    # The body names the cause -- on 2026-07-24 it was "The supported API model
-    # names are deepseek-v4-pro or deepseek-v4-flash, but you passed deepseek-chat".
+    # The body names the cause -- e.g. "The supported API model names are
+    # deepseek-v4-pro or deepseek-v4-flash, but you passed deepseek-chat".
     body = ""
     try:
         body = e.read().decode("utf-8", "replace")[:240].replace("\n", " ")
@@ -532,7 +541,7 @@ PYPROBE
       ;;
     HTTP\ 4*)
       # Any OTHER 4xx on a one-token ping is a configuration fault, not load. This
-      # is the 07-24 signature and it is the whole reason this check exists.
+      # is the retired-model signature and it is the whole reason this check exists.
       emit_alert 3 "PROVIDER REJECTS THE CONFIGURED MODEL — real questions are failing while /ready stays 200: $probe_out"
       summary+="provider=REJECTED "
       ;;
@@ -572,7 +581,7 @@ for line in sys.stdin:                      # newest first
     if models:
         print(",".join(sorted(models))); break
 ' 2>/dev/null)"
-    # No observed call yet is not a failure -- at ~2 conversations/day that is the norm.
+    # No observed call yet is not a failure -- on a quiet site that is the norm.
     if [ -n "$observed" ] && [ "$observed" != "$probe_model" ]; then
       emit_alert 3 "probe tests '$probe_model' but the last real $probe_arch call used '$observed' — the probe is validating a model the app does not send"
       summary+="probe_model_mismatch "

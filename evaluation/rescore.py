@@ -211,7 +211,7 @@ def rescore_dir(run_dir: Path, cases: Dict[str, dict], graders,
         "case_contract_sha256": contract,
         # Which evaluator produced `scored_passed`, and how sure we are of that. Carried
         # into the report so the number cannot be quoted without the grader stated
-        # (HANDOFF §3.14: "Any future round must state which grader produced it").
+        # ("Any future round must state which grader produced it").
         **grader,
         "recorded_grader_key": recorded_grader_key(manifest),
         "n": len(rows),

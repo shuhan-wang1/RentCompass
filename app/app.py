@@ -338,7 +338,7 @@ _outbox_worker = None
 _outbox_worker_lock = threading.Lock()
 
 # ============================================================================
-# Canary rollout (Shuhan's design, 2026-07-20) — process-level constants.
+# Canary rollout (2026-07-20 design) — process-level constants.
 # ----------------------------------------------------------------------------
 # The deployment runs TWO worker pools (legacy vs fc_loop) with pool-level nginx cutover;
 # each conversation durably records the arch/version that last served it for provenance.
@@ -1196,7 +1196,7 @@ def _emit_canary_turn(*, endpoint: str, conversation_id: str, user_id: str, requ
         # search_direct), because it is a fact about the PROCESS rather than about
         # the turn's own bookkeeping — and it is the fact that decides whether a
         # turn we could not measure is forgiven (observer live, turn died) or
-        # convicted (nothing was watching: the 2026-07-25 incident class).
+        # convicted (nothing was watching: the unobserved-process class).
         signals[OBSERVER_INSTALLED_FIELD] = turn_observations.observer_installed()
         record = build_canary_turn_record(
             endpoint=endpoint,
@@ -1878,10 +1878,10 @@ def _rate_limit_subject() -> str:
         # in play here, which is why the rule is stated this way rather than as a
         # single-address check:
         #
-        #   * the nginx INSTALLED on this box (/etc/nginx/sites-available/
-        #     rentcompass.co.uk.conf) sets `X-Forwarded-For $proxy_add_x_forwarded_for`
-        #     — an APPEND, so the header is `<whatever the client sent>, <real peer>`
-        #     and only the last element is trustworthy;
+        #   * an installed nginx vhost that predates the repo template may set
+        #     `X-Forwarded-For $proxy_add_x_forwarded_for` (the distro proxy_params
+        #     default) — an APPEND, so the header is `<whatever the client sent>,
+        #     <real peer>` and only the last element is trustworthy;
         #   * `deploy/nginx/*.conf` in this repo sets `X-Forwarded-For $remote_addr`
         #     — a REPLACE, so the header is exactly one address, which is also the
         #     last element.
@@ -1892,7 +1892,7 @@ def _rate_limit_subject() -> str:
         # reaches this branch at all), not a restriction on the chain's shape — and an
         # earlier revision of this fix rejected multi-element chains outright, which
         # would have silently fallen back to `remote_addr` for every request behind
-        # the appending config that is actually deployed.
+        # an appending config.
         xff = request.headers.get("X-Forwarded-For", "")
         forwarded = xff.rsplit(",", 1)[-1].strip() if xff else ""
         if forwarded:

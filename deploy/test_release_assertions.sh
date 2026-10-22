@@ -288,7 +288,7 @@ echo "--- 9. the flip gate fires on a CHANGE in exposure, never on a rebuild ---
 #
 # R3-H3: the first version of that gate compared only the END state, so it also
 # refused every ROUTINE release on a host where the candidate was already the sole
-# public pool — which is this box since 07-27. The gate now compares the START and
+# public pool. The gate now compares the START and
 # END exposure and fires only when an architecture that is not at 100% ends there.
 setup green
 install_route 0 rollback rollback
@@ -382,7 +382,7 @@ lacks    "$CALLS_TXT" "update"                                    "and nothing s
 teardown
 echo
 
-echo "--- 10. TODAY'S HOST: single upstream on :5002, no weighted include ---"
+echo "--- 10. SINGLE-UPSTREAM HOST: sole upstream on :5002, no weighted include ---"
 # R3/H2 (round 2): the preflight read these markers WITHOUT `|| true`. `set -euo
 # pipefail` turns `sed` on a missing file into exit 2, which errexit turns into a
 # silent abort — the entire release died after "Release plan" with no output.
@@ -397,14 +397,14 @@ contains "$OUT" "candidate weight 0%"         "and to the candidate exposure it 
 contains "$CALLS_TXT" "update --both --drain" "so the release proceeds"
 teardown
 
-# THE R3-H3 REGRESSION TEST. This is the exact live state of the production box:
+# THE R3-H3 REGRESSION TEST. A single-upstream host whose candidate is public:
 # no /etc/nginx/snippets/rentcompass-canary-routing.conf, and the site conf's sole
 # upstream is 127.0.0.1:5002. `bash deploy/release.sh` must work with no new flags.
 setup green
 remove_route
 install_upstream 5002
 run_release --yes; CALLS_TXT="$(cat "$CALLS")"
-check    "TODAY'S HOST: a routine release needs NO flag"  0 "$RC"
+check    "CANDIDATE-PUBLIC HOST: a routine release needs NO flag"  0 "$RC"
 contains "$OUT" "SINGLE-UPSTREAM mode"        "the routing mode is named"
 contains "$OUT" "routing    UNCHANGED"        "and the run is identified as a rebuild, not a cutover"
 contains "$CALLS_TXT" "update --both --drain" "so update.sh is handed the deploy"
@@ -415,7 +415,7 @@ setup green
 remove_route
 install_upstream 5002
 run_release --dry-run; CALLS_TXT="$(cat "$CALLS")"
-check    "TODAY'S HOST: --dry-run exits 0"    0 "$RC"
+check    "CANDIDATE-PUBLIC HOST: --dry-run exits 0"    0 "$RC"
 contains "$OUT" "routing    UNCHANGED"        "and previews the unchanged routing"
 check    "the pin is untouched by a dry run"  "$OLD_SHA" "$(pin_now)"
 lacks    "$CALLS_TXT" "update"                "and nothing is deployed"

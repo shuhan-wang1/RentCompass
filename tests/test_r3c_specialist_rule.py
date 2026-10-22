@@ -1,7 +1,7 @@
-"""One rule for `X-Agent-Specialists`, in five files, that today's images can pass.
+"""One rule for `X-Agent-Specialists`, in five files, that older images can pass.
 
-THE DEFECT (R3-H1). `X-Agent-Specialists` does not exist in `origin/main`, so
-NEITHER container running on this box emits it. The PR added an equality check to
+THE DEFECT (R3-H1). `X-Agent-Specialists` did not exist in `origin/main` when this
+rule was written, so images built before it do not emit it. The PR added an equality check to
 `deploy/switch_pool.sh`'s single-upstream path without the exemption
 `set_canary_weight.sh::verify_local` and `probe_pool_answer.py` already carried,
 so `switch_pool.sh --to legacy` — the documented emergency rollback — and the
@@ -61,7 +61,7 @@ def test_every_shell_copy_of_the_rule_is_byte_identical():
     [
         ("0", "0", True),
         ("1", "1", True),
-        # TODAY'S IMAGES: no header at all.
+        # OLDER IMAGES: no header at all.
         ("none", "0", True),
         ("", "0", True),
         # The bit the manager_v1 rollout is gated on may never be inferred.
@@ -109,9 +109,9 @@ def test_the_python_twin_agrees_with_the_shell_rule():
 def test_no_deploy_script_recommends_demoting_production_to_legacy():
     """R3-H3: the flip gate's remedy used to say `switch_pool.sh --to legacy`.
 
-    That is a production DOWNGRADE (this box has served the fc_loop architecture
-    since 07-27), and it was itself broken by R3-H1. A remedy that makes things
-    worse is worse than no remedy.
+    On a host whose public pool is the candidate that is a production DOWNGRADE,
+    and it was itself broken by R3-H1. A remedy that makes things worse is worse
+    than no remedy.
     """
     release = (REPO / "deploy" / "release.sh").read_text()
     gate = release[release.index("4a. Rollout preflight"):]

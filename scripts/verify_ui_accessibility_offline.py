@@ -12,21 +12,26 @@ from pathlib import Path
 import sys
 from urllib.parse import urlparse
 
-AUDIT_LIBS = Path('/tmp/carbonminer-update-20261016/browser-deps/usr/lib/x86_64-linux-gnu')
-if AUDIT_LIBS.exists():
-    os.environ['LD_LIBRARY_PATH'] = str(AUDIT_LIBS) + (':' + os.environ['LD_LIBRARY_PATH'] if os.environ.get('LD_LIBRARY_PATH') else '')
-if Path('/tmp/carbonminer-qa-python').exists():
-    sys.path.insert(0, '/tmp/carbonminer-qa-python')
+# Optional pre-provisioned audit runtime: extra shared libraries for the browser and an
+# extra import path that holds Playwright. Both are ignored when unset or missing.
+AUDIT_LIBS = os.environ.get('UI_AUDIT_LIB_DIR', '')
+if AUDIT_LIBS and Path(AUDIT_LIBS).exists():
+    os.environ['LD_LIBRARY_PATH'] = AUDIT_LIBS + (':' + os.environ['LD_LIBRARY_PATH'] if os.environ.get('LD_LIBRARY_PATH') else '')
+AUDIT_PYTHONPATH = os.environ.get('UI_AUDIT_PYTHONPATH', '')
+if AUDIT_PYTHONPATH and Path(AUDIT_PYTHONPATH).exists():
+    sys.path.insert(0, AUDIT_PYTHONPATH)
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 ORIGIN = 'http://rentcompass-offline.test'
-DEFAULT_CHROME = '/tmp/carbonminer-qa-browsers/chromium-1248/chrome-linux64/chrome'
+# Empty means Playwright's own bundled Chromium.
+DEFAULT_CHROME = os.environ.get('CHROMIUM_PATH', '')
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--browser', default=os.environ.get('CHROMIUM_PATH', DEFAULT_CHROME))
+    parser.add_argument('--browser', default=DEFAULT_CHROME,
+                        help="Chromium executable (default: $CHROMIUM_PATH, else Playwright's bundled browser)")
     parser.add_argument('--output', type=Path, default=Path('/tmp/rentcompass-ui-offline'))
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
@@ -103,7 +108,7 @@ def main():
         checks.append(name)
 
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(executable_path=args.browser if Path(args.browser).exists() else None, headless=True, args=['--no-sandbox', '--disable-dev-shm-usage'])
+        browser = playwright.chromium.launch(executable_path=args.browser if args.browser and Path(args.browser).exists() else None, headless=True, args=['--no-sandbox', '--disable-dev-shm-usage'])
         context = browser.new_context(viewport={'width': 390, 'height': 844})
         context.route('**/*', route_request)
         context.add_init_script("if(window.top===window){if(!localStorage.getItem('ukra_user_id'))localStorage.setItem('ukra_user_id','offline-user'); if(!localStorage.getItem('ukra_active_conversation'))localStorage.setItem('ukra_active_conversation','conv-a');}")

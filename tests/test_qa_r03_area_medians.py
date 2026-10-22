@@ -13,7 +13,7 @@ import pathlib
 from uk_rent_agent.agent.critic import evaluate_grounding, unsupported_reply_prices
 
 CASE = json.loads((pathlib.Path(__file__).parent / "data" /
-                   "overnight_r03_area_medians.json").read_text(encoding="utf-8"))
+                   "qa_r03_area_medians.json").read_text(encoding="utf-8"))
 
 
 def test_area_rent_medians_support_the_reply():

@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # Is the monitor that guards production the monitor that is in git?
 #
-# THE DEFECT THIS EXISTS FOR. rentcompass-monitor.sh lives in three places, and on
-# 2026-07-27 all three were different builds:
+# THE DEFECT THIS EXISTS FOR. rentcompass-monitor.sh lives in three places, and all
+# three can silently become different builds:
 #
 #   A  deploy/monitoring/rentcompass-monitor.sh  (git — nominally the source of truth)
 #   B  /usr/local/bin/rentcompass-monitor.sh     (the stable copy the systemd timer runs)
 #   C  $MON_REPO/deploy/monitoring/…             (the pinned production tree)
 #
-# B differing from A is a REAL exposure: the improvements that stop the monitor screaming
-# a false alarm every five minutes, and that let it see the 2026-07-24 provider-outage
-# class, exist as an untracked root-owned file. Rebuild the box, or re-run the README's
-# install from the pinned tree, and production silently regresses. Nothing compared them.
+# B differing from A is a REAL exposure: monitor fixes (false-alarm suppression, new
+# failure classes) can end up existing only as an untracked root-owned file. Rebuild the
+# box, or re-run the README's install from the pinned tree, and production silently
+# regresses. Nothing compared them.
 #
 # WHY A SCRIPT AND NOT ONLY A TEST. CI cannot see /usr/local/bin, and the file is
 # root-owned, so a test alone can never be the whole guard. This script runs where both

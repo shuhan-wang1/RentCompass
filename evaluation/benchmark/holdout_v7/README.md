@@ -1,4 +1,4 @@
-# Production `fc_loop` v7 evaluation evidence
+# `fc_loop` v7 release evidence
 
 v7 replaces the v6 legacy-only run as the release-evidence contract. The tracked
 `PREREGISTRATION.template.json` is intentionally **UNBOUND** and cannot pass the gate;

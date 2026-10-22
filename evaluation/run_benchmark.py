@@ -1964,7 +1964,7 @@ def top_slowest_cases(runs: List["RunResult"], k: int = 10) -> List[dict]:
 # --------------------------------------------------------------------------- #
 # Repeat-aware guard gates + zero-tolerance sweep + stability + SLO (R3)
 #
-# shuhan's binding gate rules (replacing majority-vote leniency):
+# The binding gate rules (replacing majority-vote leniency):
 #   * Under ``--repeat K`` a hard-gate case passes ONLY at K/K. A case that fails even one
 #     of its K runs (a user would hit it ~1/K of the time) FAILS the gate — never averaged
 #     away.

@@ -6,11 +6,11 @@ Why this exists (2026-07-25). DeepSeek retired ``deepseek-chat`` and
 
 ``core/llm_config.py`` and ``uk_rent_agent/llm/router.py`` had already been migrated, but
 ``app/config.py`` still carried ``deepseek-chat`` as its ``os.getenv`` default, feeding
-``core/llm_interface.py``. The outage that surfaced this was NOT caused by that default —
-it was caused by a stale ``DEEPSEEK_MODEL=deepseek-chat`` in the deployment env, which
+``core/llm_interface.py``. The failure that surfaced this was NOT caused by that default —
+it was caused by a stale ``DEEPSEEK_MODEL=deepseek-chat`` in a deployment env, which
 overrode three correct defaults at once. The lesson generalises: a retired name is
-dangerous in a default AND in an override, and neither is visible from ``/health``, so the
-public pool served 400s for a day without a single alarm.
+dangerous in a default AND in an override, and neither is visible from ``/health``, so a
+pool can serve 400s without a single alarm.
 
 These tests pin the source side. The env side is pinned by the RUNTIME GUARD:
 ``uk_rent_agent.llm.router.reject_retired_model_names`` refuses a known-dead name at every
@@ -98,9 +98,9 @@ def test_resolved_defaults_are_not_retired(monkeypatch):
 def test_no_retired_name_survives_an_env_override(monkeypatch):
     """A stale env override must not silently reach the provider.
 
-    This is the failure that actually happened: DEEPSEEK_MODEL=deepseek-chat in the
+    This is the failure that actually happened: DEEPSEEK_MODEL=deepseek-chat in a
     deployment env overrode three correct defaults, and the only symptom was a 400 at
-    request time — invisible to /health, so the public pool was broken for a day.
+    request time — invisible to /health.
 
     The router is the single place every model name flows through, so it is the right
     place to refuse. WAS xfail while the guard was only a docstring; the guard now exists
@@ -162,7 +162,7 @@ def test_every_model_env_var_is_refused_not_only_the_one_that_broke_prod(
         monkeypatch, var, dead):
     """Every previous fix in this repo addressed the single instance that was observed.
 
-    DEEPSEEK_MODEL is the var that caused the outage; the other three reach the provider by
+    DEEPSEEK_MODEL is the var that caused the failure; the other three reach the provider by
     exactly the same route and must be refused on the same terms.
     """
     monkeypatch.setenv(var, dead)
@@ -232,7 +232,7 @@ def test_a_patched_route_table_cannot_smuggle_a_retired_name(monkeypatch):
 
 def test_the_raw_openai_sdk_path_refuses_before_touching_the_provider(monkeypatch):
     """_call_deepseek swallows EVERY provider error into ``return None`` plus a print —
-    which is how a full day of HTTP 400s produced no alarm. A dead model name is a config
+    which is how a run of HTTP 400s can produce no alarm. A dead model name is a config
     defect, so the guard sits OUTSIDE that try/except and must propagate.
     """
     import openai
@@ -263,9 +263,9 @@ def test_a_stale_env_var_kills_STARTUP_rather_than_serving_400s():
     """Startup-time refusal, proven end-to-end in a fresh interpreter.
 
     ``app/app.py`` imports ``core.llm_interface`` -> ``core.llm_config`` at module scope,
-    so this import failing is the web app failing to boot. That is the point: the 2026-07-24
-    outage was a process that started cleanly, passed /health, and 400d every real turn for
-    a day. Loud at boot beats silent in production.
+    so this import failing is the web app failing to boot. That is the point: the failure
+    mode is a process that starts cleanly, passes /health, and 400s every real turn.
+    Loud at boot beats silent in production.
 
     Subprocess rather than ``importlib.reload``: a failed reload leaves the poisoned
     ``DEEPSEEK_MODEL`` bound in the live module for every later test in the session.
@@ -369,7 +369,7 @@ def test_the_construction_site_scan_still_sees_all_three_known_paths():
 # --------------------------------------------------------------------------- #
 # The runtime guard covers the process. It does not cover ``app/.env.example``, which used
 # to ship ``DEEPSEEK_MODEL="deepseek-chat"`` — so the documented onboarding step
-# (``cp app/.env.example app/.env``) CONFIGURED the 2026-07-24 outage. The guard turns that
+# (``cp app/.env.example app/.env``) CONFIGURED a retired model. The guard turns that
 # into a loud boot failure rather than a silent 400, which is better but is not a fix: a new
 # developer following the README simply cannot start the app and is given no reason why.
 #
@@ -499,7 +499,7 @@ def test_the_example_env_boots_the_app_it_documents(tmp_path):
 # --------------------------------------------------------------------------- #
 # DEEPSEEK_MODEL had TWO literal defaults that disagreed — 'deepseek-chat' in
 # app/config.py and 'deepseek-v4-flash' in app/core/llm_config.py. That disagreement is
-# what made the 2026-07-25 outage possible AND what hid it: an audit comparing the
+# what made the stale-override failure possible AND what hid it: an audit comparing the
 # deployed value against "the" code default finds a match against whichever copy happens
 # to agree, and reports no override. This test is the invariant that would have caught it
 # before it shipped.

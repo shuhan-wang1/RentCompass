@@ -20,12 +20,11 @@ os.environ.setdefault(
 # the flat ``app`` module. Collection order can import that module earlier, so
 # establish the test-only identity mode once, before any test module import.
 # Production Compose explicitly sets this to false.
-# Every other runtime state file whose DEFAULT lives under the repo's .runtime/. On the
-# production box the checkout's .runtime/ is bind-mounted into the live pools, so a local
-# test run used to write test rows into LIVE state: f5c-session-* pending memory writes
-# ("user_clearance=admin"), empty area-recommendation cache entries for UCL, the OTM pacing
-# row (2026-10-19). CI's isolated-DB env list does not cover these; this does, for every
-# runner.
+# Every other runtime state file whose DEFAULT lives under the repo's .runtime/. Where a
+# deployment bind-mounts the checkout's .runtime/ into the running pools, a local test run
+# would write test rows into LIVE state (pending memory writes, area-recommendation cache
+# entries, the OTM pacing row). CI's isolated-DB env list does not cover these; this does,
+# for every runner.
 for _name, _file in (
     ("MEMORY_GATE_DB", "memory_gate.sqlite3"),
     ("OTM_ACCESS_STATE_PATH", "otm_access.sqlite3"),

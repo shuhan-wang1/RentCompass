@@ -855,7 +855,7 @@ def snapshot() -> Dict[str, Any]:
         # The fact the consumer's unobservable-turn exemption turns on: was the
         # LangChain callback attached while this turn ran? A crash with the
         # observer live is a turn we could not measure; a crash without it is the
-        # 2026-07-25 incident class, and only the second may be forgiven nothing.
+        # unobserved-process class, and only the second may be forgiven nothing.
         "llm_observer_installed": bool(_observer_installed),
     }
     if obs.get("root_agent_context"):

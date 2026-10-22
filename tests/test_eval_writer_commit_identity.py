@@ -24,6 +24,7 @@ import ast
 import asyncio
 import importlib
 import json
+import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -510,13 +511,17 @@ def test_cv_metrics_renders_for_a_legacy_round(tmp_path, monkeypatch):
     assert rp.TRUST_UNKNOWN in cv and "unavailable" in cv
 
 
-@pytest.mark.parametrize("round_dir", [
-    Path("/home/shuhan/uk_rent_recommendation/.runtime/"
-         "round-8793c0b-internal-2026-07-25/eval/sweep"),
-])
+# The retained round of record lives outside the repo. Point this at its ``eval/sweep``
+# directory to read it; unset, the test skips (as it does in the containerised suite).
+_ROUND_OF_RECORD = os.environ.get("RENTCOMPASS_ROUND_OF_RECORD_DIR", "")
+
+
+@pytest.mark.parametrize("round_dir", [Path(_ROUND_OF_RECORD) if _ROUND_OF_RECORD else None])
 def test_the_real_round_of_record_still_reads_when_it_is_present(round_dir):
     """Reads the RETAINED package itself when this checkout can see it (it lives outside
     the repo, so the containerised suite skips). Read-only."""
+    if round_dir is None:
+        pytest.skip("RENTCOMPASS_ROUND_OF_RECORD_DIR is not set")
     summary = round_dir / "summary.json"
     if not summary.exists():
         pytest.skip(f"retained round not mounted here: {round_dir}")

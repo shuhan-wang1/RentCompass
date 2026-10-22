@@ -1,4 +1,4 @@
-"""The commute-claim redactor (overnight round r01: R1-10, ledger B-02/C-08 partial).
+"""The commute-claim redactor (QA round r01: R1-10, ledger B-02/C-08 partial).
 
 * "Note: some commute claims could not be verified and have been removed from this answer."
   was appended to answers with no commute claim at all (memory recall 5/5, weather,

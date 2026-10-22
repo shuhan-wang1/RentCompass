@@ -1043,8 +1043,8 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
 
     # D (listing-advice contract): a move-in date stated THIS turn ("move in from
     # September", "从9月1号起") folds into the accumulated criteria so it persists to the
-    # next search — mirroring the budget pattern. The deterministic extractor is being
-    # delivered by a parallel agent in search_properties.py; tolerate its absence so a
+    # next search — mirroring the budget pattern. The deterministic extractor lives in
+    # search_properties.py; tolerate its absence so a
     # missing symbol never breaks this whole update path.
     try:
         from core.tools.search_properties import _extract_move_in_date
@@ -1278,7 +1278,7 @@ def build_context_info(extracted_context: dict, tool_name: str, prefs: dict) -> 
 
     if extracted_context.get('property_address'):
         info.append("=== Current Property Context ===")
-        # C: a parallel agent resolves these extra fields from the REAL session listing
+        # C: the context builder resolves these extra fields from the REAL session listing
         #    (bedrooms/property_type/area/budget_status/availability + the FULL description)
         #    so focused-listing answers are grounded in the actual listing text. Tolerate
         #    the absence of every key. budget_status/availability_status carry frontend
@@ -1715,7 +1715,7 @@ def _has_cjk(text: str) -> bool:
 
 
 # ─── Reply-language policy (hard, no zh/en mixing) ──────────────────────────
-# A parallel agent computes extracted_context['reply_language'] in {'zh','en'}
+# The request path computes extracted_context['reply_language'] in {'zh','en'}
 # (zh if THIS message has CJK; else en only when the UI language is en; else zh).
 # Every user-facing surface produced here — generation prompts, the fair-housing
 # refusal — obeys it. When it is absent (e.g. a legacy caller) we fall back to
@@ -1825,7 +1825,7 @@ def _is_market_research_request(message: str) -> bool:
 #          answer with a canned template, DISCARDING the correct £3,446.15 total
 #     B12  search_properties -> status "need_clarification", rendered to the user as
 #          "The property search completed: no studio listings matched your criteria"
-#          (HANDOFF §0 defect #6 verbatim: a clarification counted as a completed 0-match search)
+#          (defect-class instance #6 verbatim: a clarification counted as a completed 0-match search)
 #     B14  web_search x2 on a purely statutory arithmetic question
 #   legacy arm (4/98 = 4.08%)
 #     B10, B14, B15  web_search x5 each — the market_info -> multi_search web fan-out
@@ -3169,7 +3169,7 @@ def _format_single_result(record) -> str:
     label = [('address', 'Property'), ('price', 'Price'), ('travel_time', 'Commute'),
              ('bedrooms', 'Bedrooms'), ('property_type', 'Type'),
              ('budget_status', 'Budget status'),
-             # listing-advice: availability fields (a parallel agent adds these keys to
+             # listing-advice: availability fields (the listing pipeline adds these keys to
              # the records; tolerate their absence). Relevant to move-in / timing Qs.
              ('available_from', 'Available from'),
              ('availability_status', 'Availability'),
@@ -4152,7 +4152,7 @@ def _make_execute_tool_node(tool_registry):
                     observation = _format_single_result(_prev_focus)
                     raw_data = {'property_info': observation}
                 else:
-                    # Assemble property info from context. C: a parallel agent now carries the
+                    # Assemble property info from context. C: the context builder now carries the
                     # REAL session listing's extra fields (bedrooms/property_type/area/
                     # budget_status/availability + full description) on extracted_context, so a
                     # focused-listing answer is grounded in the actual listing text. Every key
@@ -5149,7 +5149,7 @@ def _collect_grounding_evidence(state: AgentState, tool_name: str) -> list:
     if stated:
         pieces.append({"user_stated": stated})
     # The server-held rows of listings shown earlier (``view_results``, never model prose) are
-    # price evidence too, as the owner ruled for the no-evidence contract (r6d).
+    # price evidence too, as the no-evidence contract requires (r6d).
     shown = [{key: row.get(key) for key in ("address", "price", "budget_status", "travel_time")
               if row.get(key) not in (None, "")}
              for row in (extracted_context.get("view_results") or [])[:50] if isinstance(row, dict)]
@@ -5182,7 +5182,7 @@ def _record_critic_hard_replace(*, reason: str, variant: str, tool: str,
     ``soft_wrapped=False``. Every counter the project has for "did the user get boilerplate
     instead of an answer" is denominated in soft wraps, so this path is invisible to all of
     them — which is how the record came to say "the canned-template fallback is gone" while
-    it was still replacing answers. HANDOFF §0's defect class exactly: a value produced and
+    it was still replacing answers. the "computed but never acted on" defect class exactly: a value produced and
     never asserted on. This function does not change what happens; it makes it countable.
 
     A NEW event type, deliberately not another ``critic_verdict``: run_benchmark's
@@ -5352,8 +5352,8 @@ def _make_critic_node():
         # the critic had itself recorded `issues=['empty_answer']`, and it shipped because
         # a turn where retrieval was not expected is graded `grounded=True` regardless of
         # whether the model said anything at all — `grounded` answers a different question
-        # from `answered`. Reproduced on a second turn with the same query, on the arch
-        # holding the public edge. One bounded regeneration, then an explicit grounded
+        # from `answered`. Reproduced on a second turn with the same query, on fc.
+        # One bounded regeneration, then an explicit grounded
         # fallback; a zero-length 200 is the one outcome that is always wrong.
         _empty_lang = None
         if not str(final or "").strip():

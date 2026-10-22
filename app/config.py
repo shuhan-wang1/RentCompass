@@ -23,11 +23,11 @@ DEEPSEEK_BASE_URL = os.getenv('DEEPSEEK_BASE_URL', 'https://api.deepseek.com')
 # return HTTP 400 ("The supported API model names are deepseek-v4-pro or
 # deepseek-v4-flash"). core/llm_config.py and uk_rent_agent/llm/router.py were migrated;
 # THIS default was missed, and it feeds core/llm_interface.py. A retired name left in a
-# default is a live outage waiting for someone to drop the env override — which is exactly
-# how the 2026-07-25 fc smoke failed. tests/test_model_name_defaults.py pins this.
+# default is a live outage waiting for someone to drop the env override.
+# tests/test_model_name_defaults.py pins this.
 DEEPSEEK_MODEL = os.getenv('DEEPSEEK_MODEL', 'deepseek-v4-flash')
-# Pinning the default is only half of it — the 2026-07-24 outage came from an ENV OVERRIDE
-# of three correct defaults, which no source-scan test can see. Refuse the override here
+# Pinning the default is only half of it — a retired name can also arrive as an ENV
+# OVERRIDE of correct defaults, which no source-scan test can see. Refuse the override here
 # too: this module reads the repo-ROOT .env (load_dotenv() with no path) while
 # core/llm_config.py reads app/.env, so the two see different files and a retired name can
 # arrive through either one.

@@ -1,8 +1,15 @@
 [Unit]
-Description=RentCompass health monitor (legacy public + fc internal)
-Documentation=file:///home/shuhan/uk_rent_recommendation/deploy/monitoring/README.md
+Description=RentCompass health monitor (public edge + both pools)
+Documentation=file:///path/to/uk_rent_recommendation/deploy/monitoring/README.md
 After=docker.service network-online.target
 Wants=network-online.target
+
+# /path/to/uk_rent_recommendation is a placeholder for the deploy checkout. Substitute
+# it when installing the unit, e.g. from the checkout:
+#   sed "s|/path/to/uk_rent_recommendation|$PWD|g" deploy/monitoring/rentcompass-monitor.service \
+#     | sudo tee /etc/systemd/system/rentcompass-monitor.service
+# The override.conf drop-in (deploy/monitoring/README.md, section 2a) then redirects
+# ExecStart to the stable /usr/local/bin copy.
 
 [Service]
 Type=oneshot
@@ -10,7 +17,7 @@ EnvironmentFile=-/etc/rentcompass/monitor.env
 # Runs as root so it can read all runtime files, query docker, and write
 # /var/log/rentcompass. The script itself takes an flock, so an overrun run
 # is skipped rather than stacking.
-ExecStart=/home/shuhan/uk_rent_recommendation/deploy/monitoring/rentcompass-monitor.sh
+ExecStart=/path/to/uk_rent_recommendation/deploy/monitoring/rentcompass-monitor.sh
 Nice=10
 IOSchedulingClass=idle
 # Read-only probes; harden the unit so a compromised probe can't do much.

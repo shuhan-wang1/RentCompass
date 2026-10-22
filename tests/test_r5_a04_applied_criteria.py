@@ -25,7 +25,7 @@ from core import preference_grounding
 from core.agent_loop import build_fc_nodes
 from core.langgraph_agent import _apply_explicit_criteria_updates
 from tests.test_agent_contract_guards import _state, _tc
-from tests.test_overnight_null_injection import _ValidatingProvider
+from tests.test_qa_null_injection import _ValidatingProvider
 
 TURNS = [
     "Hi! I want to rent in Islington. Budget is £1,800 a month, 1 bedroom, whole flat please.",

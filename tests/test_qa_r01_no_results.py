@@ -1,4 +1,4 @@
-"""The no-results template (overnight round r01: R1-13).
+"""The no-results template (QA round r01: R1-13).
 
 * Any search_properties no_results in the turn replaced the whole answer with "I couldn't find
   listings … Please check the area spelling …" — even when the user had asked something else

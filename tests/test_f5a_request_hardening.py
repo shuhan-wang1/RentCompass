@@ -1,7 +1,7 @@
-"""Transport-hardening regressions for the 2026-09-03 post-deploy round (angle T3).
+"""Transport-hardening regressions (angle T3).
 
-Three defects, all reachable by an UNAUTHENTICATED caller against the configuration
-that is live on both pools today (`fc_loop`, specialists off):
+Three defects, all reachable by an UNAUTHENTICATED caller against the default
+candidate configuration (`fc_loop`, specialists off):
 
   * 高-1  `{"message":"hello \\ud800 world"}` -> HTTP 500 from
           `conversation_store.start_request_turn`, plus a canary record charging the

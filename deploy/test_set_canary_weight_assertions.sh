@@ -7,10 +7,10 @@
 # WHY THIS FILE EXISTS
 # --------------------
 # set_canary_weight.sh is the lever that decides how much of the public sees the
-# candidate, and the only weight-0 emergency rollback on a weighted host. Until
-# 2026-09-06 it had NO offline exerciser: switch_pool.sh, update.sh and
-# release.sh each had one, and the controller they all delegate to had none. The
-# 2026-09-03 test round had to build a throwaway sandbox to answer basic
+# candidate, and the only weight-0 emergency rollback on a weighted host. It
+# used to have NO offline exerciser: switch_pool.sh, update.sh and release.sh
+# each had one, and the controller they all delegate to had none. An earlier
+# review had to build a throwaway sandbox to answer basic
 # questions about it ("does weight 0 ever wait on the answer probe?"), and that
 # sandbox could not model the public endpoint correctly, so its weight-0 run died
 # at the post-reload verification on a fake's limitation rather than on anything
@@ -48,8 +48,8 @@ contains() { if grep -qF -- "$2" <<<"$1"; then printf '\033[32mPASS\033[0m %s\n'
 lacks()  { if grep -qF -- "$2" <<<"$1"; then printf '\033[31mFAIL\033[0m %s\n       unexpectedly present: %s\n' "$3" "$2"; FAIL=$((FAIL+1))
            else printf '\033[32mPASS\033[0m %s\n' "$3"; PASS=$((PASS+1)); fi; }
 
-SHA_LEGACY=1df0d4f7140f366e42b120fc9629fdb87e738428
-SHA_CANDIDATE=1df0d4f7140f366e42b120fc9629fdb87e738428
+SHA_LEGACY=0123456789abcdef0123456789abcdef01234567
+SHA_CANDIDATE=0123456789abcdef0123456789abcdef01234567
 SANDBOX=""; VIOLATIONS="$(mktemp -u)/violations"
 
 setup() {   # setup <weight the route is currently on>
@@ -60,7 +60,7 @@ setup() {   # setup <weight the route is currently on>
     "$1" > "$ROUTE_CONF_PATH"
 
   # The candidate identity the deploy path resolves, and the two pins the
-  # controller verifies against — today's host, both pools stating specialists 0.
+  # controller verifies against — rebuilt pools, both stating specialists 0.
   {
     printf 'CANARY_AGENT_ARCH=fc_loop\n'
     printf 'CANARY_MANAGER_V1_SPECIALISTS=0\n'
@@ -70,8 +70,8 @@ setup() {   # setup <weight the route is currently on>
   } > "$SANDBOX/root.env"
 
   # `-` in the specialists slot = the pool sends NO X-Agent-Specialists header
-  # (a pre-2026-08-31 image). The DEFAULT is this host since the 1df0d4f release
-  # of 2026-09-03: both pools state 0, both state a full 40-char sha.
+  # (a pre-2026-08-31 image). The DEFAULT models rebuilt pools: both state 0,
+  # both state a full 40-char sha.
   : "${PLEGACY:=legacy $SHA_LEGACY 0}"
   : "${PCANDIDATE:=fc_loop $SHA_CANDIDATE 0}"
 
@@ -317,7 +317,7 @@ teardown
 # `maintenance` is the deploy drain, and it is machine-only: without the deploy
 # lock a human cannot park the candidate at 100%.
 setup 50
-run_weight --weight 100 --stage maintenance --rollout-id deploy-maintenance-1df0d4f --allow-public-candidate
+run_weight --weight 100 --stage maintenance --rollout-id deploy-maintenance-0123456 --allow-public-candidate
 check    "stage 'maintenance' without the deploy lock is refused" 1 "$RC"
 contains "$OUT" "machine-only"                            "by name"
 teardown
@@ -325,7 +325,7 @@ teardown
 # ...and even holding the lock, without the marker update.sh writes.
 setup 50
 RENTCOMPASS_DEPLOY_LOCK_HELD=1 run_weight --weight 100 --stage maintenance \
-  --rollout-id deploy-maintenance-1df0d4f --allow-public-candidate
+  --rollout-id deploy-maintenance-0123456 --allow-public-candidate
 check    "stage 'maintenance' without an active drain marker is refused" 1 "$RC"
 contains "$OUT" "requires an active drain marker"         "by name"
 unset RENTCOMPASS_DEPLOY_LOCK_HELD
@@ -335,7 +335,7 @@ teardown
 setup 50
 printf 'deploy-maintenance-deadbee' > "$SANDBOX/maintenance-marker"
 RENTCOMPASS_DEPLOY_LOCK_HELD=1 run_weight --weight 100 --stage maintenance \
-  --rollout-id deploy-maintenance-1df0d4f --allow-public-candidate
+  --rollout-id deploy-maintenance-0123456 --allow-public-candidate
 check    "a marker for another rollout id is refused"     1 "$RC"
 contains "$OUT" "names a different rollout id"            "by name"
 unset RENTCOMPASS_DEPLOY_LOCK_HELD
@@ -343,9 +343,9 @@ teardown
 
 # The whole gate, satisfied: lock held, machine-shaped id, marker naming it.
 setup 50
-printf 'deploy-maintenance-1df0d4f' > "$SANDBOX/maintenance-marker"
+printf 'deploy-maintenance-0123456' > "$SANDBOX/maintenance-marker"
 RENTCOMPASS_DEPLOY_LOCK_HELD=1 run_weight --weight 100 --stage maintenance \
-  --rollout-id deploy-maintenance-1df0d4f --allow-public-candidate
+  --rollout-id deploy-maintenance-0123456 --allow-public-candidate
 check    "a real deploy drain IS allowed to reach 100"    0 "$RC"
 check    "the route is 100"                               100 "$(weight_now)"
 contains "$OUT" "100% is a temporary drain"               "and says it must be restored"
@@ -400,7 +400,7 @@ teardown
 echo
 
 echo "--- 7. --allow-unidentified-target is weight-0 only ---"
-# P2-8: today's legacy pool states a full 40-char commit, so the flag is no longer
+# P2-8: a rebuilt legacy pool states a full 40-char commit, so the flag is not
 # routine. The restriction below is what stops the habit leaking onto a forward
 # escalation, where it is exactly the wrong instinct.
 setup 0
@@ -414,11 +414,11 @@ run_weight --weight 0 --allow-unidentified-target
 check    "and accepted on the rollback"                   0 "$RC"
 teardown
 
-# The 1df0d4f state: legacy names its commit, so a plain rollback needs no flag
+# A rebuilt legacy pool names its commit, so a plain rollback needs no flag
 # and prints no provenance warning.
 setup 50
 run_weight --weight 0
-check    "today's legacy pool rolls back with no flag"    0 "$RC"
+check    "a rebuilt legacy pool rolls back with no flag"  0 "$RC"
 lacks    "$OUT" "no full configured SHA"                  "and no provenance warning"
 teardown
 

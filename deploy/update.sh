@@ -2,21 +2,21 @@
 # Redeploy the LIVE pool after a code change. Public-pool deploys drain by
 # default and therefore need sudo for the nginx switch.
 #
-#   cd /home/shuhan/uk_rent_recommendation
+#   cd <repo checkout>
 #   git fetch && git checkout <the pinned sha>   # pull new code FIRST
 #   bash deploy/update.sh --both                 # refreshes both pools with safe drain
 #
-# nginx / TLS / Xray / searxng / valkey are untouched. User accounts, chat
+# nginx / TLS / searxng / valkey are untouched. User accounts, chat
 # history, .env and chroma indexes persist (they are bind-mounted from the host).
 #
 # ---------------------------------------------------------------------------
 # WHY THIS SCRIPT READS THE NGINX UPSTREAM
 # ---------------------------------------------------------------------------
 # It used to hardcode `docker compose up -d --build app` and health-check :5001.
-# That was correct only while the public upstream pointed at the legacy pool. It
-# now points at fc (:5002), so the old script rebuilt a pool NOBODY WAS SERVING
-# and reported "Healthy ✅ Live at https://rentcompass.co.uk:8443" — a green
-# deploy that changed nothing the public could see. Worse, `app` is the standing
+# That was correct only while the public upstream pointed at the legacy pool. Once
+# it points at fc (:5002), the old script rebuilt a pool NOBODY WAS SERVING and
+# still reported "Healthy ✅ Live" — a green deploy that changed nothing the
+# public could see. Worse, `app` is the standing
 # rollback escape hatch, so the one thing the old script DID do was recreate the
 # container you fall back to in an emergency, silently, on every deploy.
 #
@@ -65,7 +65,7 @@
 # no docker, no root and no network (see deploy/test_update_assertions.sh).
 set -euo pipefail
 
-REPO_DIR="${UPDATE_REPO_DIR:-/home/shuhan/uk_rent_recommendation}"
+REPO_DIR="${UPDATE_REPO_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$REPO_DIR"
 
 COMPOSE_CMD="${UPDATE_COMPOSE_CMD:-docker compose}"
@@ -109,10 +109,10 @@ bool01() {
 # X-Agent-Specialists is REQUIRED only when the EXPECTED identity has
 # specialists=1.  When 0 is expected an ABSENT header (reported as '' or 'none')
 # counts as 0: every image built before 2026-08-31 omits the header entirely,
-# which is BOTH pools deployed on this host today, and the legacy pool is the
-# standing rollback escape hatch that must not be recreated just to satisfy a
-# header check.  Demanding the header for an expected 0 turned `--to legacy`
-# (the emergency rollback) and update.sh's drain leg into hard failures.
+# and the legacy pool is the standing rollback escape hatch that must not be
+# recreated just to satisfy a header check.  Demanding the header for an
+# expected 0 turned `--to legacy` (the emergency rollback) and update.sh's
+# drain leg into hard failures.
 # Copies: deploy/update.sh, deploy/set_canary_weight.sh, deploy/switch_pool.sh,
 #         deploy/monitoring/rentcompass-monitor.sh
 # Python twin: deploy/probe_pool_answer.py::specialists_match

@@ -1,4 +1,4 @@
-"""Weather geocoding resolves UK places first (overnight round r01: R1-12).
+"""Weather geocoding resolves UK places first (QA round r01: R1-12).
 
 get_weather("Richmond") returned Richmond, Virginia (37.55, -77.46) with success=true, while
 "Reading, UK", "Newcastle upon Tyne, UK", "Boston, Lincolnshire, UK", "Newport, UK" and

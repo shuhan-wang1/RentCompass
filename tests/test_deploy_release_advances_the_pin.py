@@ -3,9 +3,9 @@ never become a way to ship something the pin gate would have refused.
 
 The gate in `deploy/update.sh` refuses to deploy anything but the exact sha named
 in an untracked, server-local file, so that no commit to this repo can change what
-production runs. On 2026-07-28 the *procedure* around that gate — three manual
-steps in deploy/monitoring/README.md — was skipped, and a merged search fix sat
-unshipped while the same bug was re-reported. release.sh automates the procedure
+production runs. The *procedure* around that gate — three manual steps in
+deploy/monitoring/README.md — could be skipped, leaving a merged fix unshipped.
+release.sh automates the procedure
 WITHOUT touching the gate: update.sh still enforces `HEAD == DEPLOY_PINNED_SHA`.
 
 The behavioural proof lives in ``deploy/test_release_assertions.sh``, which runs

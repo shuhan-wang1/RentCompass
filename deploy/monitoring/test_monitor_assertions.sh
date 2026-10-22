@@ -23,9 +23,9 @@ classify() {
 }
 
 echo "--- provider probe classifier ---"
-# The literal body the provider returned on 2026-07-24, reproduced live on 07-26.
+# The body the provider returns for a retired model name.
 INCIDENT='HTTP 400 deepseek-chat {"error":{"message":"The supported API model names are deepseek-v4-pro or deepseek-v4-flash, but you passed deepseek-chat.","type":"invalid_request_error"}}'
-check "the 2026-07-24 incident pages at sev3" "sev3-rejected"     "$(classify "$INCIDENT")"
+check "a retired model name pages at sev3"   "sev3-rejected"     "$(classify "$INCIDENT")"
 check "a healthy ping is silent"              "ok"                "$(classify 'OK 200 deepseek-v4-flash')"
 check "401 (bad key) pages at sev3"           "sev3-rejected"     "$(classify 'HTTP 401 deepseek-v4-flash {"error":"auth"}')"
 # Found by writing this test: 429 originally fell into the HTTP 4* branch and
@@ -39,14 +39,14 @@ check "empty output is not silently ok"       "sev4-unrecognised" "$(classify ''
 echo
 
 # --- telemetry line-count assertion -----------------------------------------
-# Deliberately silent on zero growth: 2 conversations/day against 288 runs/day
-# means "no traffic" and "broken" are indistinguishable here.
+# Deliberately silent on zero growth: on a low-traffic site (against 288 runs/day)
+# "no traffic" and "broken" are indistinguishable here.
 tel() { local prev="$1"; local now="$2"; local d=$(( now - prev ))
         if [ "$d" -lt 0 ]; then echo "sev3-shrank"; else echo "silent"; fi; }
 echo "--- telemetry log assertion ---"
 check "growth is silent"                 "silent"      "$(tel 100 135)"
-check "ZERO growth is silent (2 conv/day)" "silent"    "$(tel 135 135)"
-check "a SHRINK pages — the 07-25 mv/fd trap" "sev3-shrank" "$(tel 135 2)"
+check "ZERO growth is silent (low traffic)" "silent"   "$(tel 135 135)"
+check "a SHRINK pages — the mv/fd trap" "sev3-shrank" "$(tel 135 2)"
 check "truncation to zero pages"         "sev3-shrank" "$(tel 135 0)"
 echo
 
@@ -59,11 +59,11 @@ pinmatch() { [ -n "$2" ] && [ "$1" != "none" ] && [ "$1" != "$2" ] && echo "sev3
 echo "--- identity assertions (were collected, never tested) ---"
 check "edge serving a different build pages" "sev3-edge-mismatch" "$(edge abc123 def456)"
 check "edge agreeing with the pool is silent" "silent"            "$(edge abc123 abc123)"
-check "an unannounced version change pages"  "sev-drift"          "$(drift 8793c0b d7f6f50)"
-check "first run (no previous) is silent"    "silent"             "$(drift '' 8793c0b)"
+check "an unannounced version change pages"  "sev-drift"          "$(drift aaaa111 bbbb222)"
+check "first run (no previous) is silent"    "silent"             "$(drift '' aaaa111)"
 check "a pool stuck at 'none' is silent here" "silent"            "$(drift none none)"
-check "fc not matching FC_CANARY_SHA pages"  "sev3-pin-mismatch"  "$(pinmatch 8793c0b 042c477)"
-check "fc matching the pin is silent"        "silent"             "$(pinmatch 8793c0b 8793c0b)"
+check "fc not matching FC_CANARY_SHA pages"  "sev3-pin-mismatch"  "$(pinmatch aaaa111 cccc333)"
+check "fc matching the pin is silent"        "silent"             "$(pinmatch aaaa111 aaaa111)"
 echo
 
 # --- probe/observation closure ----------------------------------------------
@@ -83,8 +83,8 @@ echo
 
 # --- expected public arch ----------------------------------------------------
 # Hard-coding "legacy" here made the check fire sev3 every five minutes about the intended
-# state the moment the owner cut the edge over to fc. An always-on alert is an ignored
-# alert. Intent is declared; an UNDECLARED change must still page.
+# state the moment the edge was deliberately cut over to the candidate. An always-on alert
+# is an ignored alert. Intent is declared; an UNDECLARED change must still page.
 pubarch() { [ "$1" != "$2" ] && echo "sev3-unexpected-arch" || echo "silent"; }
 edge_ver() { local exp_code="$1"; local p_ver="$2"; local exp_ver="$3"
              if [ "$exp_code" = "200" ] && [ "$p_ver" != "$exp_ver" ]
@@ -106,10 +106,9 @@ echo
 # ignored alert, which is the same defect the "expected public arch" section above
 # records.
 #
-# CORRECTED 2026-09-06: the 1df0d4f release of 2026-09-03 rebuilt both pools, and
-# :5001 and :5002 now answer `x-agent-specialists: 0`. So the ABSENT-header rows
-# below are the compatibility path for an un-rebuilt image, and `spec 0 0` is what
-# this host actually produces every five minutes.
+# Rebuilt pools answer `x-agent-specialists: 0`, so `spec 0 0` is the normal case
+# and the ABSENT-header rows below are the compatibility path for an un-rebuilt
+# image.
 #
 # The rule is SOURCED from the shipped monitor, not transcribed: a hand-copied
 # condition passes no matter what the script says, which is the defect this whole
@@ -120,7 +119,7 @@ eval "$(sed -n '/^specialists_ok() {/,/^}/p' "$MON_SH")"
 spec() { specialists_ok "$1" "$2" && echo "silent" || echo "sev3-specialists"; }
 echo "--- specialist header (absent == 0 only when 0 is expected) ---"
 check "the rule was sourced from the shipped monitor" "function" "$(type -t specialists_ok)"
-check "TODAY'S POOLS: 0 observed where 0 is expected" "silent"           "$(spec 0 0)"
+check "REBUILT POOLS: 0 observed where 0 is expected" "silent"          "$(spec 0 0)"
 check "matching 1s are silent"                      "silent"           "$(spec 1 1)"
 check "AN UN-REBUILT IMAGE: absent where 0 is expected" "silent"        "$(spec none 0)"
 check "an empty value where 0 is expected"          "silent"           "$(spec '' 0)"
@@ -132,21 +131,20 @@ check "0 where 1 is expected still pages"           "sev3-specialists" "$(spec 0
 check "an unresolvable expectation still pages"     "sev3-specialists" "$(spec 0 none)"
 echo
 
-# --- legacy-pool provenance: this host names its commit now ------------------
+# --- legacy-pool provenance: a rebuilt legacy pool names its commit --------
 # Both legacy conditions are EXTRACTED and evaluated by
 # tests/test_monitor_legacy_pin_alert.py, which is where the real blocks are read
-# out of the shipped file. These rows record the STATE those blocks now see, which
-# changed on 2026-09-03 and which the monitor's prose used to deny:
+# out of the shipped file. These rows record the STATE those blocks see once
 # LEGACY_APP_SHA is set in the root .env and `app` was recreated, so :5001 answers
-# a full 40-char sha. The "cannot state its commit" warning is therefore inert, and
+# a full 40-char sha. The "cannot state its commit" warning is then inert, and
 # the pin check is live-and-agreeing rather than unreachable.
-LEGACY_SHA40="$(printf '1df0d4f7140f366e42b120fc9629fdb87e738428')"
+LEGACY_SHA40="$(printf '0123456789abcdef0123456789abcdef01234567')"
 unknown_alert() { # <l_ver>
   { [ "$1" = "unknown" ] || [ "$1" = "none" ]; } && echo "sev4-unidentified" || echo "silent"; }
 legacy_pin() {   # <l_ver> <pinned>
   [ -n "$2" ] && [ "$1" != "none" ] && [ "$1" != "unknown" ] && [ "$1" != "$2" ] \
     && echo "sev3-pin-mismatch" || echo "silent"; }
-echo "--- legacy pool provenance (post-1df0d4f) ---"
+echo "--- legacy pool provenance (rebuilt legacy pool) ---"
 check "a 40-char legacy sha raises no 'cannot state' warning" "silent" \
       "$(unknown_alert "$LEGACY_SHA40")"
 check "a regressed legacy pool still warns"        "sev4-unidentified" "$(unknown_alert unknown)"

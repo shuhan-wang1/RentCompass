@@ -6,7 +6,7 @@
 set -uo pipefail
 BASE=${BASE:-e7977e6}
 CAP=${CAP:-HEAD}
-REPO=${REPO:-/home/shuhan/telemetry-v2-layer-b}
+REPO=${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
 
 ALLOW=(
   "evaluation/run_benchmark.py"

@@ -1,7 +1,7 @@
 """`scripts/canary_prune_fixture_rows.py` removes fixture rows and nothing else.
 
-The live legacy log carries 121 rows no pool ever wrote (fixture shas `shaLEGACY`
-/ `shaSER`, including 32 `canary.arch_mismatch` events with no ts, request_id or
+A live legacy log can carry rows no pool ever wrote (fixture shas `shaLEGACY`
+/ `shaSER`, and `canary.arch_mismatch` events with no ts, request_id or
 schema version). The danger of any such script is that it becomes a log cleaner,
 so these tests pin what it must REFUSE to delete as hard as what it deletes.
 """
@@ -82,7 +82,7 @@ def test_drops_only_fixture_shas_and_identityless_events(tmp_path):
 
 
 def test_genuine_short_and_unknown_sha_rows_are_never_touched(tmp_path):
-    """1560 short-sha and 1222 unknown-sha rows are real production turns.
+    """Short-sha and unknown-sha rows are real production turns.
 
     They are also where every zero-tolerance counter in the file lives, so a
     script that deleted them would change a gate verdict by deleting evidence.

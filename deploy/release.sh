@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Cut a release: put this box on the latest reviewed commit and deploy it.
 #
-#   cd /home/shuhan/uk_rent_recommendation
+#   cd <repo checkout>
 #   bash deploy/release.sh
 #
 # That is the whole procedure. A cached sudo credential may be used to repair the
@@ -19,10 +19,9 @@
 # still enforces `HEAD == DEPLOY_PINNED_SHA` exactly as before.
 #
 # What was actually broken was the *procedure* around the gate. The re-pin was
-# three manual steps documented in deploy/monitoring/README.md, and on 2026-07-28
-# a merged search fix sat unshipped for hours while the same bug was re-reported,
-# because nobody had performed them. A release step people skip is not a safety
-# property — it is an outage waiting for a busy day.
+# three manual steps documented in deploy/monitoring/README.md, and a merged fix
+# could sit unshipped simply because nobody had performed them. A release step
+# people skip is not a safety property — it is an outage waiting for a busy day.
 #
 # So: the gate keeps deciding what MAY ship; this script performs the deliberate
 # act of advancing the pin, with the checks that decision deserves:
@@ -63,7 +62,7 @@
 #                        runs — i.e. an architecture that is NOT at 100% when the
 #                        run starts ends there. Rebuilding the pool that is already
 #                        the sole public upstream is NOT that: routing is unchanged,
-#                        and a routine release on this host needs no flag. Only a
+#                        and a routine release needs no flag. Only a
 #                        real cutover (a different candidate architecture taking the
 #                        exclusive :5002 slot, or a weighted host being advanced to
 #                        100%) is refused without it.
@@ -76,7 +75,7 @@ set -euo pipefail
 # relative $0 stops resolving the moment the working directory changes.
 SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 
-REPO_DIR="${RELEASE_REPO_DIR:-/home/shuhan/uk_rent_recommendation}"
+REPO_DIR="${RELEASE_REPO_DIR:-$(dirname "$(dirname "$SELF")")}"
 cd "$REPO_DIR"
 
 GIT_CMD="${RELEASE_GIT_CMD:-git}"
@@ -288,10 +287,10 @@ printf '    then       %s %s\n' "$UPDATE_CMD" "${PASSTHROUGH[*]:-}"
 #
 # R3-H3: the first version of the gate compared only the END state, so it could
 # not tell "the pool that is already live stays at 100%" from "this run flips the
-# candidate to 100%". On this box the fc_loop pool on :5002 has BEEN the sole
-# public upstream since the 07-27 cutover, so every routine release was refused
-# and had to be typed as `CANARY_ALLOW_FLIP=1 bash deploy/release.sh` — training
-# the exact habit that disarms the gate for the real manager_v1 cutover later.
+# candidate to 100%". On a host whose candidate pool is already the sole public
+# upstream, every routine release was refused and had to be typed as
+# `CANARY_ALLOW_FLIP=1 bash deploy/release.sh` — training the exact habit that
+# disarms the gate for a real cutover later.
 #
 # The gate now fires only on a CHANGE: an architecture that is NOT running at 100%
 # when the run starts ends there. A rebuild of the already-live single-upstream
@@ -314,8 +313,8 @@ esac
 # What the exclusive candidate SLOT (:5002) runs RIGHT NOW. update.sh tags every
 # candidate image `uk-rent-agent:canary-<arch-with-dashes>-<short sha>`, so the
 # root .env's own FC_CANARY_IMAGE is a primary source for it — no probe, no
-# guess. An unparseable tag falls back to fc_loop, the only architecture that has
-# ever occupied the slot on this host.
+# guess. An unparseable tag falls back to fc_loop, the default candidate
+# architecture.
 LIVE_CANDIDATE_ARCH="${RELEASE_LIVE_CANDIDATE_ARCH:-}"
 if [ -z "$LIVE_CANDIDATE_ARCH" ]; then
   LIVE_CANDIDATE_ARCH="$(printf '%s' "$(read_root_env FC_CANARY_IMAGE '')" \
@@ -380,9 +379,9 @@ else
 fi
 [ -z "$END_NOTE" ] || warn "$END_NOTE"
 
-# R3-M8. This host has exactly TWO pool slots: docker-compose.yml hardcodes :5001
-# to arch `legacy`, and :5002 is the single candidate slot. A candidate whose arch
-# is not what the slot runs today therefore REPLACES today's production
+# R3-M8. The compose stack has exactly TWO pool slots: docker-compose.yml hardcodes
+# :5001 to arch `legacy`, and :5002 is the single candidate slot. A candidate whose
+# arch is not what the slot runs today therefore REPLACES the slot's current
 # architecture instead of running beside it, and "rollback" means `legacy` — not
 # the architecture being displaced. docs/canary_runbook.md section 2 repeats this.
 if [ "$CANDIDATE_ARCH" != "$LIVE_CANDIDATE_ARCH" ]; then

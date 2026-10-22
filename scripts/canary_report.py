@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Offline aggregator + gate evaluator for the fc_loop canary (shuhan's 2026-07-20 plan).
+"""Offline aggregator + gate evaluator for the fc_loop canary (the 2026-07-20 rollout plan).
 
 Consumes ``canary.turn`` structured log records (one per completed user turn) emitted by
 the running app and, per agent architecture (``fc`` pool vs ``legacy`` pool), computes a
-comparison table and evaluates shuhan's canary gate rules, printing a verdict and returning
+comparison table and evaluates the canary gate rules, printing a verdict and returning
 an exit code the CI/rollout driver can branch on.
 
 This module NEVER imports from ``app/`` — it reads the JSONL telemetry contract only. The
@@ -42,7 +42,7 @@ from datetime import datetime, timezone
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 # --------------------------------------------------------------------------- #
-# Constants — shuhan's thresholds                                             #
+# Constants — gate thresholds                                                 #
 # --------------------------------------------------------------------------- #
 
 P50_LIMIT_MS = 6000.0        # fc p50 hard ceiling (stage-pause above this)
@@ -147,8 +147,8 @@ SCHEMA_V3_FIELDS = ("llm_calls", "tool_batches")
 #     it, so there is nothing to key an entry on (`agenttest-t1-e2-legacy`:
 #     tool_batches 1, tool_ledger_status "complete", no tool_latency key).
 #   * `count` with `p50_ms`/`max_ms` null is legal and means UNMEASURED, never
-#     "instant". Today that is the whole legacy arm — 9 of 9 post-deploy legacy
-#     tool entries are null-timed — so the fc-vs-legacy tool-overhead comparison
+#     "instant". That is the whole legacy arm — every legacy tool entry is
+#     null-timed — so the fc-vs-legacy tool-overhead comparison
 #     this field was added for cannot yet be made, and an empty comparison must
 #     never be read as "legacy is faster". A null folded into a percentile as a
 #     zero would produce exactly that false reading.
@@ -741,7 +741,7 @@ def validate_record(rec: dict) -> List[str]:
         problems.append(
             f"{OBSERVER_INSTALLED_FIELD}={observer_installed!r} is not a boolean")
     elif observer_installed is False:
-        # THE 2026-07-25 CLASS, stated on the field that actually knows it. The
+        # THE UNOBSERVED-PROCESS CLASS, stated on the field that actually knows it. The
         # LangChain callback is the only thing that sees ModelRouter calls, so with
         # it absent every counter on this record describes a SUBSET of the turn —
         # `llm_calls`, `llm_usage` and the provider-error counts are floors, and a
@@ -758,13 +758,13 @@ def validate_record(rec: dict) -> List[str]:
             f"attached, so this record's call counts and token totals omit every "
             f"ModelRouter call the turn made")
     # A turn we could not measure and a process that was not measuring are DIFFERENT
-    # facts, and only the second is the defect this gate exists to catch (the
-    # 2026-07-25 round: a stale model id produced zero-call telemetry from an
-    # unobserved process for a day). A crash/5xx/timeout/cancellation that happened
+    # facts, and only the second is the defect this gate exists to catch (a stale
+    # model id can produce zero-call telemetry from an unobserved process). A
+    # crash/5xx/timeout/cancellation that happened
     # while the callback observer WAS attached is unmeasurable, not uninstrumented:
     # no amount of instrumentation could have priced a call that never reached its
     # completion callback. Charging it as a contract violation held every window
-    # containing one — at the crash rates in the real logs, every window — which is
+    # containing one — at realistic crash rates, nearly every window — which is
     # how operators learn to ignore INSTRUMENTATION-HOLD, or to switch it off. The
     # spend is still UNMEASURED (canary_cost keeps the turn chargeable and refuses
     # to price it at zero) and the crash still counts against the outcome/5xx rates
@@ -1358,8 +1358,8 @@ def window_bounds(window_hours: Optional[float], since: Optional[datetime],
     ``--expect-turns`` anchor printed a fixed string, ``"the selected --window / --since
     range"``, while ``--since`` was parsed and then used ONLY to compute stage
     elapsed-hours — it never filtered anything. The report therefore claimed a bound it
-    had not applied, and the first run of the 2026-07-25 internal round counted a
-    warm-up turn from before the stated start and returned INSTRUMENTATION-HOLD.
+    had not applied, and a run counted a warm-up turn from before the stated start
+    and returned INSTRUMENTATION-HOLD.
     """
     labels: List[str] = []
     cutoff: Optional[datetime] = None
@@ -1416,13 +1416,13 @@ def zero_tolerance_arm(records: Sequence[dict], *, arch: str,
 
     ARM = one architecture, and — when the caller pins one — one BUILD of it. The
     zero-tolerance gate rolls back *a release*, so the rows it counts have to be
-    rows that release produced. On this host the same stream holds 286 rows written
-    by earlier `fc_loop` builds (`4171d84`, `9129280`, `unknown`), and counting them
+    rows that release produced. The same stream can hold rows written by earlier
+    builds of the same architecture (other shas, or ``unknown``), and counting them
     against the candidate meant the candidate could never clear the gate no matter
     how clean it was: history is not evidence about a build that did not exist yet.
 
-    A pinned sha is matched by normalised identity OR by prefix, so ``1df0d4f``
-    selects the rows written as ``1df0d4f7140f…`` and vice versa.
+    A pinned sha is matched by normalised identity OR by prefix, so ``abc1234``
+    selects the rows written as ``abc1234def56…`` and vice versa.
     """
     mine: List[dict] = []
     others: List[dict] = []
@@ -1454,7 +1454,7 @@ def aggregate_zero_tolerance(records: Sequence[dict]) -> dict:
       caller selects the population with :func:`zero_tolerance_arm`; this function
       never filters. Handing it the whole window makes it report the control arm's
       and every previous build's history as the candidate's breach, which is the
-      shape that auto-rolled a clean candidate back on 2026-09-03.
+      shape that can auto-roll a clean candidate back.
     """
     flags = [classify(r) for r in records]
     by_ep: Dict[str, dict] = {}
@@ -1911,10 +1911,10 @@ def evaluate_measurement_validity(instrumentation: Optional[dict]) -> dict:
     An invalid measurement can never produce an automated rollback. `exit 3` is
     wired to `set_canary_weight.sh --weight 0` by `deploy/run_canary_gate.sh`, so
     emitting 3 off a window whose population is unreadable means a *rollback of a
-    healthy candidate caused by a logging problem*. On 2026-09-03 exactly that was
-    live: a window straddling the deploy mixed schema v2/v3 and five candidate
-    labels, and the operator's own documented remedy (`--since <before-the-deploy>`)
-    was the command that would have driven the fc pool to 0%.
+    healthy candidate caused by a logging problem*. A window straddling a deploy
+    can mix schema v2/v3 and several candidate labels, and the documented remedy
+    (`--since <before-the-deploy>`) is then the command that would drive the fc
+    pool to 0%.
 
     Three facts make a window unreadable, and each of them says the same thing —
     the rates have no single denominator:
@@ -1975,7 +1975,7 @@ def build_verdict(fc: dict, legacy: dict, deltas: dict,
                   *, candidate_arch: str = "fc_loop",
                   control_arch: str = "legacy",
                   require_specialists: bool = False) -> dict:
-    """Evaluate shuhan's zero-tolerance and stage-pause rules against the fc pool.
+    """Evaluate the zero-tolerance and stage-pause rules against the fc pool.
 
     Precedence for the exit code: an INVALID MEASUREMENT (2) beats zero-tolerance
     (3), which beats stage-pause/HOLD (2), which beats proceed (0).  An observation

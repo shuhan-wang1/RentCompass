@@ -209,7 +209,7 @@ def test_no_focus_stack_target_address_unchanged(lga):
 # fc_loop (core/agent_loop.py) — the focus stack must reach the PROMPT
 #
 # The stack was resolved correctly (tests above) and then dropped on the floor by the
-# fc loop, which is the pool the public edge serves: _build_messages read a
+# fc loop: _build_messages read a
 # `focused_property` key nothing writes and fell back to {"property_address": ...} — a
 # shape _format_single_result does not read. The focus block rendered
 # "Property: (no details captured)" with NO url, so a focused listing was invisible to

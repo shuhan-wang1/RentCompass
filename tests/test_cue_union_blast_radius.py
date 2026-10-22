@@ -7,8 +7,8 @@ have: ``safe``; ``travel time`` / ``how long`` / ``how far``; ``药店`` / ``pha
 tests/test_dimension_table_is_shared.py pins that the merged table IS the union and that both
 arches now read it. tests/test_dimension_fanout.py pins the fan-out's gates generically.
 
-Neither answers the question the owner ruling needs, because fc holds the public edge and is
-already over the p50 bar: **how much extra work does the widening cause, and on which turns?**
+Neither answers the question the decision needs, because fc is already over the p50 bar:
+**how much extra work does the widening cause, and on which turns?**
 A cue on fc is not only a disclosure line — ``_dimension_fanout_calls`` turns an unserved cued
 dimension into a real tool call in the batch. So the union is a latency change, not just a
 vocabulary change, and it has to be priced rather than argued about.

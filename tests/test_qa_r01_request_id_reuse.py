@@ -1,4 +1,4 @@
-"""An X-Request-Id reused with a different message is refused (overnight round r01: R1-15).
+"""An X-Request-Id reused with a different message is refused (QA round r01: R1-15).
 
 POST /api/alex with a request id already used for "hello" and the message "find me a flat"
 replayed the old answer with 200 and X-Idempotent-Replay: 1 — the user's new question was

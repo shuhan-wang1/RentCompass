@@ -3,10 +3,10 @@ Offline unit tests for the CONFIRMED state + safety fixes in
 core/langgraph_agent.py (workstreams 1a/1b and 2a/2e).
 
 The two cross-file contract extractors (_extract_area, _extract_budget_clear)
-are still being added to core.tools.search_properties by a parallel fixer, so we
-STUB them here (monkeypatch, raising=False) to exercise langgraph_agent's own
-wiring independently of that work. The prompt-only fixes (2b/2c/2d) are behaviour
-of the LLM and are verified by the coordinator via live sampling, not here.
+live in core.tools.search_properties, so we STUB them here (monkeypatch,
+raising=False) to exercise langgraph_agent's own wiring independently of them.
+The prompt-only fixes (2b/2c/2d) are behaviour of the LLM and are verified via
+live sampling, not here.
 """
 import os
 import sys

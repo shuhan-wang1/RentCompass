@@ -1,4 +1,4 @@
-"""Criteria parsing found in overnight round r01 (R1-03, R1-04, R1-05, R1-06).
+"""Criteria parsing found in QA round r01 (R1-03, R1-04, R1-05, R1-06).
 
 R1-03: "Search web for average rent in Hackney 2026 and cite sources" stored
        max_budget=2026 and the reply offered listings "within your £2,026 budget".
@@ -22,7 +22,7 @@ from core.constraint_updates import pet_requirement_update
 from core.langgraph_agent import _apply_explicit_criteria_updates
 from core.tools.search_properties import _extract_budget, _extract_room_type, _matches_room_type
 from tests.test_agent_contract_guards import _state, _tc
-from tests.test_overnight_null_injection import _ValidatingProvider, _strict_null_args
+from tests.test_qa_null_injection import _ValidatingProvider, _strict_null_args
 
 
 @pytest.fixture(autouse=True)

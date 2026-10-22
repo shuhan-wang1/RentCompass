@@ -5,7 +5,7 @@
 # existing routing state is preserved unless --force-route-reset says otherwise.
 set -euo pipefail
 
-REPO=/home/shuhan/uk_rent_recommendation
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONF=rentcompass.co.uk.conf
 SRC="$REPO/deploy/nginx/$CONF"
 ROUTE_SRC="$REPO/deploy/nginx/rentcompass-canary-routing.conf"
@@ -19,9 +19,9 @@ ROUTE_DST=/etc/nginx/snippets/rentcompass-canary-routing.conf
 # traffic to `legacy` — and the committed vhost replaces the `upstream
 # rentcompass_app { server 127.0.0.1:PORT; }` block that IS the routing state on a
 # single-upstream host (and the block update.sh, release.sh and switch_pool.sh all
-# parse). So a cert repair, a rebuild, or any casual re-run silently DOWNGRADED
-# production from the fc_loop architecture to legacy, and removed the tooling's
-# only view of the route at the same time.
+# parse). So a cert repair, a rebuild, or any casual re-run would silently move
+# public traffic back to the legacy pool, and remove the tooling's only view of
+# the route at the same time.
 #
 # Existing routing state is therefore preserved by default. --force-route-reset
 # is the deliberate "reset the rollout to 0%" action, and it prints how to get
@@ -81,8 +81,8 @@ install_vhost() {   # $1 = source template
   ln -sf "$dst" "/etc/nginx/sites-enabled/$CONF"
 }
 
-# nginx should own :443 since the port swap (Xray moved to 8443) — see
-# deploy/migrate_ports_443.sh. Anything else here means TLS will not come up.
+# :443 should be held by nginx (or nothing yet). Anything else here means TLS
+# will not come up.
 echo "===== [1/5] Who is listening on :443 (expect nginx, or nothing yet) ====="
 ss -ltnp | grep ':443' || echo "  (:443 is FREE — good for TLS)"
 

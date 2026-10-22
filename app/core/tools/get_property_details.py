@@ -116,7 +116,7 @@ def normalize_text(text: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════════════
 # Entity-resolution guard
 #
-# HANDOFF §0 defect class: *a value is computed, stored where a reader could find
+# The recurring defect class: *a value is computed, stored where a reader could find
 # it, and then never asserted on.* This tool used to DECIDE which cached listing
 # the user meant (`matches[0]`) and then throw the decision away — the returned
 # dict said "found: True" and carried a price, with nothing anywhere comparing the

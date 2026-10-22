@@ -1,8 +1,8 @@
 # MCP integration (UK rent tools)
 
 Every tool registered in `create_tool_registry()` is exposed over the
-**Model Context Protocol** by `mcp_server.py`, and the agent consumes them
-through that server over **stdio**. That is currently **14 tools**:
+**Model Context Protocol** by `mcp_server.py`, and the agent can consume them
+through that server over **stdio** (`USE_MCP_TOOLS=1`). That is currently **14 tools**:
 
 | Group | Tools |
 |---|---|
@@ -40,13 +40,17 @@ the specs from the registry's `Tool` objects, so both paths stay single-sourced.
 
 ## Running (web app)
 
-`app.py` wires this automatically at startup: it builds the in-process registry,
-then starts an `MCPToolClient` (which spawns `python mcp_server.py` over stdio) and
-hands it to the agent. To force the old in-process path instead, set:
+`app.py` always builds the in-process registry. With `USE_MCP_TOOLS=1` it also
+starts an `MCPToolClient` (which spawns `python mcp_server.py` over stdio) and hands
+that to the agent, falling back to the registry if the server does not connect. The
+default, `USE_MCP_TOOLS=0`, uses the in-process registry directly:
 
 ```bash
-USE_MCP_TOOLS=0 python app/app.py
+USE_MCP_TOOLS=1 python app/app.py
 ```
+
+`AGENT_ARCH=manager_v1` with `MANAGER_V1_SPECIALISTS=1` requires `USE_MCP_TOOLS=0`; the
+combination is refused at config load.
 
 ## Running the MCP server standalone
 

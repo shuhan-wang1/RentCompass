@@ -156,7 +156,7 @@ VALID_USAGE_STATUSES = (USAGE_COMPLETE, USAGE_PARTIAL, USAGE_NO_CALLS,
 #   observer live + turn died   -> UNMEASURABLE. No instrumentation could have
 #                                  measured it; holding the window on it teaches
 #                                  operators to ignore INSTRUMENTATION-HOLD.
-#   observer absent             -> the 2026-07-25 incident class: zero-call
+#   observer absent             -> the unobserved-process class: zero-call
 #                                  telemetry from a process that was not watching.
 #                                  This is exactly what the gate exists to catch.
 #
@@ -586,9 +586,9 @@ def _tool_latency_summary(value: Any) -> Optional[Dict[str, Any]]:
     contract violation, and the consumer must stay tolerant of all three:
 
     * **``p50_ms``/``max_ms`` null while ``count`` is a real number.** The call was
-      counted but not timed. This is the whole legacy arm today: 9 of 9 post-deploy
-      legacy tool entries carry ``count`` with null timings, because the legacy path
-      has no timing wrapper around its dispatch. A null here means UNMEASURED, never
+      counted but not timed. This is every legacy tool entry: the legacy path
+      has no timing wrapper around its dispatch, so its entries carry ``count``
+      with null timings. A null here means UNMEASURED, never
       "instant" — never fold it into a percentile as a zero, and never read an empty
       fc-vs-legacy tool-overhead comparison as "legacy is faster".
     * **``tool_latency`` absent while ``tool_batches`` > 0.** ``tool_batches``

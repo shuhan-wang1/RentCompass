@@ -76,7 +76,7 @@ import pathlib  # noqa: E402
 from core.candidate_validation import validate_candidates  # noqa: E402
 
 REAL_15 = json.loads((pathlib.Path(__file__).parent / "data" /
-                      "overnight_r04_search_15.json").read_text(encoding="utf-8"))
+                      "qa_r04_search_15.json").read_text(encoding="utf-8"))
 
 
 def _with_ledger(payload):

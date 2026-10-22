@@ -2,8 +2,8 @@
 
 `/ready` and `set_canary_weight.sh::verify_local` only prove identity: the
 readiness LLM check asserts a non-empty credential and reports
-``connectivity: "not_probed"``. On 2026-07-25 a stale ``DEEPSEEK_MODEL`` left
-both pools green on `/ready` for a day. A greeting cannot detect it either —
+``connectivity: "not_probed"``. A stale ``DEEPSEEK_MODEL`` leaves a pool green
+on `/ready` while every real turn fails. A greeting cannot detect it either —
 `app/core/agent_loop.py::guard_node` answers greetings deterministically with
 zero model calls. So the probe drives one real turn and reads the answer.
 

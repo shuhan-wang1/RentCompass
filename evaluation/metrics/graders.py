@@ -892,7 +892,7 @@ def grade_grounding(ctx: GradeContext) -> GroundingResult:
     # Three shapes, all of which must carry EITHER an explicit /100 denominator or a
     # tight safety-score label. That requirement is what keeps this extractor away from
     # percentages ("51% of crimes were antisocial behaviour" has no denominator and no
-    # label) and away from arithmetic inside an explained formula. HANDOFF §0 instance #4
+    # label) and away from arithmetic inside an explained formula. defect-class instance #4
     # is a fabricated safety score — "Hackney: 9 crimes, 96/100 Very Safe" against a real
     # 1,657/month — and while the SCORING formula was fixed and pinned by
     # tests/test_safety_scoring.py, an invented score in the ANSWER TEXT still needs a

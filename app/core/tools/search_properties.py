@@ -3118,6 +3118,12 @@ async def search_properties_impl(
         fresh_areas = edited_areas if edited_areas is not None else _extract_areas(msg_for_extraction)
         if len(fresh_areas) == 1 and bare_city_downgrades(fresh_areas[0], search_area):
             fresh_areas = []    # a bare "London" never widens a finer requested area (R1-01)
+        if (search_area and fresh_areas and edited_areas is None
+                and all(names_place_as_workplace(msg_for_extraction, a) for a in fresh_areas)):
+            # "I also work in Shoreditch" names the commute destination; the requested home
+            # area stands (r19 e54b1945). With no area at all the workplace still centres
+            # the search, below.
+            fresh_areas = []
         if fresh_areas:
             req_areas = fresh_areas
             search_area = fresh_areas[0]

@@ -3642,6 +3642,12 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     _nearby_notice = render_nearby_failure_notice(final_state, language=_memory_language)
     if _nearby_notice and _nearby_notice not in response_text:
         response_text += '\n\n' + _nearby_notice
+    # A requirement the search cannot check ("DSS / housing benefit accepted") is said
+    # plainly instead of being dropped in silence (r6-C2).
+    from core.preference_grounding import render_unsupported_requirement_notice
+    _unsupported_notice = render_unsupported_requirement_notice(user_message, language=_memory_language)
+    if _unsupported_notice and _unsupported_notice not in response_text:
+        response_text += '\n\n' + _unsupported_notice
     if memory_contract.get('requested'):
         from core.constraint_updates import independent_memory_task
         other_result = any(artifact.get('tool') not in ('remember','recall_memory','ask_user',None)

@@ -2904,9 +2904,11 @@ async def search_properties_impl(
     else:
         _raw_property_features = []
     all_property_features = []
+    from core.preference_grounding import benefit_acceptance_feature
     for _feature in _raw_property_features:
         _raw_feature = str(_feature or "").strip()
-        if not _raw_feature:
+        if not _raw_feature or benefit_acceptance_feature(_raw_feature):
+            # "DSS accepted" has no listing evidence: never a filter, never stored (r6-C2).
             continue
         _canonical_feature = _canonical_property_feature(_raw_feature)
         # Canonicalise accessibility aliases so the request and evidence use the

@@ -296,14 +296,21 @@ def _has_content(text: str) -> bool:
 def apply_preference_policy(params: dict) -> tuple[dict, bool]:
     """The search arguments with sensitive preferences turned into requirements (NEW-E).
 
-    Returns ``(params, changed)``; derived features are appended to ``property_features``."""
+    Returns ``(params, changed)``; derived features are appended to ``property_features``.
+    A "DSS / housing benefit accepted" feature is dropped: no listing evidence can satisfy
+    it, and it would persist the user's benefit status in the criteria (r6-C2)."""
     p = dict(params or {})
+    dropped = False
+    features = p.get("property_features")
+    if isinstance(features, list) and any(benefit_acceptance_feature(f) for f in features):
+        p["property_features"] = [f for f in features if not benefit_acceptance_feature(f)]
+        dropped = True
     prefs = p.get("accumulated_preferences")
     if not prefs:
-        return p, False
+        return p, dropped
     kept, features = split_sensitive_preferences(prefs)
     original = [prefs] if isinstance(prefs, str) else list(prefs)
-    changed = kept != original
+    changed = kept != original or dropped
     if kept:
         p["accumulated_preferences"] = kept
     else:
@@ -324,3 +331,58 @@ def stored_soft_preferences(values) -> list:
     sensitive detail (NEW-E). Requirements a sensitive item names are NOT added here."""
     from rag.agent_memory import sanitize_soft_preferences
     return split_sensitive_preferences(sanitize_soft_preferences(values))[0]
+
+
+# ── r6-C2: "DSS / housing benefit accepted" is a requirement the search cannot check ───
+# No listing source records whether a landlord accepts housing benefit or Universal
+# Credit, so round 5 maps benefit status to no requirement and memory never stores it.
+# The user must still be told: a request for such listings gets a plain notice that the
+# search cannot filter for it, worded about the listings, never about the user.
+_BENEFIT_TERM = (r"(?:dss|housing\s+benefits?|universal\s+credit|uc|local\s+housing\s+allowance|lha|"
+                 r"(?:state\s+)?benefits?(?:\s+(?:tenants?|claimants?))?|"
+                 r"(?:tenants?|people|renters)\s+(?:on|claiming|receiving)\s+benefits?)")
+_NO_NEW_CLAUSE = r"(?:(?!\b(?:and|but)\s+(?:i|i'm|i am|my)\b)[^.!?;\n])"
+_BENEFIT_REQUEST = re.compile(
+    # "landlords that accept DSS", "open to tenants on Universal Credit", "takes housing benefit"
+    rf"\b(?:accept\w*|welcom\w*|allow\w*|open\s+to|happy\s+(?:with|to\s+(?:take|accept))|"
+    rf"work\s+with)\b{_NO_NEW_CLAUSE}{{0,40}}?\b{_BENEFIT_TERM}\b|"
+    rf"\btak(?:e|es|ing)\s+(?:(?:tenants?|people|renters)\s+(?:on|claiming|receiving)\s+)?{_BENEFIT_TERM}\b|"
+    # "DSS welcome", "housing benefit accepted", "is Universal Credit OK?"
+    rf"\b{_BENEFIT_TERM}\b{_NO_NEW_CLAUSE}{{0,25}}?\b(?:accept\w*|welcome[sd]?|considered|"
+    r"friendly|allowed|ok(?:ay)?|fine)\b|"
+    r"(?:接受|可以用|能用|允许|支持|收)\s*(?:dss|住房补贴|住房福利|统一福利|福利|救济金|低保)|"
+    r"(?:dss|住房补贴|住房福利|统一福利|救济金)\s*(?:可以|也行|行吗|接受|没问题)", re.I)
+_BENEFIT_NEGATED = re.compile(
+    r"\b(?:don.t|do\s+not|doesn.t|does\s+not|no\s+need|not|never)\b[^.!?;\n]{0,30}$|不(?:需要|用|必)\s*$",
+    re.I)
+_BENEFIT_FEATURE = re.compile(rf"\b{_BENEFIT_TERM}\b|住房补贴|住房福利|统一福利|救济金|低保", re.I)
+
+_BENEFIT_NOTICE_EN = (
+    "I can't filter listings by whether the landlord or letting agent accepts housing benefit "
+    "or Universal Credit (often listed as \"DSS\"): the listing data doesn't record it. "
+    "Please confirm this with the letting agent or landlord before you arrange a viewing.")
+_BENEFIT_NOTICE_ZH = (
+    "说明：我无法按房东或中介是否接受住房补贴或 Universal Credit（常写作“DSS”）来筛选房源——"
+    "房源数据中没有这项信息。请在预约看房前向中介或房东确认。")
+
+
+def benefit_acceptance_requested(message: str) -> bool:
+    """True when ``message`` asks for listings that accept housing benefit / UC ("DSS")."""
+    text = str(message or "")[:4000]
+    for match in _BENEFIT_REQUEST.finditer(text):
+        if not _BENEFIT_NEGATED.search(text[max(0, match.start() - 40):match.start()]):
+            return True
+    return False
+
+
+def benefit_acceptance_feature(value) -> bool:
+    """True for a property feature that only names benefit acceptance ("DSS accepted")."""
+    return isinstance(value, str) and bool(_BENEFIT_FEATURE.search(value))
+
+
+def render_unsupported_requirement_notice(message: str, *, language: str = "en") -> str:
+    """The plain statement that the search cannot check a requirement this message asks for
+    (today: benefit acceptance), or ''. It never repeats the user's own circumstances."""
+    if not benefit_acceptance_requested(message):
+        return ""
+    return _BENEFIT_NOTICE_ZH if str(language or "").lower().startswith("zh") else _BENEFIT_NOTICE_EN

@@ -172,5 +172,226 @@
    },
    "user_query": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a week and a month would the faster one save me?"
   }
+ },
+ "r19_ecda0b02": {
+  "checkpoint": "1f1cddde-460d-6f0d-8007-cc493e74e0f7",
+  "critic_text": null,
+  "message": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+  "raw_draft": "The listing source is temporarily down, so I couldn't pull live studios this round. That's a data outage, not a sign that nothing exists at your budget.\n\nYour criteria are saved: studio, up to £2,000/month, within 25 minutes of Old Street.\n\nA couple of things that would help me get results faster once the source is back:\n\n1. Should I widen the search to nearby areas as well (e.g. Islington, Hackney, Bethnal Green, Whitechapel, Clerkenwell)? Studios around Old Street itself at £2,000 are tight, and areas a few stops out usually give more for the money while staying inside 25 minutes.\n2. Do you have a target move-in date?\n\nSay \"try again\" and I'll re-run the search, or tell me which extra areas to include and I'll search those together.",
+  "request_id": "ecda0b028e6b4ad49acd4040d98891da",
+  "shipped": "The OnTheMarket listing source is temporarily unavailable, so current listings could not be verified. Your housing criteria are preserved; this does not show that your budget or area has no properties.",
+  "state": {
+   "accumulated_search_criteria": {
+    "amenities_of_interest": [],
+    "bedrooms": 0,
+    "bedrooms_minimum": false,
+    "budget_period": "month",
+    "commute_destination": "Old Street",
+    "constraint_sources": {
+     "bedrooms": {
+      "source": "user_message",
+      "text": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+      "value": 0
+     },
+     "bedrooms_minimum": {
+      "source": "user_message",
+      "text": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+      "value": false
+     },
+     "budget_period": {
+      "source": "user_message",
+      "text": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+      "value": "month"
+     },
+     "commute_destination": {
+      "source": "user_message",
+      "text": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+      "value": "Old Street"
+     },
+     "destination": {
+      "source": "user_message",
+      "text": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+      "value": "Old Street"
+     },
+     "max_budget": {
+      "source": "user_message",
+      "text": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+      "value": 2000
+     },
+     "max_travel_time": {
+      "source": "user_message",
+      "text": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+      "value": 25
+     },
+     "no_commute": {
+      "source": "user_message",
+      "text": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+      "value": false
+     },
+     "room_type": {
+      "source": "user_message",
+      "text": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+      "value": "studio"
+     }
+    },
+    "destination": "Old Street",
+    "max_budget": 2000,
+    "max_travel_time": 25,
+    "no_commute": false,
+    "property_features": [],
+    "room_type": "studio",
+    "soft_preferences": []
+   },
+   "candidate_validation": {
+    "constraints": {
+     "areas": [
+      "old-street"
+     ],
+     "bedrooms": 0.0,
+     "bedrooms_minimum": false,
+     "commute_destination": "Old Street, Finsbury, London Borough of Islington, Greater London, England, EC1Y 8AF, United Kingdom",
+     "max_budget_monthly": 2000.0,
+     "max_changes": null,
+     "max_commute_minutes": 25.0,
+     "monthly_total_budget": null,
+     "move_in_date": null,
+     "no_commute": false,
+     "office_days_per_week": null,
+     "property_features": [],
+     "room_type": "studio"
+    },
+    "eligible": [],
+    "excluded": [],
+    "statuses": [],
+    "unknown": []
+   },
+   "extracted_context": {
+    "current_date": "2026-10-22",
+    "current_message": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work.",
+    "history": [],
+    "memory_paused": false,
+    "reply_language": "en"
+   },
+   "memory_context": "",
+   "observations": [],
+   "tool_artifacts": [
+    {
+     "elapsed_ms": 6227,
+     "error": null,
+     "params_digest": "ca16257bbe93e13b",
+     "raw_data": {
+      "area_recommendations": [],
+      "area_status": {
+       "old-street": "unavailable"
+      },
+      "cache_stats": {
+       "hits": 0,
+       "misses": 1
+      },
+      "candidate_states": [],
+      "candidate_validation": {
+       "constraints": {
+        "areas": [
+         "old-street"
+        ],
+        "bedrooms": 0.0,
+        "bedrooms_minimum": false,
+        "commute_destination": "Old Street, Finsbury, London Borough of Islington, Greater London, England, EC1Y 8AF, United Kingdom",
+        "max_budget_monthly": 2000.0,
+        "max_changes": null,
+        "max_commute_minutes": 25.0,
+        "monthly_total_budget": null,
+        "move_in_date": null,
+        "no_commute": false,
+        "office_days_per_week": null,
+        "property_features": [],
+        "room_type": "studio"
+       },
+       "eligible": [],
+       "excluded": [],
+       "statuses": [],
+       "unknown": []
+      },
+      "commute_evidence": [],
+      "commute_note": "Commute times have not been verified for these listings this round. A narrower area or a specific destination can help complete that check.",
+      "commute_unverified": true,
+      "data_source": "OnTheMarket",
+      "excluded_candidates": [],
+      "incomplete_areas": [
+       "old-street"
+      ],
+      "known_criteria": {
+       "area": "old-street",
+       "areas": [
+        "old-street"
+       ],
+       "bedrooms": 0,
+       "bedrooms_minimum": false,
+       "budget_period": "month",
+       "commute_destination": "Old Street, Finsbury, London Borough of Islington, Greater London, England, EC1Y 8AF, United Kingdom",
+       "max_budget": 2000.0,
+       "max_changes": null,
+       "max_travel_time": 25,
+       "monthly_total_budget": null,
+       "move_in_date": null,
+       "no_commute": false,
+       "office_days_per_week": null,
+       "property_features": [],
+       "room_type": "studio",
+       "soft_preferences": []
+      },
+      "message": "The OnTheMarket listing source is temporarily unavailable, so current listings could not be verified. Your housing criteria are preserved; this does not show that your budget or area has no properties.",
+      "partial": true,
+      "partial_note": "The OnTheMarket listing source is temporarily unavailable, so current listings could not be verified. Your housing criteria are preserved; this does not show that your budget or area has no properties.",
+      "recommendations": [],
+      "retrieval_complete": false,
+      "retrieval_outcome": "source_unavailable",
+      "search_criteria": {
+       "area": "old-street",
+       "areas": [
+        "old-street"
+       ],
+       "bedrooms": 0,
+       "bedrooms_minimum": false,
+       "budget_period": "month",
+       "commute_destination": "Old Street, Finsbury, London Borough of Islington, Greater London, England, EC1Y 8AF, United Kingdom",
+       "destination": "Old Street, Finsbury, London Borough of Islington, Greater London, England, EC1Y 8AF, United Kingdom",
+       "max_budget": 2000.0,
+       "max_changes": null,
+       "max_travel_time": 25,
+       "monthly_total_budget": null,
+       "move_in_date": null,
+       "no_commute": false,
+       "office_days_per_week": null,
+       "property_features": [],
+       "room_type": "studio",
+       "soft_preferences": []
+      },
+      "source_errors": {
+       "old-street": {
+        "status": "unavailable"
+       }
+      },
+      "source_message": "The OnTheMarket listing source is temporarily unavailable, so current listings could not be verified. Your housing criteria are preserved; this does not show that your budget or area has no properties.",
+      "source_status": "unavailable",
+      "status": "no_results",
+      "success": true,
+      "unverified_candidates": []
+     },
+     "success": true,
+     "tool": "search_properties",
+     "turn": 1
+    }
+   ],
+   "tool_decision": {},
+   "user_preferences": {
+    "excluded_areas": [],
+    "hard_preferences": [],
+    "required_amenities": [],
+    "safety_concerns": [],
+    "soft_preferences": []
+   },
+   "user_query": "I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of work."
+  }
  }
 }

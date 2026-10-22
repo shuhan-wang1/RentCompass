@@ -1973,6 +1973,38 @@ _SAVING_HEADER = re.compile(
     r"\b(?:time\s+saved|saved|saves?|saving|faster|quicker|slower|difference|gap|versus|vs\.?|compared)\b", re.I)
 
 
+# The user's own limit, restated as a criterion: "Your criteria are saved: studio, up to
+# £2,000/month, within 25 minutes of Old Street." (r19 a81297be) — nothing is said to BE within it.
+_BARE_LIMIT = re.compile(
+    r"^\s*(?:and\s+|with\s+|plus\s+)?(?:a\s+commute\s+(?:of\s+)?)?(?:within|under|up\s+to|inside|no\s+more\s+than|"
+    r"at\s+most|max(?:imum)?(?:\s+of)?)\s+(?:about\s+)?\d{1,3}\s*(?:minutes?|mins?)(?:['’]?\s+(?:commute|travel))?"
+    r"(?:\s+(?:of|to|from)\s+(?P<place>[^.,;!?]+?))?\s*$", re.I)
+_WORKPLACE_WORDS = re.compile(r"^(?:(?:your\s+|the\s+)?(?:work|office|workplace|job|campus|university|school))$", re.I)
+
+
+def _restates_user_limit(fragment: str, bindings: list, user_destinations: list | None) -> bool:
+    """A clause that is ONLY the user's limit, to the user's own destination (or "work"), with no
+    listing, area or route as its subject. ``_preference_commute_reference`` still requires the
+    figure to be the user's cap and still rejects "this flat … within …"."""
+    match = _BARE_LIMIT.match(str(fragment or ""))
+    if not match:
+        return False
+    place = (match.group("place") or "").strip()
+    if place and not _WORKPLACE_WORDS.match(place) and not any(
+            _label_key(label) and _label_key(label) == _label_key(place) for label in user_destinations or []):
+        return False      # "within 25 minutes of Bank" when the user works at Old Street
+    named = _line_binding(fragment, bindings)
+    return named is None or not (named.get("labels") or named.get("members"))
+
+
+def _user_commute_destinations(state: dict) -> list:
+    criteria = state.get("accumulated_search_criteria") or {}
+    labels: list = []
+    for key in ("commute_destination", "destination"):
+        labels.extend(_place_labels(criteria.get(key)))
+    return list(dict.fromkeys(labels))
+
+
 def _per_period_line(line: str, fragment: str) -> bool:
     """The line is a per-day/week/month figure ("- Per office day: …", "Per week (3 office
     days): …") or the clause itself names a period."""
@@ -2756,7 +2788,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                            preference_context: bool = False,
                            source_texts: list[str] | None = None,
                            removed: list | None = None,
-                           office_days: set | None = None) -> str | None:
+                           office_days: set | None = None,
+                           user_destinations: list | None = None) -> str | None:
     """Drop the unverifiable commute assertions and keep everything else.
 
     Price, area, availability and an honest caveat are all still true and still useful when
@@ -2890,7 +2923,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             carries an estimate marker ("estimated", "roughly")."""
             if _preference_commute_reference(
                     fragment, caps, context=preference_line or bool(
-                        _LIMIT_LABEL.search(heading_now[0]) or _LIMIT_LABEL.search(fragment))):
+                        _LIMIT_LABEL.search(heading_now[0]) or _LIMIT_LABEL.search(fragment))
+                    or _restates_user_limit(fragment, bindings, user_destinations)):
                 return True
             if _quotes_source_text(fragment, source_texts):
                 return True
@@ -4069,7 +4103,7 @@ def _validate_commute_response(response: str, state: dict, *, note_present: bool
         text, zh=zh, bindings=bindings, caps=_known_commute_caps(state),
         default_binding=default, preference_context=memory_reference,
         source_texts=_listing_source_texts(state), removed=removed,
-        office_days=_office_days(state))
+        office_days=_office_days(state), user_destinations=_user_commute_destinations(state))
     if redacted is None:
         fallback = render_structured_evidence_fallback(state, language=language)
         if not fallback and len(original.strip()) >= _LEDGER_FALLBACK_MIN_CHARS:

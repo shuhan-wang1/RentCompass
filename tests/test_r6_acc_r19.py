@@ -106,3 +106,34 @@ def test_a_chained_step_stands_or_falls_with_its_operand(line, kept):
         assert "114" not in out and "52 a week" not in out
         assert "- Per day: 38" not in out          # no "Per day:" label carrying a weekly step
         assert out.count(NOTE_EN) == 1 and flagged
+
+
+# ── the user's own limit, restated, is no commute claim (r19 a81297be, rid ecda0b02) ────
+
+CRITERIA = "Your criteria are saved: studio, up to £2,000/month, within 25 minutes of Old Street."
+
+
+def test_the_restated_criteria_line_is_kept():
+    """"I work at Old Street right now, budget £2000 — find me a studio within 25 minutes of
+    work." The answer restated the saved criteria and lost "within 25 minutes of Old Street"."""
+    case = CORPUS["r19_ecda0b02"]
+    assert CRITERIA in case["raw_draft"]
+    out = validate_commute_response(case["raw_draft"], case["state"])
+    assert CRITERIA in out
+    # a claim that unmeasured AREAS stay inside the limit still needs evidence
+    assert "staying inside 25 minutes" not in out
+
+
+@pytest.mark.parametrize("line,gone", [
+    ("This flat is within 25 minutes of Old Street.", "within 25 minutes"),
+    ("Your criteria are saved: studio, up to £2,000/month, within 25 minutes of Bank.", "of Bank"),
+    ("Your criteria are saved: studio, up to £2,000/month, within 30 minutes of Old Street.", "30 minutes"),
+    ("Your criteria are saved: studio, up to £2,000/month, and Islington is within 25 minutes of Old Street.",
+     "Islington is within"),
+])
+def test_a_claim_that_something_meets_the_limit_still_needs_evidence(line, gone):
+    case = CORPUS["r19_ecda0b02"]
+    text = case["raw_draft"].replace(CRITERIA, line)
+    out = validate_commute_response(text, case["state"])
+    assert gone not in out
+    assert NOTE_EN in out

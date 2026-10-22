@@ -941,6 +941,9 @@ python3.12 -m venv .venv
 Production and CI registry artifacts are SHA-256 locked. After an intentional
 dependency update, edit the reviewed inputs/constraints and regenerate with
 `scripts/compile_dependency_locks.sh`; never hand-edit generated `*.lock` files.
+The generator environment is Python 3.12, pip 25.3, pip-tools 7.5.2 and `click<8.5`
+(pip-tools 7.5.2 under click 8.5 writes a false `--no-index` into the lock headers); the
+script checks the click its pip-compile runs with and stops before writing a lock.
 
 ### The two env files — both are required, and they are not the same file
 

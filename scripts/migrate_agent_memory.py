@@ -225,7 +225,8 @@ def retire_legacy(
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser()
+    # allow_abbrev=False: a destructive option is matched exactly, never by its prefix.
+    parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument(
         "--db-path",
         type=Path,

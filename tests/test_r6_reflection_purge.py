@@ -312,3 +312,144 @@ def test_a_must_have_needs_the_users_own_must_have():
 ])
 def test_a_bare_priority_or_a_nice_to_have_is_still_acceptable(reflection):
     assert am_mod.reflection_rejection(reflection, "") is None
+
+
+# ------------------------------------------------- typo safety and restore (r6g)
+def _snapshot(root: Path) -> dict:
+    got = am_mod.AgentMemory(db_path=str(root)).col.get()
+    return {rid: (doc, meta) for rid, doc, meta in
+            zip(got["ids"], got["documents"], got["metadatas"])}
+
+
+def _tombstones(root: Path) -> set:
+    with sqlite3.connect(root / "agent_memory.sqlite3") as db:
+        return {row[0] for row in db.execute("SELECT id FROM legacy_tombstones")}
+
+
+def _load_script(name):
+    spec = importlib.util.spec_from_file_location(f"{name}_r6g", _ROOT / "scripts" / f"{name}.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[f"{name}_r6g"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.mark.parametrize("typo", ["--appl", "--app", "--a", "--rest"])
+def test_a_mistyped_option_is_an_error_and_deletes_nothing(tmp_path, typo):
+    """The owner ran the purge with "--appl"; argparse's prefix matching read it as --apply."""
+    _store(tmp_path)
+    before = _snapshot(tmp_path / "mem")
+    with pytest.raises(SystemExit) as stop:
+        cli.main([str(tmp_path / "mem" / "agent_memory.sqlite3"), typo])
+    assert stop.value.code not in (0, None)
+    assert _snapshot(tmp_path / "mem") == before
+    assert not list((tmp_path / "mem").glob("reflection-purge-backup-*.json"))
+
+
+@pytest.mark.parametrize("script,argv", [
+    ("canary_prune_fixture_rows", ["x.jsonl", "--appl"]),
+    ("canary_prune_fixture_rows", ["x.jsonl", "--backup", "d"]),
+    ("migrate_agent_memory", ["--retire"]),
+    ("migrate_agent_memory", ["--retire-legacy", "--expected-source-count", "1",
+                              "--expected-source-digest", "0" * 64, "--confirm"]),
+])
+def test_other_destructive_maintenance_scripts_match_options_exactly(script, argv, tmp_path):
+    with pytest.raises(SystemExit) as stop:
+        _load_script(script).main(argv)
+    assert stop.value.code not in (0, None)
+
+
+def test_restore_puts_back_exactly_the_purged_rows(tmp_path):
+    root = tmp_path / "mem"
+    _store(tmp_path)
+    original = _snapshot(root)
+    backup = tmp_path / "reflections.json"
+    assert _run(str(root), "--apply", "--backup", str(backup))[0] == 0
+    purged = {row["id"] for row in json.loads(backup.read_text())["rows"]}
+    assert purged and purged <= _tombstones(root)
+
+    out = io.StringIO()
+    assert cli.restore(root, backup, apply=False, out=out) == 0
+    assert "DRY RUN" in out.getvalue() and f"to restore        : {len(purged)}" in out.getvalue()
+    assert set(_snapshot(root)) == set(original) - purged          # the dry run wrote nothing
+
+    out = io.StringIO()
+    assert cli.restore(root, backup, apply=True, out=out) == 0, out.getvalue()
+    assert f"restored          : {len(purged)}" in out.getvalue()
+    assert _snapshot(root) == original                              # ids, documents, metadata
+    assert not (purged & _tombstones(root))
+
+    out = io.StringIO()
+    assert cli.restore(root, backup, apply=True, out=out) == 0      # idempotent
+    assert "nothing to do." in out.getvalue()
+    assert _snapshot(root) == original
+    assert cli.main([str(root / "agent_memory.sqlite3"), "--restore", str(backup)]) == 0
+
+
+def test_restore_skips_an_id_that_already_exists(tmp_path):
+    root = tmp_path / "mem"
+    _store(tmp_path)
+    backup = tmp_path / "reflections.json"
+    _run(str(root), "--apply", "--backup", str(backup))
+    first = json.loads(backup.read_text())["rows"][0]
+    memory = am_mod.AgentMemory(db_path=str(root))
+    memory.col.add(documents=["rewritten since"], metadatas=[first["metadata"]], ids=[first["id"]])
+    out = io.StringIO()
+    assert cli.restore(root, backup, apply=True, out=out) == 0, out.getvalue()
+    assert f"SKIP (exists) {first['id']}" in out.getvalue()
+    assert memory.col.get(ids=[first["id"]])["documents"] == ["rewritten since"]
+
+
+def test_a_restored_legacy_row_is_not_imported_twice(tmp_path):
+    root = tmp_path / "mem"
+    _create_legacy(root, [
+        ("legacy-said", "User asked: Find a studio in Bow", {"user_id": BOB, "mtype": "episodic",
+                                                              "role": "user"}),
+        ("legacy-escalating", FIRM, {"user_id": BOB, "mtype": "reflection", "importance": 8}),
+    ])
+    original = _snapshot(root)
+    backup = tmp_path / "b.json"
+    assert _run(str(root), "--apply", "--backup", str(backup))[0] == 0
+    assert "legacy-escalating" not in _snapshot(root)
+    assert cli.restore(root, backup, apply=True, out=io.StringIO()) == 0
+    memory = am_mod.AgentMemory(db_path=str(root))
+    memory.col.sync_legacy(force=True)
+    assert _snapshot(root) == original
+    with sqlite3.connect(root / "agent_memory.sqlite3") as db:
+        assert db.execute("SELECT COUNT(*) FROM memory_records WHERE id='legacy-escalating'"
+                          ).fetchone()[0] == 1
+
+
+@pytest.mark.parametrize("problem", ["other-database", "other-tool", "not-a-reflection",
+                                     "duplicate"])
+def test_restore_refuses_a_backup_that_does_not_belong_here(tmp_path, problem):
+    root = tmp_path / "mem"
+    _store(tmp_path)
+    backup = tmp_path / "reflections.json"
+    _run(str(root), "--apply", "--backup", str(backup))
+    payload = json.loads(backup.read_text())
+    target = root
+    if problem == "other-database":
+        other = tmp_path / "other"
+        _store(other)                    # a second, real store: the backup is not from it
+        target = other / "mem"
+    elif problem == "other-tool":
+        payload["tool"] = "scripts/canary_prune_fixture_rows.py"
+    elif problem == "not-a-reflection":
+        payload["rows"][0]["metadata"]["mtype"] = "semantic"
+    else:
+        payload["rows"].append(dict(payload["rows"][0]))
+    edited = tmp_path / "edited.json"
+    edited.write_text(json.dumps(payload))
+    before = _snapshot(target)
+    out = io.StringIO()
+    assert cli.restore(target, edited, apply=True, out=out) == 2
+    assert "refusing" in out.getvalue() and "Nothing was restored." in out.getvalue()
+    assert _snapshot(target) == before
+
+
+def test_restore_and_backup_together_are_refused(tmp_path):
+    _store(tmp_path)
+    with pytest.raises(SystemExit) as stop:
+        cli.main([str(tmp_path / "mem"), "--restore", "a.json", "--backup", "b.json"])
+    assert stop.value.code not in (0, None)

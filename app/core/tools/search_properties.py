@@ -576,6 +576,24 @@ def _mask_years(t: str) -> str:
     return _YEAR_TOKEN.sub(_mask, t)
 
 
+# An amount bound to the user's own ceiling ("under £2,000", "budget £2,200", "up to £2,300").
+_BOUND_CUE_AMOUNT = re.compile(
+    r'(?:\b(?:budget|ceiling|under|below|up\s+to|no\s+more\s+than|max(?:imum)?|at\s+most)\b'
+    r'|\bi\s+can\s+(?:only\s+)?(?:pay|afford|spend)\b|最多|预算|上限)[^£\d。;；]{0,30}£?\s*\d{3,5}')
+# "a £1,950/month flat", "the £1,800 studio": the price of a place the user talks about.
+_PLACE_PRICE_BEFORE = re.compile(r'\b(?:a|an|the|this|that)\s*$')
+_PLACE_PRICE_AFTER = re.compile(
+    r'\s*(?:/\s*(?:month|mo|pcm|week|wk)\b|(?:pcm|pw|p/?m|a\s+month|per\s+month|a\s+week|'
+    r'per\s+week)\b)?\s*(?:-\s*)?(?:flat|apartment|studio|room|house|place|property|home|'
+    r'listing|bedsit|maisonette|1-bed|2-bed|one-bed|two-bed)\b')
+
+
+def _prices_a_place(t: str, match) -> bool:
+    """True when the amount at ``match`` is the price of a place ("a £1,950/month flat")."""
+    return bool(_PLACE_PRICE_BEFORE.search(t[max(0, match.start() - 12):match.start()])
+                and _PLACE_PRICE_AFTER.match(t, match.end()))
+
+
 def _extract_budget(text: str):
     """Pull an explicit monthly/weekly budget out of the *current* user message.
     Returns (amount:number, period:'week'|'month') or (None, None). Deterministic regex
@@ -621,6 +639,11 @@ def _extract_budget(text: str):
     rent_amounts = [m for m in re.finditer(r'(?:£\s*)?(?<![\d.])(\d{3,5}(?:\.\d{1,2})?)(?!\d|\.\d)', t)
                     if _amount_role(t, m.start(), m.end()) == 'rent'
                     and not is_hypothetical(clause_at(t, m.start(), m.end()))]
+    if rent_amounts and _BOUND_CUE_AMOUNT.search(t):
+        # "the first month's rent ... for a £1,950/month flat ... Find me one under £2,000"
+        # searched at £1,950 (r21 63fb6f8a): a price the user quotes for an example
+        # flat is not their ceiling when the message also states one.
+        rent_amounts = [m for m in rent_amounts if not _prices_a_place(t, m)]
     if rent_amounts:
         m = rent_amounts[-1]
         return valid_amount(_money_value(m.group(1)), _budget_period_near(t, m.start(), m.end()))

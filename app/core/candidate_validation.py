@@ -10,6 +10,7 @@ structured fields and explicitly linked tool evidence.
 from __future__ import annotations
 
 import asyncio
+import bisect
 import functools
 import math
 import os
@@ -1161,6 +1162,7 @@ _SCOPE_SENTENCE_SPLIT = re.compile(r"(?<=[.!?。！？])\s+|\n|[；;]")
 # "vs." too: "studio vs. a room in a shared flat vs. a whole one-bed" is one clause, and
 # splitting it there left "studio vs. a room in a shared flat vs." behind (stress B-02).
 _NAME_ABBREVIATION = r"(?:St|Dr|Mr|Mrs|Ms|Prof|Sr|Jr|vs)"
+_ABBREVIATION_BEFORE_POINT = re.compile(r"\b(?:" + _NAME_ABBREVIATION + r"|i\.e|e\.g)\.$", re.I)
 
 
 def _repair_abbreviation_breaks(text: str) -> str:
@@ -1183,6 +1185,15 @@ def _guard_text_parts(text: str, *, sentences: bool = False) -> list[str]:
         # (R3-01). Bounded and unnested, so linear.
         protected.extend((match.start() + 1, match.end() - 1)
                          for match in _BRACKET_SPAN.finditer(text))
+    # Merged and sorted once, so each split point is one bisect, not a scan of every span
+    # (a reply of thousands of brackets made this quadratic).
+    merged: list[list[int]] = []
+    for left, right in sorted(span for span in protected if span[0] < span[1]):
+        if merged and left <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], right)
+        else:
+            merged.append([left, right])
+    lefts = [left for left, _right in merged]
     parts = []
     start = 0
     pattern = _SCOPE_SENTENCE_SPLIT if sentences else _FRAGMENT_SPLIT
@@ -1190,11 +1201,14 @@ def _guard_text_parts(text: str, *, sentences: bool = False) -> list[str]:
         position = match.start()
         if sentences and text[position:position + 1].isspace() and position:
             position -= 1
-        if any(left <= position < right for left, right in protected):
+        at = bisect.bisect_right(lefts, position) - 1
+        if at >= 0 and position < merged[at][1]:
             continue
         if text[position:position + 1] == '.':
             # "192 minutes, i.e. 3 hours 12 minutes a month" is one clause (r17 8c35fd5b).
-            abbreviation = re.search(r"\b(?:" + _NAME_ABBREVIATION + r"|i\.e|e\.g)\.$", text[:position + 1], re.I)
+            # Looked for in the few characters before the point only (the pattern still sees
+            # the character before the window): the whole prefix made long replies quadratic.
+            abbreviation = _ABBREVIATION_BEFORE_POINT.search(text, max(0, position - 7), position + 1)
             decimal = (position > 0 and position + 1 < len(text)
                        and text[position - 1].isdigit() and text[position + 1].isdigit())
             ellipsis = text[max(0, position - 1):position] == '.' or text[position + 1:position + 2] == '.'

@@ -74,6 +74,7 @@ This module replaces that with three principled pieces:
 
 from __future__ import annotations
 
+import bisect
 import json
 import re
 from dataclasses import dataclass
@@ -88,6 +89,24 @@ from uk_rent_agent.agent.contracts import (
 # ── numeric parsing ────────────────────────────────────────────────────────
 # A bare number with optional thousands separators / decimals.
 _NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
+# A run of 64+ digits and commas is no real figure (a rent, a fare, a count or a time is at
+# most a dozen characters), and the number patterns below retry it from every comma inside
+# it: "£" + "1," * 12 500 took 34 s here, 100 KB never finished (the B-01 class). Such a run
+# FAILS CLOSED: in a reply it is an unsupported figure; in evidence or user text it evidences
+# nothing; and the number patterns never scan it.
+_LONG_FIGURE = re.compile(r"\d[\d,]{63,}")
+# The backstop: a reply longer than this is not judged figure by figure but is unsupported
+# outright. No real reply comes close (8 192 output tokens of prose is ~30 000 characters, and
+# the commute redactor cuts at the same size, candidate_validation.VALIDATOR_MAX_CHARS), so it
+# only bounds what a degenerate output can cost on the event loop.
+CRITIC_MAX_CHARS = 32_000
+
+
+def _mask_long_figures(text: str) -> str:
+    """``text`` with every 64+ character figure blanked out ("#"), positions unchanged."""
+    if not text or not _LONG_FIGURE.search(text):
+        return text
+    return _LONG_FIGURE.sub(lambda match: "#" * len(match.group()), text)
 
 # Currency immediately *before* the number ("£2,678", "GBP 450").
 _CURRENCY_BEFORE = re.compile(r"(?:£|GBP)\s*\Z", re.IGNORECASE)
@@ -414,8 +433,28 @@ def _close(a: float, b: float) -> bool:
     return abs(a - b) <= max(_ABS_TOL, min(_REL_TOL * max(abs(a), abs(b)), _MAX_ABS_TOL))
 
 
-def _close_to_any(value: float, pool: set[float]) -> bool:
+def _close_to_any(value: float, pool) -> bool:
+    if isinstance(pool, _ClosePool):
+        return pool.has_close(value)
     return any(_close(value, candidate) for candidate in pool)
+
+
+class _ClosePool:
+    """A price pool sorted once, so :func:`_close_to_any` reads only the candidates within
+    ``_MAX_ABS_TOL`` of a value (the tolerance never exceeds it) instead of the whole pool per
+    reply figure: a long reply against a large pool was quadratic (60 KB took 26 s). NaN and
+    infinite candidates are never close to anything and are left out."""
+
+    def __init__(self, pool) -> None:
+        self.values = sorted(v for v in pool if isinstance(v, (int, float)) and v == v and abs(v) != float("inf"))
+
+    def has_close(self, value: float) -> bool:
+        if not (value == value):
+            return False
+        reach = _MAX_ABS_TOL + 1e-6
+        low = bisect.bisect_left(self.values, value - reach)
+        high = bisect.bisect_right(self.values, value + reach)
+        return any(_close(value, candidate) for candidate in self.values[low:high])
 
 
 # ── asserted price vs. hedged estimate / statutory threshold ──────────────────
@@ -494,9 +533,30 @@ def _asserts_price(text: str, value: float) -> bool:
     around £9,999 pcm" are all asserted — a hedge adverb is not an exemption. "annual rent
     under £50,000" (bound) and "£1,400-£1,500/month" (interval) are not asserted.
     """
-    body = text or ""
-    occurrences = [(start, end) for mention, _unit, start, end
-                   in _money_mention_spans(body) if abs(mention - value) <= 0.5]
+    return _price_assertions(text or "")(value)
+
+
+def _price_assertions(body: str, spans: list | None = None):
+    """``asserts(value)`` for :func:`_asserts_price` over ONE text, its money spans located
+    once and each value's verdict computed once: a reply repeating a figure thousands of
+    times re-scanned the whole text per figure (81 KB took ~240 s)."""
+    spans = _money_mention_spans(body) if spans is None else spans
+    ordered = sorted((mention, start, end) for mention, _unit, start, end in spans)
+    keys = [mention for mention, _start, _end in ordered]
+    verdicts: dict = {}
+
+    def asserts(value: float) -> bool:
+        if value not in verdicts:
+            low, high = bisect.bisect_left(keys, value - 0.51), bisect.bisect_right(keys, value + 0.51)
+            # the same test as the scan had; the verdict is "any unqualified occurrence"
+            occurrences = sorted((start, end) for mention, start, end in ordered[low:high]
+                                 if abs(mention - value) <= 0.5)
+            verdicts[value] = _any_occurrence_asserted(body, occurrences)
+        return verdicts[value]
+    return asserts
+
+
+def _any_occurrence_asserted(body: str, occurrences: list) -> bool:
     if not occurrences:
         return True
     for start, end in occurrences:
@@ -575,25 +635,30 @@ def unsupported_reply_prices(response: str, evidence: Any) -> list[float]:
     exempt_bounds_and_intervals = bool(evidence_money)
 
     answer = response or ""
-    arithmetic = _evidenced_arithmetic(answer, evidence_money, supported)
+    arithmetic = _evidenced_arithmetic(_mask_long_figures(answer), evidence_money, supported)
     # The stated result of a journey product is minutes, not a weekly rent: "16 × 3 = 48 a
     # week" (r19). Money is never a product operand there ("£50 x 4" is not one).
     from uk_rent_agent.agent.commute_arithmetic import products as _journey_products
     journey_results = [p["span"] for p in _journey_products(answer)]
     unsupported: list[float] = []
-    for value, _unit, start, _end in _money_mention_spans(answer):
+    spans = _money_mention_spans(answer)
+    asserts_price = _price_assertions(answer, spans)
+    supported_pool, gap_pool = _ClosePool(supported), _ClosePool(gaps)
+    for value, _unit, start, _end in spans:
         if (any(s0 <= start < s1 for s0, s1 in journey_results)
                 and not _CURRENCY_BEFORE.search(answer[max(0, start - 8):start])):
             continue
-        if _HEDGED_BEFORE.search(answer[max(0, start - 24):start]) and _close_to_any(value, gaps):
+        if _HEDGED_BEFORE.search(answer[max(0, start - 24):start]) and _close_to_any(value, gap_pool):
             # A difference of two evidence prices, rounded and SAID to be rounded: "about £550 a
             # month below" for £2,350 - £1,799 = £551 (r07 0023c986). Exact pairs stay exact.
             continue
-        if _close_to_any(value, supported) or round(value, 2) in arithmetic:
+        if _close_to_any(value, supported_pool) or round(value, 2) in arithmetic:
             continue
-        if exempt_bounds_and_intervals and not _asserts_price(answer, value):
+        if exempt_bounds_and_intervals and not asserts_price(value):
             continue
         unsupported.append(value)
+    for match in _LONG_FIGURE.finditer(answer):
+        unsupported.append(_to_float(match.group()) or float("inf"))
     return sorted(set(unsupported))
 
 
@@ -610,9 +675,13 @@ _SUM_EXPRESSION = re.compile(
     r"£\s*" + _NUM + r"[^£=\n]{0,24}?\s*([+\-−–])\s*£\s*" + _NUM + r"[^£=\n]{0,16}?=\s*£\s*" + _NUM)
 _HEDGED_BEFORE = re.compile(r"(?:about|around|roughly|approximately|approx\.?|nearly|almost|~|≈|约)\s*\**\s*(?:£|GBP\s*)?\s*\Z",
                             re.I)
+# Possessive where giving whitespace back can never let the next token match (an operator,
+# "=", "£", a digit), and starting at "£" or the number rather than at any blank before it:
+# the same matches, but "£2,350" + 50 KB of spaces took ~20 s (each start re-scanned the run,
+# and the adjacent blank runs split it every way). Python >= 3.11.
 _TIMES_STEP = re.compile(
-    r"(?<![\d.])£?\s*" + _NUM + r"\s*(?:[a-z ]{0,20}?)\s*([×x*÷/])\s*£?\s*" + _NUM +
-    r"(?:\s*[a-z ]{0,20}?)\s*=\s*\**\s*£\s*" + _NUM, re.I)
+    r"(?<![\d.])(?:£\s*+)?" + _NUM + r"\s*+[a-z ]{0,20}?\s*+([×x*÷/])\s*+(?:£\s*+)?" + _NUM +
+    r"\s*+[a-z ]{0,20}?\s*+=\s*+\**+\s*+£\s*+" + _NUM, re.I)
 _TIMES_ASIDE = re.compile(
     r"£\s*" + _NUM + r"[^£()\n]{0,60}\(\s*£?\s*" + _NUM + r"\s*([×x*÷/])\s*£?\s*" + _NUM + r"[^()\n]{0,20}\)", re.I)
 _DIFF_ASIDE = re.compile(
@@ -638,8 +707,10 @@ def _evidenced_arithmetic(answer: str, evidence_money, supported: set) -> set:
         except ValueError:
             return None
 
+    supported_pool = _ClosePool(supported)
+
     def known(value: float) -> bool:
-        return _close_to_any(value, supported) or round(value, 2) in exact
+        return _close_to_any(value, supported_pool) or round(value, 2) in exact
 
     steps = []
     for match in _SUM_EXPRESSION.finditer(answer or ""):
@@ -742,7 +813,7 @@ def _unit_numbers(text: str) -> set[float]:
     for match in re.finditer(
         r"(?<![\w])([0-9][0-9,]*(?:\.\d+)?)\s*"
         r"(minutes?|mins?|分钟|km|kilomet(?:er|re)s?|miles?|mi|metres?|meters?|m)\b",
-        text or "", re.IGNORECASE,
+        _mask_long_figures(text or ""), re.IGNORECASE,
     ):
         try:
             values.add(float(match.group(1).replace(",", "")))
@@ -758,6 +829,8 @@ def unsupported_external_numbers(response: str, evidence: Any, user_text: str = 
     corresponding artifact is successful and observable; failed, denied, timed-out,
     or abandoned artifacts contribute no numbers.
     """
+    if len(response or "") > CRITIC_MAX_CHARS or _LONG_FIGURE.search(response or ""):
+        return True               # fails closed: see CRITIC_MAX_CHARS and _LONG_FIGURE
     successful = _successful_numeric_evidence(evidence)
     allowed = _unit_numbers(successful + " " + (user_text or ""))
     # A period table (rows = periods, columns = routes or the saving) is judged cell by cell by
@@ -774,8 +847,11 @@ def unsupported_external_numbers(response: str, evidence: Any, user_text: str = 
     # presented as a measured fact here. Final response assembly still applies the
     # stricter per-listing commute guard to any user-facing commute judgment.
     asserted_response = re.sub(r"\bwould\b[^.!?\n]*", "", response or "", flags=re.IGNORECASE)
+    allowed_sorted = sorted(allowed)
     unit_unsupported = [value for value in _unit_numbers(asserted_response)
-                        if not any(abs(value - known) <= 0.01 for known in allowed)]
+                        if not any(abs(value - known) <= 0.01 for known in allowed_sorted[
+                            bisect.bisect_left(allowed_sorted, value - 0.011):
+                            bisect.bisect_right(allowed_sorted, value + 0.011)])]
     # Arithmetic on this turn's measured routes is not an external number: "4 minutes x 2
     # journeys x 5 days = 40 minutes a week" (Holloway 25, Kentish Town 21) was graded
     # unsupported and the answer regenerated with the "Unverified" footer (r13 2264a2d5), and so
@@ -790,17 +866,17 @@ def unsupported_external_numbers(response: str, evidence: Any, user_text: str = 
     # The user's own limit is a reference point too: "about 5 minutes to spare" under a stated
     # 25-minute cap with Stratford measured at 20.
     limits = arithmetic.durations(user_text)
+    known = arithmetic.SortedFigures(sorted(allowed))     # sorted once for every sentence's check
     if unit_unsupported:
-        unit_unsupported = [value for value in unit_unsupported
-                            if not arithmetic.supported_in_text(value, asserted_response, routes, days,
-                                                                known=allowed, caps=limits,
-                                                                user_days=user_days)]
+        derived = arithmetic.supported_values_in_text(unit_unsupported, asserted_response, routes, days,
+                                                      known=known, caps=limits, user_days=user_days)
+        unit_unsupported = [value for value in unit_unsupported if value not in derived]
     if unit_unsupported:
         return True
     # ... and a saving that does NOT derive is unsupported even in "would save you …" prose,
     # or stated in hours ("3 hours a week over Camden"), which the unit scan never sees: the
     # critic agrees with the redactor (r14 item 3).
-    if len(routes) >= 2 and arithmetic.unsupported_arithmetic(response or "", routes, days, known=allowed,
+    if len(routes) >= 2 and arithmetic.unsupported_arithmetic(response or "", routes, days, known=known,
                                                               limits=limits, user_days=user_days):
         return True
     # The live critic supplies the current user message. Keep the legacy direct

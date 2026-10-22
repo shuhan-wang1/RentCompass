@@ -120,9 +120,7 @@ HIGHGATE = ("- **Highgate West Hill, London N6** — 1-bed flat, **£2,000/month
 
 @pytest.mark.parametrize("old,new,ok", [
     ("£200 over your budget", "£200 over your budget", True),
-    # wrong over-budget figure (not £300: the price pool's standing x1-36 fan-out derives it
-    # from a £15 fee, 15 x 20 — a documented trade-off of that pool, not of this rule)
-    ("£200 over your budget", "£260 over your budget", False),
+    ("£200 over your budget", "£300 over your budget", False),       # wrong over-budget figure
     ("**£2,000/month**", "**£2,100/month**", False),                  # wrong price
     ("about 1.6 miles", "about 2.4 miles", False),                    # a distance no tool gave
 ])
@@ -143,4 +141,6 @@ def test_an_earlier_answers_price_is_no_evidence_but_a_held_row_is():
         {"address": "Arbutus Street, Haggerston, London, E8", "price": "£2200/month",
          "budget_status": "⚠️ Over budget by £200"}]
     assert not _flags(case, state=state)
-    assert _flags(case, case["raw_draft"].replace("£2,200", "£2,450"), state=state)   # wrong price
+    # wrong price (£2,450; £2,400 would be £2,200 + the £200 over-budget amount, an exact sum of
+    # two evidence figures, which the pair rule supports)
+    assert _flags(case, case["raw_draft"].replace("£2,200", "£2,450"), state=state)

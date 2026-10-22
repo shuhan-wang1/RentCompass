@@ -77,7 +77,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable, Iterable, Optional
 
 from uk_rent_agent.agent.contracts import (
     CriticVerdict,
@@ -268,7 +268,12 @@ def _is_money_key(key: Any) -> bool:
 def _money_words_in(text: str) -> bool:
     """True when ``text`` contains a money word as a whole word — the prose analogue of
     :func:`_is_money_key`, for context blocks rendered as ``"Price: 2,900"`` lines."""
-    return any(word.lower() in _MONEY_KEY_SEGMENTS for word in _KEY_SPLIT.split(text) if word)
+    return (any(word.lower() in _MONEY_KEY_SEGMENTS for word in _KEY_SPLIT.split(text) if word)
+            or bool(_CJK_MONEY_WORD.search(text)))
+
+
+# "预算改成2000" (budget changed to 2000, r07 2709858a): the user's own figure is money.
+_CJK_MONEY_WORD = re.compile(r"预算|租金|月租|房租|价格|押金|费用")
 
 
 def _evidence_money_mentions(evidence: Any, key: Any = "") -> list[tuple[float, str]]:
@@ -321,28 +326,87 @@ def _evidence_money_mentions(evidence: Any, key: Any = "") -> list[tuple[float, 
     return out
 
 
-def _derivations(value: float, unit: str) -> set[float]:
+# The rent arithmetic that actually occurs: the weekly/monthly conversions, a year, the
+# deposit (5 weeks' rent, 6 where the annual rent is £50,000 or more), the holding deposit (1
+# week), and N months of rent where the answer itself states N. The old "x 1-36" fan-out let
+# an invented figure pass as a multiple of any small evidence amount: "£2,400" as 200 x 12,
+# "£300" as a £15 fee x 20 (r6d).
+_DEPOSIT_WEEKS = (5, 6)
+_MONTHS_STATED = re.compile(
+    r"\b(\d{1,2}|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|eighteen|"
+    r"twenty[\s-]four|thirty[\s-]six)[\s-]*(?:calendar\s+)?months?\b", re.I)
+_MONTH_WORDS = {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9,
+                "ten": 10, "eleven": 11, "twelve": 12, "eighteen": 18, "twenty four": 24,
+                "twenty-four": 24, "thirty six": 36, "thirty-six": 36}
+
+
+def months_stated(text: str) -> set[int]:
+    """The month counts an answer states ("6 months' rent", "a 12-month tenancy")."""
+    out: set[int] = set()
+    for match in _MONTHS_STATED.finditer(str(text or "")):
+        word = match.group(1).lower()
+        n = int(word) if word.isdigit() else _MONTH_WORDS.get(re.sub(r"\s+", " ", word), 0)
+        if 1 < n <= _MAX_MONTHS:
+            out.add(n)
+    return out
+
+
+# A count the answer itself states: "21.67 commuting days", "22 commuting days a month", "an
+# equal three-way split", "5 office days" — the only multipliers a written-out step may use
+# besides the rent conversions.
+_COUNT_STATED = re.compile(
+    r"(?<![\d.£$€])(\d{1,3}(?:\.\d{1,2})?|two|three|four|five|six|seven|eight|nine|ten|twelve)"
+    r"(?:[\s-]+(?:commuting|office|working|travel|calendar|billing))?[\s-]+"
+    r"(?:days?|months?|weeks?|people|persons?|sharers?|flatmates?|tenants?|housemates?|journeys?|trips?|way)\b",
+    re.I)
+_COUNT_WORDS = {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9,
+                "ten": 10, "twelve": 12}
+# A fare or daily cap, not a rent: small enough that "x 2 a day" and "x the stated commuting days"
+# are the arithmetic that occurs (r06 369f50c1: "£1.75 each way … £3.50 a day … 21.7 commuting
+# days … roughly £76 a month").
+_FARE_LIKE_MAX = 100.0
+_RETURN_WORDS = re.compile(r"\beach\s+way\b|\breturn\b|\ba\s+day\b|\bper\s+day\b|\bdaily\b|往返|每天", re.I)
+
+
+def counts_stated(text: str) -> set[float]:
+    out: set[float] = set()
+    for match in _COUNT_STATED.finditer(str(text or "")):
+        word = match.group(1).lower()
+        n = float(word) if word[0].isdigit() else float(_COUNT_WORDS.get(word, 0))
+        if 1 < n <= 400:
+            out.add(n)
+    return out
+
+
+# A year only where the answer speaks of one: "£200 over your ceiling … £2,400" is no 200 x 12.
+YEAR_FRAMED = re.compile(r"\b(?:a|per|each|every)\s+year\b|\bannual(?:ly)?\b|\byearly\b|\bper\s+annum\b|"
+                         r"\b(?:12|twelve)[\s-]+months?\b|\bover\s+(?:a|the)\s+year\b|每年|一年|年租", re.I)
+
+
+def _derivations(value: float, unit: str, months: Iterable[int] = (), *, year: bool = True) -> set[float]:
     """Standard rent-derived figures from a single evidence price.
 
-    * integer multiples (annual / N-month totals, and weekly-rent deposit
-      multiples, both covered by ``value × 1‑36``),
-    * weekly → monthly conversion, and the annual total of a WEEKLY rent
-      (``value × 52``) — a first-class UK rent figure that ``× 1‑36`` cannot express,
-      so "at £1,000/week the annual rent is £52,000" used to pass only because the old
-      relative tolerance was £520 wide at that magnitude (``sweep/B14``);
-    * monthly → weekly conversion and deposits of N weeks derived from it.
+    * weekly -> monthly (x 52/12) and the annual total of a WEEKLY rent (x 52) — "at
+      £1,000/week the annual rent is £52,000" (``sweep/B14``);
+    * monthly -> weekly (x 12/52, also the 1-week holding deposit), the 5- or 6-week deposit
+      derived from it, and a year (x 12);
+    * N months of rent only where the answer states N (``months``).
+    Sums and differences of two evidence figures (price - budget) are exact pairs, in
+    ``_evidenced_arithmetic``.
     """
     out: set[float] = {value}
-    for n in range(2, _MAX_MONTHS + 1):
-        out.add(value * n)
     if unit in ("weekly", "unknown"):
         out.add(monthly_from_weekly(value))
-        out.add(value * _WEEKS_PER_YEAR)
+        if year:
+            out.add(value * _WEEKS_PER_YEAR)
+        out.update(value * n for n in _DEPOSIT_WEEKS)
     if unit in ("monthly", "unknown"):
         weekly = weekly_from_monthly(value)
         out.add(weekly)
-        for n in range(1, _MAX_DEPOSIT_WEEKS + 1):
-            out.add(weekly * n)
+        out.update(weekly * n for n in _DEPOSIT_WEEKS)
+        if year:
+            out.add(value * _MONTHS_PER_YEAR)
+        out.update(value * n for n in months if 1 < n <= _MAX_MONTHS)
     return out
 
 
@@ -397,7 +461,7 @@ _NONASSERTION_BEFORE = (
     "under £", "under gbp", "below £", "below gbp", "less than £", "less than gbp",
     "over £", "over gbp", "above £", "above gbp", "more than £", "more than gbp",
     "up to £", "up to gbp", "at least £", "at least gbp", "between £", "between gbp",
-    "exceeds £", "exceeds gbp", "exceeding £", "exceeding gbp",
+    "exceeds £", "exceeds gbp", "exceeding £", "exceeding gbp", "sub-£", "sub £",
     "capped at £", "capped at gbp", "or more", "or above", "or higher",
     # explicit statutory framing of a threshold
     "statutory", "tenant fees act",
@@ -461,8 +525,32 @@ def unsupported_reply_prices(response: str, evidence: Any) -> list[float]:
     """
     evidence_money = _evidence_money_mentions(evidence)
     supported: set[float] = set()
+    months = months_stated(response)
+    year = bool(YEAR_FRAMED.search(response or ""))
+    # A figure seen WITH its period ("£1,500/month") is not also read in the other period
+    # because a bare copy of it was seen too: £1,500 a month is no £1,500 a week, whose
+    # 6-week deposit (£9,000) used to pass.
+    periodic = {round(v, 2) for v, u in evidence_money if u in ("monthly", "weekly")}
     for value, unit in evidence_money:
-        supported |= _derivations(value, unit)
+        if unit == "unknown" and round(value, 2) in periodic:
+            continue
+        supported |= _derivations(value, unit, months, year=year)
+    # A monthly difference of two evidence prices over a year or the stated months: "£550/month
+    # less … over a 12-month tenancy £6,600", "£20.80 a month (roughly £250 a year)" (r06/r20).
+    values = sorted({round(v, 2) for v, _u in evidence_money})[:_ARITH_LIMIT]
+    gaps: set[float] = set()
+    for index, first in enumerate(values):
+        for second in values[index + 1:]:
+            gap = abs(second - first)
+            gaps.add(gap)
+            supported.update(gap * n for n in ({_MONTHS_PER_YEAR} if year else set()) | set(months))
+    # A fare or daily cap: x 2 for the return trip, x the commuting days the answer states.
+    counts = counts_stated(response)
+    returning = bool(_RETURN_WORDS.search(response or ""))
+    for value in [v for v in values if 0 < v < _FARE_LIKE_MAX]:
+        trips = {1.0, 2.0} if returning else {1.0}
+        supported.update(value * t for t in trips)
+        supported.update(value * t * n for t in trips for n in counts)
 
     # FAIL CLOSED when the evidence supplies no money at all. The bound/interval exemption
     # rests on the figure being context *alongside* retrieved data ("the listing is £4,200
@@ -484,6 +572,10 @@ def unsupported_reply_prices(response: str, evidence: Any) -> list[float]:
         if (any(s0 <= start < s1 for s0, s1 in journey_results)
                 and not _CURRENCY_BEFORE.search(answer[max(0, start - 8):start])):
             continue
+        if _HEDGED_BEFORE.search(answer[max(0, start - 24):start]) and _close_to_any(value, gaps):
+            # A difference of two evidence prices, rounded and SAID to be rounded: "about £550 a
+            # month below" for £2,350 - £1,799 = £551 (r07 0023c986). Exact pairs stay exact.
+            continue
         if _close_to_any(value, supported) or round(value, 2) in arithmetic:
             continue
         if exempt_bounds_and_intervals and not _asserts_price(answer, value):
@@ -503,6 +595,13 @@ _ARITH_LIMIT = 120
 _NUM = r"(\d[\d,]*(?:\.\d{1,2})?)"
 _SUM_EXPRESSION = re.compile(
     r"£\s*" + _NUM + r"[^£=\n]{0,24}?\s*([+\-−–])\s*£\s*" + _NUM + r"[^£=\n]{0,16}?=\s*£\s*" + _NUM)
+_HEDGED_BEFORE = re.compile(r"(?:about|around|roughly|approximately|approx\.?|nearly|almost|~|≈|约)\s*\**\s*(?:£|GBP\s*)?\s*\Z",
+                            re.I)
+_TIMES_STEP = re.compile(
+    r"(?<![\d.])£?\s*" + _NUM + r"\s*(?:[a-z ]{0,20}?)\s*([×x*÷/])\s*£?\s*" + _NUM +
+    r"(?:\s*[a-z ]{0,20}?)\s*=\s*\**\s*£\s*" + _NUM, re.I)
+_TIMES_ASIDE = re.compile(
+    r"£\s*" + _NUM + r"[^£()\n]{0,60}\(\s*£?\s*" + _NUM + r"\s*([×x*÷/])\s*£?\s*" + _NUM + r"[^()\n]{0,20}\)", re.I)
 _DIFF_ASIDE = re.compile(
     r"£\s*" + _NUM + r"[^£()\n]{0,40}\(\s*£\s*" + _NUM + r"\s*([+\-−–])\s*£\s*" + _NUM + r"\s*\)")
 
@@ -516,6 +615,9 @@ def _evidenced_arithmetic(answer: str, evidence_money, supported: set) -> set:
         for second in base[index:]:
             exact.add(round(first + second, 2))
             exact.add(round(abs(first - second), 2))
+            # The median of an even list is the mean of its middle two (£2,300 and £2,500 ->
+            # "median £2,400", r07 865c783a).
+            exact.add(round((first + second) / 2, 2))
 
     def number(token: str) -> float | None:
         try:
@@ -531,14 +633,31 @@ def _evidenced_arithmetic(answer: str, evidence_money, supported: set) -> set:
         steps.append((match.group(1), match.group(2), match.group(3), match.group(4)))
     for match in _DIFF_ASIDE.finditer(answer or ""):
         steps.append((match.group(2), match.group(3), match.group(4), match.group(1)))
+    # A written-out multiplication or division by a count the answer states ("£1.75 × 21.67
+    # days = £37.92", "22 x £3.50 = £77.00", "£6,600 (550 × 12)", "£667 (2000 ÷ 3)"; r06/r07).
+    counts = counts_stated(answer) | {2.0, float(_MONTHS_PER_YEAR), float(_WEEKS_PER_YEAR)}
+    for match in _TIMES_STEP.finditer(answer or ""):
+        left, op, right, result = match.group(1), match.group(2), match.group(3), match.group(4)
+        steps.append((left, op, right, result))
+    for match in _TIMES_ASIDE.finditer(answer or ""):
+        steps.append((match.group(2), match.group(3), match.group(4), match.group(1)))
     for _round in range(3):
         grew = False
         for left, op, right, result in steps:
             a, b, c = number(left), number(right), number(result)
             if a is None or b is None or c is None or round(c, 2) in exact:
                 continue
-            value = a + b if op == "+" else a - b
-            if abs(value - c) <= 0.011 and known(a) and known(b):
+            if op in "+-−–":
+                value = a + b if op == "+" else a - b
+                holds = abs(value - c) <= 0.011 and known(a) and known(b)
+            else:
+                # money x count (either order) or money ÷ count; the count must be stated
+                money, count = (a, b) if known(a) and any(abs(b - n) < 1e-9 for n in counts) else (b, a)
+                if not (known(money) and any(abs(count - n) < 1e-9 for n in counts)):
+                    continue
+                value = money / count if op in "÷/" else money * count
+                holds = _close(value, c)
+            if holds:
                 exact.add(round(c, 2))
                 grew = True
         if not grew:
@@ -1256,8 +1375,10 @@ def enforce_no_evidence_numeric_contract(response: str, *, retrieved_evidence: A
         return response
     user_money = _evidence_money_mentions({"user_message": user_message})
     supported = set()
+    months = months_stated(response)
+    year = bool(YEAR_FRAMED.search(response or ""))
     for value, unit in user_money + _shown_listing_money(shown_listings):
-        supported |= _derivations(value, unit)
+        supported |= _derivations(value, unit, months, year=year)
     unsupported = [value for value, _unit in _money_mentions(response)
                    if not _close_to_any(value, supported)]
     if not unsupported:

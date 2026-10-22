@@ -38,11 +38,11 @@ product change-sets are not.
    alone is too narrow: `no_false_retrieval_provenance` takes its cues from
    `uk_rent_agent.agent.critic`). Grader identity is a **tri-state**: `match`,
    `GRADER-MISMATCH` (refused, no opt-out flag — the sanctioned cross-grader measurement
-   lives in `contract_delta.py`, see §3B, not in a loosened `rescore.py`), and `UNKNOWN`
+   lives in a separate contract-delta tool, not in a loosened `rescore.py`), and `UNKNOWN`
    for the retained packages that predate the field, which stay re-scorable and are never
    reported as matching. `rescore.py` additionally asserts that the ARMS OF ONE ROUND
-   recorded under one grader; `fp-results/idp98_r{1,2,3}_{base,cand}` is a real paired round
-   on disk where they did not, under one contract, and nothing said so.
+   recorded under one grader; a real retained paired round had arms that did not, under
+   one contract, and nothing said so.
 5. **Shard preflight** — every benchmark shard must load and schema-validate before a
    measurement starts, not just the one being run.
 6. **Output-dir reuse refused by default** — `--allow-reuse-out` is the explicit opt-out.

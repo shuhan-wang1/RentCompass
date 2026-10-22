@@ -1,7 +1,6 @@
 # Harness 迁移设计：从 classify-then-execute 到原生 Function-Calling 工具循环
 
 状态：**v2.1，已批准**（2026-07-19 拍板：Phase 0 立即开工；Phase 1 待本版四处契约修订落档后开工；taint = A+；strict 维持非 strict 闭环优先。v1 评审：方向 8.5/10、实施准备度 5.5/10，5 项 P0 + 2 项契约不一致 + eval 调整，逐项见 §5）
-作者：Claude + shuhan
 范围：`app/core/langgraph_agent.py` 的路由/决策层重构；工具执行层、MCP 协议、前端 API 契约不变（ask_user 按 §2.5 对齐现有契约）。
 
 ---

@@ -62,8 +62,9 @@ checks required state and reports optional SearXNG/RAG loss as degraded.
   `.env` are **bind-mounted** from the host, so the container shares the same data
   as a host run and persists writes back.
 - The embedding model is cached in the `hf_cache` named volume (downloaded once).
-- Both published ports bind to loopback. Nginx overwrites `X-Forwarded-For`
-  with the socket peer instead of appending a client-controlled chain.
+- Both published ports bind to loopback. A reverse proxy in front should overwrite
+  `X-Forwarded-For` with the socket peer instead of appending a client-controlled chain
+  (see [`deploy/DEPLOY_DOMAIN.md`](../deploy/DEPLOY_DOMAIN.md)).
 
 ## Verify the search backend directly
 
@@ -88,23 +89,14 @@ Persistent bind mounts and databases still require an off-host backup plan. Use
 the verified, encrypted workflow in [`runtime_recovery.md`](runtime_recovery.md);
 do not treat Docker volumes or a successful container restart as a backup.
 
-## One-time legacy AgentMemory retirement
+## Upgrading from the legacy Chroma memory store
 
-The current SQLite memory runtime imports the legacy Chroma files read-only and
-keeps a verified lineage until the old pool can no longer return. Do not delete
-`chroma.sqlite3` or its UUID index directories manually. After one pinned,
-Chroma-free commit is deployed and `/ready` on **both** pools reports that same
-full SHA, run:
-
-```bash
-bash deploy/retire_legacy_agent_memory.sh
-```
-
-The script shares the deployment lock, rejects a dirty/unpinned tree, proves both
-images lack `chromadb`, seals the exact legacy count and digest, shows the exact
-delete/preserve boundary, and asks for confirmation. It preserves
-`agent_memory.sqlite3` and rechecks both pools after retirement. From that point,
-do not roll back to an image that still depends on Chroma.
+The SQLite memory runtime imports legacy Chroma memory files read-only. Do not delete
+`chroma.sqlite3` or its index directories by hand; `deploy/retire_legacy_agent_memory.sh`
+performs a verified retirement (it seals the legacy count and digest, shows the exact
+delete/preserve boundary, asks for confirmation, and keeps `agent_memory.sqlite3`). Read
+its header before running it, and do not roll back to an image that still depends on
+Chroma afterwards.
 
 ## Notes
 

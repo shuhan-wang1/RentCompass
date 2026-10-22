@@ -1,7 +1,7 @@
 # UK Rent Recommendation Agent — 重构实施手册（FINISHED）
 
 > 版本：2026-07-07　|　目标分支基线：`feat/send-command-multiuser-fixes`　|　主分支：`main`
-> 适用仓库：`C:\Users\shuhan\Desktop\uk_rent_recommendation`　|　活跃应用目录：`local_data_demo/`
+> 适用仓库：`<repo>`　|　活跃应用目录：`local_data_demo/`
 > 运行环境：Python 3.10，Windows 11（命令给出 PowerShell 版本）
 
 本文件是一份**可直接执行的重构操作手册**。所有对现状代码的论断都带有经过本人核对的 `文件:行号` 证据。凡是与审计摘要（六个 agent 的调查结论）冲突之处，一律以**实际代码为准**，并在正文相应位置以「⚠️ 审计校正」标注（完整清单见 §7）。
@@ -304,7 +304,7 @@ web  →  agent  →  tools  →  {data, rag}  →  domain  →  config
 
 ## §4 分阶段实施
 
-> 通用命令前缀：本节命令均以 PowerShell（Windows）为准。仓库根记为 `$repo = "C:\Users\shuhan\Desktop\uk_rent_recommendation"`。凡涉及历史改写（`git filter-repo`）务必先备份整仓。
+> 通用命令前缀：本节命令均以 PowerShell（Windows）为准。仓库根记为 `$repo = "<repo>"`。凡涉及历史改写（`git filter-repo`）务必先备份整仓。
 
 ---
 
@@ -332,7 +332,7 @@ web  →  agent  →  tools  →  {data, rag}  →  domain  →  config
 
 **0.2 备份**
 ```powershell
-$repo = "C:\Users\shuhan\Desktop\uk_rent_recommendation"
+$repo = "<repo>"
 Copy-Item -Recurse -Force $repo "$repo-backup-$(Get-Date -Format yyyyMMdd-HHmmss)"
 ```
 

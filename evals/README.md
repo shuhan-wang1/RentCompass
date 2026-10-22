@@ -5,7 +5,7 @@ diagnostics. They do not execute the production graph and must not authorize a r
 `thresholds.json` is retained only for historical result interpretation; the
 `uk-rent-eval-gate` command no longer consumes it.
 
-Production `fc_loop` releases use the frozen dual-track v7 evidence protocol in
+`fc_loop` release evidence uses the frozen dual-track v7 protocol in
 `evaluation/benchmark/holdout_v7/`. That gate checks identities and hashes, recomputes the
 declared report, enforces at least three repeats with nested semantic/template-cluster
 bootstrap, and exits non-zero on HOLD or BLOCK.

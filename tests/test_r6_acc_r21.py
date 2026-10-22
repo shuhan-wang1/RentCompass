@@ -179,3 +179,52 @@ def test_a_plain_search_turn_still_ships_the_ledger_alone():
     case, state, _, _ = _ctx("r21_63fb6f8a")
     out = _format(state, case["raw_draft"], message="Find me a flat in Hackney under £2,000.")
     assert out.startswith(LEDGER_HEAD) and "£4,650" not in out
+
+
+# ── r21 0136f2f6: the cached-record caveat and its enumeration ─────────────────
+
+CAVEAT = ("First, this is a cached record, not a live check — the price and availability have not "
+          "been verified as current, so confirm both with the agent before relying on them.")
+
+
+def test_the_cached_record_caveat_is_a_caveat():
+    case, state, _, _ = _ctx("r21_0136f2f6")
+    assert CAVEAT in case["raw_draft"]
+    assert validate_evidence_scope(case["raw_draft"], state) == case["raw_draft"]
+
+
+def test_a_withdrawn_item_takes_its_count_and_the_others_ordinals():
+    case, state, _, _ = _ctx("r21_0136f2f6")
+    text = case["raw_draft"].replace(
+        CAVEAT, "First, the price and availability were checked live today, so it is ready to book.")
+    out = validate_evidence_scope(text, state)
+    assert "checked live today" not in out
+    assert "Two things to keep in mind" not in out and "Second," not in out
+    assert "It is still over your budget, so it remains an alternative rather than a match." in out
+
+
+SOURCE = "- Source: OnTheMarket, cached snapshot taken 21 July 2026"
+
+
+@pytest.mark.parametrize("sentence,kept", [
+    # caveats in the wordings the recorded drafts use (r07, r10)
+    ("I haven't checked it against the live listing, so the price may be out of date.", True),
+    ("Both entries were not refreshed live, so the recorded prices and availability are unverified.", True),
+    ("This is a cached snapshot, not a live check.", True),
+    # a live claim next to a caveat about something else is still a live claim
+    ("The price is live and current, and the furnishing is unverified.", False),
+    ("The price is live; I haven't checked the photos.", False),
+])
+def test_a_caveat_names_the_live_check_it_did_not_make(sentence, kept):
+    case, state, _, _ = _ctx("r21_0136f2f6")
+    text = case["raw_draft"].replace(SOURCE, f"- Source: OnTheMarket. {sentence}")
+    assert (sentence in validate_evidence_scope(text, state)) is kept
+
+
+def test_an_unhedged_live_claim_still_goes():
+    case, state, _, _ = _ctx("r21_0136f2f6")
+    text = case["raw_draft"].replace("- Source: OnTheMarket, cached snapshot taken 21 July 2026",
+                                     "- Source: OnTheMarket. The price is live and verified as current today.")
+    out = validate_evidence_scope(text, state)
+    assert "live and verified as current today" not in out
+    assert CAVEAT in out and "Second, it is still over your budget" in out

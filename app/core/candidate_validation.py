@@ -3877,6 +3877,12 @@ def render_structured_evidence_fallback(state: dict, *, language: str | None = N
     return "\n".join(lines)
 
 
+_ORDINAL_LEAD = re.compile(r"^\s*(?:first(?:ly)?|second(?:ly)?|third(?:ly)?|fourth(?:ly)?|finally|lastly)\s*[,:]\s*", re.I)
+_COUNT_LEAD_IN = re.compile(
+    r"^\s*(?:two|three|four|a\s+couple\s+of|a\s+few)\s+(?:more\s+)?(?:things|points|caveats|notes|details|"
+    r"reminders)\b[^.!?]{0,60}[.!?:]\s*$", re.I)
+
+
 def validate_evidence_scope(response: str, state: dict) -> str:
     """Withdraw provenance/scope claims unsupported by the relevant tool's OWN result.
 
@@ -3929,6 +3935,7 @@ def validate_evidence_scope(response: str, state: dict) -> str:
                   "gp": re.compile(r"\bgps?\b|\bdoctors?\b|medical\s+cent(?:er|re)|\bclinics?\b|全科|诊所|医疗中心", re.I)}
     changed: set[str] = set()
     kept = []
+    dropped_ordinal = False
     safety_context = False
     for sentence in _guard_text_parts(text, sentences=True):
         if safety_topic.search(sentence):
@@ -3958,8 +3965,11 @@ def validate_evidence_scope(response: str, state: dict) -> str:
                 if not refs or not all(ref.get("coordinate_identity_verified") is True for ref in refs):
                     drop = True
                     changed.add("safety")
+        # "not a live check", "have not been verified as current" are caveats too (r21 0136f2f6).
         live_caveat = bool(re.search(
-            r"\bnot\s+(?:live|real.time)|not\s+(?:yet\s+)?(?:verified|confirmed|checked).{0,20}(?:live|current)|"
+            r"\bnot\s+(?:a\s+)?(?:live|real.time)|"
+            r"(?:not|never|n['’]t)\s+(?:yet\s+)?(?:been\s+)?(?:verified|confirmed|checked).{0,20}(?:live|current)|"
+            r"\b(?:prices?|rents?|availability)\b[^.;!?]{0,25}\b(?:are|is|remains?|stays?)\s+unverified\b|"
             r"(?:cannot|can't)\s+(?:confirm|verify).{0,35}(?:current|availability|live)|"
             r"current\s+(?:price|rent|availability).{0,20}(?:unknown|unverified)|"
             r"(?:未|不|无法)(?:能|曾)?(?:实时|核实|确认)|并非实时|不是实时", sentence, re.I))
@@ -3987,8 +3997,17 @@ def validate_evidence_scope(response: str, state: dict) -> str:
                         changed.add(kind)
         if not drop:
             kept.append(sentence)
+        else:
+            dropped_ordinal = dropped_ordinal or bool(_ORDINAL_LEAD.match(sentence))
     if not changed:
         return text
+    if dropped_ordinal:
+        # "Two things to keep in mind. First, <withdrawn>. Second, …" must not ship as "Two
+        # things to keep in mind. Second, …" (r21 0136f2f6): the count goes, and so do the
+        # ordinals of the items that stay.
+        kept = [sentence for sentence in kept if not _COUNT_LEAD_IN.match(sentence)]
+        kept = [_ORDINAL_LEAD.sub(lambda m: "", sentence, count=1) for sentence in kept]
+        kept = [sentence[:1].upper() + sentence[1:] if sentence[:1].islower() else sentence for sentence in kept]
     notes = []
     if "safety" in changed:
         for raw in safety:

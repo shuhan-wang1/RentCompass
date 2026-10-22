@@ -259,6 +259,34 @@ def test_a_wrong_total_or_leg_takes_the_tfl_sentence_with_it(old, new):
     # estimate, or the bus leg's 10) as figures the evidence holds; the redactor binds them.
 
 
+LEGS = "a short walk, the 476 bus, then a 3-minute walk"
+
+
+@pytest.mark.parametrize("legs,kept", [
+    ("a 1-minute walk, the 476 bus (10 min), then a 3-minute walk", True),
+    ("a short walk (1 min), the 476 bus (10 min), then a 3-minute walk", True),
+    ("a 1-minute walk, the 476 bus (12 min), then a 3-minute walk", False),   # no such leg
+    ("a 1-minute walk, the 476 bus (3 min), then a 3-minute walk", False),    # the walk's figure
+    ("a short walk (2 min), the 476 bus, then a 3-minute walk", False),
+])
+def test_a_parenthetical_leg_is_judged_against_its_own_sentences_route(legs, kept):
+    """The line also names the King Square listing, one sentence later, and the line binding
+    went to that listing: "the 476 bus (10 min)" was judged against King Square's estimate and
+    withdrawn. The aside belongs to the route its own sentence names (Islington's bus leg)."""
+    text, out, _ = _mutate("r17_4f27cfd2", LEGS, legs)
+    aside = legs.split("(", 1)[1].split(")", 1)[0]
+    assert (f"({aside})" in out) is kept
+    assert out.count(NOTE_EN) == (0 if kept else 1)
+    assert "476 bus" in out                                # only the aside goes, never the route
+
+
+@pytest.mark.parametrize("aside,kept", [("(~20 min estimated)", True), ("(~25 min estimated)", False)])
+def test_the_listing_its_own_sentence_names_still_owns_its_aside(aside, kept):
+    old = "rather than from the King Square flat specifically"
+    text, out, _ = _mutate("r17_4f27cfd2", old, f"{old} {aside}")
+    assert (aside in out) is kept
+
+
 def test_the_flat_estimate_after_the_area_route_is_the_flats_own():
     """"That's a measured journey from the Islington area rather than from the King Square flat
     specifically, so treat the flat's own ~20 minutes as an estimate": "the flat" is King Square,

@@ -2961,6 +2961,18 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                     local = _line_binding(wider, bindings)
                 if local is not None and local.get("labels") and not local.get("members"):
                     own = local
+            else:
+                # The line's entity is not necessarily this sentence's: "On the commute itself: for
+                # Islington generally, … — a 1-minute walk, the 476 bus (10 min), … That's a measured
+                # journey … rather than from the King Square flat" bound "(10 min)" to the King
+                # Square listing named a sentence later, and the bus leg went (r17 4f27cfd2). The
+                # one entity its own sentence names before it owns the aside.
+                lead = _without_abbreviation_dots(body[max(0, m.start() - 300):m.start()])
+                opening = max((x.end() for x in re.finditer(r"[.!?。！？](?=\s|$)", lead)), default=0)
+                local = _line_binding(lead[opening:], bindings) if lead[opening:].strip() else None
+                if (local is not None and local is not binding and local.get("labels")
+                        and not local.get("members")):
+                    own = local
             heading_now[0] = heading if m.start() < heading_reach else ""
             if not _evidenced(m.group(0), own, context=attached,
                               sentence_marked=bool(_ESTIMATE_MARKER.search(

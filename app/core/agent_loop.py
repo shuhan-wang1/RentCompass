@@ -5602,6 +5602,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         return Command(update=update, goto="agent")
 
     # ── format_output_fc ───────────────────────────────────────────
+    _COST_QUESTION = re.compile(
+        r"\bdeposit\b|\bup-?front\b|\bmove[- ]in\b|\bfirst month(?:['’]s)?\b|\bholding fee\b|押金|首月|入住费用",
+        re.I)
+
     def format_output_fc_node(state: AgentState) -> dict:
         artifacts = list(state.get("tool_artifacts") or [])
         prefs = state.get("user_preferences") or {}
@@ -5768,6 +5772,14 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                             for a in artifacts))
                 and any(a.get("tool") not in ("search_properties", "remember", "ask_user")
                         and _is_executed(a) for a in artifacts))
+            # A deposit / move-in cost question is answered by the model's own arithmetic, with
+            # no other tool: "What would a 6-week deposit and the first month's rent come to …?
+            # Find me one under £2,000 too." shipped the listing ledger alone and the deposit
+            # answer was lost (r21 63fb6f8a). Its answer leads, the ledger follows.
+            if (not composite_answer and requires_status and str(final_response or '').strip()
+                    and search_found.get('status') != 'no_results'
+                    and _COST_QUESTION.search(_cm) and _COST_QUESTION.search(str(final_response))):
+                composite_answer = True
             if composite_answer:
                 response = f"{str(final_response).strip()}\n\n{response}"
             if search_found.get('source_message') and search_found['source_message'] not in response:

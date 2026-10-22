@@ -1456,8 +1456,13 @@ def _clean_commute_fragments(text: str) -> tuple[str, bool]:
             r'^(?:(?:total\s+)?(?:journey|commute|travel)\s+time|通勤时间|总行程时间)'
             r'\s*[:：]\s*(?:(?:which|that is)\b|由\s*(?:TfL|交通)|$)', plain, re.I))
         empty_table_row = bool(re.fullmatch(r'\|\s*(?:commute|通勤)\s*\|\s*', plain, re.I))
-        orphan = bool(re.match(
-            r"^(?:which|and which|that is)\b.*(?:minute|cap|limit|within|under|over)|"
+        # A leftover CLAUSE ("which is under your limit"), never a paragraph of its own: "That is
+        # before any holding deposit … a deposit is normally capped at 5 weeks' rent …" went
+        # whole, silently (r21 63fb6f8a: "cap" inside "capped", and three sentences long).
+        single_clause = len(plain.split()) <= 20 and not re.search(r"[.!?。！？]\s+\S", plain)
+        orphan = bool(single_clause and re.match(
+            r"^(?:which|and which|that is)\b.*\b(?:minutes?|mins?|cap|limit|within|under|over)\b", plain, re.I)
+        ) or bool(re.match(
             r"^(?:basis|依据)\s*[:：\"'“\s]*(?:tfl_journey_plan|straight_line_estimate)|"
             r"^(?:No[.!]?\s*)?What is established\s*[:：]?$|"
             r"^Does this establish a reliable\s*$|^已确认这次只\s*$|"

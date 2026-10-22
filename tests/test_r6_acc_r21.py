@@ -124,3 +124,58 @@ def test_a_possessive_names_its_route_and_a_wrong_walk_still_goes():
     assert right in validate_commute_response(case["raw_draft"], state)
     text = case["raw_draft"].replace(right, "versus Stratford's 9-minute walk")
     assert "9-minute" not in validate_commute_response(text, state)
+
+
+# ── r21 63fb6f8a: the move-in total ────────────────────────────────────────────
+
+def test_the_deposit_answer_is_kept_and_its_total_is_evidenced():
+    case, state, evidence, message = _ctx("r21_63fb6f8a")
+    draft = case["raw_draft"]
+    assert validate_commute_response(draft, state) == draft
+    assert "That is before any holding deposit" in validate_commute_response(draft, state)
+    assert unsupported_reply_prices(draft, evidence) == []
+    assert _grounded(draft, evidence, message)
+
+
+@pytest.mark.parametrize("wrong,value", [
+    ("**Total: £4,800**", 4800.0),            # a wrong total of the same shape
+    ("**Total: £3,575**", 3575.0),            # Jacob House's deposit + the flat share's rent
+])
+def test_a_wrong_move_in_total_is_still_flagged(wrong, value):
+    case, _, evidence, _ = _ctx("r21_63fb6f8a")
+    text = case["raw_draft"].replace("**Total: £4,650**", wrong)
+    assert wrong in text
+    assert unsupported_reply_prices(text, evidence) == [value]
+
+
+def test_a_multi_sentence_paragraph_is_not_an_orphan_clause_but_a_leftover_clause_is():
+    case, _, _, _ = _ctx("r21_63fb6f8a")
+    assert _clean_commute_fragments(case["raw_draft"]) == (case["raw_draft"], False)
+    assert _clean_commute_fragments("Bow fits.\nwhich is well under your 30-minute limit.") == ("Bow fits.", True)
+    assert _clean_commute_fragments("Bow fits.\nand which keeps you under 30 mins") == ("Bow fits.", True)
+
+
+class _NoTools:
+    def list_specs(self):
+        return []
+
+
+def _format(state, answer, message=None):
+    state = dict(state, final_response=answer)
+    if message is not None:
+        state["extracted_context"] = dict(state.get("extracted_context") or {}, current_message=message)
+    return build_fc_nodes(_NoTools())["format_output_fc"](state)["final_response"]
+
+
+def test_the_deposit_answer_leads_and_the_listing_ledger_follows():
+    case, state, _, _ = _ctx("r21_63fb6f8a")
+    out = _format(state, case["raw_draft"])
+    assert out.startswith("**Upfront cost on a £1,950/month flat**")
+    assert "**Total: £4,650**" in out
+    assert out.index("**Total: £4,650**") < out.index(LEDGER_HEAD)
+
+
+def test_a_plain_search_turn_still_ships_the_ledger_alone():
+    case, state, _, _ = _ctx("r21_63fb6f8a")
+    out = _format(state, case["raw_draft"], message="Find me a flat in Hackney under £2,000.")
+    assert out.startswith(LEDGER_HEAD) and "£4,650" not in out

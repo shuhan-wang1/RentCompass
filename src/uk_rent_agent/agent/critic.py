@@ -544,6 +544,19 @@ def unsupported_reply_prices(response: str, evidence: Any) -> list[float]:
             gap = abs(second - first)
             gaps.add(gap)
             supported.update(gap * n for n in ({_MONTHS_PER_YEAR} if year else set()) | set(months))
+    # A move-in total on ONE rent R: R's deposit (5 or 6 weeks) plus R's first month — "6-week
+    # deposit £2,700 + first month £1,950 = £4,650" (r21 63fb6f8a). Never one listing's deposit
+    # plus another figure: that made "£3,190" a £3,000 rent's holding deposit + a £2,500 rent
+    # (r07 619c9e59); and no holding-week sums, which no recorded answer states and which
+    # made a suggested "£1,100" budget £900 + one week of it (r07 7955a79b).
+    for value, unit in evidence_money:
+        if value < _FARE_LIKE_MAX or (unit == "unknown" and round(value, 2) in periodic):
+            continue
+        if unit in ("monthly", "unknown"):
+            week, month = weekly_from_monthly(value), value
+        else:
+            week, month = value, monthly_from_weekly(value)
+        supported.update({week * 5 + month, week * 6 + month})
     # A fare or daily cap: x 2 for the return trip, x the commuting days the answer states.
     counts = counts_stated(response)
     returning = bool(_RETURN_WORDS.search(response or ""))

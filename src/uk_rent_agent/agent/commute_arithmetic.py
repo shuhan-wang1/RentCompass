@@ -1267,8 +1267,11 @@ def period_table_rows(text: str, routes: list, *, user_days: Iterable[float] = (
     ONE consistent choice of measurement per place for the whole table (a table is one chain:
     a Bow column on 27 a day and on 28 a week holds under neither)."""
     routes = merge_same_place([r for r in routes if r.get("minutes") is not None])
-    verdicts = [_period_table_rows(text, variant, user_days=user_days, answer_days=answer_days)
-                for variant in route_variants(routes)]
+    verdicts: list = []
+    for variant in route_variants(routes):
+        verdicts.append(_period_table_rows(text, variant, user_days=user_days, answer_days=answer_days))
+        if all(v["ok"] for v in verdicts[-1].values()):
+            break          # every table holds under this choice: the others cannot do better
     out: dict = {}
     for table in sorted({v["table"] for verdict in verdicts for v in verdict.values()}):
         rows = [{row: v for row, v in verdict.items() if v["table"] == table} for verdict in verdicts]

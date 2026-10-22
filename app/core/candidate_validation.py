@@ -3232,6 +3232,21 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             return bool(named and named.get("labels") and not named.get("members")
                         and _label_key(plain) in {_label_key(label) for label in named["labels"]})
 
+        def _drop_orphan_enumeration() -> None:
+            # The withdrawn clause was the tail and predicate of an enumeration: "…, so nearby
+            # areas such as Islington, Hoxton, Bethnal Green, <Whitechapel or Clerkenwell often
+            # give more options within a 25-minute commute>." left "…such as Islington, Hoxton,
+            # Bethnal Green." (r20 3745b76a). The enumeration has no predicate left, so it goes
+            # with it, back to the clause that opened it.
+            end = len(kept)
+            while (end > sentence_start + 1 and _ENUMERATION_ITEM.fullmatch(kept[end - 1].strip(" ,，、\t"))
+                   and not _FINITE_VERB.search(kept[end - 1])):
+                end -= 1
+            if end < len(kept) and end > sentence_start and _ENUMERATION_LEAD.search(kept[end - 1].rstrip(" ,，、\t")) \
+                    and not _FINITE_VERB.search(_ENUMERATION_LEAD.split(kept[end - 1])[-1]):
+                removed.extend(kept[end - 1:])
+                del kept[end - 1:]
+
         def _close_sentence() -> None:
             # A sentence that lost its claim and kept only a lead-in ("If you want to continue
             # here, for example,") or a bare label ("For your commute") goes whole (R2-01 e/f).
@@ -3376,6 +3391,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                     # The sentence ends with the withdrawn clause. What is left of it either
                     # goes whole (a stub) or keeps the full stop, so it does not run on into
                     # the next sentence ("B is nice, C is nice.").
+                    _drop_orphan_enumeration()
                     opened_at = sentence_start
                     _close_sentence()
                     if len(kept) > opened_at:
@@ -3592,6 +3608,12 @@ def _without_touched_sentences(body: str, removed_fragments: list) -> str:
     if len(kept) == len(sentences):
         return ""            # the withdrawal cannot be located: keep nothing of this line
     return "".join(kept).strip()
+
+
+# A bare item of an enumeration ("Hoxton", "Bethnal Green", "and King's Cross"), and the
+# words that open one ("such as Islington").
+_ENUMERATION_ITEM = re.compile(r"(?:(?:and|or)\s+)?[A-Z][\w'’.-]*(?:\s+[A-Z][\w'’.-]*){0,3}")
+_ENUMERATION_LEAD = re.compile(r"\b(?:such\s+as|including|like|e\.g\.?|for\s+example)\s+(?=[A-Z])")
 
 
 def _stub_remnant(text: str) -> bool:

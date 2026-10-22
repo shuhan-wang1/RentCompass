@@ -172,3 +172,27 @@ def test_a_plain_search_or_an_ungrounded_answer_keeps_the_ledger_alone():
     assert plain.startswith("满足全部已声明条件") and plain.count(CACHE_LINE) == 1
     ungrounded = _format(state, draft, verdict={"grounded": False, "issues": ["unsupported_prices"]})
     assert ungrounded.startswith("满足全部已声明条件") and ungrounded.count(CACHE_LINE) == 1
+
+
+# ── r20 3745b76a: an enumeration whose predicate was withdrawn goes with it ───
+
+def test_a_withdrawn_predicate_takes_its_enumeration():
+    case, state, _evidence, _message = _ctx("r20_3745b76a")
+    draft = case["drafts"][-1]
+    claim = ("Old Street itself has relatively few studios under £2,000, so nearby areas such as Islington, "
+             "Hoxton, Bethnal Green, Whitechapel or Clerkenwell often give more options within a 25-minute commute.")
+    assert claim in draft
+    out = validate_commute_response(draft, state)
+    assert "Old Street itself has relatively few studios under £2,000." in out
+    assert "Bethnal Green" not in out and "within a 25-minute commute" not in out
+
+
+def test_an_enumeration_with_its_own_predicate_stays():
+    case, state, _evidence, _message = _ctx("r20_3745b76a")
+    draft = case["drafts"][-1]
+    claim = ("Old Street itself has relatively few studios under £2,000, so nearby areas such as Islington, "
+             "Hoxton, Bethnal Green, Whitechapel or Clerkenwell often give more options within a 25-minute commute.")
+    kept = ("Old Street itself has relatively few studios under £2,000, so nearby areas such as Islington, "
+            "Hoxton, Bethnal Green, Whitechapel or Clerkenwell often give more options.")
+    text = draft.replace(claim, kept)
+    assert validate_commute_response(text, state) == text

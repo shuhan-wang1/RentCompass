@@ -38,9 +38,13 @@ By hand: edit `DEPLOY_PINNED_SHA` **and** `git checkout <sha>` to the same commi
 
 ## 2. Health monitor (systemd timer + logrotate)
 
+The tracked unit names its checkout as the placeholder `/path/to/uk_rent_recommendation`;
+substitute your deploy checkout while installing it. Run these from the checkout:
+
 ```bash
 sudo install -d -m 0755 /var/log/rentcompass
-sudo cp deploy/monitoring/rentcompass-monitor.service /etc/systemd/system/
+sed "s|/path/to/uk_rent_recommendation|$PWD|g" deploy/monitoring/rentcompass-monitor.service \
+  | sudo tee /etc/systemd/system/rentcompass-monitor.service
 sudo cp deploy/monitoring/rentcompass-monitor.timer   /etc/systemd/system/
 sudo cp deploy/monitoring/rentcompass-monitor.logrotate /etc/logrotate.d/rentcompass-monitor
 sudo systemctl daemon-reload
@@ -73,8 +77,10 @@ Step 2 also declares the build it installed via `MON_EXPECTED_SRC_SHA`, taken fr
 repo manifest, so the monitor alerts (once per state change) if it is ever running
 something else. Unset, the check is inert.
 
-Neither `release.sh` nor `update.sh` reinstalls the monitor; re-run step 1 after a release
-that changes it.
+Neither `release.sh` nor `update.sh` reinstalls the monitor. After a release that changes
+it, re-run steps 1–3: step 1 installs the new script, and step 2 rewrites `override.conf`
+so `MON_EXPECTED_SRC_SHA` is refreshed from the regenerated manifest (otherwise the monitor
+alerts that it is running an undeclared build).
 
 ### 2b. Verify
 

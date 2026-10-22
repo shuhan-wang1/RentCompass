@@ -3430,8 +3430,9 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             # (R4-13): the block now carries all of them up to a wide bound, and says how many
             # of how many it lists.
             _mems, _saved_total = _with_all_saved_facts(_am, user_id, _mems)
-        _mem_block = (_am.format_for_prompt(_mems) if _saved_total is None
-                      else _am.format_for_prompt(_mems, saved_total=_saved_total))
+        _mem_block = (_am.format_for_prompt(_mems, user_id=user_id) if _saved_total is None
+                      else _am.format_for_prompt(_mems, saved_total=_saved_total,
+                                                 user_id=user_id))
         if _mem_block:
             print(f"[Memory] 🧠 注入 {len(_mems)} 条相关记忆")
     except Exception as _e:
@@ -3448,8 +3449,9 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     if selected_defaults:
         _mems = selected_defaults + [record for record in _mems if record.get('id') not in selected_memory_ids]
         # A recall question keeps its full list (R4-13); otherwise the six most relevant.
-        _mem_block = (_am.format_for_prompt(_mems[:6]) if _saved_total is None
-                      else _am.format_for_prompt(_mems, saved_total=_saved_total))
+        _mem_block = (_am.format_for_prompt(_mems[:6], user_id=user_id) if _saved_total is None
+                      else _am.format_for_prompt(_mems, saved_total=_saved_total,
+                                                 user_id=user_id))
 
     if _memory_turn.get('paused'):
         # Runtime data the model reads: memory is paused for the rest of this conversation.

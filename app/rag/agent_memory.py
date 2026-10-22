@@ -1042,15 +1042,63 @@ def reflection_rejection(text: str, user_words: str = "") -> str | None:
     return None
 
 
-def presentable_memories(mems) -> list:
+def presentable_memories(mems, history=None) -> list:
     """The memory records a prompt may show.
 
     Rows written before R4-12 were never checked, so a reflection is shown only when its
-    wording passes :func:`reflection_rejection` against the stated memories beside it."""
+    wording passes :func:`reflection_rejection` against what the user said. ``history`` (a
+    string, or a callable returning one: :meth:`AgentMemory.user_stated_history`) is the user's
+    FULL own-message history; it is read only when a reflection fails against the memories
+    beside it, so a word the user said in a row that was not retrieved no longer hides a valid
+    reflection, and this read-side verdict is the one the purge tool applies (r6-M2)."""
     items = [m for m in (mems or []) if isinstance(m, dict)]
     stated = "\n".join(str(m.get("text") or "") for m in items if m.get("mtype") != "reflection")
-    return [m for m in items
-            if m.get("mtype") != "reflection" or not reflection_rejection(m.get("text"), stated)]
+    full = None
+    out = []
+    for m in items:
+        if m.get("mtype") != "reflection" or not reflection_rejection(m.get("text"), stated):
+            out.append(m)
+            continue
+        if history is None:
+            continue
+        if full is None:
+            try:
+                full = str((history() if callable(history) else history) or "")
+            except Exception:
+                full = ""
+        if not reflection_rejection(m.get("text"), stated + "\n" + full):
+            out.append(m)
+    return out
+
+
+def _stated_rows_text(rows) -> str:
+    """The user's own messages and saved facts among ``rows`` ((document, metadata) pairs):
+    every episodic and semantic row, never a reflection (r6-M2)."""
+    return "\n".join(str(document or "") for document, meta in rows
+                     if ((meta or {}).get("mtype") in ("episodic", "semantic")))
+
+
+def rejected_reflections(records) -> list:
+    """The reflection rows the R4-12 wording guard rejects, each judged against the FULL
+    own-message history of ITS user (every episodic and semantic row of that user in
+    ``records``), the same verdict :func:`presentable_memories` gives on read.
+
+    ``records`` is an iterable of ``(id, document, metadata)``. Returns ``[{"id", "user_id",
+    "text", "metadata", "reason"}]`` in input order (r6-M2)."""
+    rows = [(rid, doc, meta if isinstance(meta, dict) else {}) for rid, doc, meta in records]
+    by_user: dict = {}
+    for _rid, doc, meta in rows:
+        by_user.setdefault(meta.get("user_id"), []).append((doc, meta))
+    history = {user: _stated_rows_text(items) for user, items in by_user.items()}
+    out = []
+    for rid, doc, meta in rows:
+        if meta.get("mtype") != "reflection":
+            continue
+        reason = reflection_rejection(doc, history.get(meta.get("user_id"), ""))
+        if reason:
+            out.append({"id": rid, "user_id": meta.get("user_id"), "text": doc,
+                        "metadata": dict(meta), "reason": reason})
+    return out
 
 
 _RATIONALE_PAREN = re.compile(r"\s*\(([^()]{1,160})\)")
@@ -1865,16 +1913,30 @@ class AgentMemory:
         except Exception:
             pass
 
-    def format_for_prompt(self, mems, saved_total=None) -> str:
+    def user_stated_history(self, user_id) -> str:
+        """Everything one user said or saved here: the text of every episodic and semantic row
+        of that user (never a reflection). The history a reflection's wording is judged by."""
+        uid = _valid_user_id(user_id)
+        if uid is None:
+            return ""
+        try:
+            got = self.col.get(where={"user_id": uid})
+        except Exception:
+            return ""
+        return _stated_rows_text(zip(got.get("documents") or [], got.get("metadatas") or []))
+
+    def format_for_prompt(self, mems, saved_total=None, user_id=None) -> str:
         """The memory block. Reflections are the assistant's own INFERENCES and are labelled
         and listed apart: they were recalled as "everything I have saved" and applied as
         search preferences (R2-06/R2-20). They are labelled TENTATIVE, and one whose wording
-        escalates or attributes is not shown at all (R4-12).
+        escalates or attributes is not shown at all (R4-12); with ``user_id`` it is judged
+        against that user's full history, as the purge tool judges it (r6-M2).
 
         ``saved_total`` (a recall question): how many saved facts the user has, so the block
         says whether it lists all of them. "Here is everything I have stored" listed 19 of 25
         (R4-13)."""
-        mems = presentable_memories(mems)
+        mems = presentable_memories(
+            mems, history=(lambda: self.user_stated_history(user_id)) if user_id else None)
         if not mems:
             return ""
         tag = {"semantic": "FACT", "episodic": "PAST"}

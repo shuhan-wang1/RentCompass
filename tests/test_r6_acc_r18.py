@@ -117,3 +117,96 @@ def test_another_failed_lookup_keeps_its_own_wording():
     assert out.startswith("I couldn't run one of the lookups this time.")
     assert "The lookup failed this turn, so I could not check what you asked." in out
     assert "property search" not in out
+
+
+# ── r6b kept-wrong gaps: a route's own time, a bike figure, an orphaned route time ─────
+
+R17 = json.loads((pathlib.Path(__file__).parent / "data" / "r6_r17_corpus.json").read_text(encoding="utf-8"))
+R17_LINE = "- Per day: 8 minutes each way, so 16 minutes a day"     # r17 8c35fd5b: Stratford 19, Bow 27
+
+
+def _r17(line, state=None):
+    case = R17["r17_8c35fd5b"]
+    state = state or case["state"]
+    text = case["raw_draft"].replace(R17_LINE, line)
+    message = case["message"]
+    return (text, validate_commute_response(text, state),
+            unsupported_external_numbers(text, _collect_grounding_evidence(state, ""), message))
+
+
+@pytest.mark.parametrize("name,old,new,kept", [
+    # (a) "<route> is N minutes" states the route's OWN time
+    ("r17", R17_LINE, "- Per day: Stratford is 19 minutes each way", True),
+    ("r17", R17_LINE, "- Per day: Stratford is 8 minutes each way, so 16 minutes a day", False),
+    ("r18", "Per office day: 11 minutes each way", "Per office day: Stratford is 18 minutes each way", True),
+    ("r18", "Per office day: 11 minutes each way", "Per office day: Stratford is 11 minutes each way", False),
+])
+def test_a_routes_own_time_must_be_its_measured_time(name, old, new, kept):
+    case = R17["r17_8c35fd5b"] if name == "r17" else CORPUS["r18_eb65e918"]
+    state, message = case["state"], case["message"]
+    text = case["raw_draft"].replace(old, new)
+    out = validate_commute_response(text, state)
+    assert (new.split(":", 1)[1].split(",")[0].strip() in out) is kept
+    if not kept:
+        assert out.count(NOTE_EN) == 1
+        assert unsupported_external_numbers(text, _collect_grounding_evidence(state, ""), message)
+
+
+def _with_bike_route(minutes=22):
+    """The r17 state plus a SYNTHETIC measured bike route Stratford -> Liverpool Street (the
+    recorded turns measured public transport only)."""
+    import copy
+    state = copy.deepcopy(R17["r17_8c35fd5b"]["state"])
+    stratford = next(a for a in state["tool_artifacts"] if a["tool"] == "calculate_commute"
+                     and "Stratford" in a["raw_data"]["from_address"])
+    bike = copy.deepcopy(stratford)
+    bike["raw_data"].update({"mode": "bicycling", "duration_minutes": minutes, "route_legs": [],
+                             "route_summary": f"Cycle to Liverpool Street ({minutes} min)"})
+    state["tool_artifacts"].append(bike)
+    return state
+
+
+def test_b_a_bike_figure_needs_a_bike_measurement():
+    """Rule: a cycling/driving figure is a different journey from the transit routes (the
+    redactor's standing rule for bounds, ``_DURATION_BOUND``); only a route measured in that
+    mode evidences it. With no such measurement nothing does, so it is removed, not kept."""
+    _, out, flagged = _r17("- Per day: 8 minutes each way by bike, so 16 minutes a day")
+    assert "by bike" not in out and "Per day" not in out and flagged
+
+
+@pytest.mark.parametrize("sentence,kept", [
+    ("Stratford is 22 minutes by bike.", True),
+    ("By bike, Stratford takes 22 minutes.", True),
+    ("Stratford is 25 minutes by bike.", False),
+    ("Stratford is 19 minutes by bike.", False),     # the TRANSIT figure, called a bike time
+    ("Bow is 22 minutes by bike.", False),           # Stratford's bike route, borrowed
+])
+def test_b_with_a_bike_measurement_only_its_own_figure_is_kept(sentence, kept):
+    state = _with_bike_route()
+    case = R17["r17_8c35fd5b"]
+    assert validate_commute_response(case["raw_draft"], state) == case["raw_draft"]   # transit lines unaffected
+    text = case["raw_draft"].replace("Two caveats worth knowing:", f"{sentence}\n\nTwo caveats worth knowing:")
+    out = validate_commute_response(text, state)
+    assert (sentence in out) is kept
+    assert out.count(NOTE_EN) == (0 if kept else 1)
+
+
+@pytest.mark.parametrize("old,new", [
+    (R17_LINE, "- Per day: 19 minutes each way, so 38 minutes a day"),     # r17: Stratford's own 19
+    (R17_LINE, "- Per day: 19 minutes each way"),
+    ("- Per office day: 11 minutes each way, so 22 minutes of travel per day",
+     "- Per office day: 18 minutes each way, so 36 minutes of travel per day"),   # r18: Stratford 18
+])
+def test_c_a_routes_time_is_not_left_alone_under_a_savings_block(old, new):
+    """Under "**Time saved by the faster one (Stratford):**" a bullet's figure is a saving; a
+    route's own time there is wrong, and once its wrong total went it stayed alone on the line."""
+    case = R17["r17_8c35fd5b"] if old == R17_LINE else CORPUS["r18_eb65e918"]
+    text = case["raw_draft"].replace(old, new)
+    out = validate_commute_response(text, case["state"])
+    assert new.split(":", 1)[0] + ":" not in out           # the whole bullet goes
+    assert out.count(NOTE_EN) == 1
+
+
+def test_c_the_true_savings_bullets_still_ship():
+    for case in (R17["r17_8c35fd5b"], CORPUS["r18_eb65e918"]):
+        assert validate_commute_response(case["raw_draft"], case["state"]) == case["raw_draft"]

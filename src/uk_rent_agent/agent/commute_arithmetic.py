@@ -309,6 +309,63 @@ def _mentions(text: Any, label: Any) -> int:
     return f" {_key(text)} ".find(f" {key} ") if key else -1
 
 
+# A journey by bike or by car is a DIFFERENT journey from the public-transport one the turn
+# measured (the redactor's standing rule for bounds: "a walking/driving/cycling time is a
+# different journey, never this bound"). A figure stated for that mode is evidenced only by a
+# route measured in that mode; arithmetic on transit routes never licenses it (r6b: "8
+# minutes each way by bike" was kept as the transit difference).
+_CYCLING = re.compile(r"\b(?:by\s+(?:bike|bicycle|cycle)|on\s+(?:a|your|the)\s+bike|cycl(?:e|es|ed|ing)|"
+                      r"bik(?:e|es|ing)|bicycl\w*)\b", re.I)
+_DRIVING = re.compile(r"\b(?:by\s+(?:car|taxi|cab)|driv(?:e|es|ing)|car\s+journey)\b", re.I)
+
+
+def route_mode(value: Any) -> str:
+    """'bicycling' / 'driving' / 'walking' for a measured route's own mode, else 'transit'."""
+    text = str(value or "").lower()
+    if text.startswith(("bicycl", "cycl", "bike")):
+        return "bicycling"
+    if text.startswith(("driv", "car")):
+        return "driving"
+    if text.startswith("walk"):
+        return "walking"
+    return "transit"
+
+
+def figure_mode(clause: str) -> str | None:
+    """The non-transit mode a clause states its figure for: 'bicycling', 'driving' or None."""
+    if _CYCLING.search(clause or ""):
+        return "bicycling"
+    if _DRIVING.search(clause or ""):
+        return "driving"
+    return None
+
+
+# "Stratford is 8 minutes each way" / "Stratford takes 19 minutes": the route's name is the
+# whole subject of the clause, so the figure is that route's OWN time (r6b: "Per day: Stratford
+# is 8 minutes each way" with Stratford 19 was kept as the 8-minute difference).
+_NOT_OWN_TIME_AFTER = re.compile(
+    r"\s*(?:(?:each|one)\s+way\s+|per\s+(?:trip|journey)\s+)?(?:slower|faster|quicker|shorter|longer|less|more|"
+    r"extra|saved|saving|over|under|above|below|within|inside|to\s+spare|than|apart|behind|ahead)\b", re.I)
+
+
+def route_named_as_subject(text: str, start: int, end: int, routes: list) -> dict | None:
+    """The route whose own time the figure at [start, end) states, via "<route> is / takes"."""
+    if _NOT_OWN_TIME_AFTER.match(text[end:end + 40]):
+        return None
+    lead = ("\n" if start <= 80 else "") + text[max(0, start - 80):start]
+    best, best_len = None, 0
+    for route in routes:
+        for label in route.get("labels") or []:
+            if not str(label).strip() or len(str(label)) <= best_len:
+                continue
+            if re.search(r"(?:[\n:;,(|]|\*\*|\s[-–—]\s)\s*(?:[-•*]\s+)?(?:\*\*)?\s*" + re.escape(str(label)) +
+                         r"(?:['’]s(?:\s+(?:commute|journey|trip|route))?)?\s+(?:is|takes)\s+"
+                         r"(?:about\s+|roughly\s+|around\s+|approximately\s+|just\s+|only\s+|~\s*)?$",
+                         lead, re.I):
+                best, best_len = route, len(str(label))
+    return best
+
+
 def named_routes(evidence: Any, *, _depth: int = 0) -> list[dict]:
     """``[{labels, minutes}]`` for each named whole-trip measurement in tool evidence."""
     found: list[dict] = []
@@ -328,7 +385,7 @@ def named_routes(evidence: Any, *, _depth: int = 0) -> list[dict]:
             labels = [str(evidence[k]) for k in ("name", "area", "address", "from_address", "label")
                       if isinstance(evidence.get(k), str) and evidence[k].strip()]
             labels += [label.split(",", 1)[0].strip() for label in labels if "," in label]
-            found.append({"labels": labels, "minutes": minutes})
+            found.append({"labels": labels, "minutes": minutes, "mode": route_mode(evidence.get("mode"))})
         for key, value in evidence.items():
             if key not in ("route_legs", "legs", "steps") and isinstance(value, (dict, list, tuple)):
                 found.extend(named_routes(value, _depth=_depth + 1))
@@ -955,6 +1012,19 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
             if not any(margin > 0 and close(value, margin, hedged) for margin in margins):
                 return False, True
             continue
+        mode = figure_mode(_clause_of(rest, start, end))
+        if mode is not None:
+            # A bike / car figure: only a route measured in that mode evidences it.
+            same = [r for r in routes if r.get("mode", "transit") == mode]
+            owner = route_named_as_subject(rest, start, end, same) or (_route_before(rest, start, same) if same else None)
+            if not any(abs(value - r["minutes"]) < 1e-9 for r in ([owner] if owner else same)):
+                return False, True
+            continue
+        own = route_named_as_subject(rest, start, end, routes)
+        if own is not None:
+            if abs(own["minutes"] - value) < 1e-9:
+                continue
+            return False, True        # "Stratford is 8 minutes each way" with Stratford 19
         diffs, fixed = pair_reference(text=rest, at=end, sentence=sentence, line=line, label=label,
                                       routes=routes, measured=measured, days=days, subject=subject,
                                       start=start)

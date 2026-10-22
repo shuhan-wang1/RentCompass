@@ -1,0 +1,1732 @@
+{
+ "r23_de60c6a8": {
+  "checkpointed_final": "在 Hackney 符合「一居室、整套、每月 2000 英镑以内」的房源，目前只找到 1 套：\n\n**Jacob House, London, E8 — £1,950/月**\n- 房型：一居室公寓（整套）\n- 距 Hackney 中心约 1.1 英里\n- 房源标注：无中介费、学生可咨询\n- 链接：https://www.onthemarket.com/details/19970243/\n\n关于「现在还能租吗」：我无法确认。这条信息来自 OnTheMarket 的缓存快照（抓取于 2026 年 7 月 21 日），我这次查询并没有联系或刷新该房源，所以记录中的价格和可租状态都不代表当前实际情况；可入住日期一栏也只写着「联系中介」。要确认是否仍在出租，需要直接向发布该房源的中介核实。我这边不能替你联系中介或预约看房。\n\n另外还有 2 套略超预算的备选（不在你的预算内，仅供参考）：\n- Arbutus Street, Haggerston, E8 — £2,200/月（超 £200）\n- 22-24 Powell Road, E5 — £2,300/月（超 £300）\n\n如果你愿意把预算放宽到 2200 左右，或者想看看 Hackney 周边（比如 Haggerston、Dalston、Stoke Newington）的一居室，我可以再搜一轮。\n\n满足全部已声明条件（已核实）：\n- Jacob House, London, E8（£1950/month)\n已排除/不符合：\n- Arbutus Street, Haggerston, London, E8：该房源是备选，未满足全部已声明条件；月租 £2200 超过预算 £2000\n- 22-24 Powell Road, London, London, London, E5：该房源是备选，未满足全部已声明条件；月租 £2300 超过预算 £2000\n房源来自缓存，价格和出租状态可能已变化；请联系中介核实。",
+  "draft": "在 Hackney 符合「一居室、整套、每月 2000 英镑以内」的房源，目前只找到 1 套：\n\n**Jacob House, London, E8 — £1,950/月**\n- 房型：一居室公寓（整套）\n- 距 Hackney 中心约 1.1 英里\n- 房源标注：无中介费、学生可咨询\n- 链接：https://www.onthemarket.com/details/19970243/\n\n关于「现在还能租吗」：我无法确认。这条信息来自 OnTheMarket 的缓存快照（抓取于 2026 年 7 月 21 日），我这次查询并没有联系或刷新该房源，所以记录中的价格和可租状态都不代表当前实际情况；可入住日期一栏也只写着「联系中介」。要确认是否仍在出租，需要直接向发布该房源的中介核实。我这边不能替你联系中介或预约看房。\n\n另外还有 2 套略超预算的备选（不在你的预算内，仅供参考）：\n- Arbutus Street, Haggerston, E8 — £2,200/月（超 £200）\n- 22-24 Powell Road, E5 — £2,300/月（超 £300）\n\n如果你愿意把预算放宽到 2200 左右，或者想看看 Hackney 周边（比如 Haggerston、Dalston、Stoke Newington）的一居室，我可以再搜一轮。",
+  "message": "帮我在Hackney找一个一居室，预算每月2000英镑，这些房源现在还能租吗？",
+  "request_id": "de60c6a8af6f425780efa7da480194fd",
+  "shipped": "在 Hackney 符合「一居室、整套、每月 2000 英镑以内」的房源，目前只找到 1 套：\n\n**Jacob House, London, E8 — £1,950/月**\n- 房型：一居室公寓（整套）\n- 距 Hackney 中心约 1.1 英里\n- 房源标注：无中介费、学生可咨询\n- 链接：https://www.onthemarket.com/details/19970243/\n\n关于「现在还能租吗」：我无法确认。这条信息来自 OnTheMarket 的缓存快照（抓取于 2026 年 7 月 21 日），我这次查询并没有联系或刷新该房源，所以记录中的价格和可租状态都不代表当前实际情况；可入住日期一栏也只写着「联系中介」。我这边不能替你联系中介或预约看房。\n\n另外还有 2 套略超预算的备选（不在你的预算内，仅供参考）：\n- Arbutus Street, Haggerston, E8 — £2,200/月（超 £200）\n- 22-24 Powell Road, E5 — £2,300/月（超 £300）\n\n如果你愿意把预算放宽到 2200 左右，或者想看看 Hackney 周边（比如 Haggerston、Dalston、Stoke Newington）的一居室，我可以再搜一轮。\n\n满足全部已声明条件（已核实）：\n- Jacob House, London, E8（£1950/month)\n已排除/不符合：\n- Arbutus Street, Haggerston, London, E8：该房源是备选，未满足全部已声明条件；月租 £2200 超过预算 £2000\n- 22-24 Powell Road, London, London, London, E5：该房源是备选，未满足全部已声明条件；月租 £2300 超过预算 £2000\n房源来自缓存，价格和出租状态可能已变化；请联系中介核实。\n\n详情来自缓存，并未实时核实价格或出租状态；须向中介确认。\n返回的房源详情：Jacob House, London, E8；£1,950 pcm；1 bed Flat。\n房源所列配置：No Agent Fees, Students Can Enquire。\n可入住信息：Contact agent。当前是否仍可租须向中介核实。\n房源来自缓存，价格和出租状态可能已变化；请联系中介核实。",
+  "state": {
+   "accumulated_search_criteria": {
+    "amenities_of_interest": [],
+    "area": "Hackney",
+    "areas": [
+     "Hackney"
+    ],
+    "bedrooms": 1,
+    "bedrooms_minimum": false,
+    "budget_period": "month",
+    "constraint_sources": {
+     "area": {
+      "source": "user_message",
+      "text": "帮我在Hackney找一个一居室，预算每月2000英镑，这些房源现在还能租吗？",
+      "value": "Hackney"
+     },
+     "areas": {
+      "source": "user_message",
+      "text": "帮我在Hackney找一个一居室，预算每月2000英镑，这些房源现在还能租吗？",
+      "value": [
+       "Hackney"
+      ]
+     },
+     "bedrooms": {
+      "source": "user_message",
+      "text": "帮我在Hackney找一个一居室，预算每月2000英镑，这些房源现在还能租吗？",
+      "value": 1
+     },
+     "bedrooms_minimum": {
+      "source": "user_message",
+      "text": "帮我在Hackney找一个一居室，预算每月2000英镑，这些房源现在还能租吗？",
+      "value": false
+     },
+     "budget_period": {
+      "source": "user_message",
+      "text": "帮我在Hackney找一个一居室，预算每月2000英镑，这些房源现在还能租吗？",
+      "value": "month"
+     },
+     "max_budget": {
+      "source": "user_message",
+      "text": "帮我在Hackney找一个一居室，预算每月2000英镑，这些房源现在还能租吗？",
+      "value": 2000
+     },
+     "room_type": {
+      "source": "user_message",
+      "text": "帮我在Hackney找一个一居室，预算每月2000英镑，这些房源现在还能租吗？",
+      "value": "whole"
+     }
+    },
+    "destination": null,
+    "max_budget": 2000,
+    "max_travel_time": null,
+    "property_features": [],
+    "room_type": "whole",
+    "soft_preferences": []
+   },
+   "answer_contract": {},
+   "candidate_validation": {
+    "constraints": {
+     "areas": [
+      "hackney"
+     ],
+     "bedrooms": 1.0,
+     "bedrooms_minimum": false,
+     "commute_destination": "Hackney",
+     "max_budget_monthly": 2000.0,
+     "max_changes": null,
+     "max_commute_minutes": null,
+     "monthly_total_budget": null,
+     "move_in_date": null,
+     "no_commute": false,
+     "office_days_per_week": null,
+     "property_features": [],
+     "room_type": "whole"
+    },
+    "eligible": [
+     {
+      "candidate": {
+       "absent_features": [],
+       "address": "Jacob House, London, E8",
+       "area": "Hackney",
+       "availability_status": "",
+       "available_from": "",
+       "bedrooms": 1,
+       "budget_status": "✅ 在预算内",
+       "candidate_reasons": [],
+       "candidate_status": "eligible",
+       "candidate_unknown_reasons": [],
+       "description": "",
+       "distance_miles": 1.1,
+       "explanation": "1 bedroom flat to rent in Jacob House, London, E8",
+       "geo_location": "51.554058, -0.06814",
+       "images": [
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-4-480x320.jpg"
+       ],
+       "match_type": "perfect",
+       "possibly_outdated": false,
+       "price": "£1950/month",
+       "property_type": "1 bed Flat",
+       "provider_address": "Jacob House, London, E8",
+       "rank": 1,
+       "room_type": "whole",
+       "score": 59.53,
+       "score_breakdown": {
+        "freshness": 13.46,
+        "price": 32.38,
+        "semantic": 13.69
+       },
+       "source": "OnTheMarket (cached)",
+       "unverified_features": [],
+       "url": "https://www.onthemarket.com/details/19970243/",
+       "verified_features": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/19970243",
+      "evidence_status": "not_required",
+      "index": 0,
+      "reasons": [],
+      "status": "eligible",
+      "transport_cost_evidence_status": "not_required",
+      "unknown_reasons": []
+     }
+    ],
+    "excluded": [
+     {
+      "candidate": {
+       "absent_features": [],
+       "address": "Arbutus Street, Haggerston, London, E8",
+       "alternative": true,
+       "area": "Hackney",
+       "availability_status": "",
+       "available_from": "",
+       "bedrooms": 1,
+       "budget_status": "⚠️ 超预算 £200",
+       "candidate_reasons": [
+        "alternative is outside the declared hard result set",
+        "monthly price 2200 exceeds budget 2000"
+       ],
+       "candidate_status": "excluded",
+       "candidate_unknown_reasons": [],
+       "description": "",
+       "distance_miles": 1.18,
+       "explanation": "1 bedroom flat to rent in Arbutus Street, Haggerston, London, E8",
+       "geo_location": "51.539025, -0.075944",
+       "images": [
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-4-480x320.jpg"
+       ],
+       "match_type": "soft_violation",
+       "possibly_outdated": false,
+       "price": "£2200/month",
+       "property_type": "1 bed Flat",
+       "provider_address": "Arbutus Street, Haggerston, London, E8",
+       "rank": 1,
+       "room_type": "whole",
+       "score": 38.27,
+       "score_breakdown": {
+        "freshness": 13.46,
+        "price": 10.58,
+        "semantic": 14.23
+       },
+       "source": "OnTheMarket (cached)",
+       "unverified_features": [],
+       "url": "https://www.onthemarket.com/details/19973895/",
+       "verified_features": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/19973895",
+      "evidence_status": "not_required",
+      "index": 1,
+      "reasons": [
+       "alternative is outside the declared hard result set",
+       "monthly price 2200 exceeds budget 2000"
+      ],
+      "status": "excluded",
+      "transport_cost_evidence_status": "not_required",
+      "unknown_reasons": []
+     },
+     {
+      "candidate": {
+       "absent_features": [],
+       "address": "22-24 Powell Road, London, London, London, E5",
+       "alternative": true,
+       "area": "Hackney",
+       "availability_status": "",
+       "available_from": "",
+       "bedrooms": 1,
+       "budget_status": "⚠️ 超预算 £300",
+       "candidate_reasons": [
+        "alternative is outside the declared hard result set",
+        "monthly price 2300 exceeds budget 2000"
+       ],
+       "candidate_status": "excluded",
+       "candidate_unknown_reasons": [],
+       "description": "",
+       "distance_miles": 0.98,
+       "explanation": "1 bedroom apartment to rent in 22-24 Powell Road, London, London, London, E5",
+       "geo_location": "51.556694, -0.056791",
+       "images": [
+        "https://media.onthemarket.com/properties/19731055/1622190770/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/19731055/1622190770/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/19731055/1622190770/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/19731055/1622190770/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/19731055/1622190770/image-4-480x320.jpg"
+       ],
+       "match_type": "soft_violation",
+       "possibly_outdated": false,
+       "price": "£2300/month",
+       "property_type": "1 bed Apartment",
+       "provider_address": "22-24 Powell Road, London, London, London, E5",
+       "rank": 2,
+       "room_type": "whole",
+       "score": 28.84,
+       "score_breakdown": {
+        "freshness": 13.46,
+        "price": 0.0,
+        "semantic": 15.38
+       },
+       "source": "OnTheMarket (cached)",
+       "unverified_features": [],
+       "url": "https://www.onthemarket.com/details/19731055/",
+       "verified_features": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/19731055",
+      "evidence_status": "not_required",
+      "index": 2,
+      "reasons": [
+       "alternative is outside the declared hard result set",
+       "monthly price 2300 exceeds budget 2000"
+      ],
+      "status": "excluded",
+      "transport_cost_evidence_status": "not_required",
+      "unknown_reasons": []
+     }
+    ],
+    "statuses": [
+     {
+      "candidate": {
+       "absent_features": [],
+       "address": "Jacob House, London, E8",
+       "area": "Hackney",
+       "availability_status": "",
+       "available_from": "",
+       "bedrooms": 1,
+       "budget_status": "✅ 在预算内",
+       "candidate_reasons": [],
+       "candidate_status": "eligible",
+       "candidate_unknown_reasons": [],
+       "description": "",
+       "distance_miles": 1.1,
+       "explanation": "1 bedroom flat to rent in Jacob House, London, E8",
+       "geo_location": "51.554058, -0.06814",
+       "images": [
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-4-480x320.jpg"
+       ],
+       "match_type": "perfect",
+       "possibly_outdated": false,
+       "price": "£1950/month",
+       "property_type": "1 bed Flat",
+       "provider_address": "Jacob House, London, E8",
+       "rank": 1,
+       "room_type": "whole",
+       "score": 59.53,
+       "score_breakdown": {
+        "freshness": 13.46,
+        "price": 32.38,
+        "semantic": 13.69
+       },
+       "source": "OnTheMarket (cached)",
+       "unverified_features": [],
+       "url": "https://www.onthemarket.com/details/19970243/",
+       "verified_features": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/19970243",
+      "evidence_status": "not_required",
+      "index": 0,
+      "reasons": [],
+      "status": "eligible",
+      "transport_cost_evidence_status": "not_required",
+      "unknown_reasons": []
+     },
+     {
+      "candidate": {
+       "absent_features": [],
+       "address": "Arbutus Street, Haggerston, London, E8",
+       "alternative": true,
+       "area": "Hackney",
+       "availability_status": "",
+       "available_from": "",
+       "bedrooms": 1,
+       "budget_status": "⚠️ 超预算 £200",
+       "candidate_reasons": [
+        "alternative is outside the declared hard result set",
+        "monthly price 2200 exceeds budget 2000"
+       ],
+       "candidate_status": "excluded",
+       "candidate_unknown_reasons": [],
+       "description": "",
+       "distance_miles": 1.18,
+       "explanation": "1 bedroom flat to rent in Arbutus Street, Haggerston, London, E8",
+       "geo_location": "51.539025, -0.075944",
+       "images": [
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-4-480x320.jpg"
+       ],
+       "match_type": "soft_violation",
+       "possibly_outdated": false,
+       "price": "£2200/month",
+       "property_type": "1 bed Flat",
+       "provider_address": "Arbutus Street, Haggerston, London, E8",
+       "rank": 1,
+       "room_type": "whole",
+       "score": 38.27,
+       "score_breakdown": {
+        "freshness": 13.46,
+        "price": 10.58,
+        "semantic": 14.23
+       },
+       "source": "OnTheMarket (cached)",
+       "unverified_features": [],
+       "url": "https://www.onthemarket.com/details/19973895/",
+       "verified_features": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/19973895",
+      "evidence_status": "not_required",
+      "index": 1,
+      "reasons": [
+       "alternative is outside the declared hard result set",
+       "monthly price 2200 exceeds budget 2000"
+      ],
+      "status": "excluded",
+      "transport_cost_evidence_status": "not_required",
+      "unknown_reasons": []
+     },
+     {
+      "candidate": {
+       "absent_features": [],
+       "address": "22-24 Powell Road, London, London, London, E5",
+       "alternative": true,
+       "area": "Hackney",
+       "availability_status": "",
+       "available_from": "",
+       "bedrooms": 1,
+       "budget_status": "⚠️ 超预算 £300",
+       "candidate_reasons": [
+        "alternative is outside the declared hard result set",
+        "monthly price 2300 exceeds budget 2000"
+       ],
+       "candidate_status": "excluded",
+       "candidate_unknown_reasons": [],
+       "description": "",
+       "distance_miles": 0.98,
+       "explanation": "1 bedroom apartment to rent in 22-24 Powell Road, London, London, London, E5",
+       "geo_location": "51.556694, -0.056791",
+       "images": [
+        "https://media.onthemarket.com/properties/19731055/1622190770/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/19731055/1622190770/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/19731055/1622190770/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/19731055/1622190770/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/19731055/1622190770/image-4-480x320.jpg"
+       ],
+       "match_type": "soft_violation",
+       "possibly_outdated": false,
+       "price": "£2300/month",
+       "property_type": "1 bed Apartment",
+       "provider_address": "22-24 Powell Road, London, London, London, E5",
+       "rank": 2,
+       "room_type": "whole",
+       "score": 28.84,
+       "score_breakdown": {
+        "freshness": 13.46,
+        "price": 0.0,
+        "semantic": 15.38
+       },
+       "source": "OnTheMarket (cached)",
+       "unverified_features": [],
+       "url": "https://www.onthemarket.com/details/19731055/",
+       "verified_features": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/19731055",
+      "evidence_status": "not_required",
+      "index": 2,
+      "reasons": [
+       "alternative is outside the declared hard result set",
+       "monthly price 2300 exceeds budget 2000"
+      ],
+      "status": "excluded",
+      "transport_cost_evidence_status": "not_required",
+      "unknown_reasons": []
+     }
+    ],
+    "unknown": []
+   },
+   "commute_evidence": [],
+   "context_tainted": true,
+   "critic_attempts": 1,
+   "extracted_context": {
+    "current_date": "2026-10-22",
+    "current_message": "帮我在Hackney找一个一居室，预算每月2000英镑，这些房源现在还能租吗？",
+    "history": [],
+    "memory_paused": false,
+    "reply_language": "zh"
+   },
+   "loop_turn": 3,
+   "manager_task_plans": [],
+   "memory_context": "",
+   "memory_write_contract": {},
+   "observations": [],
+   "plan": [],
+   "plan_just_completed": false,
+   "plan_notes": [],
+   "plan_origin": "",
+   "request_id": "de60c6a8af6f425780efa7da480194fd",
+   "response_type": "search",
+   "run_id": "test-run",
+   "search_results": [],
+   "session_id": "test-session",
+   "soft_wrapped": false,
+   "specialist_results": [],
+   "task_plan": [],
+   "task_results": [],
+   "tool_artifacts": [
+    {
+     "elapsed_ms": 395,
+     "error": null,
+     "params_digest": "1c6da028c27171c3",
+     "raw_data": {
+      "area_recommendations": [],
+      "area_status": {
+       "Hackney": "results"
+      },
+      "cache_stats": {
+       "hits": 1,
+       "misses": 0
+      },
+      "candidate_states": [
+       {
+        "candidate": {
+         "absent_features": [],
+         "address": "Jacob House, London, E8",
+         "area": "Hackney",
+         "availability_status": "",
+         "available_from": "",
+         "bedrooms": 1,
+         "budget_status": "✅ 在预算内",
+         "candidate_reasons": [],
+         "candidate_status": "eligible",
+         "candidate_unknown_reasons": [],
+         "description": "",
+         "distance_miles": 1.1,
+         "explanation": "1 bedroom flat to rent in Jacob House, London, E8",
+         "geo_location": "51.554058, -0.06814",
+         "images": [
+          "https://media.onthemarket.com/properties/19970243/1630741305/image-0-480x320.jpg",
+          "https://media.onthemarket.com/properties/19970243/1630741305/image-1-480x320.jpg",
+          "https://media.onthemarket.com/properties/19970243/1630741305/image-2-480x320.jpg",
+          "https://media.onthemarket.com/properties/19970243/1630741305/image-3-480x320.jpg",
+          "https://media.onthemarket.com/properties/19970243/1630741305/image-4-480x320.jpg"
+         ],
+         "match_type": "perfect",
+         "possibly_outdated": false,
+         "price": "£1950/month",
+         "property_type": "1 bed Flat",
+         "provider_address": "Jacob House, London, E8",
+         "rank": 1,
+         "room_type": "whole",
+         "score": 59.53,
+         "score_breakdown": {
+          "freshness": 13.46,
+          "price": 32.38,
+          "semantic": 13.69
+         },
+         "source": "OnTheMarket (cached)",
+         "unverified_features": [],
+         "url": "https://www.onthemarket.com/details/19970243/",
+         "verified_features": []
+        },
+        "candidate_key": "url:https://www.onthemarket.com/details/19970243",
+        "evidence_status": "not_required",
+        "index": 0,
+        "reasons": [],
+        "status": "eligible",
+        "transport_cost_evidence_status": "not_required",
+        "unknown_reasons": []
+       },
+       {
+        "candidate": {
+         "absent_features": [],
+         "address": "Arbutus Street, Haggerston, London, E8",
+         "alternative": true,
+         "area": "Hackney",
+         "availability_status": "",
+         "available_from": "",
+         "bedrooms": 1,
+         "budget_status": "⚠️ 超预算 £200",
+         "candidate_reasons": [
+          "alternative is outside the declared hard result set",
+          "monthly price 2200 exceeds budget 2000"
+         ],
+         "candidate_status": "excluded",
+         "candidate_unknown_reasons": [],
+         "description": "",
+         "distance_miles": 1.18,
+         "explanation": "1 bedroom flat to rent in Arbutus Street, Haggerston, London, E8",
+         "geo_location": "51.539025, -0.075944",
+         "images": [
+          "https://media.onthemarket.com/properties/19973895/1630862996/image-0-480x320.jpg",
+          "https://media.onthemarket.com/properties/19973895/1630862996/image-1-480x320.jpg",
+          "https://media.onthemarket.com/properties/19973895/1630862996/image-2-480x320.jpg",
+          "https://media.onthemarket.com/properties/19973895/1630862996/image-3-480x320.jpg",
+          "https://media.onthemarket.com/properties/19973895/1630862996/image-4-480x320.jpg"
+         ],
+         "match_type": "soft_violation",
+         "possibly_outdated": false,
+         "price": "£2200/month",
+         "property_type": "1 bed Flat",
+         "provider_address": "Arbutus Street, Haggerston, London, E8",
+         "rank": 1,
+         "room_type": "whole",
+         "score": 38.27,
+         "score_breakdown": {
+          "freshness": 13.46,
+          "price": 10.58,
+          "semantic": 14.23
+         },
+         "source": "OnTheMarket (cached)",
+         "unverified_features": [],
+         "url": "https://www.onthemarket.com/details/19973895/",
+         "verified_features": []
+        },
+        "candidate_key": "url:https://www.onthemarket.com/details/19973895",
+        "evidence_status": "not_required",
+        "index": 1,
+        "reasons": [
+         "alternative is outside the declared hard result set",
+         "monthly price 2200 exceeds budget 2000"
+        ],
+        "status": "excluded",
+        "transport_cost_evidence_status": "not_required",
+        "unknown_reasons": []
+       },
+       {
+        "candidate": {
+         "absent_features": [],
+         "address": "22-24 Powell Road, London, London, London, E5",
+         "alternative": true,
+         "area": "Hackney",
+         "availability_status": "",
+         "available_from": "",
+         "bedrooms": 1,
+         "budget_status": "⚠️ 超预算 £300",
+         "candidate_reasons": [
+          "alternative is outside the declared hard result set",
+          "monthly price 2300 exceeds budget 2000"
+         ],
+         "candidate_status": "excluded",
+         "candidate_unknown_reasons": [],
+         "description": "",
+         "distance_miles": 0.98,
+         "explanation": "1 bedroom apartment to rent in 22-24 Powell Road, London, London, London, E5",
+         "geo_location": "51.556694, -0.056791",
+         "images": [
+          "https://media.onthemarket.com/properties/19731055/1622190770/image-0-480x320.jpg",
+          "https://media.onthemarket.com/properties/19731055/1622190770/image-1-480x320.jpg",
+          "https://media.onthemarket.com/properties/19731055/1622190770/image-2-480x320.jpg",
+          "https://media.onthemarket.com/properties/19731055/1622190770/image-3-480x320.jpg",
+          "https://media.onthemarket.com/properties/19731055/1622190770/image-4-480x320.jpg"
+         ],
+         "match_type": "soft_violation",
+         "possibly_outdated": false,
+         "price": "£2300/month",
+         "property_type": "1 bed Apartment",
+         "provider_address": "22-24 Powell Road, London, London, London, E5",
+         "rank": 2,
+         "room_type": "whole",
+         "score": 28.84,
+         "score_breakdown": {
+          "freshness": 13.46,
+          "price": 0.0,
+          "semantic": 15.38
+         },
+         "source": "OnTheMarket (cached)",
+         "unverified_features": [],
+         "url": "https://www.onthemarket.com/details/19731055/",
+         "verified_features": []
+        },
+        "candidate_key": "url:https://www.onthemarket.com/details/19731055",
+        "evidence_status": "not_required",
+        "index": 2,
+        "reasons": [
+         "alternative is outside the declared hard result set",
+         "monthly price 2300 exceeds budget 2000"
+        ],
+        "status": "excluded",
+        "transport_cost_evidence_status": "not_required",
+        "unknown_reasons": []
+       }
+      ],
+      "candidate_validation": {
+       "constraints": {
+        "areas": [
+         "hackney"
+        ],
+        "bedrooms": 1.0,
+        "bedrooms_minimum": false,
+        "commute_destination": "Hackney",
+        "max_budget_monthly": 2000.0,
+        "max_changes": null,
+        "max_commute_minutes": null,
+        "monthly_total_budget": null,
+        "move_in_date": null,
+        "no_commute": false,
+        "office_days_per_week": null,
+        "property_features": [],
+        "room_type": "whole"
+       },
+       "eligible": [
+        {
+         "candidate": {
+          "absent_features": [],
+          "address": "Jacob House, London, E8",
+          "area": "Hackney",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 1,
+          "budget_status": "✅ 在预算内",
+          "candidate_reasons": [],
+          "candidate_status": "eligible",
+          "candidate_unknown_reasons": [],
+          "description": "",
+          "distance_miles": 1.1,
+          "explanation": "1 bedroom flat to rent in Jacob House, London, E8",
+          "geo_location": "51.554058, -0.06814",
+          "images": [
+           "https://media.onthemarket.com/properties/19970243/1630741305/image-0-480x320.jpg",
+           "https://media.onthemarket.com/properties/19970243/1630741305/image-1-480x320.jpg",
+           "https://media.onthemarket.com/properties/19970243/1630741305/image-2-480x320.jpg",
+           "https://media.onthemarket.com/properties/19970243/1630741305/image-3-480x320.jpg",
+           "https://media.onthemarket.com/properties/19970243/1630741305/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": false,
+          "price": "£1950/month",
+          "property_type": "1 bed Flat",
+          "provider_address": "Jacob House, London, E8",
+          "rank": 1,
+          "room_type": "whole",
+          "score": 59.53,
+          "score_breakdown": {
+           "freshness": 13.46,
+           "price": 32.38,
+           "semantic": 13.69
+          },
+          "source": "OnTheMarket (cached)",
+          "unverified_features": [],
+          "url": "https://www.onthemarket.com/details/19970243/",
+          "verified_features": []
+         },
+         "candidate_key": "url:https://www.onthemarket.com/details/19970243",
+         "evidence_status": "not_required",
+         "index": 0,
+         "reasons": [],
+         "status": "eligible",
+         "transport_cost_evidence_status": "not_required",
+         "unknown_reasons": []
+        }
+       ],
+       "excluded": [
+        {
+         "candidate": {
+          "absent_features": [],
+          "address": "Arbutus Street, Haggerston, London, E8",
+          "alternative": true,
+          "area": "Hackney",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 1,
+          "budget_status": "⚠️ 超预算 £200",
+          "candidate_reasons": [
+           "alternative is outside the declared hard result set",
+           "monthly price 2200 exceeds budget 2000"
+          ],
+          "candidate_status": "excluded",
+          "candidate_unknown_reasons": [],
+          "description": "",
+          "distance_miles": 1.18,
+          "explanation": "1 bedroom flat to rent in Arbutus Street, Haggerston, London, E8",
+          "geo_location": "51.539025, -0.075944",
+          "images": [
+           "https://media.onthemarket.com/properties/19973895/1630862996/image-0-480x320.jpg",
+           "https://media.onthemarket.com/properties/19973895/1630862996/image-1-480x320.jpg",
+           "https://media.onthemarket.com/properties/19973895/1630862996/image-2-480x320.jpg",
+           "https://media.onthemarket.com/properties/19973895/1630862996/image-3-480x320.jpg",
+           "https://media.onthemarket.com/properties/19973895/1630862996/image-4-480x320.jpg"
+          ],
+          "match_type": "soft_violation",
+          "possibly_outdated": false,
+          "price": "£2200/month",
+          "property_type": "1 bed Flat",
+          "provider_address": "Arbutus Street, Haggerston, London, E8",
+          "rank": 1,
+          "room_type": "whole",
+          "score": 38.27,
+          "score_breakdown": {
+           "freshness": 13.46,
+           "price": 10.58,
+           "semantic": 14.23
+          },
+          "source": "OnTheMarket (cached)",
+          "unverified_features": [],
+          "url": "https://www.onthemarket.com/details/19973895/",
+          "verified_features": []
+         },
+         "candidate_key": "url:https://www.onthemarket.com/details/19973895",
+         "evidence_status": "not_required",
+         "index": 1,
+         "reasons": [
+          "alternative is outside the declared hard result set",
+          "monthly price 2200 exceeds budget 2000"
+         ],
+         "status": "excluded",
+         "transport_cost_evidence_status": "not_required",
+         "unknown_reasons": []
+        },
+        {
+         "candidate": {
+          "absent_features": [],
+          "address": "22-24 Powell Road, London, London, London, E5",
+          "alternative": true,
+          "area": "Hackney",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 1,
+          "budget_status": "⚠️ 超预算 £300",
+          "candidate_reasons": [
+           "alternative is outside the declared hard result set",
+           "monthly price 2300 exceeds budget 2000"
+          ],
+          "candidate_status": "excluded",
+          "candidate_unknown_reasons": [],
+          "description": "",
+          "distance_miles": 0.98,
+          "explanation": "1 bedroom apartment to rent in 22-24 Powell Road, London, London, London, E5",
+          "geo_location": "51.556694, -0.056791",
+          "images": [
+           "https://media.onthemarket.com/properties/19731055/1622190770/image-0-480x320.jpg",
+           "https://media.onthemarket.com/properties/19731055/1622190770/image-1-480x320.jpg",
+           "https://media.onthemarket.com/properties/19731055/1622190770/image-2-480x320.jpg",
+           "https://media.onthemarket.com/properties/19731055/1622190770/image-3-480x320.jpg",
+           "https://media.onthemarket.com/properties/19731055/1622190770/image-4-480x320.jpg"
+          ],
+          "match_type": "soft_violation",
+          "possibly_outdated": false,
+          "price": "£2300/month",
+          "property_type": "1 bed Apartment",
+          "provider_address": "22-24 Powell Road, London, London, London, E5",
+          "rank": 2,
+          "room_type": "whole",
+          "score": 28.84,
+          "score_breakdown": {
+           "freshness": 13.46,
+           "price": 0.0,
+           "semantic": 15.38
+          },
+          "source": "OnTheMarket (cached)",
+          "unverified_features": [],
+          "url": "https://www.onthemarket.com/details/19731055/",
+          "verified_features": []
+         },
+         "candidate_key": "url:https://www.onthemarket.com/details/19731055",
+         "evidence_status": "not_required",
+         "index": 2,
+         "reasons": [
+          "alternative is outside the declared hard result set",
+          "monthly price 2300 exceeds budget 2000"
+         ],
+         "status": "excluded",
+         "transport_cost_evidence_status": "not_required",
+         "unknown_reasons": []
+        }
+       ],
+       "statuses": [
+        {
+         "candidate": {
+          "absent_features": [],
+          "address": "Jacob House, London, E8",
+          "area": "Hackney",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 1,
+          "budget_status": "✅ 在预算内",
+          "candidate_reasons": [],
+          "candidate_status": "eligible",
+          "candidate_unknown_reasons": [],
+          "description": "",
+          "distance_miles": 1.1,
+          "explanation": "1 bedroom flat to rent in Jacob House, London, E8",
+          "geo_location": "51.554058, -0.06814",
+          "images": [
+           "https://media.onthemarket.com/properties/19970243/1630741305/image-0-480x320.jpg",
+           "https://media.onthemarket.com/properties/19970243/1630741305/image-1-480x320.jpg",
+           "https://media.onthemarket.com/properties/19970243/1630741305/image-2-480x320.jpg",
+           "https://media.onthemarket.com/properties/19970243/1630741305/image-3-480x320.jpg",
+           "https://media.onthemarket.com/properties/19970243/1630741305/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": false,
+          "price": "£1950/month",
+          "property_type": "1 bed Flat",
+          "provider_address": "Jacob House, London, E8",
+          "rank": 1,
+          "room_type": "whole",
+          "score": 59.53,
+          "score_breakdown": {
+           "freshness": 13.46,
+           "price": 32.38,
+           "semantic": 13.69
+          },
+          "source": "OnTheMarket (cached)",
+          "unverified_features": [],
+          "url": "https://www.onthemarket.com/details/19970243/",
+          "verified_features": []
+         },
+         "candidate_key": "url:https://www.onthemarket.com/details/19970243",
+         "evidence_status": "not_required",
+         "index": 0,
+         "reasons": [],
+         "status": "eligible",
+         "transport_cost_evidence_status": "not_required",
+         "unknown_reasons": []
+        },
+        {
+         "candidate": {
+          "absent_features": [],
+          "address": "Arbutus Street, Haggerston, London, E8",
+          "alternative": true,
+          "area": "Hackney",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 1,
+          "budget_status": "⚠️ 超预算 £200",
+          "candidate_reasons": [
+           "alternative is outside the declared hard result set",
+           "monthly price 2200 exceeds budget 2000"
+          ],
+          "candidate_status": "excluded",
+          "candidate_unknown_reasons": [],
+          "description": "",
+          "distance_miles": 1.18,
+          "explanation": "1 bedroom flat to rent in Arbutus Street, Haggerston, London, E8",
+          "geo_location": "51.539025, -0.075944",
+          "images": [
+           "https://media.onthemarket.com/properties/19973895/1630862996/image-0-480x320.jpg",
+           "https://media.onthemarket.com/properties/19973895/1630862996/image-1-480x320.jpg",
+           "https://media.onthemarket.com/properties/19973895/1630862996/image-2-480x320.jpg",
+           "https://media.onthemarket.com/properties/19973895/1630862996/image-3-480x320.jpg",
+           "https://media.onthemarket.com/properties/19973895/1630862996/image-4-480x320.jpg"
+          ],
+          "match_type": "soft_violation",
+          "possibly_outdated": false,
+          "price": "£2200/month",
+          "property_type": "1 bed Flat",
+          "provider_address": "Arbutus Street, Haggerston, London, E8",
+          "rank": 1,
+          "room_type": "whole",
+          "score": 38.27,
+          "score_breakdown": {
+           "freshness": 13.46,
+           "price": 10.58,
+           "semantic": 14.23
+          },
+          "source": "OnTheMarket (cached)",
+          "unverified_features": [],
+          "url": "https://www.onthemarket.com/details/19973895/",
+          "verified_features": []
+         },
+         "candidate_key": "url:https://www.onthemarket.com/details/19973895",
+         "evidence_status": "not_required",
+         "index": 1,
+         "reasons": [
+          "alternative is outside the declared hard result set",
+          "monthly price 2200 exceeds budget 2000"
+         ],
+         "status": "excluded",
+         "transport_cost_evidence_status": "not_required",
+         "unknown_reasons": []
+        },
+        {
+         "candidate": {
+          "absent_features": [],
+          "address": "22-24 Powell Road, London, London, London, E5",
+          "alternative": true,
+          "area": "Hackney",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 1,
+          "budget_status": "⚠️ 超预算 £300",
+          "candidate_reasons": [
+           "alternative is outside the declared hard result set",
+           "monthly price 2300 exceeds budget 2000"
+          ],
+          "candidate_status": "excluded",
+          "candidate_unknown_reasons": [],
+          "description": "",
+          "distance_miles": 0.98,
+          "explanation": "1 bedroom apartment to rent in 22-24 Powell Road, London, London, London, E5",
+          "geo_location": "51.556694, -0.056791",
+          "images": [
+           "https://media.onthemarket.com/properties/19731055/1622190770/image-0-480x320.jpg",
+           "https://media.onthemarket.com/properties/19731055/1622190770/image-1-480x320.jpg",
+           "https://media.onthemarket.com/properties/19731055/1622190770/image-2-480x320.jpg",
+           "https://media.onthemarket.com/properties/19731055/1622190770/image-3-480x320.jpg",
+           "https://media.onthemarket.com/properties/19731055/1622190770/image-4-480x320.jpg"
+          ],
+          "match_type": "soft_violation",
+          "possibly_outdated": false,
+          "price": "£2300/month",
+          "property_type": "1 bed Apartment",
+          "provider_address": "22-24 Powell Road, London, London, London, E5",
+          "rank": 2,
+          "room_type": "whole",
+          "score": 28.84,
+          "score_breakdown": {
+           "freshness": 13.46,
+           "price": 0.0,
+           "semantic": 15.38
+          },
+          "source": "OnTheMarket (cached)",
+          "unverified_features": [],
+          "url": "https://www.onthemarket.com/details/19731055/",
+          "verified_features": []
+         },
+         "candidate_key": "url:https://www.onthemarket.com/details/19731055",
+         "evidence_status": "not_required",
+         "index": 2,
+         "reasons": [
+          "alternative is outside the declared hard result set",
+          "monthly price 2300 exceeds budget 2000"
+         ],
+         "status": "excluded",
+         "transport_cost_evidence_status": "not_required",
+         "unknown_reasons": []
+        }
+       ],
+       "unknown": []
+      },
+      "commute_evidence": [],
+      "commute_note": "",
+      "commute_unverified": false,
+      "data_source": "OnTheMarket (cached)",
+      "excluded_candidates": [
+       {
+        "absent_features": [],
+        "address": "Arbutus Street, Haggerston, London, E8",
+        "alternative": true,
+        "area": "Hackney",
+        "availability_status": "",
+        "available_from": "",
+        "bedrooms": 1,
+        "budget_status": "⚠️ 超预算 £200",
+        "candidate_reasons": [
+         "alternative is outside the declared hard result set",
+         "monthly price 2200 exceeds budget 2000"
+        ],
+        "candidate_status": "excluded",
+        "candidate_unknown_reasons": [],
+        "description": "",
+        "distance_miles": 1.18,
+        "explanation": "1 bedroom flat to rent in Arbutus Street, Haggerston, London, E8",
+        "geo_location": "51.539025, -0.075944",
+        "images": [
+         "https://media.onthemarket.com/properties/19973895/1630862996/image-0-480x320.jpg",
+         "https://media.onthemarket.com/properties/19973895/1630862996/image-1-480x320.jpg",
+         "https://media.onthemarket.com/properties/19973895/1630862996/image-2-480x320.jpg",
+         "https://media.onthemarket.com/properties/19973895/1630862996/image-3-480x320.jpg",
+         "https://media.onthemarket.com/properties/19973895/1630862996/image-4-480x320.jpg"
+        ],
+        "match_type": "soft_violation",
+        "possibly_outdated": false,
+        "price": "£2200/month",
+        "property_type": "1 bed Flat",
+        "provider_address": "Arbutus Street, Haggerston, London, E8",
+        "rank": 1,
+        "room_type": "whole",
+        "score": 38.27,
+        "score_breakdown": {
+         "freshness": 13.46,
+         "price": 10.58,
+         "semantic": 14.23
+        },
+        "source": "OnTheMarket (cached)",
+        "unverified_features": [],
+        "url": "https://www.onthemarket.com/details/19973895/",
+        "verified_features": []
+       },
+       {
+        "absent_features": [],
+        "address": "22-24 Powell Road, London, London, London, E5",
+        "alternative": true,
+        "area": "Hackney",
+        "availability_status": "",
+        "available_from": "",
+        "bedrooms": 1,
+        "budget_status": "⚠️ 超预算 £300",
+        "candidate_reasons": [
+         "alternative is outside the declared hard result set",
+         "monthly price 2300 exceeds budget 2000"
+        ],
+        "candidate_status": "excluded",
+        "candidate_unknown_reasons": [],
+        "description": "",
+        "distance_miles": 0.98,
+        "explanation": "1 bedroom apartment to rent in 22-24 Powell Road, London, London, London, E5",
+        "geo_location": "51.556694, -0.056791",
+        "images": [
+         "https://media.onthemarket.com/properties/19731055/1622190770/image-0-480x320.jpg",
+         "https://media.onthemarket.com/properties/19731055/1622190770/image-1-480x320.jpg",
+         "https://media.onthemarket.com/properties/19731055/1622190770/image-2-480x320.jpg",
+         "https://media.onthemarket.com/properties/19731055/1622190770/image-3-480x320.jpg",
+         "https://media.onthemarket.com/properties/19731055/1622190770/image-4-480x320.jpg"
+        ],
+        "match_type": "soft_violation",
+        "possibly_outdated": false,
+        "price": "£2300/month",
+        "property_type": "1 bed Apartment",
+        "provider_address": "22-24 Powell Road, London, London, London, E5",
+        "rank": 2,
+        "room_type": "whole",
+        "score": 28.84,
+        "score_breakdown": {
+         "freshness": 13.46,
+         "price": 0.0,
+         "semantic": 15.38
+        },
+        "source": "OnTheMarket (cached)",
+        "unverified_features": [],
+        "url": "https://www.onthemarket.com/details/19731055/",
+        "verified_features": []
+       }
+      ],
+      "incomplete_areas": [],
+      "known_criteria": {
+       "area": "Hackney",
+       "areas": [
+        "Hackney"
+       ],
+       "bedrooms": 1,
+       "bedrooms_minimum": false,
+       "budget_period": "month",
+       "commute_destination": null,
+       "max_budget": 2000.0,
+       "max_changes": null,
+       "max_travel_time": null,
+       "monthly_total_budget": null,
+       "move_in_date": null,
+       "no_commute": false,
+       "office_days_per_week": null,
+       "property_features": [],
+       "room_type": "whole",
+       "soft_preferences": []
+      },
+      "over_budget_alternatives": [
+       {
+        "absent_features": [],
+        "address": "Arbutus Street, Haggerston, London, E8",
+        "alternative": true,
+        "area": "Hackney",
+        "availability_status": "",
+        "available_from": "",
+        "bedrooms": 1,
+        "budget_status": "⚠️ 超预算 £200",
+        "description": "",
+        "distance_miles": 1.18,
+        "explanation": "1 bedroom flat to rent in Arbutus Street, Haggerston, London, E8",
+        "geo_location": "51.539025, -0.075944",
+        "images": [
+         "https://media.onthemarket.com/properties/19973895/1630862996/image-0-480x320.jpg",
+         "https://media.onthemarket.com/properties/19973895/1630862996/image-1-480x320.jpg",
+         "https://media.onthemarket.com/properties/19973895/1630862996/image-2-480x320.jpg",
+         "https://media.onthemarket.com/properties/19973895/1630862996/image-3-480x320.jpg",
+         "https://media.onthemarket.com/properties/19973895/1630862996/image-4-480x320.jpg"
+        ],
+        "match_type": "soft_violation",
+        "possibly_outdated": false,
+        "price": "£2200/month",
+        "property_type": "1 bed Flat",
+        "provider_address": "Arbutus Street, Haggerston, London, E8",
+        "rank": 1,
+        "room_type": "whole",
+        "score": 38.27,
+        "score_breakdown": {
+         "freshness": 13.46,
+         "price": 10.58,
+         "semantic": 14.23
+        },
+        "source": "OnTheMarket (cached)",
+        "unverified_features": [],
+        "url": "https://www.onthemarket.com/details/19973895/",
+        "verified_features": []
+       },
+       {
+        "absent_features": [],
+        "address": "22-24 Powell Road, London, London, London, E5",
+        "alternative": true,
+        "area": "Hackney",
+        "availability_status": "",
+        "available_from": "",
+        "bedrooms": 1,
+        "budget_status": "⚠️ 超预算 £300",
+        "description": "",
+        "distance_miles": 0.98,
+        "explanation": "1 bedroom apartment to rent in 22-24 Powell Road, London, London, London, E5",
+        "geo_location": "51.556694, -0.056791",
+        "images": [
+         "https://media.onthemarket.com/properties/19731055/1622190770/image-0-480x320.jpg",
+         "https://media.onthemarket.com/properties/19731055/1622190770/image-1-480x320.jpg",
+         "https://media.onthemarket.com/properties/19731055/1622190770/image-2-480x320.jpg",
+         "https://media.onthemarket.com/properties/19731055/1622190770/image-3-480x320.jpg",
+         "https://media.onthemarket.com/properties/19731055/1622190770/image-4-480x320.jpg"
+        ],
+        "match_type": "soft_violation",
+        "possibly_outdated": false,
+        "price": "£2300/month",
+        "property_type": "1 bed Apartment",
+        "provider_address": "22-24 Powell Road, London, London, London, E5",
+        "rank": 2,
+        "room_type": "whole",
+        "score": 28.84,
+        "score_breakdown": {
+         "freshness": 13.46,
+         "price": 0.0,
+         "semantic": 15.38
+        },
+        "source": "OnTheMarket (cached)",
+        "unverified_features": [],
+        "url": "https://www.onthemarket.com/details/19731055/",
+        "verified_features": []
+       }
+      ],
+      "over_budget_alternatives_label": "超预算备选（最多高出预算 15%；未计入上述结果，且不在预算内）",
+      "partial": false,
+      "partial_note": "",
+      "perfect_count": 1,
+      "possibly_outdated": false,
+      "recommendations": [
+       {
+        "absent_features": [],
+        "address": "Jacob House, London, E8",
+        "area": "Hackney",
+        "availability_status": "",
+        "available_from": "",
+        "bedrooms": 1,
+        "budget_status": "✅ 在预算内",
+        "description": "",
+        "distance_miles": 1.1,
+        "explanation": "1 bedroom flat to rent in Jacob House, London, E8",
+        "geo_location": "51.554058, -0.06814",
+        "images": [
+         "https://media.onthemarket.com/properties/19970243/1630741305/image-0-480x320.jpg",
+         "https://media.onthemarket.com/properties/19970243/1630741305/image-1-480x320.jpg",
+         "https://media.onthemarket.com/properties/19970243/1630741305/image-2-480x320.jpg",
+         "https://media.onthemarket.com/properties/19970243/1630741305/image-3-480x320.jpg",
+         "https://media.onthemarket.com/properties/19970243/1630741305/image-4-480x320.jpg"
+        ],
+        "match_type": "perfect",
+        "possibly_outdated": false,
+        "price": "£1950/month",
+        "property_type": "1 bed Flat",
+        "provider_address": "Jacob House, London, E8",
+        "rank": 1,
+        "room_type": "whole",
+        "score": 59.53,
+        "score_breakdown": {
+         "freshness": 13.46,
+         "price": 32.38,
+         "semantic": 13.69
+        },
+        "source": "OnTheMarket (cached)",
+        "unverified_features": [],
+        "url": "https://www.onthemarket.com/details/19970243/",
+        "verified_features": []
+       }
+      ],
+      "retrieval_outcome": "candidates_returned",
+      "search_criteria": {
+       "area": "Hackney",
+       "areas": [
+        "Hackney"
+       ],
+       "bedrooms": 1,
+       "bedrooms_minimum": false,
+       "budget_period": "month",
+       "commute_destination": null,
+       "destination": "Hackney",
+       "max_budget": 2000.0,
+       "max_changes": null,
+       "max_travel_time": null,
+       "monthly_total_budget": null,
+       "move_in_date": null,
+       "no_commute": false,
+       "office_days_per_week": null,
+       "property_features": [],
+       "room_type": "whole",
+       "soft_preferences": []
+      },
+      "soft_count": 2,
+      "status": "found",
+      "success": true,
+      "summary": "在 Hackney 为你找到 1 套当前房源（整套住宅）。价格约 £1950/月。已应用筛选：预算 ≤£2000.0/月、房型 整套住宅。另有 2 套略超预算的备选单独列出（未计入上述结果，且不在预算内）。完整房源见右侧列表。",
+      "total_found": 1,
+      "unverified_candidates": []
+     },
+     "success": true,
+     "tool": "search_properties",
+     "turn": 1
+    },
+    {
+     "elapsed_ms": 114,
+     "error": null,
+     "params_digest": "9726e65ff2f8625e",
+     "raw_data": {
+      "cache_age_seconds": 8027882.699,
+      "cache_status": "fresh",
+      "cache_ttl_seconds": 315360000.0,
+      "data_source": "OnTheMarket (cached)",
+      "fetched_at": "2026-07-21T14:58:24.982049+00:00",
+      "formatted_details": "✅ Identity confirmed by listing URL: this IS the listing you asked about (Jacob House, London, E8).\n\nCached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.\n\n📍 **Jacob House, London, E8**\n\n💰 **价格**: £1,950 pcm\n🏠 **房型**: 1 bed Flat\n📅 **可入住日期**: Contact agent\n\n📝 **描述**:\n1 bedroom flat to rent in Jacob House, London, E8\n\n✨ **设施与配置**:\nNo Agent Fees, Students Can Enquire\n\n👥 **访客政策**:\n\n\n💳 **付款规则**:\n\n\n⛔ **不包含的设施**:\n\n\n🔗 **链接**: https://www.onthemarket.com/details/19970243/",
+      "found": true,
+      "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+      "from_cache": true,
+      "live_verified": false,
+      "match": {
+       "corroborated_by": [
+        "listing_url"
+       ],
+       "reasons": [],
+       "requested": "https://www.onthemarket.com/details/19970243/ Jacob House Jacob House, London, E8",
+       "requested_name": "jacob",
+       "requested_postcode": "e8",
+       "resolved": "Jacob House, London, E8",
+       "resolved_postcode": "e8",
+       "verdict": "exact_url"
+      },
+      "message": "找到房产: Jacob House, London, E8（已核对与请求一致）",
+      "possibly_outdated": true,
+      "property": {
+       "address": "Jacob House, London, E8",
+       "amenities": "No Agent Fees, Students Can Enquire",
+       "available_from": "Contact agent",
+       "cache_age_seconds": 8027882.699,
+       "cache_status": "fresh",
+       "cache_ttl_seconds": 315360000.0,
+       "data_source": "OnTheMarket (cached)",
+       "description": "1 bedroom flat to rent in Jacob House, London, E8",
+       "excluded_features": "",
+       "fetched_at": "2026-07-21T14:58:24.982049+00:00",
+       "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+       "from_cache": true,
+       "geo_location": "51.554058, -0.06814",
+       "guest_policy": "",
+       "live_verified": false,
+       "payment_rules": "",
+       "possibly_outdated": true,
+       "price": "£1,950 pcm",
+       "room_type": "1 bed Flat",
+       "source": "OnTheMarket (cached)",
+       "source_url": "https://www.onthemarket.com/details/19970243/",
+       "url": "https://www.onthemarket.com/details/19970243/"
+      },
+      "provenance": {
+       "cache_age_seconds": 8027882.699,
+       "cache_status": "fresh",
+       "cache_ttl_seconds": 315360000.0,
+       "data_source": "OnTheMarket (cached)",
+       "fetched_at": "2026-07-21T14:58:24.982049+00:00",
+       "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+       "from_cache": true,
+       "live_verified": false,
+       "possibly_outdated": true,
+       "source": "OnTheMarket (cached)",
+       "source_url": "https://www.onthemarket.com/details/19970243/"
+      },
+      "room_type_analysis": {
+       "has_private_kitchen": false,
+       "is_ensuite": false,
+       "is_shared_room": false,
+       "is_studio": false,
+       "room_type_category": "1 bed Flat"
+      },
+      "search_query": "https://www.onthemarket.com/details/19970243/ Jacob House Jacob House, London, E8",
+      "source": "OnTheMarket (cached)",
+      "source_url": "https://www.onthemarket.com/details/19970243/",
+      "success": true,
+      "total_matches": 1
+     },
+     "success": true,
+     "tool": "get_property_details",
+     "turn": 2
+    }
+   ],
+   "tool_data": {
+    "area_recommendations": [],
+    "area_status": {
+     "Hackney": "results"
+    },
+    "candidate_states": [
+     {
+      "candidate": {
+       "absent_features": [],
+       "address": "Jacob House, London, E8",
+       "area": "Hackney",
+       "availability_status": "",
+       "available_from": "",
+       "bedrooms": 1,
+       "budget_status": "✅ 在预算内",
+       "candidate_reasons": [],
+       "candidate_status": "eligible",
+       "candidate_unknown_reasons": [],
+       "description": "",
+       "distance_miles": 1.1,
+       "explanation": "1 bedroom flat to rent in Jacob House, London, E8",
+       "geo_location": "51.554058, -0.06814",
+       "images": [
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-4-480x320.jpg"
+       ],
+       "match_type": "perfect",
+       "possibly_outdated": false,
+       "price": "£1950/month",
+       "property_type": "1 bed Flat",
+       "provider_address": "Jacob House, London, E8",
+       "rank": 1,
+       "room_type": "whole",
+       "score": 59.53,
+       "score_breakdown": {
+        "freshness": 13.46,
+        "price": 32.38,
+        "semantic": 13.69
+       },
+       "source": "OnTheMarket (cached)",
+       "unverified_features": [],
+       "url": "https://www.onthemarket.com/details/19970243/",
+       "verified_features": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/19970243",
+      "evidence_status": "not_required",
+      "index": 0,
+      "reasons": [],
+      "status": "eligible",
+      "transport_cost_evidence_status": "not_required",
+      "unknown_reasons": []
+     },
+     {
+      "candidate": {
+       "absent_features": [],
+       "address": "Arbutus Street, Haggerston, London, E8",
+       "alternative": true,
+       "area": "Hackney",
+       "availability_status": "",
+       "available_from": "",
+       "bedrooms": 1,
+       "budget_status": "⚠️ 超预算 £200",
+       "candidate_reasons": [
+        "alternative is outside the declared hard result set",
+        "monthly price 2200 exceeds budget 2000"
+       ],
+       "candidate_status": "excluded",
+       "candidate_unknown_reasons": [],
+       "description": "",
+       "distance_miles": 1.18,
+       "explanation": "1 bedroom flat to rent in Arbutus Street, Haggerston, London, E8",
+       "geo_location": "51.539025, -0.075944",
+       "images": [
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-4-480x320.jpg"
+       ],
+       "match_type": "soft_violation",
+       "possibly_outdated": false,
+       "price": "£2200/month",
+       "property_type": "1 bed Flat",
+       "provider_address": "Arbutus Street, Haggerston, London, E8",
+       "rank": 1,
+       "room_type": "whole",
+       "score": 38.27,
+       "score_breakdown": {
+        "freshness": 13.46,
+        "price": 10.58,
+        "semantic": 14.23
+       },
+       "source": "OnTheMarket (cached)",
+       "unverified_features": [],
+       "url": "https://www.onthemarket.com/details/19973895/",
+       "verified_features": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/19973895",
+      "evidence_status": "not_required",
+      "index": 1,
+      "reasons": [
+       "alternative is outside the declared hard result set",
+       "monthly price 2200 exceeds budget 2000"
+      ],
+      "status": "excluded",
+      "transport_cost_evidence_status": "not_required",
+      "unknown_reasons": []
+     },
+     {
+      "candidate": {
+       "absent_features": [],
+       "address": "22-24 Powell Road, London, London, London, E5",
+       "alternative": true,
+       "area": "Hackney",
+       "availability_status": "",
+       "available_from": "",
+       "bedrooms": 1,
+       "budget_status": "⚠️ 超预算 £300",
+       "candidate_reasons": [
+        "alternative is outside the declared hard result set",
+        "monthly price 2300 exceeds budget 2000"
+       ],
+       "candidate_status": "excluded",
+       "candidate_unknown_reasons": [],
+       "description": "",
+       "distance_miles": 0.98,
+       "explanation": "1 bedroom apartment to rent in 22-24 Powell Road, London, London, London, E5",
+       "geo_location": "51.556694, -0.056791",
+       "images": [
+        "https://media.onthemarket.com/properties/19731055/1622190770/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/19731055/1622190770/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/19731055/1622190770/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/19731055/1622190770/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/19731055/1622190770/image-4-480x320.jpg"
+       ],
+       "match_type": "soft_violation",
+       "possibly_outdated": false,
+       "price": "£2300/month",
+       "property_type": "1 bed Apartment",
+       "provider_address": "22-24 Powell Road, London, London, London, E5",
+       "rank": 2,
+       "room_type": "whole",
+       "score": 28.84,
+       "score_breakdown": {
+        "freshness": 13.46,
+        "price": 0.0,
+        "semantic": 15.38
+       },
+       "source": "OnTheMarket (cached)",
+       "unverified_features": [],
+       "url": "https://www.onthemarket.com/details/19731055/",
+       "verified_features": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/19731055",
+      "evidence_status": "not_required",
+      "index": 2,
+      "reasons": [
+       "alternative is outside the declared hard result set",
+       "monthly price 2300 exceeds budget 2000"
+      ],
+      "status": "excluded",
+      "transport_cost_evidence_status": "not_required",
+      "unknown_reasons": []
+     }
+    ],
+    "commute_evidence": [],
+    "data_source": "OnTheMarket (cached)",
+    "eligible_recommendations": [
+     {
+      "absent_features": [],
+      "address": "Jacob House, London, E8",
+      "area": "Hackney",
+      "availability_status": "",
+      "available_from": "",
+      "bedrooms": 1,
+      "budget_status": "✅ 在预算内",
+      "description": "",
+      "distance_miles": 1.1,
+      "explanation": "1 bedroom flat to rent in Jacob House, London, E8",
+      "geo_location": "51.554058, -0.06814",
+      "images": [
+       "https://media.onthemarket.com/properties/19970243/1630741305/image-0-480x320.jpg",
+       "https://media.onthemarket.com/properties/19970243/1630741305/image-1-480x320.jpg",
+       "https://media.onthemarket.com/properties/19970243/1630741305/image-2-480x320.jpg",
+       "https://media.onthemarket.com/properties/19970243/1630741305/image-3-480x320.jpg",
+       "https://media.onthemarket.com/properties/19970243/1630741305/image-4-480x320.jpg"
+      ],
+      "match_type": "perfect",
+      "possibly_outdated": false,
+      "price": "£1950/month",
+      "property_type": "1 bed Flat",
+      "provider_address": "Jacob House, London, E8",
+      "rank": 1,
+      "room_type": "whole",
+      "score": 59.53,
+      "score_breakdown": {
+       "freshness": 13.46,
+       "price": 32.38,
+       "semantic": 13.69
+      },
+      "source": "OnTheMarket (cached)",
+      "unverified_features": [],
+      "url": "https://www.onthemarket.com/details/19970243/",
+      "verified_features": []
+     }
+    ],
+    "excluded_candidates": [
+     {
+      "absent_features": [],
+      "address": "Arbutus Street, Haggerston, London, E8",
+      "alternative": true,
+      "area": "Hackney",
+      "availability_status": "",
+      "available_from": "",
+      "bedrooms": 1,
+      "budget_status": "⚠️ 超预算 £200",
+      "candidate_reasons": [
+       "alternative is outside the declared hard result set",
+       "monthly price 2200 exceeds budget 2000"
+      ],
+      "candidate_status": "excluded",
+      "candidate_unknown_reasons": [],
+      "description": "",
+      "distance_miles": 1.18,
+      "explanation": "1 bedroom flat to rent in Arbutus Street, Haggerston, London, E8",
+      "geo_location": "51.539025, -0.075944",
+      "images": [
+       "https://media.onthemarket.com/properties/19973895/1630862996/image-0-480x320.jpg",
+       "https://media.onthemarket.com/properties/19973895/1630862996/image-1-480x320.jpg",
+       "https://media.onthemarket.com/properties/19973895/1630862996/image-2-480x320.jpg",
+       "https://media.onthemarket.com/properties/19973895/1630862996/image-3-480x320.jpg",
+       "https://media.onthemarket.com/properties/19973895/1630862996/image-4-480x320.jpg"
+      ],
+      "match_type": "soft_violation",
+      "possibly_outdated": false,
+      "price": "£2200/month",
+      "property_type": "1 bed Flat",
+      "provider_address": "Arbutus Street, Haggerston, London, E8",
+      "rank": 1,
+      "room_type": "whole",
+      "score": 38.27,
+      "score_breakdown": {
+       "freshness": 13.46,
+       "price": 10.58,
+       "semantic": 14.23
+      },
+      "source": "OnTheMarket (cached)",
+      "unverified_features": [],
+      "url": "https://www.onthemarket.com/details/19973895/",
+      "verified_features": []
+     },
+     {
+      "absent_features": [],
+      "address": "22-24 Powell Road, London, London, London, E5",
+      "alternative": true,
+      "area": "Hackney",
+      "availability_status": "",
+      "available_from": "",
+      "bedrooms": 1,
+      "budget_status": "⚠️ 超预算 £300",
+      "candidate_reasons": [
+       "alternative is outside the declared hard result set",
+       "monthly price 2300 exceeds budget 2000"
+      ],
+      "candidate_status": "excluded",
+      "candidate_unknown_reasons": [],
+      "description": "",
+      "distance_miles": 0.98,
+      "explanation": "1 bedroom apartment to rent in 22-24 Powell Road, London, London, London, E5",
+      "geo_location": "51.556694, -0.056791",
+      "images": [
+       "https://media.onthemarket.com/properties/19731055/1622190770/image-0-480x320.jpg",
+       "https://media.onthemarket.com/properties/19731055/1622190770/image-1-480x320.jpg",
+       "https://media.onthemarket.com/properties/19731055/1622190770/image-2-480x320.jpg",
+       "https://media.onthemarket.com/properties/19731055/1622190770/image-3-480x320.jpg",
+       "https://media.onthemarket.com/properties/19731055/1622190770/image-4-480x320.jpg"
+      ],
+      "match_type": "soft_violation",
+      "possibly_outdated": false,
+      "price": "£2300/month",
+      "property_type": "1 bed Apartment",
+      "provider_address": "22-24 Powell Road, London, London, London, E5",
+      "rank": 2,
+      "room_type": "whole",
+      "score": 28.84,
+      "score_breakdown": {
+       "freshness": 13.46,
+       "price": 0.0,
+       "semantic": 15.38
+      },
+      "source": "OnTheMarket (cached)",
+      "unverified_features": [],
+      "url": "https://www.onthemarket.com/details/19731055/",
+      "verified_features": []
+     }
+    ],
+    "incomplete_areas": [],
+    "partial": false,
+    "recommendations": [
+     {
+      "absent_features": [],
+      "address": "Jacob House, London, E8",
+      "area": "Hackney",
+      "availability_status": "",
+      "available_from": "",
+      "bedrooms": 1,
+      "budget_basis": 2000.0,
+      "budget_status": "✅ 在预算内",
+      "description": "",
+      "distance_miles": 1.1,
+      "explanation": "1 bedroom flat to rent in Jacob House, London, E8",
+      "geo_location": "51.554058, -0.06814",
+      "images": [
+       "https://media.onthemarket.com/properties/19970243/1630741305/image-0-480x320.jpg",
+       "https://media.onthemarket.com/properties/19970243/1630741305/image-1-480x320.jpg",
+       "https://media.onthemarket.com/properties/19970243/1630741305/image-2-480x320.jpg",
+       "https://media.onthemarket.com/properties/19970243/1630741305/image-3-480x320.jpg",
+       "https://media.onthemarket.com/properties/19970243/1630741305/image-4-480x320.jpg"
+      ],
+      "match_type": "perfect",
+      "possibly_outdated": false,
+      "price": "£1950/month",
+      "property_type": "1 bed Flat",
+      "provider_address": "Jacob House, London, E8",
+      "qualification": {
+       "constraints": {
+        "areas": [
+         "hackney"
+        ],
+        "bedrooms": 1.0,
+        "bedrooms_minimum": false,
+        "commute_destination": "Hackney",
+        "max_budget_monthly": 2000.0,
+        "max_changes": null,
+        "max_commute_minutes": null,
+        "monthly_total_budget": null,
+        "move_in_date": null,
+        "no_commute": false,
+        "office_days_per_week": null,
+        "property_features": [],
+        "room_type": "whole"
+       },
+       "reasons": [],
+       "source": "structured_listing",
+       "status": "eligible",
+       "unknown_reasons": []
+      },
+      "rank": 1,
+      "room_type": "whole",
+      "score": 59.53,
+      "score_breakdown": {
+       "freshness": 13.46,
+       "price": 32.38,
+       "semantic": 13.69
+      },
+      "source": "OnTheMarket (cached)",
+      "unverified_features": [],
+      "url": "https://www.onthemarket.com/details/19970243/",
+      "verified_features": []
+     }
+    ],
+    "retrieval_outcome": "candidates_returned",
+    "search_criteria": {
+     "area": "Hackney",
+     "areas": [
+      "Hackney"
+     ],
+     "bedrooms": 1,
+     "bedrooms_minimum": false,
+     "budget_period": "month",
+     "commute_destination": null,
+     "destination": "Hackney",
+     "max_budget": 2000.0,
+     "max_changes": null,
+     "max_travel_time": null,
+     "monthly_total_budget": null,
+     "move_in_date": null,
+     "no_commute": false,
+     "office_days_per_week": null,
+     "property_features": [],
+     "room_type": "whole",
+     "soft_preferences": []
+    },
+    "unverified_candidates": []
+   },
+   "tool_decision": {},
+   "tool_observation": null,
+   "tool_raw_data": null,
+   "turn_start_monotonic": 267581.860928994,
+   "turn_tool_budget_used_s": 0.5100139249698259,
+   "user_id": "test-user",
+   "user_preferences": {
+    "excluded_areas": [],
+    "hard_preferences": [],
+    "required_amenities": [],
+    "safety_concerns": [],
+    "soft_preferences": []
+   },
+   "user_query": "帮我在Hackney找一个一居室，预算每月2000英镑，这些房源现在还能租吗？",
+   "verdict": {
+    "answered": true,
+    "grounded": true,
+    "issues": [],
+    "needs_replan": false,
+    "retrieval_hit": true
+   },
+   "wrapped_by": null
+  }
+ }
+}

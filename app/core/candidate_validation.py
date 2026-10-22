@@ -3968,13 +3968,59 @@ _LOOKUP_OFFER = re.compile(
     r"\s+(?:also\s+)?(?:re-?)?(?:fetch|pull|get|check|look\s+up|run|bring\s+up|show)\b[^.;!?,—–:()]*", re.I)
 
 
+# ... and its Chinese form: "要确认是否仍在出租，需要直接向发布该房源的中介核实。" asks whether,
+# it asserts nothing (r23 de60c6a8).
+_ZH_INDIRECT_QUESTION = re.compile(r"(?:是否|能否|如果|假如|要是)[^，。；！？,;!?]*")
+# A clause that asks rather than states ("Is the property still available, and from what
+# date?"), so a question that opens with it asserts nothing before its comma either.
+_INTERROGATIVE = re.compile(
+    r"^\s*(?:(?:[-*•]|\d+[.)])\s*)?[*_]*\s*(?:is|are|am|was|were|can|could|do|does|did|will|would|should|shall|has|have|had|may|might|"
+    r"what|which|who|whom|whose|where|when|why|how)\b|吗|呢|是否|能否|有没有|能不能|可不可以|要不要", re.I)
+
+
 def _asserted_part(sentence: str) -> str:
     body = sentence.rstrip(" \t*_)]")
     if body.endswith(("?", "？")):
-        # the question is its last clause: what follows the last stop, dash or colon before it
+        # The question is the sentence's last clause — after its last stop, dash or colon, and
+        # after any statement it opens with: "It's still available, want me to book?",
+        # "该房源仍在出租，是否需要我帮你预约看房？" keep their claims (r6f).
         cut = max(body.rfind(mark, 0, len(body) - 1) for mark in ".;!?。！？—–:")
-        sentence = sentence[:cut + 1]
-    return _INDIRECT_QUESTION.sub(" ", _LOOKUP_OFFER.sub(" ", sentence))
+        stated = []
+        for part in re.split(r"[,，]", sentence[cut + 1:])[:-1]:
+            if _INTERROGATIVE.search(part):
+                break
+            stated.append(part)
+        sentence = sentence[:cut + 1] + " ".join(stated)
+    return _ZH_INDIRECT_QUESTION.sub(" ", _INDIRECT_QUESTION.sub(" ", _LOOKUP_OFFER.sub(" ", sentence)))
+
+
+# A standalone caveat line ("房源来自缓存，价格和出租状态可能已变化；请联系中介核实。", "These listings
+# are cached; prices and availability may have changed. Confirm with the agent."): not a list
+# item, a table row or a labelled field, and about the cache or checking with the agent.
+_CAVEAT_LINE = re.compile(
+    r"缓存|核实|向中介|中介确认|\bcached?\b|\bverif(?:y|ied)\b|\bconfirm\b[^.]{0,40}\bagent\b|\bnot\s+(?:a\s+)?live\b", re.I)
+_FIELD_OR_ITEM = re.compile(r"^\s*(?:[-*•|>]|\d+[.)]\s|[^:：\n]{1,30}[:：])")
+
+
+def dedupe_caveat_lines(text: str) -> str:
+    """``text`` with each standalone caveat line kept once, at its first place. The last
+    assembly step appends blocks (the scope pass's details, notices) after an answer that
+    may already end with the same caveat: r23 de60c6a8 shipped "房源来自缓存…" twice."""
+    lines = str(text or "").split("\n")
+    seen: set = set()
+    kept: list = []
+    changed = False
+    for line in lines:
+        key = line.strip()
+        if (len(key) >= 12 and _CAVEAT_LINE.search(key) and not _FIELD_OR_ITEM.match(key)):
+            if key in seen:
+                changed = True
+                continue
+            seen.add(key)
+        kept.append(line)
+    if not changed:
+        return text
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
 
 
 def validate_evidence_scope(response: str, state: dict) -> str:

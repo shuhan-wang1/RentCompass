@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import functools
 import re
-from itertools import combinations
+from itertools import combinations, product as _cartesian
 from typing import Any, Iterable
 
 STANDARD_DAYS = 5.0
@@ -138,11 +138,21 @@ def without_money(text: str) -> str:
 _DECIMAL_HOURS = re.compile(r"\s*\d+\.(\d+)\s*(?:hours?|hrs?|h)\b", re.I)
 
 
+_WHOLE_HOURS = re.compile(r"\s*(\d{1,2})\s*" + _MORE + r"(?:hours?|hrs?)\b(?!\s*(?:and\s+)?\d)", re.I)
+
+
 def written_rounding(figure: str) -> float:
     """Half a unit of the last digit ``figure`` is written to, in minutes: "3.5 hours" is any
-    time from 3.45 to 3.55 hours (3 minutes either way); "208 minutes" is 207.5 to 208.5."""
+    time from 3.45 to 3.55 hours (3 minutes either way); "208 minutes" is 207.5 to 208.5; "3
+    hours" (two or more whole hours, no minutes) is written to the hour — "the 3 hours a month"
+    for 182 minutes (r21 8f4f0a00)."""
     match = _DECIMAL_HOURS.match(str(figure or ""))
-    return max(0.5, 30.0 * 10 ** -len(match.group(1))) if match else 0.5
+    if match:
+        return max(0.5, 30.0 * 10 ** -len(match.group(1)))
+    whole = _WHOLE_HOURS.match(str(figure or ""))
+    if whole and int(whole.group(1)) >= 2:
+        return 29.0       # to the nearest hour; an exact half ("2 hours" for 90 minutes) is not
+    return 0.5
 
 
 def is_difference(value: float, measured: Iterable[float], involving: float | None = None) -> bool:
@@ -446,7 +456,9 @@ def _bases_uncached(text: str, measured: list, days: set) -> tuple[set, bool]:
         first = product["operands"][0][0]
         if is_difference(first, measured):
             valid.add(first)
-        elif not (any(abs(first - m) < 1e-9 for m in measured) or _derived_exactly(first, valid, days)):
+        elif not (any(abs(first - m) < 1e-9 for m in measured) or _derived_exactly(first, valid, days)
+                  # "- Per week: 14 × 3 = 42" chains the "7 × 2 = 14" of the line before (r21)
+                  or (not valid and _derived_exactly(first, set(differences(measured)), days))):
             wrong = True
     return valid, wrong
 
@@ -922,11 +934,99 @@ def _period_owned_elsewhere(sentence: str, unit: str, value: float) -> bool:
     return True
 
 
+# ONE PLACE, SEVERAL MEASUREMENTS (r21 8f4f0a00): calculate_commute timed "Bow, London" at 27,
+# the area ranking timed "Bow" at 28. A route may carry ``alternatives`` — the same place's
+# other measured times — and a claim holds when it holds under ONE consistent choice per place
+# (all of a sentence on 27, or all of it on 28): "27 each way" with "28 x 2 x 3" in one chain
+# holds under neither. The more specific measurement (the longer place name) is the first choice.
+_MAX_VARIANTS = 16
+
+
+def merge_same_place(routes: list) -> list:
+    """Routes of one place and mode as ONE route: the more specific measurement first, the
+    others' different times as its ``alternatives``."""
+    merged: list = []
+    for route in routes:
+        if route.get("minutes") is None:
+            merged.append(route)
+            continue
+        head = _place_head(route)
+        mode = route.get("mode") or "transit"
+        # The same PLACE, by its most specific name ("Bow, London" and "Bow"); a listing row
+        # that merely carries "area": "Islington" is not the Islington area route (r07 d8b4e4a1).
+        home = next((m for m in merged if m.get("minutes") is not None and head
+                     and (m.get("mode") or "transit") == mode and _place_head(m) == head), None)
+        if home is None:
+            merged.append({**route, "alternatives": list(route.get("alternatives") or [])})
+            continue
+        specific = max(len(str(l)) for l in route.get("labels") or [""]) > \
+            max(len(str(l)) for l in home.get("labels") or [""])
+        labels = list(dict.fromkeys(list(home.get("labels") or []) + list(route.get("labels") or [])))
+        if route["minutes"] != home["minutes"]:
+            if specific:
+                alternatives = [home["minutes"]] + list(home.get("alternatives") or [])
+                home.update({**route, "labels": labels})
+                home["alternatives"] = alternatives
+            elif route["minutes"] not in home.get("alternatives", []):
+                home.setdefault("alternatives", []).append(route["minutes"])
+        home["labels"] = labels
+    return merged
+
+
+def _place_head(route: dict) -> str:
+    """The key of a route's most specific place name, before its first comma."""
+    labels = [str(label) for label in route.get("labels") or [] if str(label).strip()]
+    if not labels:
+        return ""
+    return _key(max(labels, key=len).split(",", 1)[0])
+
+
+def route_variants(routes: list) -> list:
+    """Every consistent choice of one time per place, the first choice first (bounded)."""
+    options = [[{k: v for k, v in r.items() if k != "alternatives"}]
+               + [{**{k: v for k, v in r.items() if k != "alternatives"}, "minutes": float(a)}
+                  for a in r.get("alternatives") or [] if a != r.get("minutes")]
+               for r in routes]
+    out = []
+    for combo in _cartesian(*options):
+        out.append(list(combo))
+        if len(out) >= _MAX_VARIANTS:
+            break
+    return out
+
+
 def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", context: str = "",
                   routes: list, days: Iterable[float], subject: dict | None = None,
                   known: Iterable[float] = (), skip_bounds: bool = False,
                   caps: Iterable[float] = (), user_days: Iterable[float] = (),
                   lead: str = "") -> tuple[bool, bool]:
+    """THE derived-figure rule, under each consistent choice of measurement per place."""
+    kwargs = dict(sentence=sentence, line=line, label=label, context=context, days=days, known=known,
+                  skip_bounds=skip_bounds, caps=caps, user_days=user_days, lead=lead)
+    if not any(r.get("alternatives") for r in routes):
+        return _check_figures(text, routes=[{k: v for k, v in r.items() if k != "alternatives"} for r in routes],
+                              subject=subject, **kwargs)
+    results = []
+    for variant in route_variants(routes):
+        chosen = subject
+        if subject is not None:
+            keys = {_key(label) for label in subject.get("labels") or [] if _key(label)}
+            twin = next((r for r in variant if keys & {_key(l) for l in r.get("labels") or []}), None)
+            if twin is not None:
+                chosen = {**subject, "minutes": twin["minutes"]}
+        results.append(_check_figures(text, routes=variant, subject=chosen, **kwargs))
+        if results[-1] == (True, True):
+            return True, True
+    if any(ok for ok, _seen in results):
+        return True, False
+    return False, any(seen for _ok, seen in results)
+
+
+def _check_figures(text: str, *, sentence: str, line: str = "", label: str = "", context: str = "",
+                   routes: list, days: Iterable[float], subject: dict | None = None,
+                   known: Iterable[float] = (), skip_bounds: bool = False,
+                   caps: Iterable[float] = (), user_days: Iterable[float] = (),
+                   lead: str = "") -> tuple[bool, bool]:
     """``(every figure of text is evidenced, text does arithmetic)`` — THE derived-figure rule.
 
     A figure is evidenced when it is a correct product or subtraction step (or restates the
@@ -1163,7 +1263,23 @@ def _row_factors(label: str, user_days: Iterable[float], answer_days: Iterable[f
 def period_table_rows(text: str, routes: list, *, user_days: Iterable[float] = (),
                       answer_days: Iterable[float] = ()) -> dict:
     """``{line index: {"table": header index, "ok": bool}}`` for every data row of a period
-    table in ``text`` that carries a judged figure; ``ok`` is every judged cell holding."""
+    table in ``text`` that carries a judged figure; ``ok`` is every judged cell holding under
+    ONE consistent choice of measurement per place for the whole table (a table is one chain:
+    a Bow column on 27 a day and on 28 a week holds under neither)."""
+    routes = merge_same_place([r for r in routes if r.get("minutes") is not None])
+    verdicts = [_period_table_rows(text, variant, user_days=user_days, answer_days=answer_days)
+                for variant in route_variants(routes)]
+    out: dict = {}
+    for table in sorted({v["table"] for verdict in verdicts for v in verdict.values()}):
+        rows = [{row: v for row, v in verdict.items() if v["table"] == table} for verdict in verdicts]
+        # the first choice under which every row holds, else the one with the most rows holding
+        out.update(max(rows, key=lambda r: (all(v["ok"] for v in r.values()),
+                                            sum(v["ok"] for v in r.values()), -rows.index(r))))
+    return out
+
+
+def _period_table_rows(text: str, routes: list, *, user_days: Iterable[float] = (),
+                       answer_days: Iterable[float] = ()) -> dict:
     routes = [r for r in routes if r.get("minutes") is not None and (r.get("mode") or "transit") == "transit"]
     lines = str(text or "").split("\n")
     out: dict = {}

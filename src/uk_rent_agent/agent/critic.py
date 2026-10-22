@@ -769,7 +769,9 @@ def unsupported_external_numbers(response: str, evidence: Any, user_text: str = 
     # was the chained "3 x 2 = 6 …, and 6 x 5 = 30 …" (r14 95f29d0b). One definition, shared
     # with the commute redactor (uk_rent_agent.agent.commute_arithmetic), pair rule included.
     from uk_rent_agent.agent import commute_arithmetic as arithmetic
-    routes = arithmetic.named_routes(_successful_evidence(evidence))
+    # One place measured twice (calculate_commute 27, the area ranking 28) is ONE route with an
+    # alternative time, not two routes (r21 8f4f0a00).
+    routes = arithmetic.merge_same_place(arithmetic.named_routes(_successful_evidence(evidence)))
     days = arithmetic.days_stated(response)            # N-day weeks the answer states
     user_days = arithmetic.days_stated(user_text)      # the user's own office days win over 5
     # The user's own limit is a reference point too: "about 5 minutes to spare" under a stated

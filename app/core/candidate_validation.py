@@ -1921,6 +1921,10 @@ def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
                 # equally specific "Bow" bindings made every Bow line ambiguous, and the header
                 # "Bow — 27 minutes each way" and its leg list went whole (r17 8c35fd5b).
                 route["labels"] = list(dict.fromkeys(route["labels"] + binding["labels"]))
+                if binding.get("minutes") is not None and binding["minutes"] != route["minutes"]:
+                    route["place_alternatives"] = sorted(set(route.get("place_alternatives") or [])
+                                                         | {binding["minutes"]})
+                    route["alt_minutes"] = sorted(set(route.get("alt_minutes") or []) | {binding["minutes"]})
                 binding.pop("area_row", None)
                 binding.update(route)
                 continue
@@ -2015,11 +2019,11 @@ def _per_period_line(line: str, fragment: str) -> bool:
 
 
 def _same_area_route(area: dict, route: dict) -> bool:
-    """An area-ranking row and a measured route from that same place, with the same time (or
-    a row the ranking could not time): one route. A different time stays a separate, competing
-    measurement, so a line naming the place still cannot pick one of them."""
+    """An area-ranking row and a measured route from that same place: one route. The route
+    (address/station level) is the more specific measurement and the line's binding; a
+    different ranking time is its alternative, so "Bow — 27 minutes" (the route) and "Bow (28
+    min)" (the ranking) both hold and nothing about Bow is ambiguous (r21 8f4f0a00)."""
     return bool(area.get("area_row") and route.get("minutes") is not None and route.get("labels")
-                and area.get("minutes") in (None, route["minutes"])
                 and set(map(_norm, area.get("labels") or [])) & set(map(_norm, route["labels"])))
 
 
@@ -2535,7 +2539,8 @@ def _arithmetic_evidenced(fragment: str, *, context: str, previous_clause: str, 
     95f29d0b). The redactor adds what only it judges: no other verdict may ride along, and
     "the fastest" must be the fastest."""
     routes = [{"labels": list(route.get("labels") or []), "minutes": route["minutes"],
-               "mode": route.get("mode") or "transit"}
+               "mode": route.get("mode") or "transit",
+               "alternatives": list(route.get("place_alternatives") or [])}
               for route in pool if route.get("minutes") is not None and route.get("labels")]
     measured = sorted({route["minutes"] for route in routes})
     if len(measured) < 2:
@@ -2553,7 +2558,9 @@ def _arithmetic_evidenced(fragment: str, *, context: str, previous_clause: str, 
             or _arithmetic.JOURNEY_COUNT.search(text)
             or (caps and re.search(r"\b(?:limit|cap|max(?:imum)?|spare|headroom|margin|buffer)\b", scope, re.I))):
         return False      # no arithmetic here: cheap exit, before any line-wide work
-    if _line_has_wrong_base(line, tuple(measured), tuple(sorted(set(days) | set(user_days) | {5.0}))):
+    if all(_line_has_wrong_base(line, tuple(sorted({r["minutes"] for r in variant})),
+                                tuple(sorted(set(days) | set(user_days) | {5.0})))
+           for variant in _arithmetic.route_variants(routes)):
         return False      # consistency: a wrong base takes the line's totals with it
     plain = _OVER_A_PERIOD.sub(" ", _ROUTE_COMPARATIVE.sub(" ", _SUPERLATIVE.sub(" ", text)))
     plain = re.sub(r"\b(?:over|than|versus|vs\.?|against)\s+(?:[A-Z][\w'’-]*\s*){1,3}", " ", plain)
@@ -2598,7 +2605,8 @@ def _owned_by_named_routes(fragment: str, bindings: list, caps: set) -> bool:
         return False
     key = f" {_label_key(text)} "
     for index, figure in enumerate(figures):
-        head = f" {_label_key(text[:figure.start()])} "
+        # "versus Stratford's 4-minute walk": the possessive names Stratford (r21 8f4f0a00)
+        head = f" {_label_key(_POSSESSIVE.sub('', text[:figure.start()]))} "
         best, best_at = None, -1
         for binding in bindings:
             if binding.get("members") or binding.get("minutes") is None:
@@ -2837,6 +2845,15 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
     # the DIFFERENCE of two of this turn's measurements, quoted with a comparative (R2-25).
     measured = sorted({c["minutes"] for c in pool if c.get("minutes") is not None})[:40]
     differences = {round(abs(a - b), 2) for i, a in enumerate(measured) for b in measured[i + 1:]}
+    # ... under each consistent choice of a place's measurements (r21 8f4f0a00)
+    for variant in _arithmetic.route_variants(
+            [{"labels": list(c.get("labels") or []), "minutes": c["minutes"],
+              "alternatives": list(c.get("place_alternatives") or [])}
+             for c in pool if c.get("minutes") is not None and c.get("place_alternatives")] +
+            [{"labels": list(c.get("labels") or []), "minutes": c["minutes"]}
+             for c in pool if c.get("minutes") is not None and not c.get("place_alternatives")]):
+        values = sorted({r["minutes"] for r in variant})
+        differences |= {round(abs(a - b), 2) for i, a in enumerate(values) for b in values[i + 1:]}
     lines: list[str] = []
     source_lines = str(text or "").split("\n")
     # Period tables (rows = periods, columns = routes or the saving) are judged cell by cell by
@@ -2844,7 +2861,9 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
     # table that loses every row goes with its header (r19 de1fba15).
     table_rows = _arithmetic.period_table_rows(
         text, [{"labels": list(c.get("labels") or []), "minutes": c["minutes"],
-                "mode": c.get("mode") or "transit"} for c in pool if c.get("minutes") is not None],
+                "mode": c.get("mode") or "transit",
+                "alternatives": list(c.get("place_alternatives") or [])}
+               for c in pool if c.get("minutes") is not None],
         user_days=user_days, answer_days=answer_days)
     tables_kept: dict = {}
     produced_at: list[int] = []        # len(lines) before each source line was processed
@@ -2972,8 +2991,11 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 (re.match(r"\s*by\b", fragment, re.I)
                  or re.search(r"\b(?:each|one)\s+way\b|\bper\s+(?:trip|journey)\b", fragment, re.I))
                 and (_COMPARATIVE_DIFFERENCE.search(previous_clause) or _VERSUS.search(previous_clause))))
+            # ... and nothing else: "saves you 7 minutes each way and roughly 5 hours a month"
+            # is a period total too, which the arithmetic below judges (r21 8f4f0a00).
             if (values and differences and comparative
-                    and all(round(value, 2) in differences for value in values)):
+                    and all(round(value, 2) in differences for value in values)
+                    and not _HOURS_AND_MINUTES.search(fragment)):
                 return True
             if _arithmetic_evidenced(fragment, context=context, previous_clause=previous_clause,
                                      line=line, pool=pool, days=answer_days, subject=effective,

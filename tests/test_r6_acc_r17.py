@@ -162,12 +162,23 @@ def test_the_ranked_and_measured_route_is_one_binding():
     assert len(bow) == 1 and bow[0]["minutes"] == 27.0 and len(bow[0]["legs"]) == 4
 
 
-def test_a_ranked_row_with_another_time_stays_a_competing_measurement():
-    _, state, _, _ = _case("r17_8c35fd5b")
+@pytest.mark.parametrize("header,kept", [
+    ("**Bow — 27 minutes each way**", True),     # the route (the binding)
+    ("**Bow — 28 minutes each way**", True),     # the area ranking's own time for Bow
+    ("**Bow — 25 minutes each way**", False),    # neither measurement
+])
+def test_a_ranked_row_with_another_time_is_the_routes_alternative(header, kept):
+    """Owner rule (r6e, r21 8f4f0a00): one place measured twice is ONE binding — the more
+    specific route (calculate_commute) first, the ranking's other time its alternative; a
+    figure consistent with either holds, one matching neither still goes."""
+    case, state, _, _ = _case("r17_8c35fd5b")
     state = json.loads(json.dumps(state))
-    state["tool_artifacts"][0]["raw_data"]["areas"][0]["commute_minutes"] = 25
+    state["tool_artifacts"][0]["raw_data"]["areas"][0]["commute_minutes"] = 28
     bindings, _ = _response_commute_bindings(state)
-    assert sorted(b["minutes"] for b in bindings if "Bow" in b["labels"]) == [25.0, 27.0]
+    bow = [b for b in bindings if "Bow" in b["labels"]]
+    assert len(bow) == 1 and bow[0]["minutes"] == 27.0 and bow[0]["place_alternatives"] == [28.0]
+    text = case["raw_draft"].replace("**Bow — 27 minutes each way**", header)
+    assert (header in validate_commute_response(text, state)) is kept
 
 
 def test_the_route_block_and_its_legs_are_kept():

@@ -27,8 +27,10 @@ def recall_memory_impl(query: str, n: int = 6,
     store = _mem()
     # A reflection reaches the model labelled as a tentative inference, and one whose wording
     # escalates or attributes is not returned (R4-12).
+    history = getattr(store, "user_stated_history", None)
     mems = presentable_memories(store.retrieve(query, session_id=session_id, user_id=user_id,
-                                               n=int(n)))
+                                               n=int(n)),
+                                history=(lambda: history(user_id)) if history else None)
     try:
         saved_total = len(store.semantic_records(user_id=user_id))
     except Exception:
@@ -38,7 +40,8 @@ def recall_memory_impl(query: str, n: int = 6,
         "count": len(mems),
         "memories": [dict(m, note=INFERENCE_NOTE) if m.get("mtype") == "reflection" else m
                      for m in mems],
-        "formatted": store.format_for_prompt(mems),
+        "formatted": store.format_for_prompt(mems, user_id=user_id) if history else
+                     store.format_for_prompt(mems),
         # The tool ranks by relevance: it never returns "everything" (R4-13).
         "completeness": ("the most relevant memories for this query, not a complete list"
                          + (f"; the user has {saved_total} saved facts in total"

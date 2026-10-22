@@ -75,7 +75,7 @@ from core.llm_interface import call_ollama
 from core.candidate_validation import (
     render_candidate_status, validate_search_payload_with_provider,
 )
-from uk_rent_agent.web.view_state import view_state
+from uk_rent_agent.web.view_state import browser_response, view_state
 
 
 from uk_rent_agent.agent.execution import (
@@ -2000,7 +2000,7 @@ def _request_replay_response(user_id: str, request_id: str, turn: dict):
         payload = conversation_store.get_turn_response(user_id, turn.get("id"))
         if payload is None:
             raise ApiError(500, "persisted request has no response")
-        response = jsonify(payload)
+        response = jsonify(browser_response(payload))
         response.status_code = 502 if turn.get("status") == "failed" else 200
     response.headers["X-Request-Id"] = request_id
     response.headers["X-Idempotent-Replay"] = "1"
@@ -2355,6 +2355,9 @@ async def api_alex():
     # boundary record that should have reported it. Emitting after serialization
     # means a failure falls through to _handle_uncaught with canary_emitted still
     # False, so exactly one record is written and it says server_error.
+    # The browser gets a criterion's provenance only as a bounded, sensitive-free excerpt
+    # (r6-C1); the full user text stays in the persisted snapshot.
+    payload = browser_response(payload)
     response = jsonify(payload)
     response.status_code = _http_status
     response.headers["X-Request-Id"] = request_id
@@ -3065,6 +3068,8 @@ def _apply_background_job(job: dict, worker_id: str) -> None:
                 context_tainted=bool(payload.get("context_tainted", False)),
                 **({"criteria_changes": payload["criteria_changes"]}
                    if payload.get("criteria_changes") else {}),
+                **({"memory_withheld": bool(payload["memory_withheld"])}
+                   if "memory_withheld" in payload else {}),
             )
             if ok is False:
                 raise RuntimeError("memory store did not acknowledge the turn")
@@ -3130,6 +3135,19 @@ _RECALL_FACTS_MAX = 100
 
 def _asks_what_is_remembered(message: str) -> bool:
     return bool(_REMEMBERED_QUESTION.search(str(message or "")[:2000]))
+
+
+def _conversation_memory_turn(user_id, conversation_id, user_message) -> dict:
+    """This turn's conversation-memory decision (r6-M1); never raises. On a failure nothing is
+    kept from the turn, and the conversation's flag is left as it was."""
+    try:
+        from rag.agent_memory import apply_conversation_memory_turn
+        return apply_conversation_memory_turn(
+            user_id, conversation_id, user_message,
+            lineage=conversation_store.get_branch_lineage(user_id, conversation_id))
+    except Exception as exc:
+        print(f"[memory] conversation pause check failed; error_type={type(exc).__name__}")
+        return {"withhold": True, "paused": None, "event": None}
 
 
 def _with_all_saved_facts(memory, user_id, mems):
@@ -3282,6 +3300,12 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
 
     # ── 构建本轮 extracted_context ──────────────────────────────
     extracted_context = dict(persistent_snapshot.get('extracted_context', {}))
+    # Conversation-wide memory opt-out (r6-M1): decided once, when the turn starts, from the
+    # conversation's durable pause flag and this message. The model, the write gate and the
+    # memory job of this turn all act on the same decision.
+    _memory_turn = await asyncio.to_thread(
+        _conversation_memory_turn, user_id, conversation_id, user_message)
+    extracted_context['memory_paused'] = bool(_memory_turn.get('paused'))
     from datetime import datetime as _datetime
     from zoneinfo import ZoneInfo
     extracted_context['current_date'] = _datetime.now(ZoneInfo('Europe/London')).date().isoformat()
@@ -3406,8 +3430,9 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             # (R4-13): the block now carries all of them up to a wide bound, and says how many
             # of how many it lists.
             _mems, _saved_total = _with_all_saved_facts(_am, user_id, _mems)
-        _mem_block = (_am.format_for_prompt(_mems) if _saved_total is None
-                      else _am.format_for_prompt(_mems, saved_total=_saved_total))
+        _mem_block = (_am.format_for_prompt(_mems, user_id=user_id) if _saved_total is None
+                      else _am.format_for_prompt(_mems, saved_total=_saved_total,
+                                                 user_id=user_id))
         if _mem_block:
             print(f"[Memory] 🧠 注入 {len(_mems)} 条相关记忆")
     except Exception as _e:
@@ -3424,8 +3449,14 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     if selected_defaults:
         _mems = selected_defaults + [record for record in _mems if record.get('id') not in selected_memory_ids]
         # A recall question keeps its full list (R4-13); otherwise the six most relevant.
-        _mem_block = (_am.format_for_prompt(_mems[:6]) if _saved_total is None
-                      else _am.format_for_prompt(_mems, saved_total=_saved_total))
+        _mem_block = (_am.format_for_prompt(_mems[:6], user_id=user_id) if _saved_total is None
+                      else _am.format_for_prompt(_mems, saved_total=_saved_total,
+                                                 user_id=user_id))
+
+    if _memory_turn.get('paused'):
+        # Runtime data the model reads: memory is paused for the rest of this conversation.
+        from core.memory_gate import MEMORY_PAUSE_NOTE
+        _mem_block = MEMORY_PAUSE_NOTE + ("\n" + _mem_block if _mem_block else "")
 
     # Assemble the legacy query as before. FC-compatible arches have a dedicated channel for
     # long-term memory; putting the same block into user_query would show it twice in
@@ -3639,6 +3670,12 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     _nearby_notice = render_nearby_failure_notice(final_state, language=_memory_language)
     if _nearby_notice and _nearby_notice not in response_text:
         response_text += '\n\n' + _nearby_notice
+    # A requirement the search cannot check ("DSS / housing benefit accepted") is said
+    # plainly instead of being dropped in silence (r6-C2).
+    from core.preference_grounding import render_unsupported_requirement_notice
+    _unsupported_notice = render_unsupported_requirement_notice(user_message, language=_memory_language)
+    if _unsupported_notice and _unsupported_notice not in response_text:
+        response_text += '\n\n' + _unsupported_notice
     if memory_contract.get('requested'):
         from core.constraint_updates import independent_memory_task
         other_result = any(artifact.get('tool') not in ('remember','recall_memory','ask_user',None)
@@ -3647,6 +3684,11 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         response_text = compose_memory_contract_response(
             response_text, memory_contract, language=_memory_language,
             preserve_content=other_result or independent_memory_task(user_message))
+    # The reply to a conversation-wide opt-out (or its lifting) states the scope truthfully,
+    # whatever the model wrote (r6-M1).
+    from core.memory_gate import acknowledge_memory_pause
+    response_text = acknowledge_memory_pause(response_text, _memory_turn.get('event'),
+                                             _memory_language)
     # Explicit frequency arithmetic uses this turn's observed fare, never a stored
     # price or an inferred property cost. The estimate cannot qualify a candidate.
     from core.commuting_estimate import estimate_monthly_commuting, render_monthly_commuting_estimate
@@ -3751,6 +3793,9 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             # assistant prose): "Make that Poplar" replaces the stored area (R3-02).
             "criteria_changes": _memory_criteria_changes(
                 _criteria_before_turn, final_state.get('accumulated_search_criteria')),
+            # Taken when the turn started (r6-M1): the job may run after a later turn lifted
+            # the pause, so it must not re-read the conversation's flag.
+            "memory_withheld": bool(_memory_turn.get('withhold')),
         },
     })
 
@@ -4352,6 +4397,7 @@ async def api_search_direct():
     # Serialize BEFORE emitting — same ordering rule as /api/alex: a jsonify() failure
     # must reach the 500 handler with canary_emitted still False so the boundary
     # record is the one and only record, and it reports the 500 the user actually got.
+    payload = browser_response(payload)     # r6-C1, as in /api/alex
     response = jsonify(payload)
     response.status_code = 500 if _serialization_failed else (502 if _terminal_failed else 200)
     response.headers["X-Request-Id"] = request_id

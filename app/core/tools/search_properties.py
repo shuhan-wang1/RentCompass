@@ -1774,7 +1774,40 @@ _FOLLOW_UP_BARE_BEFORE = re.compile(r"^\s*(?:and|or|ok(?:ay)?|actually|then)?\s*
 _FOLLOW_UP_BARE_AFTER = re.compile(r"\s*(?:instead|please|then|too|as\s+well)?\s*[?.!]*\s*(?:$|[,;\n])")
 
 
+_PLACE_LIST_JOIN = r"(?:\s*,\s*(?:(?:and|or)\s+)?|\s+(?:and|or)\s+|\s*[、/]\s*)"
+_place_list_res = None
+
+
+def _in_place_list(text: str, start: int, end: int) -> bool:
+    """True when the mention is one item of a list of places joined by commas/and/or.
+
+    "Compare Camden, Islington, Hackney and Bow ..." read "Islington" as a bare follow-up,
+    because the commas around it look like clause ends, and stored it as THE search area
+    after a four-area comparison (r11 05c6dbf1, view_state area "Islington"). A list names
+    several places; a single-area parser cannot half-apply it, so no item of a list is a
+    follow-up switch. A city after a bare comma qualifies the place instead of joining a
+    list ("and Hackney, London?", "Salford, Manchester"). ``text`` is lower-cased with
+    apostrophes removed (the callers' form)."""
+    global _place_list_res
+    if _place_list_res is None:
+        def alternation(names):
+            return "|".join(re.escape(name) for name in sorted(names, key=len, reverse=True))
+        every = alternation({**_KNOWN_AREAS, **_CUE_ONLY_AREAS})
+        local = alternation({name for name in {**_KNOWN_AREAS, **_CUE_ONLY_AREAS}
+                             if name in LONDON_AREAS or name in _CUE_ONLY_AREAS})
+        joined = r"(?:\s*,\s*(?:and|or)\s+|\s+(?:and|or)\s+|\s*[、/]\s*)"
+        _place_list_res = (
+            re.compile(rf"(?<![a-z])(?:{every}){_PLACE_LIST_JOIN}$"),
+            re.compile(rf"{joined}(?:{every})(?![a-z])|\s*,\s*(?:{local})(?![a-z])"),
+        )
+    before_re, after_re = _place_list_res
+    return bool(before_re.search(text[max(0, start - 45):start])
+                or after_re.match(text[end:end + 45]))
+
+
 def _follow_up_cue(text: str, start: int, end: int) -> bool:
+    if _in_place_list(text, start, end):
+        return False
     before = re.split(r"[.;!?,，。；！？\n]", text[max(0, start - 40):start])[-1]
     after = text[end:end + 30]
     if _FOLLOW_UP_CUE_BEFORE.search(before) or re.match(r"\s+instead\b", after):
@@ -2871,9 +2904,11 @@ async def search_properties_impl(
     else:
         _raw_property_features = []
     all_property_features = []
+    from core.preference_grounding import benefit_acceptance_feature
     for _feature in _raw_property_features:
         _raw_feature = str(_feature or "").strip()
-        if not _raw_feature:
+        if not _raw_feature or benefit_acceptance_feature(_raw_feature):
+            # "DSS accepted" has no listing evidence: never a filter, never stored (r6-C2).
             continue
         _canonical_feature = _canonical_property_feature(_raw_feature)
         # Canonicalise accessibility aliases so the request and evidence use the

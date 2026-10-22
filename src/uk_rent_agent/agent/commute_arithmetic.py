@@ -8,9 +8,16 @@ A figure is derived from the measured routes when it is
   N-day week the answer itself states;
 * the stated result of an explicit product ("12 minutes x 2 journeys x 5 days = 120 minutes")
   whose every operand is a measured figure, a measured difference or a standard multiplier,
-  and whose result is right.
+  and whose result is right;
+* a monthly total = that weekly total x 52/12 (written 52 ÷ 12, 4.3, 4.33 or 4.345), or x 4
+  where the answer frames a month as four weeks ("using 4 weeks as a month", "48 x 4") or
+  hedges the figure; a yearly total = the weekly total x 52 or the monthly one x 12; an
+  explicit conversion step ("48 min × 52 weeks ÷ 12", "48 × 4.33 = about 208 minutes") whose
+  weekly operand derives and whose result is right (r17 8c35fd5b). The same total in hours or
+  minutes ("192 minutes, i.e. 3 hours 12 minutes") is the same figure.
 
-Exact, or within 10% (at least 2 minutes) when the figure is hedged ("roughly", "about").
+Exact (to the precision written: "3.5 hours" is 3.45-3.55 hours), or within 10% (at least 2
+minutes) when the figure is hedged ("roughly", "about").
 
 Used by the critic's number grounding (``critic.unsupported_external_numbers``) and by the
 answer's commute redactor (``core.candidate_validation``), so the two can never disagree about
@@ -18,6 +25,7 @@ whether "40 minutes a week" follows from Holloway 25 and Kentish Town 21 (r13 22
 """
 from __future__ import annotations
 
+import functools
 import re
 from itertools import combinations
 from typing import Any, Iterable
@@ -42,7 +50,7 @@ DAY_PERIOD = re.compile(r"\b(?:a|per|each|every)\s+day\b|\bdaily\b|\breturn\s+tr
                         r"\bthere\s+and\s+back\b|\btwo\s+journeys\b|\b2\s+journeys\b", re.I)
 WEEK_PERIOD = re.compile(r"\b(?:a|per|each|every)\s+week\b|\bweekly\b|\bweek\b", re.I)
 # A product: "12 minutes × 2 journeys × 5 days = **120 minutes (2 hours) a week**".
-_UNITS = r"minutes?|mins?|journeys?|trips?|ways?|days?|times|legs?"
+_UNITS = r"minutes?|mins?|journeys?|trips?|ways?|days?|times|legs?|weeks?|months?"
 _OPERAND = r"(\d+(?:\.\d+)?)\s*(" + _UNITS + r")?\b"
 _OPERAND_NC = r"\d+(?:\.\d+)?\s*(?:" + _UNITS + r")?\b"
 PRODUCT = re.compile(
@@ -97,8 +105,38 @@ def multipliers(days: Iterable[float]) -> set[float]:
     return {2.0} | days | {2.0 * d for d in days}
 
 
-def close(value: float, target: float, hedged: bool) -> bool:
-    return abs(value - target) <= (max(2.0, 0.1 * target) if hedged else 0.5)
+def close(value: float, target: float, hedged: bool, rounding: float = 0.5) -> bool:
+    """``rounding``: half a unit of the figure's last written digit, in minutes."""
+    return abs(value - target) <= max(rounding, max(2.0, 0.1 * target) if hedged else 0.5)
+
+
+# A month is 52/12 weeks however the answer writes the factor; four weeks only when it says so.
+WEEKS_PER_MONTH = (52.0 / 12.0, 4.3, 4.33, 4.345)
+FOUR_WEEK_MONTH = re.compile(r"\b(?:4|four)[\s-]*weeks?\b|[×x*]\s*4(?![\d.])", re.I)
+LONG_PERIOD = re.compile(r"\b(?:a|per|each|every|over\s+(?:a|the)(?:\s+typical)?|in\s+a)\s+(?:month|year)\b|"
+                         r"\bmonthly\b|\byearly\b|\bannual(?:ly)?\b", re.I)
+# The rent's period is not the commute's: "£2,350 a month", "2,350 pcm".
+# Every gap is bounded, so a long blank run costs O(1) per figure (the B-01 class).
+_MONEY_PERIOD = re.compile(
+    r"(?:[£$€][ \t]{0,3}\d[\d,.]*k?|(?<![\d.])\d{1,3}(?:,\d{3})+(?:\.\d+)?|(?<![\d.,])\d{3,}(?:\.\d+)?)"
+    r"(?:[ \t]{0,3}(?:pcm|pw|p/?m)\b|[ \t]{0,3}/[ \t]{0,3}(?:month|week|mo|year|yr)\b"
+    r"|[ \t]{1,3}(?:per|a|each)[ \t]{1,3}(?:month|week|year)\b|[ \t]{1,3}(?:monthly|weekly)\b)"
+    r"|[£$€][ \t]{0,3}\d[\d,.]*k?", re.I)
+
+
+def without_money(text: str) -> str:
+    """``text`` with each money figure and the period it is quoted for blanked, in place."""
+    return _MONEY_PERIOD.sub(lambda m: " " * len(m.group()), str(text or ""))
+
+
+_DECIMAL_HOURS = re.compile(r"\s*\d+\.(\d+)\s*(?:hours?|hrs?|h)\b", re.I)
+
+
+def written_rounding(figure: str) -> float:
+    """Half a unit of the last digit ``figure`` is written to, in minutes: "3.5 hours" is any
+    time from 3.45 to 3.55 hours (3 minutes either way); "208 minutes" is 207.5 to 208.5."""
+    match = _DECIMAL_HOURS.match(str(figure or ""))
+    return max(0.5, 30.0 * 10 ** -len(match.group(1))) if match else 0.5
 
 
 def is_difference(value: float, measured: Iterable[float], involving: float | None = None) -> bool:
@@ -133,9 +171,12 @@ def products(text: Any) -> list[dict]:
 
 
 # "25 − 22 = 3 minutes each way": a subtraction step of two measured routes.
+# Bounded gaps: two unbounded blank runs around an optional unit made a long blank run after a
+# number quadratic (the B-01 class); r6 put more sentences through this check.
 SUBTRACTION = re.compile(
-    r"(?<![\d.])(\d+(?:\.\d+)?)\s*(?:minutes?|mins?)?\s*(?:[−–-]|minus)\s*(\d+(?:\.\d+)?)\s*(?:minutes?|mins?)?"
-    r"\s*=\s*[*_]*\s*(\d+(?:\.\d+)?)\s*(?:minutes?|mins?)", re.I)
+    r"(?<![\d.])(\d+(?:\.\d+)?)(?:[ \t]{0,3}(?:minutes?|mins?))?[ \t]{0,3}(?:[−–-]|minus)[ \t]{0,3}"
+    r"(\d+(?:\.\d+)?)(?:[ \t]{0,3}(?:minutes?|mins?))?"
+    r"[ \t]{0,3}=[ \t]{0,3}[*_]{0,3}[ \t]{0,3}(\d+(?:\.\d+)?)[ \t]{0,3}(?:minutes?|mins?)", re.I)
 
 
 def subtractions(text: Any) -> list[dict]:
@@ -159,8 +200,19 @@ def _derived_exactly(value: float, diffs: Iterable[float], days: Iterable[float]
     return any(abs(value - d * f) <= 0.5 for d in diffs for f in factors)
 
 
+def _period_factor(value: float, period: str | None) -> bool:
+    """A month or year multiplier for a total over that period: x 4.33 (x 4) weeks a month,
+    x 52 weeks or x 12 months a year."""
+    if period == "month":
+        return value == 4.0 or any(abs(value - m) < 0.005 for m in WEEKS_PER_MONTH)
+    if period == "year":
+        return value in (12.0, 52.0)
+    return False
+
+
 def product_is_correct(product: dict, measured: Iterable[float], days: Iterable[float],
-                       involving: float | None = None, diffs: Iterable[float] | None = None) -> bool:
+                       involving: float | None = None, diffs: Iterable[float] | None = None,
+                       period: str | None = None) -> bool:
     """Every operand is evidenced and the stated result is the product.
 
     The minutes operand is a measured figure, a difference of the pair (``diffs``, or any
@@ -185,13 +237,17 @@ def product_is_correct(product: dict, measured: Iterable[float], days: Iterable[
         elif unit.startswith("day"):
             if not any(abs(value - d) < 1e-9 for d in days):
                 return False
+        elif unit.startswith(("week", "month")):
+            # "x 4.33 weeks" for a monthly total, "x 52 weeks" / "x 12 months" for a yearly one.
+            if not _period_factor(value, period):
+                return False
         elif unit.startswith(_COUNT_UNITS):
             # 2 a day, or the week's journeys: "x 10 journeys" for 5 days, "6 journeys" for 3.
             if value not in (1.0, 2.0) and not any(abs(value - 2 * d) < 1e-9 for d in days):
                 return False
         elif not unit:
             if value not in (1.0, 2.0) and not any(abs(value - d) < 1e-9 or abs(value - 2 * d) < 1e-9
-                                                   for d in days):
+                                                   for d in days) and not _period_factor(value, period):
                 return False
         else:
             return False
@@ -223,7 +279,8 @@ def route_minutes(evidence: Any, *, _depth: int = 0, _key: str = "") -> set[floa
 
 
 # A decimal point ("around 2.5 hours") and an abbreviation dot do not end a sentence.
-_SENTENCE = re.compile(r"(?:[^.!?\n]|\.(?=\d)|(?<=\b(?:St|Dr|Mr|Ms|vs|No))\.)*(?:[.!?](?=\s|$)|\n|$)")
+_SENTENCE = re.compile(r"(?:[^.!?\n]|\.(?=\d)|(?<=\b(?:St|Dr|Mr|Ms|vs|No))\.|(?<=\b[ie])\.(?=[eg]\.)|"
+                       r"(?<=\b(?:i\.e|e\.g))\.)*(?:[.!?](?=\s|$)|\n|$)")       # "i.e." / "e.g." go on
 _ARITHMETIC_CUE = re.compile(
     r"\b(?:each|one)\s+way\b|\bper\s+(?:trip|journey)\b|\bsaves?\b|\bsaving\b|\bdifference\b|\bgap\b|"
     r"\b(?:quicker|faster|shorter|longer|slower|less|more|extra)\b|\bversus\b|\bvs\.?|\bover\b|\bthan\b|"
@@ -280,13 +337,29 @@ def named_routes(evidence: Any, *, _depth: int = 0) -> list[dict]:
     return found
 
 
-def _bases(text: str, measured: list, days: set) -> tuple[set, bool]:
+def _bases(text: str, measured: Iterable[float], days: Iterable[float]) -> tuple[set, bool]:
+    """Cached per (line, routes, days): every sentence of a line asks for the line's bases, and
+    recomputing them per sentence was quadratic in a long line (the B-01 class)."""
+    valid, wrong = _bases_of(str(text or ""), tuple(sorted(float(m) for m in measured)),
+                             tuple(sorted({float(d) for d in days})))
+    return set(valid), wrong
+
+
+@functools.lru_cache(maxsize=512)
+def _bases_of(text: str, measured_key: tuple, days_key: tuple) -> tuple[frozenset, bool]:
+    measured, days = list(measured_key), set(days_key)
+    valid, wrong = _bases_uncached(text, measured, days)
+    return frozenset(valid), wrong
+
+
+def _bases_uncached(text: str, measured: list, days: set) -> tuple[set, bool]:
     """(the differences ``text`` quotes as its base, whether one of its bases is WRONG).
 
     A base is a quoted difference, a subtraction step's result, or a product's minutes
     operand; a product operand that is itself a total of a quoted base ("6 x 5 = 30" after
     "3 x 2 = 6") is a step, not a wrong base."""
-    quoted = [float(m.group(1) or m.group(2)) for m in BASE_FIGURE.finditer(text)]
+    quoted = [float(m.group(1) or m.group(2)) for m in BASE_FIGURE.finditer(text)
+              if not _own_time_each_way(text, m, measured)]
     # A subtraction of two measured routes is a base; one against the user's limit ("25 − 19 =
     # 6 minutes under") is a margin, judged as one.
     quoted += [step["result"] for step in subtractions(text)
@@ -294,13 +367,37 @@ def _bases(text: str, measured: list, days: set) -> tuple[set, bool]:
                and any(abs(step["b"] - m) < 1e-9 for m in measured)]
     valid = {v for v in quoted if is_difference(v, measured)}
     wrong = any(not is_difference(v, measured) for v in quoted)
+    # A conversion step's operand is a weekly total, judged by ``period_step_holds``: "48 min
+    # × 4 = 192 minutes" a month has no base of its own.
+    conversions = [step["span"] for step in period_steps(text, text)]
     for product in products(text):
+        if any(s0 < product["span"][1] and product["span"][0] < s1 for s0, s1 in conversions):
+            continue
         first = product["operands"][0][0]
         if is_difference(first, measured):
             valid.add(first)
         elif not (any(abs(first - m) < 1e-9 for m in measured) or _derived_exactly(first, valid, days)):
             wrong = True
     return valid, wrong
+
+
+_EACH_WAY_ONLY = re.compile(r"(?:minutes?|mins?)\s+(?:each\s+way|one\s+way|per\s+(?:trip|journey))$", re.I)
+
+
+def _own_time_each_way(text: str, match, measured: Iterable[float]) -> bool:
+    """"**Stratford — 19 minutes each way**" states a route's own measured time, not a
+    difference: no comparison leads into it within its clause and none follows it. "Stratford
+    saves 19 minutes each way" and "19 minutes each way faster" are still bases (r17 8c35fd5b:
+    the critic graded both route headers as wrong bases and footed the answer "Unverified")."""
+    if not (match.group(1) and _EACH_WAY_ONLY.search(match.group())):
+        return False
+    value = float(match.group(1))
+    if not any(abs(value - m) < 1e-9 for m in measured):
+        return False
+    before = text[max(0, match.start() - 120):match.start()]
+    lead = before[max([m.end() for m in _CLAUSE_BREAK.finditer(before)], default=0):]
+    return not (COMPARISON_CUE.search(lead) or re.match(r"\s*(?:slower|faster|quicker|shorter|longer|less|more|"
+                                                        r"extra|saved|saving)\b", text[match.end():], re.I))
 
 
 def _route_after(text: str, start: int, routes: list) -> dict | None:
@@ -396,7 +493,10 @@ def pair_reference(*, text: str, at: int, sentence: str, line: str, label: str, 
               or (_route_just_before(text, start, routes) if start is not None else None)
               or (_route_after(label, 0, routes) if label else None))
     if target is None:
-        return set(differences(measured)), False
+        # Nothing names the pair; with two measured routes there is only one pair to name (r17
+        # 8c35fd5b: "Per month: roughly 3.2 hours" under Stratford 19 / Bow 27).
+        every = set(differences(measured))
+        return every, len(every) == 1
     # The other end: a route the sentence names that is not itself compared WITH ("… against
     # Holloway (…) and … against Camden (…)" names two targets and no subject).
     compared = _compared_routes(sentence, routes)
@@ -492,7 +592,9 @@ def _unit_in(segment: str, *, last: bool = False) -> str | None:
 
 def figure_unit(text: str, start: int, end: int, sentence: str = "") -> str | None:
     """'day' / 'week' / 'month' / 'year' for the total at [start, end): the period phrase right
-    after it in its clause, else the nearest one before it in the clause, else in the sentence."""
+    after it in its clause, else the nearest one before it in the clause, else in the sentence.
+    A rent's period ("£2,350 a month") is not the total's."""
+    text, sentence = without_money(text), without_money(sentence)
     after = text[end:end + 60]
     stop = re.search(r"\d|[,;:—–]|(?<=[.!?])\s|$", after)
     unit = _unit_in(after[:stop.start()] if stop else after)
@@ -536,18 +638,99 @@ def figure_days(clause: str, sentence: str, user_days: Iterable[float], answer_d
     return {float(d) for d in answer_days if d} | {STANDARD_DAYS}
 
 
-def total_matches(value: float, diffs: Iterable[float], unit: str | None, days: Iterable[float], *,
-                  hedged: bool, one_way: bool = False) -> bool:
-    """A daily total is diff x 2 (diff x 1 only "one way"); a weekly one diff x 2 x days (x days
-    only "one way"); a monthly or yearly total, or one with no period, is not derived here."""
+def period_factors(unit: str | None, days: Iterable[float], *, one_way: bool = False,
+                   four_weeks: bool = False) -> set:
+    """The multipliers on a one-way difference for a total over ``unit``: a day is x 2 (x 1
+    only "one way"); a week x 2 x days (x days only "one way"); a month that week x 52/12 (x 4
+    only where the answer frames a month as four weeks, or hedges); a year that week x 52 or
+    that month x 12. No period, no total."""
     if unit == "day":
-        factors = {2.0} | ({1.0} if one_way else set())
-    elif unit == "week":
-        days = [float(d) for d in days if d]
-        factors = {2.0 * d for d in days} | ({d for d in days} if one_way else set())
-    else:
+        return {2.0} | ({1.0} if one_way else set())
+    if unit not in ("week", "month", "year"):
+        return set()
+    days = [float(d) for d in days if d]
+    weekly = {2.0 * d for d in days} | ({d for d in days} if one_way else set())
+    if unit == "week":
+        return weekly
+    monthly = {w * m for w in weekly for m in set(WEEKS_PER_MONTH) | ({4.0} if four_weeks else set())}
+    return monthly if unit == "month" else {w * 52.0 for w in weekly} | {m * 12.0 for m in monthly}
+
+
+def total_matches(value: float, diffs: Iterable[float], unit: str | None, days: Iterable[float], *,
+                  hedged: bool, one_way: bool = False, four_weeks: bool = False,
+                  rounding: float = 0.5) -> bool:
+    """``value`` is a total of one of ``diffs`` for the period ``unit`` names
+    (``period_factors``), exact to the written precision or, hedged, within 10%."""
+    factors = period_factors(unit, days, one_way=one_way, four_weeks=four_weeks or hedged)
+    return any(close(value, d * f, hedged, rounding) for d in diffs for f in factors)
+
+
+# A conversion of a weekly total into a month or a year, written out: "48 min × 52 weeks ÷ 12",
+# "48 × 4.33 = about 208 minutes", "48 min × 4 = 192 minutes", "208 × 12 = 2496 minutes".
+# Every gap is bounded (the B-01 class).
+_GAP = r"[ \t]{0,3}"
+PERIOD_STEP = re.compile(
+    r"(?<![\d.])(\d+(?:\.\d+)?)(?:" + _GAP + r"(?:minutes?|mins?))?" + _GAP + r"[×x*]" + _GAP +
+    r"(\d+(?:\.\d+)?)(?:" + _GAP + r"(weeks?|months?))?"
+    r"(?:" + _GAP + r"(?:÷|/)" + _GAP + r"(\d+(?:\.\d+)?)(?:" + _GAP + r"months?)?)?"
+    r"(?![\d.]|" + _GAP + r"[×x*]" + _GAP + r"\d)"
+    r"(?:" + _GAP + r"=" + _GAP + r"[*_]{0,3}" + _GAP +
+    r"((?:about|roughly|around|approximately|approx\.?|nearly|almost|~|≈)" + _GAP + r")?"
+    r"(\d[\d,]*(?:\.\d+)?)" + _GAP + r"(minutes?|mins?|hours?|hrs?))?", re.I)
+
+
+def period_steps(text: str, sentence: str = "") -> list:
+    """``[{weekly, factor, period, result, hedged, span, from_month}]`` for each conversion step
+    of ``text`` into a month or a year. "x 4.33", "x 52 ÷ 12" and "x 52 weeks" name their
+    period; a bare "x 4" or "x 12" is one only where the step's own period is a month or a
+    year (or its factor is written in weeks / months)."""
+    found = []
+    for match in PERIOD_STEP.finditer(str(text or "")):
+        first, factor = float(match.group(1)), float(match.group(2))
+        if match.group(4):
+            divisor = float(match.group(4))
+            if not divisor:
+                continue
+            factor /= divisor
+        unit = (match.group(3) or "").lower()
+        if abs(factor - 4.0) > 1e-9 and any(abs(factor - m) < 0.005 for m in WEEKS_PER_MONTH):
+            period = "month"
+        elif factor == 52.0 and not unit.startswith("month"):
+            period = "year"
+        elif factor in (4.0, 12.0):
+            stated = figure_unit(text, match.end() - 1, match.end(), sentence)
+            period = stated if stated in ("month", "year") and _period_factor(factor, stated) else None
+            if period is None and unit.startswith("week") and factor == 4.0:
+                period = "month"
+            if period is None and unit.startswith("month") and factor == 12.0:
+                period = "year"
+        else:
+            period = None
+        if period is None:
+            continue
+        result = None
+        if match.group(6):
+            result = float(match.group(6).replace(",", "")) * (
+                60.0 if match.group(7).lower().startswith("h") else 1.0)
+        found.append({"weekly": first, "factor": factor, "period": period, "result": result,
+                      "hedged": bool(match.group(5)), "span": match.span(),
+                      "from_month": period == "year" and factor == 12.0})
+    return found
+
+
+def period_step_holds(step: dict, diffs: Iterable[float], days: Iterable[float], *,
+                      results: Iterable[float] = (), one_way: bool = False) -> bool:
+    """The step's operand is a weekly total of the pair (a monthly one for "x 12 months"), or
+    the result of an earlier correct step; its result, if stated, is the product."""
+    diffs = list(diffs)
+    operand = step["weekly"]
+    if not (any(abs(operand - r) < 0.5 for r in results)
+            or total_matches(operand, diffs, "month" if step["from_month"] else "week", days,
+                             hedged=False, one_way=one_way, four_weeks=True)):
         return False
-    return any(close(value, d * f, hedged) for d in diffs for f in factors)
+    if step["result"] is None:
+        return True
+    return close(step["result"], operand * step["factor"], step["hedged"])
 
 
 # The SPREAD of the routes: "all three are within 4 minutes of each other" (Camden 25, Holloway
@@ -671,33 +854,59 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
         return False, True
     caps = sorted({float(c) for c in caps if c})
     covered, results, seen = [], [], False
+    periods: dict = {}          # the period a step's result is FOR, where the step names one
     for step in subtractions(text):
         if not subtraction_is_correct(step, measured, caps):
             return False, True
         covered.append(step["span"])
         results.append(step["result"])
         seen = True
+    # Earlier correct steps of the sentence (or of the clause a parenthetical belongs to) are
+    # operands a conversion may build on: "8 x 2 x 3 = 48 …; 48 x 4.33 = about 208".
+    earlier = [p["result"] for p in products(f"{sentence} {context}") if product_is_correct(p, measured, days)]
+    steps = period_steps(text, sentence)
+    for step in steps:
+        start_, end_ = step["span"]
+        diffs = pair_differences(text=text, at=end_, sentence=sentence, line=line,
+                                 label=label, routes=routes, measured=measured, days=days, subject=subject)
+        clause = _clause_of(text, start_, end_)
+        stated = figure_unit(text, end_ - 1, end_, "") if step["result"] is not None else None
+        if (stated not in (None, step["period"])
+                or not period_step_holds(step, diffs, figure_days(clause, sentence, user_days, answer_days),
+                                         results=results + earlier, one_way=bool(_ONE_WAY.search(clause)))):
+            return False, True
+        covered.append(step["span"])
+        if step["result"] is not None:
+            results.append(step["result"])
+            periods[len(results) - 1] = step["period"]
+        results.append(step["weekly"])
+        periods[len(results) - 1] = "month" if step["from_month"] else "week"
+        seen = True
     for product in products(text):
         start_, end_ = product["span"]
+        if any(s0 < end_ and start_ < s1 for s0, s1 in (step["span"] for step in steps)):
+            continue          # judged as a conversion step above
         diffs = pair_differences(text=text, at=end_, sentence=sentence, line=line,
                                  label=label, routes=routes, measured=measured, days=days, subject=subject)
         clause = _clause_of(text, start_, end_)
         local = days_stated(clause)
-        if not product_is_correct(product, measured, local or days, diffs=diffs):
-            return False, True
         # ... and the result is a total for the period it names: "3 x 2 = 6 minutes per day",
-        # never "4 x 2 = 8 minutes a week".
+        # never "4 x 2 = 8 minutes a week"; "8 x 2 x 3 x 4.33 = 208 minutes a month".
         unit = figure_unit(text, end_ - 1, end_, "")
+        if not product_is_correct(product, measured, local or days, diffs=diffs,
+                                  period=unit if unit in ("month", "year") else None):
+            return False, True
         stated_days = {v for v, u in product["operands"] if u.startswith("day")}
-        if unit in ("day", "week") and diffs and not total_matches(
+        if unit in ("day", "week", "month", "year") and diffs and not total_matches(
                 product["result"], diffs, unit,
                 stated_days or figure_days(clause, sentence, user_days, answer_days),
-                hedged=False, one_way=bool(_ONE_WAY.search(clause))):
-            return False, True
-        if unit in ("month", "year"):
+                hedged=False, one_way=bool(_ONE_WAY.search(clause)),
+                four_weeks=any(v == 4.0 for v, _u in product["operands"][1:])):
             return False, True
         covered.append(product["span"])
         results.append(product["result"])
+        if unit:
+            periods[len(results) - 1] = unit
         seen = True
     for span, holds in spreads(text, sentence, routes):
         if not holds:
@@ -715,13 +924,18 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
     rest = text
     for start, end in sorted(covered, reverse=True):
         rest = rest[:start] + " " * (end - start) + rest[end:]
-    period = bool(DAY_PERIOD.search(scope) or WEEK_PERIOD.search(scope))
+    period = bool(DAY_PERIOD.search(scope) or WEEK_PERIOD.search(scope)
+                  or LONG_PERIOD.search(without_money(scope)))
     comparison = bool(COMPARISON_CUE.search(scope))
     hedged = bool(HEDGE.search(text))
     known = [float(k) for k in known]
     caps = sorted({float(c) for c in caps if c})
     for start, end, value in figure_spans(rest):
-        if any(abs(value - r) < 0.5 for r in results):
+        # The same total restated ("192 minutes, i.e. 3 hours 12 minutes a month"), but never for
+        # another period: "= 54 minutes a week — roughly 54 minutes a month" is not a restatement.
+        restated_for = figure_unit(rest, start, end, "") if period else None   # its own clause only
+        if any(abs(value - r) < 0.5 and (restated_for is None or periods.get(i) in (None, restated_for))
+               for i, r in enumerate(results)):
             seen = True
             continue
         if caps and any(abs(value - cap) < 1e-9 for cap in caps) and CAP_NAMED.search(
@@ -751,11 +965,23 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
         # pair fallback takes a hedged figure only EXACTLY.
         unit = figure_unit(rest, start, end, sentence) if period else None
         if unit in ("month", "year"):
-            return False, True    # outside the rule: a monthly figure is not derived here
+            # A monthly total is the weekly one x 52/12 (x 4 framed as four weeks); a yearly one
+            # x 52 or the month x 12, to the precision written ("about 3.5 hours", r17 8c35fd5b).
+            # Anything else goes: "around 54 minutes over a typical month" for 9 x 2 x 3 = 54 a
+            # WEEK (r15 efaa330f).
+            clause = _clause_of(rest, start, end)
+            if total_matches(value, diffs, unit, figure_days(clause, sentence, user_days, answer_days),
+                             hedged=hedged and fixed, one_way=bool(_ONE_WAY.search(rest[end:end + 40])),
+                             four_weeks=bool(FOUR_WEEK_MONTH.search(f"{label} {sentence} {context}")),
+                             rounding=written_rounding(rest[start:end])):
+                seen = True
+                continue
+            return False, True
         if unit in ("day", "week"):
             clause = _clause_of(rest, start, end)
             if total_matches(value, diffs, unit, figure_days(clause, sentence, user_days, answer_days),
-                             hedged=hedged and fixed, one_way=bool(_ONE_WAY.search(rest[end:end + 40]))):
+                             hedged=hedged and fixed, one_way=bool(_ONE_WAY.search(rest[end:end + 40])),
+                             rounding=written_rounding(rest[start:end])):
                 seen = True
                 continue
             if not (comparison and any(abs(value - d) < 1e-9 for d in diffs)):
@@ -818,6 +1044,7 @@ def unsupported_arithmetic(text: str, routes: list, days: Iterable[float],
         if not figure_spans(sentence) and not products(sentence) and not JOURNEY_COUNT.search(sentence):
             continue
         if not (_ARITHMETIC_CUE.search(sentence) or DAY_PERIOD.search(sentence) or WEEK_PERIOD.search(sentence)
+                or LONG_PERIOD.search(without_money(sentence)) or period_steps(sentence, sentence)
                 or MARGIN_UNDER.search(sentence) or MARGIN_OVER.search(sentence)
                 or SPREAD_BOUND.search(sentence) or SPREAD_EXACT.search(sentence)
                 or JOURNEY_COUNT.search(sentence)):

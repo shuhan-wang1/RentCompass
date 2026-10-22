@@ -1193,7 +1193,8 @@ def _guard_text_parts(text: str, *, sentences: bool = False) -> list[str]:
         if any(left <= position < right for left, right in protected):
             continue
         if text[position:position + 1] == '.':
-            abbreviation = re.search(r"\b" + _NAME_ABBREVIATION + r"\.$", text[:position + 1], re.I)
+            # "192 minutes, i.e. 3 hours 12 minutes a month" is one clause (r17 8c35fd5b).
+            abbreviation = re.search(r"\b(?:" + _NAME_ABBREVIATION + r"|i\.e|e\.g)\.$", text[:position + 1], re.I)
             decimal = (position > 0 and position + 1 < len(text)
                        and text[position - 1].isdigit() and text[position + 1].isdigit())
             ellipsis = text[max(0, position - 1):position] == '.' or text[position + 1:position + 2] == '.'
@@ -1265,7 +1266,11 @@ _POSITIONAL_REFERENCE = re.compile(
     r"(?:see|shown|listed|mentioned|given|quoted|described|noted|set\s+out)\s+)(?:above|below)\b"
     r"(?=\s*(?:[,.;:!?)]|$|(?:and|but|or|so|for|is|are|was|were)\b))|"
     # "some of the above may have come from that" (r10 385542cc recall): "the above" is a noun.
-    r"\b(?:of\s+)?the\s+(?:above|below)\b(?!\s*(?:\d|your\b|the\b|a\b|an\b|limit|cap|threshold|max))",
+    r"\b(?:of\s+)?the\s+(?:above|below)\b(?!\s*(?:\d|your\b|the\b|a\b|an\b|limit|cap|threshold|max))|"
+    # "The 19-minute Stratford figure above comes from the separate journey calculation" (r17
+    # 8c35fd5b) points at the answer's own figure, whatever verb follows.
+    r"\b(?:figures?|numbers?|table|list|section|summary|breakdown|calculation|comparison|"
+    r"itinerar(?:y|ies))\s+(?:above|below)\b(?!\s*(?:\d|your\b|the\b|a\b|an\b|limit|cap|threshold|max))",
     re.I)
 # A bracketed list of categories names the commute as a TOPIC, it says nothing about one:
 # "extracts durable details you mention (budget, areas, commute, needs)".
@@ -1645,6 +1650,24 @@ def _named_legs(text: str, binding: dict | None) -> list[dict]:
                    for mode in leg["modes"])]
 
 
+def _legs_at_named_places(legs: list, text: str) -> list:
+    """Of ``legs``, those that start or end at a place ``text`` names, when it names any: "the
+    13-minute walk to Bow Road" is the walk TO Bow Road (13), not the walk at the Liverpool
+    Street end (6); "versus 4 minutes at Stratford" is the walk at Stratford (r17). A text that
+    names no leg's place leaves every leg it names by mode."""
+    hay = _label_key(text)
+    placed = [leg for leg in legs
+              if any(_key_in(place, hay) for place in (leg.get("places") or []) + (leg.get("origins") or []))]
+    return placed or legs
+
+
+def _legs_named_at(text: str, binding: dict | None, places_in: str | None = None) -> list[dict]:
+    """The legs ``text`` names by line or mode, narrowed to the places ``places_in`` (the claim
+    itself, never the line's label: "- **Stratford: 19 minutes.** … 6 min walk at the other
+    end" names the route, not Stratford station) names."""
+    return _legs_at_named_places(_named_legs(text, binding), text if places_in is None else places_in)
+
+
 def _arrives_at_destination(leg: dict, binding: dict) -> bool:
     destinations = [k for k in (_label_key(d) for d in binding.get("destinations") or []) if k]
     return any(d in place or place in d for place in leg["places"] for d in destinations)
@@ -1826,7 +1849,7 @@ def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
                 bindings.append({"labels": _place_labels(row.get("name")) +
                                  _place_labels(str(row.get("slug") or "").replace("-", " ")),
                                  "minutes": float(value) if measured else None,
-                                 "destinations": []})
+                                 "destinations": [], "area_row": True})
             continue
         if tool not in {"calculate_commute", "calculate_commute_cost", "get_transport_info"}:
             continue
@@ -1891,6 +1914,15 @@ def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
         for binding in bindings:
             if any(binding is other for other in routes):
                 continue          # routes were merged above; only listings take a route
+            if _same_area_route(binding, route):
+                # compare_or_rank_areas ranked "Bow" at 27 and calculate_commute measured "Bow,
+                # London" -> Liverpool Street at 27: one route, not two. Kept apart, the two
+                # equally specific "Bow" bindings made every Bow line ambiguous, and the header
+                # "Bow — 27 minutes each way" and its leg list went whole (r17 8c35fd5b).
+                route["labels"] = list(dict.fromkeys(route["labels"] + binding["labels"]))
+                binding.pop("area_row", None)
+                binding.update(route)
+                continue
             if (binding.get("minutes") is None and route["labels"]
                     and _norm(route["labels"][0]) == _norm(binding["labels"][0])
                     and (not binding.get("destinations") or not route["destinations"]
@@ -1919,6 +1951,32 @@ def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
     return bindings, default
 
 
+_THE_LISTING = re.compile(r"\b(?:the|this|that)\s+(?:flat|listing|property|apartment|home|house|studio)\b", re.I)
+
+
+def _the_listing_referred_to(fragment: str, inherited: dict | None, local: dict | None,
+                             previous: str, bindings: list) -> dict | None:
+    """"That's a measured journey from the Islington area rather than from the King Square flat
+    specifically, so treat the flat's own ~20 minutes as an estimate" (r17 4f27cfd2): a clause
+    that names nothing itself but refers to "the flat" is about the ONE listing the clause
+    before it named, not the route that clause was about."""
+    if local is not None or not _THE_LISTING.search(fragment) or (inherited or {}).get("listing"):
+        return inherited
+    named = _line_binding(previous, bindings) if previous.strip() else None
+    pool = (named or {}).get("members") or ([named] if named else []) or (inherited or {}).get("members") or []
+    listings = [member for member in pool if member.get("listing")]
+    return listings[0] if len(listings) == 1 else inherited
+
+
+def _same_area_route(area: dict, route: dict) -> bool:
+    """An area-ranking row and a measured route from that same place, with the same time (or
+    a row the ranking could not time): one route. A different time stays a separate, competing
+    measurement, so a line naming the place still cannot pick one of them."""
+    return bool(area.get("area_row") and route.get("minutes") is not None and route.get("labels")
+                and area.get("minutes") in (None, route["minutes"])
+                and set(map(_norm, area.get("labels") or [])) & set(map(_norm, route["labels"])))
+
+
 def _line_binding(line: str, bindings: list[dict], default: dict | None = None) -> dict | None:
     """The verified listing this line is about, if it names exactly one.
 
@@ -1944,7 +2002,10 @@ def _line_binding(line: str, bindings: list[dict], default: dict | None = None) 
         named_bindings.append(binding)
         destinations = binding.get("destinations") or []
         explicit_destination = _TARGET_WITH_FROM.search(_without_abbreviation_dots(line))
-        if destinations and explicit_destination:
+        # Only a NAMED place switches the route: "The 19-minute Stratford figure above comes
+        # from the separate journey calculation" travels nowhere, and reading "the separate
+        # journey calculation" as an origin unbound Stratford's own 19 (r17 8c35fd5b).
+        if destinations and explicit_destination and _names_a_place(explicit_destination.group(1)):
             if not _names_route_place(explicit_destination.group(1), binding, line):
                 continue
         # Origin specificity comes first. A long destination name must never let a town
@@ -2261,8 +2322,10 @@ def _compares_measured_routes(fragment: str, context: str, pool: list) -> bool:
     def figures(route) -> set:
         if not by_mode:
             return {route["minutes"]}
-        return {leg["minutes"] for leg in route.get("legs") or []
-                if any(_key_in(_label_key(mode), scope_key) for mode in leg.get("modes") or [])}
+        return {leg["minutes"] for leg in _legs_at_named_places(
+            [leg for leg in route.get("legs") or []
+             if any(_key_in(_label_key(mode), scope_key) for mode in leg.get("modes") or [])],
+            f"{fragment} {context}")}
 
     def named_in(text: str) -> list:
         """Routes named in ``text``, in order of first mention."""
@@ -2428,6 +2491,7 @@ def _arithmetic_evidenced(fragment: str, *, context: str, previous_clause: str, 
     label = line[:80].split(":", 1)[0] if ":" in line[:80] else ""
     scope = f"{label} {previous_clause} {context} {text}"
     if not (_DAY_PERIOD.search(scope) or _WEEK_PERIOD.search(scope) or _COMPARISON_CUE.search(scope)
+            or _arithmetic.LONG_PERIOD.search(_arithmetic.without_money(scope)) or _arithmetic.period_steps(text)
             or _arithmetic.products(text) or _arithmetic.subtractions(text)
             or _arithmetic.JOURNEY_COUNT.search(text)
             or (caps and re.search(r"\b(?:limit|cap|max(?:imum)?|spare|headroom|margin|buffer)\b", scope, re.I))):
@@ -2562,7 +2626,7 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
     # A clause that names one of the route's legs and quotes exactly that leg's figure is the
     # leg, whatever it walks TO: "a 12-minute walk to the Hammersmith & City platforms" (R2-25).
     leg_quote = bool(values) and all(
-        any(abs(value - leg["minutes"]) < 1e-9 for leg in _named_legs(f"{scope} {heading}", binding))
+        any(abs(value - leg["minutes"]) < 1e-9 for leg in _legs_named_at(f"{scope} {heading}", binding, scope))
         for value in values)
     if destinations and not leg_quote and not _targets_on_route(fragment, binding, scope):
         return False
@@ -2598,14 +2662,19 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
     # Canary Wharf takes 17 minutes on the Jubilee line").
     # ``heading`` is the line's label before a colon: "Commute: 17 minutes (Jubilee line)"
     # is a whole-trip claim even though the clause split leaves only "17 minutes".
+    # A clause that names the leg ITSELF ("then a 3-minute walk") is that leg under any label:
+    # "On the commute itself: … a short walk, the 476 bus, then a 3-minute walk" lost the walk
+    # to the label's "commute" (r17 4f27cfd2).
+    names_own_leg = bool(values) and all(
+        any(abs(value - leg["minutes"]) < 1e-9 for leg in _legs_named_at(scope, binding)) for value in values)
     hay = _label_key(scope)
     end_to_end = (any(_key_in(_label_key(l), hay) for l in binding.get("labels") or [])
                   and any(_key_in(_label_key(l), hay) for l in destinations))
-    if not (_WHOLE_TRIP_WORD.search(fragment) or _WHOLE_TRIP_WORD.search(heading)
+    if not (_WHOLE_TRIP_WORD.search(fragment) or (_WHOLE_TRIP_WORD.search(heading) and not names_own_leg)
             or end_to_end):
         # A leg named in the line's label counts too: "- Heathrow Express to London
         # Paddington: 20 minutes" (R2-25).
-        for leg in _named_legs(f"{scope} {heading}", binding):
+        for leg in _legs_named_at(f"{scope} {heading}", binding, scope):
             # A leg ending at an intermediate stop is unambiguous; one ending at the
             # destination only inside an enumerated itinerary.
             if not _arrives_at_destination(leg, binding) or id(binding) in itinerary:
@@ -2627,8 +2696,9 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
         # quoting THAT as an estimate is still honest.
         return _estimate_is_quoted_as_estimate(fragment, binding, caps, context, sentence_marked)
 
-    asserts_pass = bool(_PASS_VERDICT.search(fragment))
-    asserts_fail = bool(_FAIL_VERDICT.search(fragment))
+    pointed = _POSITIONAL_REFERENCE.sub(" ", fragment)     # "the figure above" is no verdict
+    asserts_pass = bool(_PASS_VERDICT.search(pointed))
+    asserts_fail = bool(_FAIL_VERDICT.search(pointed))
     if asserts_pass and asserts_fail:
         return False  # both directions in one fragment: nothing coherent to check
     if asserts_pass or asserts_fail:
@@ -2708,8 +2778,11 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
     source_lines = str(text or "").split("\n")
     produced_at: list[int] = []        # len(lines) before each source line was processed
     block_binding = None                # the listing a header line names, for its bullets
+    block_minutes = False               # an earlier line of this paragraph/list quoted a journey time
     for line in source_lines:
         produced_at.append(len(lines))
+        in_timed_block = block_minutes
+        block_minutes = bool(line.strip()) and (block_minutes or bool(_MINUTE_TOKEN.search(line)))
         removed_before_line = len(removed)
         bullet = _BULLET_PREFIX.match(line)
         prefix = bullet.group(1) if bullet else ""
@@ -2746,6 +2819,14 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
         heading = line.split(":", 1)[0] if ":" in line[:60] else ""
         if _MINUTE_TOKEN.search(heading):
             heading = ""
+        # ... and only the sentence it introduces: "So Stratford is the clear winner on commute:
+        # it's both faster and change-free. Bow's problem is mostly the 13-minute walk to Bow
+        # Road" read "commute" as the label of the walk too, so its leg figure counted as a
+        # whole-trip claim and went (r17 392cdf42).
+        colon_at = body.find(":") if heading else -1
+        heading_close = re.search(r"[.!?。！？](?=\s|$)", body[colon_at + 1:]) if colon_at >= 0 else None
+        heading_reach = colon_at + 1 + heading_close.end() if heading_close else len(body)
+        heading_now = [heading]     # the label in force for the clause being judged
 
         def _evidenced(fragment: str, _binding=None, context: str = "",
                        sentence_marked: bool = False, previous_clause: str = "") -> bool:
@@ -2757,7 +2838,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             carries an estimate marker ("estimated", "roughly")."""
             if _preference_commute_reference(
                     fragment, caps, context=preference_line or bool(
-                        _LIMIT_LABEL.search(heading) or _LIMIT_LABEL.search(fragment))):
+                        _LIMIT_LABEL.search(heading_now[0]) or _LIMIT_LABEL.search(fragment))):
                 return True
             if _quotes_source_text(fragment, source_texts):
                 return True
@@ -2768,7 +2849,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 return _arithmetic.journey_counts_ok(
                     fragment, context=f"{context} {previous_clause}", sentence=line,
                     user_days=user_days, answer_days=answer_days)
-            if _claim_is_evidenced(fragment, effective, caps, context=context, heading=heading,
+            if _claim_is_evidenced(fragment, effective, caps, context=context, heading=heading_now[0],
                                    itinerary=itinerary, sentence_marked=sentence_marked):
                 return True
             if (_compares_measured_routes(fragment, f"{context} {previous_clause}", pool)
@@ -2832,7 +2913,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                                      for value in values):
                 return False          # cheap reject before trying each route (B-01 class)
             return any(_claim_is_evidenced(fragment, candidate, caps, context=context,
-                                           heading=heading, itinerary=itinerary,
+                                           heading=heading_now[0], itinerary=itinerary,
                                            sentence_marked=sentence_marked)
                        for candidate in pool)
 
@@ -2880,6 +2961,19 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                     local = _line_binding(wider, bindings)
                 if local is not None and local.get("labels") and not local.get("members"):
                     own = local
+            else:
+                # The line's entity is not necessarily this sentence's: "On the commute itself: for
+                # Islington generally, … — a 1-minute walk, the 476 bus (10 min), … That's a measured
+                # journey … rather than from the King Square flat" bound "(10 min)" to the King
+                # Square listing named a sentence later, and the bus leg went (r17 4f27cfd2). The
+                # one entity its own sentence names before it owns the aside.
+                lead = _without_abbreviation_dots(body[max(0, m.start() - 300):m.start()])
+                opening = max((x.end() for x in re.finditer(r"[.!?。！？](?=\s|$)", lead)), default=0)
+                local = _line_binding(lead[opening:], bindings) if lead[opening:].strip() else None
+                if (local is not None and local is not binding and local.get("labels")
+                        and not local.get("members")):
+                    own = local
+            heading_now[0] = heading if m.start() < heading_reach else ""
             if not _evidenced(m.group(0), own, context=attached,
                               sentence_marked=bool(_ESTIMATE_MARKER.search(
                                   _sentence_around(m.start(), m.end())))):
@@ -2890,6 +2984,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
 
         original_body = body
         body = _PARENTHETICAL.sub(_parenthetical, body)
+        heading_now[0] = heading
+        colon_passed = False
         split_coordinators: list = []   # (original words, the text after them) per split
 
         labels = sorted({label for item in bindings for label in item["labels"] if label},
@@ -2936,17 +3032,37 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
         sentence_dropped = False    # something was withdrawn from the current sentence
         inherited = binding
         commute_context = False
-        figure_context = False      # an earlier clause of this line quoted a journey time
+        # An earlier clause of this line quoted a journey time, or (for a list item) an earlier
+        # line of its list did: "- Per week: 48 minutes" then "- Per month: about 3.5 hours" is a
+        # journey total too, judged like one (r17 8c35fd5b; a wrong "about 5 hours" shipped).
+        figure_context = bool(in_timed_block and list_item)
         last_fragment = ""          # the previous clause of the current sentence
         continuation_broken = False  # a kept clause leans on a withdrawn one ("…, but I have
                                      # not verified that") — no clean cut exists (R3-01)
         address_tail_open = False    # the last clause was withdrawn and ended at a comma
 
+        line_index = len(produced_at) - 1
+        heads_a_list = (not list_item and bool(re.match(r"^\s*(?:\*\*|#{1,4}\s)", line))
+                        and line_index + 1 < len(source_lines)
+                        and bool(re.match(r"^\s*(?:[-•]|\*(?!\*)|\d+[.)])\s+", source_lines[line_index + 1])))
+
+        def _keeps_its_block(remnant: str) -> bool:
+            """A route header that lost its figure keeps the route's name: "**Bow — 25 minutes each
+            way**" goes to "**Bow**", so the leg list under it is not left hanging under the
+            previous route's block (r17 8c35fd5b: "- One change." shipped under Stratford)."""
+            if not heads_a_list:
+                return False
+            plain = re.sub(r"[*_#`]+", " ", remnant).strip(" \t—–-:,")
+            named = _line_binding(plain, bindings) if plain else None
+            return bool(named and named.get("labels") and not named.get("members")
+                        and _label_key(plain) in {_label_key(label) for label in named["labels"]})
+
         def _close_sentence() -> None:
             # A sentence that lost its claim and kept only a lead-in ("If you want to continue
             # here, for example,") or a bare label ("For your commute") goes whole (R2-01 e/f).
             nonlocal sentence_start, sentence_dropped
-            if sentence_dropped and _stub_remnant("".join(kept[sentence_start:])):
+            remnant = "".join(kept[sentence_start:])
+            if sentence_dropped and _stub_remnant(remnant) and not _keeps_its_block(remnant):
                 del kept[sentence_start:]
             sentence_start = len(kept)
             sentence_dropped = False
@@ -2955,6 +3071,9 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             fragment = parts[index]
             separator = parts[index + 1] if index + 1 < len(parts) else ""
             context_fragment = last_fragment
+            if colon_passed and index >= 2 and _SENTENCE_END.search(parts[index - 1]):
+                heading_now[0] = ""          # the labelled sentence has ended
+            colon_passed = colon_passed or ":" in separator
             last_fragment = "" if _SENTENCE_END.search(separator) else fragment
             local = _line_binding(fragment, bindings)
             if local is not None:
@@ -3016,7 +3135,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             # time, judged alone it named no leg and was withdrawn (R3-01, R2-01 a).
             bare_figure = bool(_BARE_FIGURE.fullmatch(claim.strip()))
             drop = fragment.strip() and asserts and not _evidenced(
-                claim, inherited, context=context_fragment if bare_figure else "",
+                claim, _the_listing_referred_to(claim, inherited, local, context_fragment, bindings),
+                context=context_fragment if bare_figure else "",
                 sentence_marked=sentence_marked, previous_clause=context_fragment)
             # A dependent clause after a redacted one restates its verdict without repeating
             # its subject ("…, which is well within your limit"), so it goes with it.
@@ -3316,6 +3436,8 @@ def _balance_emphasis(rebuilt: str, original: str) -> str:
 # alone: a dependent continuation or a bare comparative about the removed figure.
 _DANGLING_AFTER_DROP = re.compile(
     r"^\s*(?:(?:[-–—:]\s*)?(?:with|which|that|whereas|while|making it|so it|so this)\b"
+    # "…, plus the extra change at Mile End" adds to the withdrawn clause's subject (r17).
+    r"|(?:plus|as\s+well\s+as|along\s+with|together\s+with|on\s+top\s+of)\b"
     r"|(?:the\s+)?(?:longest|shortest|fastest|slowest|quickest|longer|shorter|faster|slower|quicker)\b"
     r"|(?:是|为)?(?:最长|最短|最快|最慢|较长|较短)(?:的)?(?:通勤)?\s*$)", re.I)
 _LEADING_COORDINATOR = re.compile(r"^(\s*)(?:and|but|or|plus|also)\s+(?=\S)", re.I)

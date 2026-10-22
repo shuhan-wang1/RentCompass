@@ -672,9 +672,54 @@ class _PendingWriteStore:
                 "SET operation_id=lower(hex(randomblob(16))) "
                 "WHERE operation_id IS NULL OR operation_id=''"
             )
+            # A conversation whose user asked not to be remembered for the rest of it (r6-M1).
+            # Identifiers and a timestamp only: what the user said is never kept here.
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS conversation_memory_pause ("
+                "user_id TEXT NOT NULL, conversation_id TEXT NOT NULL, "
+                "paused_at REAL NOT NULL, PRIMARY KEY(user_id, conversation_id))"
+            )
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.path, timeout=10)
+
+    def memory_paused_at(self, user_id: str, conversation_id: str) -> float | None:
+        with self._lock, self._connect() as db:
+            row = db.execute(
+                "SELECT paused_at FROM conversation_memory_pause "
+                "WHERE user_id=? AND conversation_id=?",
+                (user_id, conversation_id),
+            ).fetchone()
+            return float(row[0]) if row else None
+
+    def memory_paused(self, user_id: str, conversation_id: str) -> bool:
+        return self.memory_paused_at(user_id, conversation_id) is not None
+
+    def forget_memory_pauses(self, user_id: str) -> int:
+        with self._lock, self._connect() as db:
+            return db.execute(
+                "DELETE FROM conversation_memory_pause WHERE user_id=?", (user_id,)).rowcount
+
+    def memory_pause_count(self, user_id: str) -> int:
+        with self._lock, self._connect() as db:
+            return int(db.execute(
+                "SELECT COUNT(*) FROM conversation_memory_pause WHERE user_id=?",
+                (user_id,)).fetchone()[0])
+
+    def set_memory_paused(self, user_id: str, conversation_id: str, paused: bool) -> None:
+        with self._lock, self._connect() as db:
+            if paused:
+                db.execute(
+                    "INSERT OR IGNORE INTO conversation_memory_pause"
+                    "(user_id, conversation_id, paused_at) VALUES (?, ?, ?)",
+                    (user_id, conversation_id, time.time()),
+                )
+            else:
+                db.execute(
+                    "DELETE FROM conversation_memory_pause "
+                    "WHERE user_id=? AND conversation_id=?",
+                    (user_id, conversation_id),
+                )
 
     def freeze(self, session_id: str, content: str, kind: str) -> str:
         digest = hashlib.sha256((content or "").encode("utf-8")).hexdigest()
@@ -818,3 +863,126 @@ def latest_pending_digest(session_id: str) -> str | None:
     user's confirmation turn.
     """
     return _store().latest_digest(session_id)
+
+
+# ------------------------------------------------------- conversation memory pause (r6-M1)
+# "Please don't save anything about me from now on" withheld that one message while every
+# later turn of the conversation was logged and extracted again. The pause is a property of
+# ONE conversation of ONE user, kept in this durable ledger so a restart (or the other pool)
+# still honours it. It is lifted only by the user's explicit re-consent.
+
+def _pause_key(user_id, conversation_id) -> tuple[str, str] | None:
+    uid = user_id.strip() if isinstance(user_id, str) else ""
+    cid = conversation_id.strip() if isinstance(conversation_id, str) else ""
+    if not uid or uid.lower() == "default" or not cid:
+        return None
+    return uid, cid
+
+
+def conversation_memory_paused(user_id, conversation_id) -> bool | None:
+    """True when automatic memory is paused for this conversation of this user.
+
+    ``None`` when the ledger cannot be read: the caller then keeps nothing from the turn
+    rather than guess that the user never asked."""
+    key = _pause_key(user_id, conversation_id)
+    if key is None:
+        return False
+    try:
+        return _store().memory_paused(*key)
+    except (OSError, sqlite3.Error) as exc:
+        print(f"[memory_gate] pause lookup failed; error_type={type(exc).__name__}")
+        return None
+
+
+# What the model reads (as runtime data, beside the memory block) while the pause holds, and the
+# fixed text the user is shown. The r03 reply said "I won't save anything … from now on" while the
+# system kept logging; the opposite slip, "the service still keeps a short log", is as untrue now.
+MEMORY_PAUSE_NOTE = (
+    "AUTOMATIC MEMORY STATUS: PAUSED for this conversation at the user's request. Since that "
+    "request nothing from this conversation is kept: no log of the user's messages, no extracted "
+    "facts, no inferences. The pause covers the rest of this conversation, not only one message. "
+    "Memories saved before the request stay until the user asks to forget them. Only something "
+    "the user explicitly asks to be remembered is saved (that one item). The pause ends only when "
+    "the user says memory may be used again.")
+MEMORY_PAUSED_ACK_EN = (
+    "Memory is now off for the rest of this conversation, not just this message. From your "
+    "request on, I won't keep a log of what you say here, pull facts out of it or form guesses "
+    "about you from it. Anything saved before your request stays saved; you can ask what I have, "
+    "or ask me to forget it. If you ask me to remember something specific, I'll save only that. "
+    "To turn memory back on, say \"you can remember things again\".")
+MEMORY_PAUSED_ACK_ZH = (
+    "本次对话剩余部分的记忆已关闭，不只是这一条消息。从你提出要求起，我不会保存你在本对话中说的内容，"
+    "也不会从中提取信息或推断你的偏好。此前已保存的内容会保留，你可以问我保存了什么，或要求我删除。"
+    "如果你明确要我记住某件事，我只会保存那一件。想恢复记忆，请说「可以重新记了」。")
+MEMORY_RESUMED_ACK_EN = (
+    "Memory is back on for this conversation: from this message on, I'll again keep a short log "
+    "of your requests and the lasting facts you state, as before.")
+MEMORY_RESUMED_ACK_ZH = "本对话已恢复记忆：从这条消息起，我会像之前一样保存你的请求摘要和你说过的长期信息。"
+MEMORY_PAUSED_DISCLOSURE_EN = (
+    "How memory works here: you asked me not to remember this conversation, so automatic memory "
+    "is paused for the rest of it: no log of your messages, no extracted facts and no inferences "
+    "from them. What was saved before your request, here or in other conversations, stays until "
+    "you ask me to forget it, and anything you explicitly ask me to remember is still saved.")
+MEMORY_PAUSED_DISCLOSURE_ZH = (
+    "关于记忆的说明：你要求本次对话不要被记住，所以本对话剩余部分的自动记忆已暂停：不保存你的消息记录、"
+    "不提取信息，也不据此推断。你提出要求之前保存的内容（包括其他对话中的）会保留，直到你要求删除；"
+    "你明确要求我记住的内容仍会保存。")
+MEMORY_PAUSE_FIXED_TEXTS = (MEMORY_PAUSED_ACK_EN, MEMORY_PAUSED_ACK_ZH, MEMORY_RESUMED_ACK_EN,
+                            MEMORY_RESUMED_ACK_ZH, MEMORY_PAUSED_DISCLOSURE_EN,
+                            MEMORY_PAUSED_DISCLOSURE_ZH)
+
+
+def acknowledge_memory_pause(text: str, event, reply_language: str = "en") -> str:
+    """``text`` with the fixed acknowledgement of a pause or resume this turn made, so the reply
+    states the scope truthfully whatever the model wrote (r6-M1)."""
+    body = str(text or "")
+    zh = str(reply_language or "").lower().startswith("zh")
+    if event == "paused":
+        note = MEMORY_PAUSED_ACK_ZH if zh else MEMORY_PAUSED_ACK_EN
+        if MEMORY_PAUSED_DISCLOSURE_EN in body or MEMORY_PAUSED_DISCLOSURE_ZH in body:
+            return body
+    elif event == "resumed":
+        note = MEMORY_RESUMED_ACK_ZH if zh else MEMORY_RESUMED_ACK_EN
+    else:
+        return body
+    if note in body:
+        return body
+    return f"{body.rstrip()}\n\n{note}" if body.strip() else note
+
+
+def conversation_memory_paused_at(user_id, conversation_id) -> float | None:
+    """When (epoch seconds) memory was paused for this conversation, or None when it is not."""
+    key = _pause_key(user_id, conversation_id)
+    if key is None:
+        return None
+    return _store().memory_paused_at(*key)
+
+
+def forget_conversation_memory_pauses(user_id) -> int:
+    """Delete every pause row of one user (the /api/forget_me erasure). Raises on a ledger
+    error, so the erasure reports the memory layer as failed instead of claiming success."""
+    uid = user_id.strip() if isinstance(user_id, str) else ""
+    if not uid:
+        return 0
+    return _store().forget_memory_pauses(uid)
+
+
+def conversation_memory_pause_count(user_id) -> int:
+    """How many pause rows one user has: an identifier-only residual for erasure read-back."""
+    uid = user_id.strip() if isinstance(user_id, str) else ""
+    if not uid:
+        return 0
+    return _store().memory_pause_count(uid)
+
+
+def set_conversation_memory_paused(user_id, conversation_id, paused: bool) -> bool:
+    """Pause (or, on re-consent, resume) automatic memory for one conversation."""
+    key = _pause_key(user_id, conversation_id)
+    if key is None:
+        return False
+    try:
+        _store().set_memory_paused(*key, bool(paused))
+        return True
+    except (OSError, sqlite3.Error) as exc:
+        print(f"[memory_gate] pause update failed; error_type={type(exc).__name__}")
+        return False

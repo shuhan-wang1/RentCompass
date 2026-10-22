@@ -306,10 +306,17 @@ AUTOMATIC_MEMORY_DISCLOSURE_ZH = (
     "（如预算、区域、通勤），并形成对你偏好的推断，跨对话保留。你可以随时询问我保存了什么，或要求我删除。")
 # Fixed system text: no commute redaction pass may edit it (R3-01).
 register_protected_system_text(AUTOMATIC_MEMORY_DISCLOSURE_EN, AUTOMATIC_MEMORY_DISCLOSURE_ZH)
+from core.memory_gate import (MEMORY_PAUSE_FIXED_TEXTS, MEMORY_PAUSED_DISCLOSURE_EN,  # noqa: E402
+                              MEMORY_PAUSED_DISCLOSURE_ZH)
+register_protected_system_text(*MEMORY_PAUSE_FIXED_TEXTS)
 
 
-def disclose_automatic_memory(text: str, message: str, reply_language: str = "en") -> str:
-    """Append the truthful automatic-memory description to an answer about silent storage."""
+def disclose_automatic_memory(text: str, message: str, reply_language: str = "en",
+                              memory_paused: bool = False) -> str:
+    """Append the truthful automatic-memory description to an answer about silent storage.
+
+    While the user has paused memory for this conversation the truthful description is the
+    paused one: nothing from it is logged, extracted or inferred (r6-M1)."""
     body = str(text or "")
     asked = str(message or "")[:2000]
     if not _AUTOMATIC_STORAGE_QUESTION.search(asked) or re.match(
@@ -317,7 +324,10 @@ def disclose_automatic_memory(text: str, message: str, reply_language: str = "en
             asked, re.I):
         return body      # a request to remember something is not a question about storage
     zh = str(reply_language or "").lower().startswith("zh")
-    note = AUTOMATIC_MEMORY_DISCLOSURE_ZH if zh else AUTOMATIC_MEMORY_DISCLOSURE_EN
+    if memory_paused:
+        note = MEMORY_PAUSED_DISCLOSURE_ZH if zh else MEMORY_PAUSED_DISCLOSURE_EN
+    else:
+        note = AUTOMATIC_MEMORY_DISCLOSURE_ZH if zh else AUTOMATIC_MEMORY_DISCLOSURE_EN
     if note in body:
         return body
     return f"{body.rstrip()}\n\n{note}" if body.strip() else note
@@ -3719,7 +3729,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         text = await _validate_commute_off_loop(text, state)
         text = disclose_automatic_memory(
             text, (state.get("extracted_context") or {}).get("current_message")
-            or _current_message(state.get("user_query") or ""), reply_language)
+            or _current_message(state.get("user_query") or ""), reply_language,
+            memory_paused=bool((state.get("extracted_context") or {}).get("memory_paused")))
         text = acknowledge_remembered_budget(
             text, state.get("memory_context") or "",
             (state.get("accumulated_search_criteria") or {}).get("max_budget"), reply_language,
@@ -4172,6 +4183,16 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                                 reason="pure recall question: no new content to save")
                             plan.append((tc, digest, ("deny_recall", ""), args))
                             continue
+                    if not user_authorized and ec.get("memory_paused"):
+                        # The user paused memory for this conversation: only what they
+                        # explicitly ask to be remembered is saved, never a write the model
+                        # chose on its own (r6-M1).
+                        _note_write_decision(
+                            tool=name, decision="denied_forbidden", context_tainted=_tainted,
+                            user_authorized=False, audit_key=_akey,
+                            reason="memory paused for this conversation by the user")
+                        plan.append((tc, digest, ("deny_paused", ""), args))
+                        continue
                     allowed = bool(mem_gate.memory_write_allowed(
                         context_tainted=batch_tainted,
                         user_authorized=user_authorized))
@@ -5082,6 +5103,20 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                         "success": False, "data": None,
                         "error": ("write blocked: this is a memory-recall question; there is "
                                   "nothing new to save. Answer the recall question directly."),
+                    }, ensure_ascii=False),
+                    tool_call_id=tcid, name=name))
+                continue
+            if isinstance(mode, tuple) and mode[0] == "deny_paused":
+                artifacts.append(_artifact(
+                    turn, name, None, digest, success=False,
+                    error="denied: memory paused for this conversation", denied=True,
+                    elapsed_ms=0))
+                messages.append(ToolMessage(
+                    content=json.dumps({
+                        "success": False, "data": None,
+                        "error": ("write blocked: the user asked not to be remembered in this "
+                                  "conversation, so nothing was saved. Only something the user "
+                                  "explicitly asks you to remember may be saved."),
                     }, ensure_ascii=False),
                     tool_call_id=tcid, name=name))
                 continue

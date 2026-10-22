@@ -144,11 +144,178 @@ _DO_NOT_REMEMBER = re.compile(
 
 
 def do_not_remember_requested(user_msg: str) -> bool:
-    """True when the user's own message asks that it not be remembered."""
-    return bool(_DO_NOT_REMEMBER.search(str(user_msg or "")[:_REDACT_MAX_CHARS]))
+    """True when the user's own message asks that it (or the rest of its conversation) not be
+    remembered."""
+    return memory_opt_out_scope(user_msg) is not None
 
 
 _OPTED_OUT_LOG = "User asked: [message not stored at the user's request]"
+
+
+# ── Conversation-wide opt-out (r6-M1) ─────────────────────────────────────────
+# r03 priv1: "OK. Please don't save anything about me from now on. What will you keep?" was
+# answered "I won't save anything about you to long-term memory from now on", while only that one
+# message was withheld and every later turn of the conversation was logged and extracted again.
+# An opt-out with forward or conversation scope now pauses automatic memory for the rest of the
+# conversation; one about a single message ("don't remember this", "别记这条") stays per message.
+MEMORY_SCOPE_CONVERSATION = "conversation"
+MEMORY_SCOPE_MESSAGE = "message"
+_NEG_STORE_EN = (r"(?:do\s+not|don'?t|dont|never|no\s+need\s+to)\s+(?:(?:ever|even|actually)\s+)?"
+                 r"(?:store|save|remember|memori[sz]e|record|log|keep|retain|track)")
+_STORE_ALT_EN = r"(?:store|save|remember|memori[sz]e|record|log|keep|retain|track)"
+# "for the rest of this chat", "from now on", "in this conversation".
+_FORWARD_SCOPE_EN = re.compile(
+    r"\bfrom\s+(?:now|here|this\s+point|today)\s+on(?:wards?)?\b|\bgoing\s+forward\b|"
+    r"\bhenceforth\b|\b(?:for|during|in|throughout)\s+(?:the\s+(?:rest|remainder)\s+of\s+)?"
+    r"(?:this|our|the)\s+(?:whole\s+|entire\s+)?(?:chat|conversation|session|thread)\b", re.I)
+_CONVERSATION_OPT_OUT_EN = re.compile(
+    # "don't save anything about me", "do not store or remember anything", "don't keep my data";
+    # never "any of that", "anything from this message" or "anything about my salary".
+    r"\b" + _NEG_STORE_EN + r"(?:\s+(?:or|and|/)\s+" + _STORE_ALT_EN + r")?\s+"
+    r"(?:(?:any|every)thing|a\s+thing|any\s+(?:info(?:rmation)?|data|details?|facts?|personal\s+\w+)"
+    r"|(?:any\s+)?(?:stuff|things)\s+about\s+me|my\s+(?:personal\s+)?(?:data|info(?:rmation)?|details))\b"
+    r"(?!\s+(?:from|in|of)\s+(?:this|that)\s+(?:message|one|bit|part|turn|sentence|line)\b)"
+    r"(?!\s+(?:about|regarding|concerning|on)\s+(?:my|the|this|that|these|those|his|her|their)\b)|"
+    # "stop remembering things", "stop saving my info"; never "stop saving listings".
+    r"\b(?:stop|quit|cease|no\s+more)\s+(?:remembering|saving|storing|recording|logging|"
+    r"memori[sz]ing|keeping\s+(?:track|records?|notes?|(?:any|every)thing))\b"
+    r"(?!\s+(?:the\s+|this\s+|that\s+|these\s+|those\s+|my\s+)?(?:listings?|flats?|propert\w+|"
+    r"searches|search|results?|homes?|favou?rites?|places?)\b)|"
+    r"\b(?:turn|switch|shut)\s+(?:off\s+(?:the\s+|your\s+)?memory|(?:the\s+|your\s+)?memory\s+off)\b|"
+    r"\b(?:disable|deactivate|pause)\s+(?:the\s+|your\s+)?memory\b|\bno\s+memory\s+at\s+all\b",
+    re.I)
+_STOP_STORE_EN = re.compile(
+    r"\b(?:stop|quit|cease)\s+(?:remembering|saving|storing|recording|logging|memori[sz]ing)\b", re.I)
+_NEG_STORE_ZH = (r"(?:请不要|不要|别|不用|请勿|不准|不许|不必|无需|不需要)(?:再|都|也|帮我|给我|替我)*"
+                 r"(?:记住|记下|记录|保存|存储|存下|存档|储存|记)")
+_SCOPE_ZH = (r"(?:以后|今后|从现在(?:开始|起)|从今(?:天)?(?:开始|起)|接下来|往后|此后|"
+             r"(?:这次|本次|这个|本|这段|整个)(?:对话|聊天|会话))")
+_CONVERSATION_OPT_OUT_ZH = re.compile(
+    # "以后都别记", "这次对话都不要记", "不要记录这次对话"
+    _SCOPE_ZH + r"[^。！？!?；;\n]{0,8}?" + _NEG_STORE_ZH + r"|"
+    + _NEG_STORE_ZH + r"[^。！？!?；;\n]{0,8}?" + _SCOPE_ZH + r"|"
+    # "什么都别记", "不要记住关于我的任何信息", "别再记了", "关闭记忆"
+    r"(?:什么|任何|一切|所有)(?:东西|信息|内容|事情?|资料|数据)?(?:都|也)" + _NEG_STORE_ZH + r"|"
+    + _NEG_STORE_ZH + r"(?:关于)?(?:我的)?(?:任何|一切|所有)|"
+    r"(?:别|不要)再(?:记住|记录|保存|存储|记)(?:了|啦|啊|吧)?\s*(?:[。！!，,]|$)|"
+    r"(?:关闭|停止|暂停)(?:记忆|记录功能|记忆功能)|停止(?:记住|记录|保存|存储)")
+# Re-consent: "you can remember things again", "ok start saving again", "可以重新记了".
+_RESUME_OBJECT_EN = (r"(?:\s+(?:things|stuff|everything|anything|me|(?:things|stuff)\s+about\s+me|"
+                     r"about\s+me|my\s+(?:info(?:rmation)?|details|data|preferences|stuff|messages)|"
+                     r"(?:what|whatever)\s+i\s+(?:say|tell\s+you)))?"
+                     r"(?:\s+(?:in|for|from)\s+(?:this|the)\s+(?:chat|conversation|session))?")
+_RESUME_EN = re.compile(
+    r"\b(?:you\s+(?:can|may|could)(?:\s+now)?|feel\s+free\s+to|it'?s\s+(?:ok(?:ay)?|fine|alright)\s+"
+    r"(?:for\s+you\s+)?to|i'?m\s+(?:happy|fine|ok(?:ay)?)\s+(?:for\s+you\s+)?to|go\s+ahead\s+and|"
+    r"i\s+(?:don'?t|do\s+not)\s+mind\s+(?:you\s+)?|ok(?:ay)?,?)\s+"
+    r"(?:(?:start|begin|resume|continue|go\s+back\s+to)\s+(?:to\s+)?)?"
+    r"(?:remember(?:ing)?|sav(?:e|ing)|stor(?:e|ing)|record(?:ing)?|keep(?:ing)?|log(?:ging)?|"
+    r"memori[sz](?:e|ing))\b" + _RESUME_OBJECT_EN + r"\s+(?:again|now|back\s+on)\b|"
+    r"\b(?:start|begin|resume|continue)\s+(?:to\s+)?(?:remember(?:ing)?|sav(?:e|ing)|stor(?:e|ing)|"
+    r"record(?:ing)?|logging|memori[sz]ing)\b" + _RESUME_OBJECT_EN + r"\s+again\b|"
+    r"\bresume\s+(?:saving|remembering|storing|recording|memory)\b|"
+    r"\b(?:turn|switch|put)\s+(?:the\s+|your\s+)?memory\s+(?:back\s+)?on\b|"
+    r"\b(?:turn|switch)\s+(?:back\s+)?on\s+(?:the\s+|your\s+)?memory\b|\bmemory\s+(?:is\s+)?back\s+on\b|"
+    r"\b(?:re-?enable|reactivate|unpause)\s+(?:the\s+|your\s+)?memory\b", re.I)
+_RESUME_ZH = re.compile(
+    r"(?:重新|恢复)(?:开始)?(?:记住|记录|保存|存储|记忆|记)(?:吧|了|啦|好了)?\s*(?:[。！!，,；;]|$)|"
+    r"(?:可以|能)(?:继续|重新)?(?:记住|记录|保存|存储|记)了(?!吗|么|嘛)|"
+    r"(?:恢复|打开|开启|重新开启)(?:记忆|记录功能|记忆功能)")
+_QUESTION_END = re.compile(r"[?？]\s*$|(?:吗|么|嘛)\s*[?？]?\s*$")
+
+
+def _sentences(text: str) -> list:
+    return [s for s in re.split(r"(?<=[.!?。！？；;\n])", str(text or "")) if s.strip()]
+
+
+def memory_opt_out_scope(user_msg: str) -> str | None:
+    """``"conversation"`` when the message asks not to be remembered from now on or for the rest
+    of the conversation, ``"message"`` when it asks only about itself, else None (r6-M1)."""
+    value = str(user_msg or "")[:_REDACT_MAX_CHARS]
+    if not value.strip():
+        return None
+    for sentence in _sentences(value):
+        if _CONVERSATION_OPT_OUT_EN.search(sentence) or _CONVERSATION_OPT_OUT_ZH.search(sentence):
+            return MEMORY_SCOPE_CONVERSATION
+        if _FORWARD_SCOPE_EN.search(sentence) and (
+                _DO_NOT_REMEMBER.search(sentence) or _STOP_STORE_EN.search(sentence)):
+            return MEMORY_SCOPE_CONVERSATION
+    if _DO_NOT_REMEMBER.search(value):
+        return MEMORY_SCOPE_MESSAGE
+    return None
+
+
+def memory_resume_requested(user_msg: str) -> bool:
+    """True when the user explicitly lets automatic memory run again ("you can remember things
+    again"). A question about it, or a message that also opts out, is not a re-consent."""
+    value = str(user_msg or "")[:_REDACT_MAX_CHARS]
+    if memory_opt_out_scope(value) == MEMORY_SCOPE_CONVERSATION:
+        return False
+    for sentence in _sentences(value):
+        match = _RESUME_EN.search(sentence) or _RESUME_ZH.search(sentence)
+        if match and not _QUESTION_END.search(sentence[match.start():]) and not re.match(
+                r"\s*(?:can|could|will|would|may|do|did|should|shall)\s+you\b", sentence, re.I):
+            return True
+    return False
+
+
+def conversation_memory_turn(previously_paused, user_msg: str) -> dict:
+    """What automatic memory does with this turn, given the conversation's pause flag.
+
+    ``{"withhold": keep nothing from this turn, "paused": the flag after it, "event":
+    "paused" | "resumed" | None, "scope": memory_opt_out_scope(user_msg)}``. ``previously_paused``
+    is None when the flag could not be read: the turn is then withheld and nothing changes."""
+    scope = memory_opt_out_scope(user_msg)
+    if scope == MEMORY_SCOPE_CONVERSATION:
+        return {"withhold": True, "paused": True, "event": "paused", "scope": scope}
+    if previously_paused is None:
+        return {"withhold": True, "paused": None, "event": None, "scope": scope}
+    if previously_paused and memory_resume_requested(user_msg):
+        return {"withhold": scope is not None, "paused": False, "event": "resumed", "scope": scope}
+    if previously_paused:
+        return {"withhold": True, "paused": True, "event": None, "scope": scope}
+    return {"withhold": scope is not None, "paused": False, "event": None, "scope": scope}
+
+
+def _paused_before_fork(user_id, lineage) -> bool | None:
+    """True when an ancestor of a branched conversation was paused before the branch point: the
+    branch continues a stretch the user asked not to be remembered. None when unknown."""
+    from core import memory_gate
+    for entry in list(lineage or [])[1:]:
+        if not isinstance(entry, dict) or not entry.get("conversation_id"):
+            continue
+        try:
+            paused_at = memory_gate.conversation_memory_paused_at(user_id, entry["conversation_id"])
+            if paused_at is None:
+                continue
+            before = entry.get("before")
+            if before is None or paused_at <= datetime.datetime.fromisoformat(
+                    str(before)).timestamp():
+                return True
+        except Exception:
+            return None
+    return False
+
+
+def apply_conversation_memory_turn(user_id, conversation_id, user_msg: str,
+                                   lineage=None) -> dict:
+    """Read this conversation's durable pause flag, apply the user's message to it and store the
+    result (memory_gate ledger, so it survives a restart and is seen by every pool). Called once
+    per turn, when the turn starts; the background memory job is handed the turn's ``withhold``.
+
+    ``lineage`` (``conversation_store.get_branch_lineage``): a branch made after its parent was
+    paused starts paused too."""
+    from core import memory_gate
+    previously = memory_gate.conversation_memory_paused(user_id, conversation_id)
+    if previously is False and lineage:
+        inherited = _paused_before_fork(user_id, lineage)
+        if inherited:
+            memory_gate.set_conversation_memory_paused(user_id, conversation_id, True)
+        previously = None if inherited is None else bool(inherited)
+    turn = conversation_memory_turn(previously, user_msg)
+    if turn["paused"] is not None and turn["paused"] != previously:
+        memory_gate.set_conversation_memory_paused(user_id, conversation_id, turn["paused"])
+    return dict(turn, previously_paused=previously)
 
 
 # The criteria slots a turn can change, with the keys they live under in
@@ -1368,8 +1535,14 @@ class AgentMemory:
     def remember_turn(self, user_msg, assistant_msg, session_id="default",
                       user_id=None, tool_used=None, idempotency_key=None,
                       conversation_id=None, turn_id=None, turn_started_at=None,
-                      context_tainted=False, criteria_changes=None):
+                      context_tainted=False, criteria_changes=None, memory_withheld=None):
         """After-turn entry point (run this in the background — it makes LLM calls).
+
+        ``memory_withheld`` is the turn's conversation-memory decision, taken when the turn
+        started (:func:`apply_conversation_memory_turn`): True keeps nothing from it. The
+        caller that took it also stored the conversation's pause flag; a background job may
+        run after a LATER turn lifted the pause, so this job never re-reads or changes the flag.
+        ``None`` (a direct caller) applies and stores the flag here (r6-M1).
 
         Branch scoping: conversation_id / turn_id / turn_started_at are recorded on
         the auto-EPISODIC turn log only, so retrieve() can restrict a forked
@@ -1397,7 +1570,12 @@ class AgentMemory:
                     {"idempotency_key": idempotency_key}, {"user_id": user_id}]})
                 if existing and existing.get("ids"):
                     return True
-            opted_out = do_not_remember_requested(user_msg)
+            if memory_withheld is None:
+                memory_withheld = apply_conversation_memory_turn(
+                    user_id, conversation_id, user_msg)["withhold"]
+            # A turn in a conversation the user paused memory for is kept like a turn that asked
+            # not to be kept: no content, no extraction, no consolidation, no reflection (r6-M1).
+            opted_out = bool(memory_withheld) or do_not_remember_requested(user_msg)
             # Sensitive categories are redacted BEFORE anything is written or extracted
             # (A-09): the episodic log, the fact extractor and the reflections built on
             # them all see the redacted text only.
@@ -1455,7 +1633,10 @@ class AgentMemory:
                                           user_msg=user_msg)
             finally:
                 self._turn_local.turn_id = None
-            self.maybe_reflect(session_id, user_id)
+            if not opted_out:
+                # A withheld turn triggers no reflection: nothing new is inferred about a user
+                # while they asked not to be remembered (r6-M1).
+                self.maybe_reflect(session_id, user_id)
             return True
         except Exception as e:
             print(f"[memory] remember_turn error_type={type(e).__name__}")
@@ -1516,9 +1697,11 @@ class AgentMemory:
                 and ((metas[i] if i < len(metas) else None) or {}).get("role") == "user")
             # Reflections are built from what the user said and asked, never from earlier
             # reflections: feeding them back escalated "pet-friendliness is a key
-            # requirement" to "a non-negotiable dealbreaker" in two minutes (R2-06).
+            # requirement" to "a non-negotiable dealbreaker" in two minutes (R2-06). A turn the
+            # user asked not to be kept is a placeholder with nothing to reflect on (r6-M1).
             own = [i for i in range(len(docs))
-                   if ((metas[i] if i < len(metas) else None) or {}).get("mtype") != "reflection"]
+                   if ((metas[i] if i < len(metas) else None) or {}).get("mtype") != "reflection"
+                   and not str(docs[i] or "").startswith(_OPTED_OUT_LOG)]
             docs = [docs[i] for i in own]
             metas = [(metas[i] if i < len(metas) else None) or {} for i in own]
             if len(docs) < 4:

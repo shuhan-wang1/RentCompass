@@ -157,3 +157,72 @@ def test_the_extraction_model_call_never_sees_the_sensitive_clauses(stub_env, mo
     _run(user_query="1-bed flat in Camden under £1,800 a month, DSS/Universal Credit accepted",
          current_message=R18_LIVE3, area="Camden", bedrooms=1, max_budget=1800, reply_language="en")
     assert seen == []
+
+
+# ── r6b: get_property_details' fixed labels follow the reply language too ───────────────
+def _details(monkeypatch, tmp_path, language=None, **kwargs):
+    from core.tools import get_property_details as gpd
+    from tests.test_fix_data_property_details import _ROW, _seed_cache
+    _seed_cache(monkeypatch, tmp_path, [_ROW])
+    token = gpd.REPLY_LANGUAGE.set(language)
+    try:
+        found = gpd.get_property_details_impl(property_url=_ROW["URL"], **kwargs)
+        missing = gpd.get_property_details_impl(property_name="Nonexistent Palace Tower", **kwargs)
+    finally:
+        gpd.REPLY_LANGUAGE.reset(token)
+    return found, missing
+
+
+def _cjk(text):
+    import re
+    return re.findall(r"[\u4e00-\u9fff]+", text or "")
+
+
+@pytest.mark.parametrize("language, kwargs", [
+    (None, {}), (None, {"question": "Is it a studio?"}), ("en", {}),
+    ("en", {"question": "是不是studio？"}),      # the turn's reply language wins
+])
+def test_property_details_are_english_unless_the_conversation_is_chinese(
+        monkeypatch, tmp_path, language, kwargs):
+    found, missing = _details(monkeypatch, tmp_path, language, **kwargs)
+    assert found["found"] is True
+    text = found["formatted_details"]
+    assert "📅 **Available from**: 2026-09-01" in text and "💰 **Price**: £2,300 pcm" in text
+    # Only the listing's own text could contain Chinese; none of the tool's labels do.
+    assert _cjk(text) == [] and _cjk(found["message"]) == []
+    assert missing["found"] is False and _cjk(missing["message"]) == []
+
+
+@pytest.mark.parametrize("language, kwargs", [("zh", {}), (None, {"question": "是不是studio？"})])
+def test_property_details_are_chinese_for_a_chinese_conversation(monkeypatch, tmp_path, language, kwargs):
+    found, missing = _details(monkeypatch, tmp_path, language, **kwargs)
+    assert "📅 **可入住日期**: 2026-09-01" in found["formatted_details"]
+    assert found["message"].startswith("找到房产")
+    assert "未找到该房源" in missing["message"]
+
+
+@pytest.mark.parametrize("language", ["en", "zh"])
+def test_fc_loop_runs_the_details_tool_in_the_turns_reply_language(language):
+    from langchain_core.messages import AIMessage
+    from core.agent_loop import build_fc_nodes
+    from core.tools import get_property_details as gpd
+    from tests.test_agent_contract_guards import _state, _tc
+    from tests.test_overnight_null_injection import _ValidatingProvider
+
+    class _Recording(_ValidatingProvider):
+        seen = []
+
+        async def execute_tool(self, name, **params):
+            self.seen.append(gpd.REPLY_LANGUAGE.get())
+            return await super().execute_tool(name, **params)
+
+    provider = _Recording(["get_property_details"])
+    state = _state("Tell me more about Woburn Place")
+    state["extracted_context"]["reply_language"] = language
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc(
+        "get_property_details", {"property_address": "19-29 Woburn Place"}, "c0")])]
+    asyncio.run(build_fc_nodes(provider)["execute_tools"](state))
+    assert provider.seen == [language]
+    (_name, raw), = provider.raw_calls
+    assert not any(str(key).startswith("_reply") for key in raw)   # no injected argument
+    assert gpd.REPLY_LANGUAGE.get() is None                          # reset after the node

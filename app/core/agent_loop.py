@@ -963,6 +963,25 @@ def _ref_matches_focus(ref: str, focus: dict) -> bool:
     return any(ref == ", ".join(segments[:i]) for i in range(2, len(segments) + 1))
 
 
+def _with_reply_language(node):
+    """Run a tool-dispatch node with the turn's reply language in context (r6b).
+
+    get_property_details renders fixed labels the model reads and can echo; they follow
+    the reply language. A context variable, not a tool argument: the specialist boundary
+    refuses every harness-injected argument but ``_deadline_monotonic``, and the tool
+    workers copy the caller's context (``_offload_tool_call``)."""
+    @functools.wraps(node)
+    async def wrapped(state):
+        from core.tools.get_property_details import REPLY_LANGUAGE
+        language = (state.get("extracted_context") or {}).get("reply_language")
+        token = REPLY_LANGUAGE.set(language if language in ("en", "zh") else None)
+        try:
+            return await node(state)
+        finally:
+            REPLY_LANGUAGE.reset(token)
+    return wrapped
+
+
 def _inject_focus_url(params: dict, state: AgentState) -> dict:
     """get_property_details executor re-injection: supply the FOCUSED listing's URL when
     the model referenced that listing (or named none) and passed no URL of its own.
@@ -5821,7 +5840,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
     return {
         "guard": guard_node,
         "agent": agent_node,
-        "execute_tools": execute_tools_node,
+        "execute_tools": _with_reply_language(execute_tools_node),
         "format_output_fc": (format_output_fc_with_contract if specialist_dispatch
                              else format_output_fc_node),
     }

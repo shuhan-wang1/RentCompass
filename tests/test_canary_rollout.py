@@ -231,6 +231,11 @@ def test_fork_inherits_assignment(client, user, monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_arch_mismatch_overwrites_and_warns(client, user, monkeypatch, caplog):
+    # The warning carries a KEYED conversation hash only when the deployment configured a
+    # stable secret (canary_telemetry._hash_key); with none it is null + "unkeyed" by
+    # design. This test used to inherit CANARY_USER_HASH_KEY from other modules that set
+    # it at import time, so it failed when this file ran on its own.
+    monkeypatch.setenv("CANARY_USER_HASH_KEY", "canary-rollout-test-key")
     # Conversation is CREATED while the process serves fc_loop.
     monkeypatch.setattr(appmod, "AGENT_ARCH", "fc_loop")
     monkeypatch.setattr(appmod, "APP_CANDIDATE_SHA", "7db03e7")
@@ -252,7 +257,7 @@ def test_arch_mismatch_overwrites_and_warns(client, user, monkeypatch, caplog):
     assert mm[0]["stored_arch"] == "fc_loop"
     assert mm[0]["serving_arch"] == "legacy"
     assert "conversation_id" not in mm[0]
-    assert mm[0]["conversation_id_hash"]
+    assert len(mm[0]["conversation_id_hash"]) == 32 and mm[0]["conversation_id_hash"] != cid
 
     # Stored assignment overwritten to THIS process's arch so subsequent turns are consistent.
     conv = appmod.conversation_store.get_conversation(user, cid)

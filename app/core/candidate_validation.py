@@ -1248,7 +1248,7 @@ _MONEY_OR_WEATHER_SPAN = re.compile(
     r"(?:\s*(?:pcm|pw|p/?m|/\s*(?:month|week|mo)\b|per\s+(?:month|week)|a\s+(?:month|week)))?|"
     # "search actual listings … within a budget" (r18 eb65e918) is money too.
     r"\b(?:within|under|over|above|below|inside|outside|beyond)\s+(?:your\s+|the\s+|my\s+|a\s+|any\s+)?"
-    r"(?:budget|price\s+range|rent\s+(?:limit|cap|ceiling))\b|"
+    r"(?:budget|price\s+range|ceiling|rent\s+(?:limit|cap|ceiling))\b|"
     r"(?:\b(?:about|around|roughly|over|under|above|below)\s+)?(?<![\d.])-?\d+(?:\.\d+)?\s*"
     r"(?:°\s*[CF]?|℃|degrees?(?:\s+[CF]\b)?)|"
     r"\btemperatures?\s+(?:\w+\s+){0,2}(?:above|below|around|about|over|under)\s+\w+|"
@@ -2780,6 +2780,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
     answer_days = _arithmetic.days_stated(text)         # N-day weeks the answer states
     user_days = set(office_days or ())                   # the user's own office days
     itinerary = _itinerary_bindings(text, bindings + ([default_binding] if default_binding else []))
+    itinerary_routes = [b for b in bindings + ([default_binding] if default_binding else []) if id(b) in itinerary]
     removed = removed if removed is not None else []
     # Every route/area/listing of this turn that carries a figure. A clause attributable to
     # none of them may still quote one of them: "About 14 minutes in the tube" after a
@@ -3102,6 +3103,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                                      # not verified that") — no clean cut exists (R3-01)
         address_tail_open = False    # the last clause was withdrawn and ended at a comma
         withdrawn_this_sentence = False  # a clause of the CURRENT sentence was withdrawn
+        gap_lost = False             # a withdrawn clause took the only blank before the next kept one
 
         line_index = len(produced_at) - 1
         heads_a_list = (not list_item and bool(re.match(r"^\s*(?:\*\*|#{1,4}\s)", line))
@@ -3207,7 +3209,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             # "That is an estimate, not a timetable figure" stands on its own (R2-01 c).
             within = dropped_in_sentence and not crossed_sentence
             if (not drop and dropped_in_sentence and fragment.strip()
-                    and ((_CONTINUATION.match(fragment) and _FIT_WORD.search(fragment)
+                    # a verdict on money ("That is £250 over your ceiling") leans on no journey
+                    and ((_CONTINUATION.match(fragment) and _FIT_WORD.search(_without_money_or_weather(fragment))
                           and not _evidenced(fragment, inherited,
                                              sentence_marked=sentence_marked))
                          or (within and _dependent_commute_aside(fragment)))):
@@ -3227,6 +3230,14 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             if drop:
                 address_tail_open = separator.strip() in {",", "，"}
                 withdrawn_this_sentence = not _SENTENCE_END.search(separator)
+                # The blank that separated this clause from what follows goes with it; the next
+                # kept clause must still be spaced ("£2,250/month.I'm mentioning…", r18 1787af1e).
+                gap_lost = gap_lost or bool(re.search(r"\s", fragment[:1] + separator))
+                if _MINUTE_TOKEN.search(fragment) and any(_named_legs(fragment, route) for route in itinerary_routes):
+                    # A leg of an enumerated itinerary is wrong: what is left ("a short walk, the
+                    # 476 bus.") is no longer the route the planner returned, so the sentence goes
+                    # whole (r17 4f27cfd2, r6-O4: "remove it when the total or leg figure is wrong").
+                    continuation_broken = True
                 removed.append(fragment)
                 if (len(kept) > sentence_start
                         and re.match(r"^\s*(?:so\s+|and\s+|but\s+)?(?:if|when|unless|once|whenever)\b[^.!?]*[,，]\s*$",
@@ -3265,7 +3276,16 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                     continuation_broken = True
                 # "Features: and the listing says ..." - a coordinator left at the front.
                 fragment = _LEADING_COORDINATOR.sub(r"\1", fragment)
+            if crossed_sentence:
+                # The withdrawn clause ended its sentence and this one starts a new sentence that
+                # nothing was withdrawn from: "That is £250 over your ceiling, so it is not within
+                # budget" is not "dependent" on the withdrawn journey a sentence earlier (r18).
+                dropped_in_sentence = False
             crossed_sentence = False
+            if (gap_lost and kept and kept[-1][-1:] and not kept[-1][-1:].isspace()
+                    and fragment[:1] and not fragment[:1].isspace()):
+                fragment = " " + fragment
+            gap_lost = False
             kept.append(fragment + separator)
             if _SENTENCE_END.search(separator):
                 withdrawn_this_sentence = False

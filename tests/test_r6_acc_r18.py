@@ -13,6 +13,7 @@ search offer, and the answer when the model never produced a usable search reque
 """
 import json
 import pathlib
+import re
 
 import pytest
 
@@ -210,3 +211,32 @@ def test_c_a_routes_time_is_not_left_alone_under_a_savings_block(old, new):
 def test_c_the_true_savings_bullets_still_ship():
     for case in (R17["r17_8c35fd5b"], CORPUS["r18_eb65e918"]):
         assert validate_commute_response(case["raw_draft"], case["state"]) == case["raw_draft"]
+
+
+# ── the join after a withdrawn clause keeps its blank (r18 live 5b, rid 1787af1e) ──────
+
+TIMES_SQUARE = ("- **Times Square, London** — 1-bed apartment, £2,250/month, about 18 minutes to Bank by public "
+                "transport (TfL routing). That is £250 over your ceiling, so it is not within budget — I'm mentioning "
+                "it only so you know what the market looks like at this size and commute.")
+
+
+def test_the_recorded_listing_line_keeps_its_budget_sentence_and_spacing():
+    """Shipped: "… £2,250/month.I'm mentioning it only …": the unverified journey clause went,
+    the budget sentence after it went as a "dependent verdict" (its "over your ceiling" is about
+    money), and the " — " that carried the only blank went with it."""
+    case = CORPUS["r18_1787af1e"]
+    assert TIMES_SQUARE in case["raw_draft"]
+    out = validate_commute_response(case["raw_draft"], case["state"])
+    assert ("- **Times Square, London** — 1-bed apartment, £2,250/month. That is £250 over your ceiling, so it "
+            "is not within budget — I'm mentioning it only so you know what the market looks like at this size "
+            "and commute.") in out
+    assert not re.search(r"[a-z0-9)]\.[A-Z]", out.replace("St.", "St"))
+
+
+@pytest.mark.parametrize("middle", ["That journey is 40 minutes — ", "That is 40 minutes to Bank. "])
+def test_a_withdrawn_middle_sentence_leaves_exactly_one_space(middle):
+    case = CORPUS["r18_1787af1e"]
+    text = case["raw_draft"].replace("That is £250 over your ceiling, so it is not within budget — ", middle)
+    out = validate_commute_response(text, case["state"])
+    assert "40 minutes" not in out
+    assert "£2,250/month. I'm mentioning it only so you know" in out

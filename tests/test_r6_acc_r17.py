@@ -187,7 +187,9 @@ def test_a_wrong_route_total_keeps_the_route_name_so_no_bullet_is_orphaned():
 def test_a_wrong_leg_figure_is_removed():
     text, out, flagged = _mutate("r17_8c35fd5b", "Walk 13 min to Bow Road, District",
                                  "Walk 15 min to Bow Road, District")
-    assert "15 min" not in out and "District line 1 min to Mile End" in out
+    # the itinerary with a wrong leg goes whole: a partial leg list is not the planner's route
+    assert "15 min" not in out and "District line 1 min to Mile End" not in out
+    assert "**Bow — 27 minutes each way**" in out
     assert flagged
 
 

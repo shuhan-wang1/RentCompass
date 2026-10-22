@@ -54,9 +54,12 @@ WEEK_PERIOD = re.compile(r"\b(?:a|per|each|every)\s+week\b|\bweekly\b|\bweek\b",
 _UNITS = r"minutes?|mins?|journeys?|trips?|ways?|days?|times|legs?|weeks?|months?"
 _OPERAND = r"(\d+(?:\.\d+)?)\s*(" + _UNITS + r")?\b"
 _OPERAND_NC = r"\d+(?:\.\d+)?\s*(?:" + _UNITS + r")?\b"
+# A bare result is minutes when the period follows it: "38 x 3 = 114 a week" (r19 W3b) was
+# no product at all, so a wrong step on a removed figure shipped unjudged. Money is no operand.
 PRODUCT = re.compile(
-    r"(?<![\d.])" + _OPERAND + r"((?:\s*[×x*]\s*" + _OPERAND_NC + r"){1,3})"
-    r"\s*=\s*[*_]*\s*(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?|hrs?)", re.I)
+    r"(?<![\d.,£$€])" + _OPERAND + r"((?:\s*[×x*]\s*" + _OPERAND_NC + r"){1,3})"
+    r"\s*=\s*[*_]*\s*(\d+(?:\.\d+)?)[ \t]{0,3}(?:(minutes?|mins?|hours?|hrs?)"
+    r"|(?=(?:a|per|each|every)[ \t]{1,3}(?:day|week|month|year)\b))", re.I)
 _PRODUCT_TERM = re.compile(r"[×x*]\s*" + _OPERAND, re.I)
 _COUNT_UNITS = ("journey", "trip", "way", "time", "leg")
 
@@ -166,7 +169,7 @@ def products(text: Any) -> list[dict]:
         operands = [(float(match.group(1)), (match.group(2) or "").lower())]
         operands += [(float(term.group(1)), (term.group(2) or "").lower())
                      for term in _PRODUCT_TERM.finditer(match.group(3))]
-        result = float(match.group(4)) * (60.0 if match.group(5).lower().startswith("h") else 1.0)
+        result = float(match.group(4)) * (60.0 if (match.group(5) or "").lower().startswith("h") else 1.0)
         found.append({"operands": operands, "result": result, "span": match.span()})
     return found
 

@@ -475,8 +475,15 @@ def unsupported_reply_prices(response: str, evidence: Any) -> list[float]:
 
     answer = response or ""
     arithmetic = _evidenced_arithmetic(answer, evidence_money, supported)
+    # The stated result of a journey product is minutes, not a weekly rent: "16 × 3 = 48 a
+    # week" (r19). Money is never a product operand there ("£50 x 4" is not one).
+    from uk_rent_agent.agent.commute_arithmetic import products as _journey_products
+    journey_results = [p["span"] for p in _journey_products(answer)]
     unsupported: list[float] = []
-    for value, _unit in _money_mentions(answer):
+    for value, _unit, start, _end in _money_mention_spans(answer):
+        if (any(s0 <= start < s1 for s0, s1 in journey_results)
+                and not _CURRENCY_BEFORE.search(answer[max(0, start - 8):start])):
+            continue
         if _close_to_any(value, supported) or round(value, 2) in arithmetic:
             continue
         if exempt_bounds_and_intervals and not _asserts_price(answer, value):

@@ -2510,7 +2510,7 @@ def _arithmetic_evidenced(fragment: str, *, context: str, previous_clause: str, 
         return False
     text = str(fragment or "")
     if not (_arithmetic.MINUTES.search(text) or _HOURS_AND_MINUTES.search(text)
-            or _arithmetic.JOURNEY_COUNT.search(text)
+            or _arithmetic.JOURNEY_COUNT.search(text) or _arithmetic.products(text)
             or any(phrase in text.lower() for phrase, _v in _arithmetic.DURATION_WORDS)):
         return False
     label = line[:80].split(":", 1)[0] if ":" in line[:80] else ""
@@ -3104,6 +3104,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
         address_tail_open = False    # the last clause was withdrawn and ended at a comma
         withdrawn_this_sentence = False  # a clause of the CURRENT sentence was withdrawn
         gap_lost = False             # a withdrawn clause took the only blank before the next kept one
+        withdrawn_values: set = set()  # the figures this line's withdrawn clauses stated
 
         line_index = len(produced_at) - 1
         heads_a_list = (not list_item and bool(re.match(r"^\s*(?:\*\*|#{1,4}\s)", line))
@@ -3186,6 +3187,9 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             period_claim = bool(figure_context and _period_total(claim) and not monetary_or_independent)
             if _MINUTE_TOKEN.search(fragment):
                 figure_context = True
+            # "…, 38 x 3 = 114 a week" after the line's journey figures is journey arithmetic too.
+            period_claim = period_claim or bool(figure_context and _arithmetic.products(claim)
+                                                and not monetary_or_independent)
             asserts = period_claim or (_asserts_commute(claim) or
                        (commute_context and not _COMMUTE_WORD.search(claim)
                         and (_FIT_WORD.search(_without_money_or_weather(claim))
@@ -3222,6 +3226,12 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 drop = True
             if not drop and withdrawn_this_sentence and _SO_TOTAL_AFTER_DROP.match(fragment):
                 drop = True
+            if not drop and withdrawn_values and any(
+                    any(abs(value - gone) < 1e-9 for value, _unit in product["operands"] for gone in withdrawn_values)
+                    for product in _arithmetic.products(claim)):
+                # A step on a withdrawn figure goes with it: "19 minutes each way, so 38 minutes a
+                # day, 38 x 3 = 114 a week" shipped "- Per day: 38 x 3 = 114 a week" (r19 W3b).
+                drop = True
             if (not drop and address_tail_open and _ADDRESS_TAIL.fullmatch(fragment)):
                 # "35 min to Canary Wharf, London E14 5AB": the comma split the destination,
                 # and the withdrawn clause left "Commute: London E14 5AB." (r07 97b3d456).
@@ -3233,6 +3243,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 # The blank that separated this clause from what follows goes with it; the next
                 # kept clause must still be spaced ("£2,250/month.I'm mentioning…", r18 1787af1e).
                 gap_lost = gap_lost or bool(re.search(r"\s", fragment[:1] + separator))
+                withdrawn_values.update(_minute_claim_values(fragment))
+                withdrawn_values.update(p["result"] for p in _arithmetic.products(fragment))
                 if _MINUTE_TOKEN.search(fragment) and any(_named_legs(fragment, route) for route in itinerary_routes):
                     # A leg of an enumerated itinerary is wrong: what is left ("a short walk, the
                     # 476 bus.") is no longer the route the planner returned, so the sentence goes

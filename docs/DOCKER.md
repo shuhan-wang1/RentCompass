@@ -53,6 +53,8 @@ checks required state and reports optional SearXNG/RAG loss as degraded.
 - The `web_search` tool reads `SEARXNG_URL` (see `app/core/web_search.py`).
   Compose sets it to `http://searxng:8080`; on the host it defaults to
   `http://localhost:8080`, so the same code works both ways.
+  - `SEARXNG_PROBE_INTERVAL_S` (default `5`, in `app/.env`): while SearXNG is cooling down after a failure, a user's own `web_search` may probe it at most once per this many seconds.
+  - `SEARXNG_PROBE_DEADLINE_S` (default `8`, in `app/.env`): the deadline, in seconds, of that single no-retry probe request.
 - `searxng/settings.yml` enables the **JSON API** (`search.formats: [html, json]`)
   and disables the request `limiter` — both required for a server-to-server caller.
   A default SearXNG install serves HTML only and returns `403` for `format=json`.

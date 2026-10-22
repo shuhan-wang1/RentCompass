@@ -46,7 +46,8 @@ HOURS_AND_MINUTES = re.compile(
 MINUTES = re.compile(r"(?<![\d.])(\d+(?:\.\d+)?)[\s\-–]*(?:minutes?|mins?\b|分钟)", re.I)
 HEDGE = re.compile(r"\b(?:roughly|about|around|approximately|approx\.?|nearly|almost|"
                    r"just\s+(?:over|under)|some|close\s+to)\b|~|≈", re.I)
-DAY_PERIOD = re.compile(r"\b(?:a|per|each|every)\s+day\b|\bdaily\b|\breturn\s+trips?\b|\bround\s+trips?\b|"
+# "Per office day: 11 minutes each way" (r18 eb65e918) is a day too, as ``_UNIT_PHRASES`` reads it.
+DAY_PERIOD = re.compile(r"\b(?:a|per|each|every)\s+(?:working\s+|office\s+|commuting\s+)?day\b|\bdaily\b|\breturn\s+trips?\b|\bround\s+trips?\b|"
                         r"\bthere\s+and\s+back\b|\btwo\s+journeys\b|\b2\s+journeys\b", re.I)
 WEEK_PERIOD = re.compile(r"\b(?:a|per|each|every)\s+week\b|\bweekly\b|\bweek\b", re.I)
 # A product: "12 minutes × 2 journeys × 5 days = **120 minutes (2 hours) a week**".

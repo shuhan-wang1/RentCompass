@@ -1246,7 +1246,8 @@ _MONEY_OR_WEATHER_SPAN = re.compile(
     r"(?:\b(?:under|within|below|over|above|about|around|roughly|up\s+to|at\s+most|less\s+than|"
     r"more\s+than|no\s+more\s+than)\s+)?(?:£|\$|€)\s*\d[\d,.]*\s*k?"
     r"(?:\s*(?:pcm|pw|p/?m|/\s*(?:month|week|mo)\b|per\s+(?:month|week)|a\s+(?:month|week)))?|"
-    r"\b(?:within|under|over|above|below|inside|outside|beyond)\s+(?:your\s+|the\s+|my\s+)?"
+    # "search actual listings … within a budget" (r18 eb65e918) is money too.
+    r"\b(?:within|under|over|above|below|inside|outside|beyond)\s+(?:your\s+|the\s+|my\s+|a\s+|any\s+)?"
     r"(?:budget|price\s+range|rent\s+(?:limit|cap|ceiling))\b|"
     r"(?:\b(?:about|around|roughly|over|under|above|below)\s+)?(?<![\d.])-?\d+(?:\.\d+)?\s*"
     r"(?:°\s*[CF]?|℃|degrees?(?:\s+[CF]\b)?)|"
@@ -3040,6 +3041,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
         continuation_broken = False  # a kept clause leans on a withdrawn one ("…, but I have
                                      # not verified that") — no clean cut exists (R3-01)
         address_tail_open = False    # the last clause was withdrawn and ended at a comma
+        withdrawn_this_sentence = False  # a clause of the CURRENT sentence was withdrawn
 
         line_index = len(produced_at) - 1
         heads_a_list = (not list_item and bool(re.match(r"^\s*(?:\*\*|#{1,4}\s)", line))
@@ -3155,6 +3157,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 # "Cheapest route: with the same line pattern." / "Cons - the longest of the
                 # three.": what is left of a sentence whose figure went cannot stand (R1-10).
                 drop = True
+            if not drop and withdrawn_this_sentence and _SO_TOTAL_AFTER_DROP.match(fragment):
+                drop = True
             if (not drop and address_tail_open and _ADDRESS_TAIL.fullmatch(fragment)):
                 # "35 min to Canary Wharf, London E14 5AB": the comma split the destination,
                 # and the withdrawn clause left "Commute: London E14 5AB." (r07 97b3d456).
@@ -3162,6 +3166,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             address_tail_open = False
             if drop:
                 address_tail_open = separator.strip() in {",", "，"}
+                withdrawn_this_sentence = not _SENTENCE_END.search(separator)
                 removed.append(fragment)
                 if (len(kept) > sentence_start
                         and re.match(r"^\s*(?:so\s+|and\s+|but\s+)?(?:if|when|unless|once|whenever)\b[^.!?]*[,，]\s*$",
@@ -3203,6 +3208,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             crossed_sentence = False
             kept.append(fragment + separator)
             if _SENTENCE_END.search(separator):
+                withdrawn_this_sentence = False
                 dropped_in_sentence = False
                 commute_context = False
                 _close_sentence()
@@ -3441,6 +3447,9 @@ _DANGLING_AFTER_DROP = re.compile(
     r"|(?:the\s+)?(?:longest|shortest|fastest|slowest|quickest|longer|shorter|faster|slower|quicker)\b"
     r"|(?:是|为)?(?:最长|最短|最快|最慢|较长|较短)(?:的)?(?:通勤)?\s*$)", re.I)
 _LEADING_COORDINATOR = re.compile(r"^(\s*)(?:and|but|or|plus|also)\s+(?=\S)", re.I)
+# "<withdrawn base>, so 22 minutes of travel per day" is a total OF the withdrawn figure and
+# cannot stand without it (r18 eb65e918). Only within the withdrawn clause's own sentence.
+_SO_TOTAL_AFTER_DROP = re.compile(r"^\s*so\b(?=[^.!?]{0,120}\d)", re.I)
 
 
 def _quotes_source_text(fragment: str, source_texts: list[str] | None) -> bool:

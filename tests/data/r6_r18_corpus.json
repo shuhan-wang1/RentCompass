@@ -1,0 +1,260 @@
+{
+ "r18_c14fe21d": {
+  "checkpoint": "1f1cdd44-ad5b-61de-8006-a4b17997c461",
+  "critic_text": null,
+  "message": "I've changed jobs, I work at Bank now. Find me a 1-bed within 30 minutes of work under £2,000.",
+  "raw_draft": null,
+  "request_id": "c14fe21d0b66401786f5763a0e133776",
+  "shipped": "I couldn't run one of the lookups this turn (its request was malformed).\nThe lookup failed this turn, so I could not check what you asked.\nYou can ask me to try again.",
+  "state": {
+   "accumulated_search_criteria": {
+    "amenities_of_interest": [],
+    "bedrooms": 1,
+    "bedrooms_minimum": false,
+    "budget_period": "month",
+    "commute_destination": "Bank",
+    "constraint_sources": {
+     "bedrooms": {
+      "source": "user_message",
+      "text": "I've changed jobs, I work at Bank now. Find me a 1-bed within 30 minutes of work under £2,000.",
+      "value": 1
+     },
+     "bedrooms_minimum": {
+      "source": "user_message",
+      "text": "I've changed jobs, I work at Bank now. Find me a 1-bed within 30 minutes of work under £2,000.",
+      "value": false
+     },
+     "budget_period": {
+      "source": "user_message",
+      "text": "I've changed jobs, I work at Bank now. Find me a 1-bed within 30 minutes of work under £2,000.",
+      "value": "month"
+     },
+     "commute_destination": {
+      "source": "user_message",
+      "text": "I've changed jobs, I work at Bank now. Find me a 1-bed within 30 minutes of work under £2,000.",
+      "value": "Bank"
+     },
+     "destination": {
+      "source": "user_message",
+      "text": "I've changed jobs, I work at Bank now. Find me a 1-bed within 30 minutes of work under £2,000.",
+      "value": "Bank"
+     },
+     "max_budget": {
+      "source": "user_message",
+      "text": "I've changed jobs, I work at Bank now. Find me a 1-bed within 30 minutes of work under £2,000.",
+      "value": 2000
+     },
+     "max_travel_time": {
+      "source": "user_message",
+      "text": "I've changed jobs, I work at Bank now. Find me a 1-bed within 30 minutes of work under £2,000.",
+      "value": 30
+     },
+     "no_commute": {
+      "source": "user_message",
+      "text": "I've changed jobs, I work at Bank now. Find me a 1-bed within 30 minutes of work under £2,000.",
+      "value": false
+     },
+     "room_type": {
+      "source": "user_message",
+      "text": "I've changed jobs, I work at Bank now. Find me a 1-bed within 30 minutes of work under £2,000.",
+      "value": "whole"
+     }
+    },
+    "destination": "Bank",
+    "max_budget": 2000,
+    "max_travel_time": 30,
+    "no_commute": false,
+    "property_features": [],
+    "room_type": "whole",
+    "soft_preferences": []
+   },
+   "candidate_validation": {},
+   "extracted_context": {
+    "current_date": "2026-10-22",
+    "current_message": "I've changed jobs, I work at Bank now. Find me a 1-bed within 30 minutes of work under £2,000.",
+    "history": [],
+    "memory_paused": false,
+    "reply_language": "en"
+   },
+   "memory_context": "",
+   "observations": [],
+   "tool_artifacts": [],
+   "tool_decision": {},
+   "user_preferences": {
+    "excluded_areas": [],
+    "hard_preferences": [],
+    "required_amenities": [],
+    "safety_concerns": [],
+    "soft_preferences": []
+   },
+   "user_query": "I've changed jobs, I work at Bank now. Find me a 1-bed within 30 minutes of work under £2,000."
+  }
+ },
+ "r18_eb65e918": {
+  "checkpoint": "1f1cdd3f-b426-6312-8007-209d6bcc20cf",
+  "critic_text": null,
+  "message": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a week and a month would the faster one save me?",
+  "raw_draft": "**Stratford vs Bow — commute to Liverpool Street (3 office days a week)**\n\n| | Stratford | Bow |\n|---|---|---|\n| Commute to Liverpool Street | 18 min | 29 min |\n| Median rent (cached listings) | £2,395/month | £2,350/month |\n\n**Time saved by the faster one (Stratford)**\n\n- Per office day: 11 minutes each way, so 22 minutes of travel per day\n- Per week (3 office days): about 66 minutes, roughly 1 hour 6 minutes\n- Per month (3 days × 52 weeks ÷ 12 ≈ 13 office days): about 286 minutes, roughly 4 hours 45 minutes\n\nSo Stratford saves you close to 5 hours of commuting a month compared with Bow, for a median rent that is only about £45 a month higher.\n\n**A few caveats worth knowing**\n\n- These are area-level commute times measured from each area's reference point, not from a specific flat. An individual home can be noticeably better or worse depending on how far it is from the station.\n- The rent figures are medians across mixed cached listings (45 for Stratford, 30 for Bow), not filtered by room type or bedroom count, and they are cache snapshots rather than live asking prices. Stratford's cache is about 80 days old, Bow's about 89.\n- Sources: OnTheMarket listing cache for rents, and commute routing for the journey times.\n\nIf you'd like, I can search actual listings in Stratford or Bow within a budget and check the door-to-door commute for specific flats.",
+  "request_id": "eb65e91883f1404c8dc2d8bdaa94a8e9",
+  "shipped": "**Stratford vs Bow — commute to Liverpool Street (3 office days a week)**\n\n| | Stratford | Bow |\n|---|---|---|\n| Commute to Liverpool Street | 18 min | 29 min |\n| Median rent (cached listings) | £2,395/month | £2,350/month |\n\n**Time saved by the faster one (Stratford)**\n\n- Per office day: so 22 minutes of travel per day\n- Per week (3 office days): about 66 minutes, roughly 1 hour 6 minutes\n- Per month (3 days × 52 weeks ÷ 12 ≈ 13 office days): about 286 minutes, roughly 4 hours 45 minutes\n\nSo Stratford saves you close to 5 hours of commuting a month compared with Bow, for a median rent that is only about £45 a month higher.\n\n**A few caveats worth knowing**\n\n- These are area-level commute times measured from each area's reference point, not from a specific flat. An individual home can be noticeably better or worse depending on how far it is from the station.\n- The rent figures are medians across mixed cached listings (45 for Stratford, 30 for Bow), not filtered by room type or bedroom count, and they are cache snapshots rather than live asking prices. Stratford's cache is about 80 days old, Bow's about 89.\n- Sources: OnTheMarket listing cache for rents, and commute routing for the journey times.\n\nNote: some commute claims could not be verified and have been removed from this answer.",
+  "state": {
+   "accumulated_search_criteria": {
+    "amenities_of_interest": [],
+    "commute_destination": "Liverpool Street",
+    "constraint_sources": {
+     "commute_destination": {
+      "source": "user_message",
+      "text": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a week and a month would the faster one save me?",
+      "value": "Liverpool Street"
+     },
+     "destination": {
+      "source": "user_message",
+      "text": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a week and a month would the faster one save me?",
+      "value": "Liverpool Street"
+     },
+     "no_commute": {
+      "source": "user_message",
+      "text": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a week and a month would the faster one save me?",
+      "value": false
+     },
+     "office_days_per_week": {
+      "source": "user_message",
+      "text": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a week and a month would the faster one save me?",
+      "value": 3
+     }
+    },
+    "destination": "Liverpool Street",
+    "max_budget": null,
+    "max_travel_time": null,
+    "no_commute": false,
+    "office_days_per_week": 3,
+    "property_features": [],
+    "soft_preferences": []
+   },
+   "candidate_validation": {},
+   "extracted_context": {
+    "current_date": "2026-10-22",
+    "current_message": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a week and a month would the faster one save me?",
+    "history": [],
+    "memory_paused": false,
+    "reply_language": "en"
+   },
+   "memory_context": "",
+   "observations": [],
+   "tool_artifacts": [
+    {
+     "elapsed_ms": 5654,
+     "error": null,
+     "params_digest": "70cdd3d86f266c69",
+     "raw_data": {
+      "areas": [
+       {
+        "budget_match_rate": null,
+        "commute_minutes": 18,
+        "name": "Stratford",
+        "no_data": false,
+        "rank": 1,
+        "rent": {
+         "freshness_days": 80,
+         "low_sample": false,
+         "max": 4350.0,
+         "median": 2395.0,
+         "min": 875.0,
+         "sample_size": 45
+        },
+        "score": {
+         "components": {
+          "commute": 100.0,
+          "value": 90.6
+         },
+         "partial": false,
+         "total": 96.9,
+         "weights": {
+          "commute": 0.6667,
+          "value": 0.3333
+         }
+        },
+        "slug": "stratford-london",
+        "sources": [
+         "OnTheMarket listing cache",
+         "commute routing"
+        ]
+       },
+       {
+        "budget_match_rate": null,
+        "commute_minutes": 29,
+        "name": "Bow",
+        "no_data": false,
+        "rank": 2,
+        "rent": {
+         "freshness_days": 89,
+         "low_sample": false,
+         "max": 4050.0,
+         "median": 2350.0,
+         "min": 1650.0,
+         "sample_size": 30
+        },
+        "score": {
+         "components": {
+          "commute": 63.3,
+          "value": 100.0
+         },
+         "partial": false,
+         "total": 75.5,
+         "weights": {
+          "commute": 0.6667,
+          "value": 0.3333
+         }
+        },
+        "slug": "bow",
+        "sources": [
+         "OnTheMarket listing cache",
+         "commute routing"
+        ]
+       }
+      ],
+      "evidence_scope": {
+       "bedrooms_filtered": false,
+       "budget_match_basis": "rent_only",
+       "commute_scope": "area_reference_point",
+       "freshness_basis": "cache_fetch_time",
+       "live_verified": false,
+       "rent_sample": "mixed_cached_listings",
+       "room_type_filtered": false
+      },
+      "explanation_notes": [
+       "Composite score = weighted sum of 0-100 components (value = lower median rent, adjusted by how many cached listings fall under budget; commute = shorter time). Weights come from the ranking priorities (as passed to the tool) and sum to 1: commute=0.6667, value=0.3333. The best area on a component scores 100; gaps are measured against at least a 30-minute commute spread and a rent spread of 20% of the dearest median, so small differences stay small.",
+       "Rent statistics cover mixed cached listings without room-type or bedroom filtering. Budget match measures rent only. Freshness is the cache age, not verification of current price or availability. Area commute times do not verify individual homes.",
+       "Ranked order (present the areas in this order; #1 is the top recommendation): #1 Stratford, #2 Bow."
+      ],
+      "not_evaluated": [],
+      "priorities": [
+       "commute",
+       "value"
+      ],
+      "priorities_note": "Do not describe these priorities as the user's own unless the user stated them in this conversation.",
+      "priorities_source": "caller_supplied",
+      "status": "ok",
+      "success": true,
+      "weights": {
+       "commute": 0.6667,
+       "value": 0.3333
+      }
+     },
+     "success": true,
+     "tool": "compare_or_rank_areas",
+     "turn": 1
+    }
+   ],
+   "tool_decision": {},
+   "user_preferences": {
+    "excluded_areas": [],
+    "hard_preferences": [],
+    "required_amenities": [],
+    "safety_concerns": [],
+    "soft_preferences": []
+   },
+   "user_query": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a week and a month would the faster one save me?"
+  }
+ }
+}

@@ -562,7 +562,8 @@ def build_context_sections(*, accumulated_criteria: Optional[Dict[str, Any]] = N
                            focus_stack: Optional[List[Dict[str, Any]]] = None,
                            last_results: Optional[List[Dict[str, Any]]] = None,
                            recommendations_index: Optional[List[Dict[str, Any]]] = None,
-                           discussed_areas: Optional[List[str]] = None
+                           discussed_areas: Optional[List[str]] = None,
+                           shown_alternatives: Optional[List[Dict[str, Any]]] = None,
                            ) -> str:
     """Concatenate the non-memory context sections in the §2.7 order, omitting every
     empty section. Returns '' when all sections are empty. ``discussed_areas`` (the
@@ -594,6 +595,9 @@ def build_context_sections(*, accumulated_criteria: Optional[Dict[str, Any]] = N
         render_last_results(last_results),
         render_recommendations_index(recommendations_index),
     ]
+    if shown_alternatives:
+        from core.context_assembler import render_shown_alternatives  # lazy
+        sections.append(render_shown_alternatives(shown_alternatives))
     return "\n\n".join(s for s in sections if s)
 
 

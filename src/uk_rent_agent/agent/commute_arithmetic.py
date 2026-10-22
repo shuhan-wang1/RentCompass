@@ -40,10 +40,12 @@ DURATION_WORDS = (
     ("a half hour", 30.0), ("a quarter of an hour", 15.0), ("quarter of an hour", 15.0),
     ("two hours", 120.0), ("an hour", 60.0), ("one hour", 60.0),
 )
+# "about 3.5 extra hours a month" (r20 f510d8f3) is a figure too: it escaped every check.
+_MORE = r"(?:(?:extra|more|additional|fewer|less)[ \t]+)?"
 HOURS_AND_MINUTES = re.compile(
-    r"(?<![\d.])(\d{1,2}(?:\.\d)?)\s*(?:hours?|hrs?|h)\b(?:\s*(?:and\s+)?(\d{1,2})\s*(?:minutes?|mins?)\b)?",
+    r"(?<![\d.])(\d{1,2}(?:\.\d)?)\s*" + _MORE + r"(?:hours?|hrs?|h)\b(?:\s*(?:and\s+)?(\d{1,2})\s*(?:minutes?|mins?)\b)?",
     re.I)
-MINUTES = re.compile(r"(?<![\d.])(\d+(?:\.\d+)?)[\s\-–]*(?:minutes?|mins?\b|分钟)", re.I)
+MINUTES = re.compile(r"(?<![\d.])(\d+(?:\.\d+)?)[\s\-–]*" + _MORE + r"(?:minutes?|mins?\b|分钟)", re.I)
 HEDGE = re.compile(r"\b(?:roughly|about|around|approximately|approx\.?|nearly|almost|"
                    r"just\s+(?:over|under)|some|close\s+to)\b|~|≈", re.I)
 # "Per office day: 11 minutes each way" (r18 eb65e918) is a day too, as ``_UNIT_PHRASES`` reads it.
@@ -369,12 +371,21 @@ def route_named_as_subject(text: str, start: int, end: int, routes: list) -> dic
     return best
 
 
-def named_routes(evidence: Any, *, _depth: int = 0) -> list[dict]:
-    """``[{labels, minutes}]`` for each named whole-trip measurement in tool evidence."""
+def named_routes(evidence: Any, *, _depth: int = 0, _inherited: tuple = ()) -> list[dict]:
+    """``[{labels, minutes}]`` for each named whole-trip measurement in tool evidence.
+
+    A measurement nested under its request keeps the request's place: calculate_commute_cost
+    returns ``{"from_address": "Stratford, London", "commute": {"duration_minutes": 20}}``, and
+    the nameless 20 left the critic unable to bind "Stratford … 20 minutes" (r20 f510d8f3), while
+    the redactor's bindings read the same nesting."""
     found: list[dict] = []
     if _depth > 8 or evidence is None:
         return found
     if isinstance(evidence, dict):
+        own_labels = [str(evidence[k]) for k in ("name", "area", "address", "from_address", "label")
+                      if isinstance(evidence.get(k), str) and evidence[k].strip()]
+        own_labels += [label.split(",", 1)[0].strip() for label in own_labels if "," in label]
+        inherited = tuple(own_labels) or _inherited
         minutes = None
         for key in ("commute_minutes", "duration_minutes", "verified_commute_minutes"):
             value = evidence.get(key)
@@ -385,13 +396,11 @@ def named_routes(evidence: Any, *, _depth: int = 0) -> list[dict]:
             match = re.match(r"\s*(\d{1,3})\s*min", evidence["travel_time"])
             minutes = float(match.group(1)) if match else None
         if minutes is not None:
-            labels = [str(evidence[k]) for k in ("name", "area", "address", "from_address", "label")
-                      if isinstance(evidence.get(k), str) and evidence[k].strip()]
-            labels += [label.split(",", 1)[0].strip() for label in labels if "," in label]
-            found.append({"labels": labels, "minutes": minutes, "mode": route_mode(evidence.get("mode"))})
+            found.append({"labels": list(inherited), "minutes": minutes, "mode": route_mode(evidence.get("mode"))})
         for key, value in evidence.items():
             if key not in ("route_legs", "legs", "steps") and isinstance(value, (dict, list, tuple)):
-                found.extend(named_routes(value, _depth=_depth + 1))
+                found.extend(named_routes(value, _depth=_depth + 1,
+                                          _inherited=inherited if isinstance(value, dict) else ()))
     elif isinstance(evidence, (list, tuple)):
         for item in evidence[:200]:
             found.extend(named_routes(item, _depth=_depth + 1))
@@ -442,6 +451,8 @@ def _bases_uncached(text: str, measured: list, days: set) -> tuple[set, bool]:
     return valid, wrong
 
 
+_SIDE_BY_SIDE = re.compile(r"\b(?:versus|vs\.?|compared\s+(?:with|to)|against)\b", re.I)
+_EACH_WAY_AFTER = re.compile(r"\s*(?:each|one)[\s-]way\b|\s*per\s+(?:trip|journey|direction)\b", re.I)
 _EACH_WAY_ONLY = re.compile(r"(?:minutes?|mins?)\s+(?:each\s+way|one\s+way|per\s+(?:trip|journey))$", re.I)
 
 
@@ -457,8 +468,13 @@ def _own_time_each_way(text: str, match, measured: Iterable[float]) -> bool:
         return False
     before = text[max(0, match.start() - 120):match.start()]
     lead = before[max([m.end() for m in _CLAUSE_BREAK.finditer(before)], default=0):]
-    return not (COMPARISON_CUE.search(lead) or re.match(r"\s*(?:slower|faster|quicker|shorter|longer|less|more|"
-                                                        r"extra|saved|saving)\b", text[match.end():], re.I))
+    if re.match(r"\s*(?:slower|faster|quicker|shorter|longer|less|more|extra|saved|saving)\b",
+                text[match.end():], re.I):
+        return False
+    # "20 minutes versus 28 minutes each way" sets two routes' own times side by side; only a
+    # cue other than versus/vs/compared/against ("saves", "faster by") makes it a difference
+    # (r20 f510d8f3: the critic read the 28 as a wrong base and footed a correct answer).
+    return not COMPARISON_CUE.search(_SIDE_BY_SIDE.sub(" ", lead))
 
 
 def _route_after(text: str, start: int, routes: list) -> dict | None:
@@ -890,6 +906,22 @@ def figure_spans(text: str) -> list:
     return sorted(spans)
 
 
+def _period_owned_elsewhere(sentence: str, unit: str, value: float) -> bool:
+    """Every phrase of ``unit`` in ``sentence`` follows ANOTHER figure in its own clause ("about
+    3.5 hours a month", "3.5 hours less commuting per month"), so none is this figure's."""
+    pattern = dict(_UNIT_PHRASES).get(unit)
+    phrases = list(pattern.finditer(sentence)) if pattern else []
+    if not phrases:
+        return False
+    spans = figure_spans(sentence)
+    for phrase in phrases:
+        owners = [v for _s, e, v in spans if e <= phrase.start() and phrase.start() - e <= 30
+                  and not re.search(r"[\d,;:—–()]", sentence[e:phrase.start()])]
+        if not owners or any(abs(v - value) < 1e-9 for v in owners):
+            return False
+    return True
+
+
 def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", context: str = "",
                   routes: list, days: Iterable[float], subject: dict | None = None,
                   known: Iterable[float] = (), skip_bounds: bool = False,
@@ -904,7 +936,9 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
     the line, or any other figure fails it."""
     routes = [r for r in routes if r.get("minutes") is not None]
     measured = sorted({float(r["minutes"]) for r in routes})
-    if len(measured) < 2:
+    # One measured route still has a margin against the user's own limit ("roughly 12 minutes
+    # of headroom against your 30-minute cap", r18 1787af1e); nothing else derives from it.
+    if not measured or (len(measured) < 2 and not any(c for c in caps)):
         return False, False
     answer_days = {float(d) for d in days if d}
     user_days = {float(d) for d in user_days if d}
@@ -1008,7 +1042,8 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
             # when over), exact or hedged, and NEVER another pair or an evidence coincidence:
             # "about 9 minutes to spare" (Bow - Stratford) under a 25 cap with Stratford at 20.
             seen = True
-            owner = _route_before(rest, start, routes) or subject or _first_route(sentence, routes)
+            owner = (_route_before(rest, start, routes) or subject or _first_route(sentence, routes)
+                     or (routes[0] if len(measured) == 1 else None))   # the turn's only route
             if owner is None or not caps:
                 return False, True
             margins = [cap - owner["minutes"] if side == "under" else owner["minutes"] - cap for cap in caps]
@@ -1038,6 +1073,17 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
         # A total is checked for the period it names, over the right number of days; the any-
         # pair fallback takes a hedged figure only EXACTLY.
         unit = figure_unit(rest, start, end, sentence) if period else None
+        if unit is not None and (
+                _EACH_WAY_AFTER.match(rest[end:end + 24])
+                or re.match(r"\s*" + _SIDE_BY_SIDE.pattern, rest[end:end + 24], re.I)
+                or re.search(_SIDE_BY_SIDE.pattern + r"\s*$", rest[max(0, start - 24):start], re.I)):
+            # "8 minutes each way, about 3.5 hours a month" / "20 minutes versus 28 minutes each
+            # way, … 3.5 hours … per month": a one-way figure or a route time set side by side
+            # takes no period from LATER in its sentence; the month belongs to the later figure
+            # (r20 f510d8f3). A period no other figure owns ("- Per day: 8 minutes each way")
+            # still holds.
+            if figure_unit(rest, start, end, "") is None and _period_owned_elsewhere(sentence or rest, unit, value):
+                unit = None
         if unit in ("month", "year"):
             # A monthly total is the weekly one x 52/12 (x 4 framed as four weeks); a yearly one
             # x 52 or the month x 12, to the precision written ("about 3.5 hours", r17 8c35fd5b).

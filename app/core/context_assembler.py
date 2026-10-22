@@ -113,6 +113,8 @@ def build_turn_snapshot(*, turn_id: Any, persistent_state: Dict[str, Any],
 
     if isinstance(ec.get("search_retrieval"), dict):
         snapshot["search_retrieval"] = deepcopy(ec["search_retrieval"])
+    if isinstance(ec.get("shown_alternatives"), list) and ec["shown_alternatives"]:
+        snapshot["shown_alternatives"] = deepcopy(ec["shown_alternatives"])
     return snapshot
 
 
@@ -167,12 +169,98 @@ def snapshot_to_session_patch(snapshot: Any) -> Dict[str, Any]:
 
     if isinstance(snapshot.get("search_retrieval"), dict):
         patch["search_retrieval"] = deepcopy(snapshot["search_retrieval"])
+    if isinstance(snapshot.get("shown_alternatives"), list):
+        patch["shown_alternatives"] = [deepcopy(r) for r in snapshot["shown_alternatives"]
+                                       if isinstance(r, dict)]
     return patch
 
 
 # ---------------------------------------------------------------------------
 # Recommended-listings index (accumulated registry -> compact prompt block)
 # ---------------------------------------------------------------------------
+
+# Alternatives a search SHOWED (over budget / similar) but that are not matches. r20 1419b01e:
+# Arbutus Street (£2,200, over a £2,000 budget) was listed to the user, yet the server kept
+# only the one match, so "Tell me more about Arbutus Street" found no record and the price
+# could not be grounded. They are kept apart from the matches: never recommendations, never
+# in the panel's results, never criteria.
+_ALTERNATIVE_FIELDS = ("address", "provider_address", "price", "url", "area", "bedrooms",
+                       "room_type", "property_type", "match_type", "budget_status",
+                       "available_from", "geo_location", "travel_time")
+_MAX_SHOWN_ALTERNATIVES = 20
+
+
+def shown_alternative_rows(tool_data: Any, recommendations: Any = None) -> List[Dict[str, Any]]:
+    """The over-budget / similar alternatives a search result showed, as compact rows
+    marked ``alternative``; [] when there are none."""
+    data = tool_data if isinstance(tool_data, dict) else {}
+
+    def key(row):
+        return (str(row.get("url") or "").rstrip("/").lower()
+                or f"{str(row.get('address') or '').strip().lower()}|{row.get('price')}")
+
+    matches = {key(r) for r in (recommendations or []) if isinstance(r, dict)
+               and r.get("candidate_status") not in ("excluded", "unknown")}
+    out, seen = [], set()
+    for source in ("excluded_candidates", "unverified_candidates", "over_budget_alternatives",
+                   "similar_properties"):
+        for row in data.get(source) or []:
+            if not isinstance(row, dict) or not (row.get("address") or row.get("url")):
+                continue
+            is_alternative = (row.get("alternative") is True or row.get("match_type") in (
+                "soft_violation", "similar_suggestion") or source in (
+                "over_budget_alternatives", "similar_properties"))
+            k = key(row)
+            if not is_alternative or k in matches or k in seen:
+                continue
+            seen.add(k)
+            compact = {f: deepcopy(row[f]) for f in _ALTERNATIVE_FIELDS if row.get(f) not in (None, "")}
+            compact.update(alternative=True, candidate_status="excluded",
+                           status_reason=("similar_suggestion"
+                                          if row.get("match_type") == "similar_suggestion"
+                                          else "over_budget"))
+            out.append(compact)
+            if len(out) >= _MAX_SHOWN_ALTERNATIVES:
+                return out
+    return out
+
+
+def render_shown_alternatives(rows: Optional[List[Dict[str, Any]]]) -> str:
+    """The shown alternatives as a prompt block (summaries only; details by URL)."""
+    rows = [r for r in (rows or []) if isinstance(r, dict)][:_MAX_SHOWN_ALTERNATIVES]
+    if not rows:
+        return ""
+    lines = [
+        "=== SHOWN ALTERNATIVES (listed to the user as NOT meeting their criteria; not "
+        "recommendations) ===",
+        "Each line is a SUMMARY of a listing the last search showed as an alternative. It is "
+        "not a match: never present it as one. For its full details call "
+        "get_property_details with its exact URL below.",
+    ]
+    for row in rows:
+        seg = [str(row.get("address") or "Unknown").strip()]
+        if row.get("price") not in (None, "", "N/A"):
+            seg.append(f"price {row['price']}")
+        if row.get("area"):
+            seg.append(f"area {row['area']}")
+        seg.append("similar listing" if row.get("status_reason") == "similar_suggestion"
+                   else "over budget")
+        line = " | ".join(seg)
+        if str(row.get("url") or "").strip():
+            line += f" | {str(row['url']).strip()}"
+        lines.append(line)
+    lines.append("=== END SHOWN ALTERNATIVES ===")
+    return "\n".join(lines)
+
+
+def render_listing_index(registry: Optional[List[Dict[str, Any]]],
+                         alternatives: Optional[List[Dict[str, Any]]] = None) -> str:
+    """The recommended-listings index followed by the shown alternatives ('' when both are
+    empty): the block app.py pre-renders as ``recommended_index``."""
+    return "\n\n".join(block for block in (
+        render_recommended_index(registry) if registry else "",
+        render_shown_alternatives(alternatives)) if block)
+
 
 def render_recommended_index(registry: Optional[List[Dict[str, Any]]],
                              max_items: int = 200) -> str:
@@ -858,6 +946,7 @@ def assemble_messages(*, user_message: str,
         last_results=ctx.get("last_results"),
         recommendations_index=ctx.get("recommendations_index"),
         discussed_areas=ctx.get("discussed_areas"),
+        shown_alternatives=ctx.get("shown_alternatives"),
     )
     if ctx.get('current_date'):
         context_sections = (f"Current date in Europe/London: {ctx['current_date']}. "

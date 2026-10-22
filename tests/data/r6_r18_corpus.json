@@ -813,6 +813,626 @@
    "user_query": "I've changed jobs, I work at Bank now. Find me a 1-bed within 30 minutes of work under £2,000."
   }
  },
+ "r18_640bdda0": {
+  "checkpoint": "1f1cdd42-9aa5-6a5c-8007-28fb58f3b075",
+  "critic_text": null,
+  "message": "Find a 1-bed in Camden under £1,800 a month.",
+  "raw_draft": "I searched, and I have to be straight with you: there are no 1-bed flats in Camden within your £1,800 a month budget in the listings I can see right now.\n\nWhat did come up:\n\n- **Highgate West Hill, London N6** — 1-bed flat, **£2,000/month**. That's £200 over your budget, so it's not within what you can afford. It's also about 1.6 miles from central Camden.\n\nTwo things I could not check, and I don't want to guess at them:\n\nA few ways forward:\n\nWhich of those would you like me to try?",
+  "request_id": "640bdda00a7f48afbbff792a695f0e9b",
+  "shipped": "- No listing is both fully eligible and verified.\nExcluded / does not meet:\n- Highgate West Hill, London, N6: alternative is outside the declared hard result set; monthly price 2000 exceeds budget 1800\nThese listings are cached; prices and availability may have changed. Confirm with the agent.",
+  "state": {
+   "accumulated_search_criteria": {
+    "amenities_of_interest": [],
+    "area": "Camden",
+    "areas": [
+     "Camden"
+    ],
+    "bedrooms": 1,
+    "bedrooms_minimum": false,
+    "budget_period": "month",
+    "constraint_sources": {
+     "area": {
+      "source": "user_message",
+      "text": "Find a 1-bed in Camden under £1,800 a month.",
+      "value": "Camden"
+     },
+     "areas": {
+      "source": "user_message",
+      "text": "Find a 1-bed in Camden under £1,800 a month.",
+      "value": [
+       "Camden"
+      ]
+     },
+     "bedrooms": {
+      "source": "user_message",
+      "text": "Find a 1-bed in Camden under £1,800 a month.",
+      "value": 1
+     },
+     "bedrooms_minimum": {
+      "source": "user_message",
+      "text": "Find a 1-bed in Camden under £1,800 a month.",
+      "value": false
+     },
+     "budget_period": {
+      "source": "user_message",
+      "text": "Find a 1-bed in Camden under £1,800 a month.",
+      "value": "month"
+     },
+     "max_budget": {
+      "source": "user_message",
+      "text": "Find a 1-bed in Camden under £1,800 a month.",
+      "value": 1800
+     },
+     "room_type": {
+      "source": "user_message",
+      "text": "Find a 1-bed in Camden under £1,800 a month.",
+      "value": "whole"
+     }
+    },
+    "destination": null,
+    "max_budget": 1800,
+    "max_travel_time": null,
+    "property_features": [],
+    "room_type": "whole",
+    "soft_preferences": []
+   },
+   "candidate_validation": {
+    "constraints": {
+     "areas": [
+      "camden"
+     ],
+     "bedrooms": 1.0,
+     "bedrooms_minimum": false,
+     "commute_destination": "Camden",
+     "max_budget_monthly": 1800.0,
+     "max_changes": null,
+     "max_commute_minutes": null,
+     "monthly_total_budget": null,
+     "move_in_date": null,
+     "no_commute": false,
+     "office_days_per_week": null,
+     "property_features": [],
+     "room_type": "whole"
+    },
+    "eligible": [],
+    "excluded": [
+     {
+      "candidate": {
+       "absent_features": [],
+       "address": "Highgate West Hill, London, N6",
+       "alternative": true,
+       "area": "Camden",
+       "availability_status": "",
+       "available_from": "",
+       "bedrooms": 1,
+       "budget_status": "⚠️ 超预算 £200",
+       "candidate_reasons": [
+        "alternative is outside the declared hard result set",
+        "monthly price 2000 exceeds budget 1800"
+       ],
+       "candidate_status": "excluded",
+       "candidate_unknown_reasons": [],
+       "description": "",
+       "distance_miles": 1.6,
+       "explanation": "1 bedroom flat to rent in Highgate West Hill, London, N6",
+       "geo_location": "51.561483, -0.151028",
+       "images": [
+        "https://media.onthemarket.com/properties/20262641/1641692577/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/20262641/1641692577/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/20262641/1641692577/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/20262641/1641692577/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/20262641/1641692577/image-4-480x320.jpg"
+       ],
+       "match_type": "soft_violation",
+       "possibly_outdated": false,
+       "price": "£2000/month",
+       "property_type": "1 bed Flat",
+       "provider_address": "Highgate West Hill, London, N6",
+       "rank": 1,
+       "room_type": "whole",
+       "score": 37.29,
+       "score_breakdown": {
+        "freshness": 13.46,
+        "price": 8.23,
+        "semantic": 15.6
+       },
+       "source": "OnTheMarket (cached)",
+       "unverified_features": [],
+       "url": "https://www.onthemarket.com/details/20262641/",
+       "verified_features": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/20262641",
+      "evidence_status": "not_required",
+      "index": 0,
+      "reasons": [
+       "alternative is outside the declared hard result set",
+       "monthly price 2000 exceeds budget 1800"
+      ],
+      "status": "excluded",
+      "transport_cost_evidence_status": "not_required",
+      "unknown_reasons": []
+     }
+    ],
+    "statuses": [
+     {
+      "candidate": {
+       "absent_features": [],
+       "address": "Highgate West Hill, London, N6",
+       "alternative": true,
+       "area": "Camden",
+       "availability_status": "",
+       "available_from": "",
+       "bedrooms": 1,
+       "budget_status": "⚠️ 超预算 £200",
+       "candidate_reasons": [
+        "alternative is outside the declared hard result set",
+        "monthly price 2000 exceeds budget 1800"
+       ],
+       "candidate_status": "excluded",
+       "candidate_unknown_reasons": [],
+       "description": "",
+       "distance_miles": 1.6,
+       "explanation": "1 bedroom flat to rent in Highgate West Hill, London, N6",
+       "geo_location": "51.561483, -0.151028",
+       "images": [
+        "https://media.onthemarket.com/properties/20262641/1641692577/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/20262641/1641692577/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/20262641/1641692577/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/20262641/1641692577/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/20262641/1641692577/image-4-480x320.jpg"
+       ],
+       "match_type": "soft_violation",
+       "possibly_outdated": false,
+       "price": "£2000/month",
+       "property_type": "1 bed Flat",
+       "provider_address": "Highgate West Hill, London, N6",
+       "rank": 1,
+       "room_type": "whole",
+       "score": 37.29,
+       "score_breakdown": {
+        "freshness": 13.46,
+        "price": 8.23,
+        "semantic": 15.6
+       },
+       "source": "OnTheMarket (cached)",
+       "unverified_features": [],
+       "url": "https://www.onthemarket.com/details/20262641/",
+       "verified_features": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/20262641",
+      "evidence_status": "not_required",
+      "index": 0,
+      "reasons": [
+       "alternative is outside the declared hard result set",
+       "monthly price 2000 exceeds budget 1800"
+      ],
+      "status": "excluded",
+      "transport_cost_evidence_status": "not_required",
+      "unknown_reasons": []
+     }
+    ],
+    "unknown": []
+   },
+   "extracted_context": {
+    "current_date": "2026-10-22",
+    "current_message": "Find a 1-bed in Camden under £1,800 a month.",
+    "history": [],
+    "memory_paused": false,
+    "reply_language": "en"
+   },
+   "memory_context": "",
+   "observations": [],
+   "tool_artifacts": [
+    {
+     "elapsed_ms": 768,
+     "error": null,
+     "params_digest": "feeb6ecfff78fefe",
+     "raw_data": {
+      "area_recommendations": [],
+      "area_status": {
+       "Camden": "results"
+      },
+      "cache_stats": {
+       "hits": 1,
+       "misses": 0
+      },
+      "candidate_states": [
+       {
+        "candidate": {
+         "absent_features": [],
+         "address": "Highgate West Hill, London, N6",
+         "alternative": true,
+         "area": "Camden",
+         "availability_status": "",
+         "available_from": "",
+         "bedrooms": 1,
+         "budget_status": "⚠️ 超预算 £200",
+         "candidate_reasons": [
+          "alternative is outside the declared hard result set",
+          "monthly price 2000 exceeds budget 1800"
+         ],
+         "candidate_status": "excluded",
+         "candidate_unknown_reasons": [],
+         "description": "",
+         "distance_miles": 1.6,
+         "explanation": "1 bedroom flat to rent in Highgate West Hill, London, N6",
+         "geo_location": "51.561483, -0.151028",
+         "images": [
+          "https://media.onthemarket.com/properties/20262641/1641692577/image-0-480x320.jpg",
+          "https://media.onthemarket.com/properties/20262641/1641692577/image-1-480x320.jpg",
+          "https://media.onthemarket.com/properties/20262641/1641692577/image-2-480x320.jpg",
+          "https://media.onthemarket.com/properties/20262641/1641692577/image-3-480x320.jpg",
+          "https://media.onthemarket.com/properties/20262641/1641692577/image-4-480x320.jpg"
+         ],
+         "match_type": "soft_violation",
+         "possibly_outdated": false,
+         "price": "£2000/month",
+         "property_type": "1 bed Flat",
+         "provider_address": "Highgate West Hill, London, N6",
+         "rank": 1,
+         "room_type": "whole",
+         "score": 37.29,
+         "score_breakdown": {
+          "freshness": 13.46,
+          "price": 8.23,
+          "semantic": 15.6
+         },
+         "source": "OnTheMarket (cached)",
+         "unverified_features": [],
+         "url": "https://www.onthemarket.com/details/20262641/",
+         "verified_features": []
+        },
+        "candidate_key": "url:https://www.onthemarket.com/details/20262641",
+        "evidence_status": "not_required",
+        "index": 0,
+        "reasons": [
+         "alternative is outside the declared hard result set",
+         "monthly price 2000 exceeds budget 1800"
+        ],
+        "status": "excluded",
+        "transport_cost_evidence_status": "not_required",
+        "unknown_reasons": []
+       }
+      ],
+      "candidate_validation": {
+       "constraints": {
+        "areas": [
+         "camden"
+        ],
+        "bedrooms": 1.0,
+        "bedrooms_minimum": false,
+        "commute_destination": "Camden",
+        "max_budget_monthly": 1800.0,
+        "max_changes": null,
+        "max_commute_minutes": null,
+        "monthly_total_budget": null,
+        "move_in_date": null,
+        "no_commute": false,
+        "office_days_per_week": null,
+        "property_features": [],
+        "room_type": "whole"
+       },
+       "eligible": [],
+       "excluded": [
+        {
+         "candidate": {
+          "absent_features": [],
+          "address": "Highgate West Hill, London, N6",
+          "alternative": true,
+          "area": "Camden",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 1,
+          "budget_status": "⚠️ 超预算 £200",
+          "candidate_reasons": [
+           "alternative is outside the declared hard result set",
+           "monthly price 2000 exceeds budget 1800"
+          ],
+          "candidate_status": "excluded",
+          "candidate_unknown_reasons": [],
+          "description": "",
+          "distance_miles": 1.6,
+          "explanation": "1 bedroom flat to rent in Highgate West Hill, London, N6",
+          "geo_location": "51.561483, -0.151028",
+          "images": [
+           "https://media.onthemarket.com/properties/20262641/1641692577/image-0-480x320.jpg",
+           "https://media.onthemarket.com/properties/20262641/1641692577/image-1-480x320.jpg",
+           "https://media.onthemarket.com/properties/20262641/1641692577/image-2-480x320.jpg",
+           "https://media.onthemarket.com/properties/20262641/1641692577/image-3-480x320.jpg",
+           "https://media.onthemarket.com/properties/20262641/1641692577/image-4-480x320.jpg"
+          ],
+          "match_type": "soft_violation",
+          "possibly_outdated": false,
+          "price": "£2000/month",
+          "property_type": "1 bed Flat",
+          "provider_address": "Highgate West Hill, London, N6",
+          "rank": 1,
+          "room_type": "whole",
+          "score": 37.29,
+          "score_breakdown": {
+           "freshness": 13.46,
+           "price": 8.23,
+           "semantic": 15.6
+          },
+          "source": "OnTheMarket (cached)",
+          "unverified_features": [],
+          "url": "https://www.onthemarket.com/details/20262641/",
+          "verified_features": []
+         },
+         "candidate_key": "url:https://www.onthemarket.com/details/20262641",
+         "evidence_status": "not_required",
+         "index": 0,
+         "reasons": [
+          "alternative is outside the declared hard result set",
+          "monthly price 2000 exceeds budget 1800"
+         ],
+         "status": "excluded",
+         "transport_cost_evidence_status": "not_required",
+         "unknown_reasons": []
+        }
+       ],
+       "statuses": [
+        {
+         "candidate": {
+          "absent_features": [],
+          "address": "Highgate West Hill, London, N6",
+          "alternative": true,
+          "area": "Camden",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 1,
+          "budget_status": "⚠️ 超预算 £200",
+          "candidate_reasons": [
+           "alternative is outside the declared hard result set",
+           "monthly price 2000 exceeds budget 1800"
+          ],
+          "candidate_status": "excluded",
+          "candidate_unknown_reasons": [],
+          "description": "",
+          "distance_miles": 1.6,
+          "explanation": "1 bedroom flat to rent in Highgate West Hill, London, N6",
+          "geo_location": "51.561483, -0.151028",
+          "images": [
+           "https://media.onthemarket.com/properties/20262641/1641692577/image-0-480x320.jpg",
+           "https://media.onthemarket.com/properties/20262641/1641692577/image-1-480x320.jpg",
+           "https://media.onthemarket.com/properties/20262641/1641692577/image-2-480x320.jpg",
+           "https://media.onthemarket.com/properties/20262641/1641692577/image-3-480x320.jpg",
+           "https://media.onthemarket.com/properties/20262641/1641692577/image-4-480x320.jpg"
+          ],
+          "match_type": "soft_violation",
+          "possibly_outdated": false,
+          "price": "£2000/month",
+          "property_type": "1 bed Flat",
+          "provider_address": "Highgate West Hill, London, N6",
+          "rank": 1,
+          "room_type": "whole",
+          "score": 37.29,
+          "score_breakdown": {
+           "freshness": 13.46,
+           "price": 8.23,
+           "semantic": 15.6
+          },
+          "source": "OnTheMarket (cached)",
+          "unverified_features": [],
+          "url": "https://www.onthemarket.com/details/20262641/",
+          "verified_features": []
+         },
+         "candidate_key": "url:https://www.onthemarket.com/details/20262641",
+         "evidence_status": "not_required",
+         "index": 0,
+         "reasons": [
+          "alternative is outside the declared hard result set",
+          "monthly price 2000 exceeds budget 1800"
+         ],
+         "status": "excluded",
+         "transport_cost_evidence_status": "not_required",
+         "unknown_reasons": []
+        }
+       ],
+       "unknown": []
+      },
+      "commute_evidence": [],
+      "commute_note": "",
+      "commute_unverified": false,
+      "data_source": "OnTheMarket (cached)",
+      "excluded_candidates": [
+       {
+        "absent_features": [],
+        "address": "Highgate West Hill, London, N6",
+        "alternative": true,
+        "area": "Camden",
+        "availability_status": "",
+        "available_from": "",
+        "bedrooms": 1,
+        "budget_status": "⚠️ 超预算 £200",
+        "candidate_reasons": [
+         "alternative is outside the declared hard result set",
+         "monthly price 2000 exceeds budget 1800"
+        ],
+        "candidate_status": "excluded",
+        "candidate_unknown_reasons": [],
+        "description": "",
+        "distance_miles": 1.6,
+        "explanation": "1 bedroom flat to rent in Highgate West Hill, London, N6",
+        "geo_location": "51.561483, -0.151028",
+        "images": [
+         "https://media.onthemarket.com/properties/20262641/1641692577/image-0-480x320.jpg",
+         "https://media.onthemarket.com/properties/20262641/1641692577/image-1-480x320.jpg",
+         "https://media.onthemarket.com/properties/20262641/1641692577/image-2-480x320.jpg",
+         "https://media.onthemarket.com/properties/20262641/1641692577/image-3-480x320.jpg",
+         "https://media.onthemarket.com/properties/20262641/1641692577/image-4-480x320.jpg"
+        ],
+        "match_type": "soft_violation",
+        "possibly_outdated": false,
+        "price": "£2000/month",
+        "property_type": "1 bed Flat",
+        "provider_address": "Highgate West Hill, London, N6",
+        "rank": 1,
+        "room_type": "whole",
+        "score": 37.29,
+        "score_breakdown": {
+         "freshness": 13.46,
+         "price": 8.23,
+         "semantic": 15.6
+        },
+        "source": "OnTheMarket (cached)",
+        "unverified_features": [],
+        "url": "https://www.onthemarket.com/details/20262641/",
+        "verified_features": []
+       }
+      ],
+      "incomplete_areas": [],
+      "known_criteria": {
+       "area": "Camden",
+       "areas": [
+        "Camden"
+       ],
+       "bedrooms": 1,
+       "bedrooms_minimum": false,
+       "budget_period": "month",
+       "commute_destination": null,
+       "max_budget": 1800.0,
+       "max_changes": null,
+       "max_travel_time": null,
+       "monthly_total_budget": null,
+       "move_in_date": null,
+       "no_commute": false,
+       "office_days_per_week": null,
+       "property_features": [],
+       "room_type": "whole",
+       "soft_preferences": []
+      },
+      "over_budget_alternatives": [
+       {
+        "absent_features": [],
+        "address": "Highgate West Hill, London, N6",
+        "alternative": true,
+        "area": "Camden",
+        "availability_status": "",
+        "available_from": "",
+        "bedrooms": 1,
+        "budget_status": "⚠️ 超预算 £200",
+        "candidate_status": "excluded",
+        "description": "",
+        "distance_miles": 1.6,
+        "explanation": "1 bedroom flat to rent in Highgate West Hill, London, N6",
+        "geo_location": "51.561483, -0.151028",
+        "images": [
+         "https://media.onthemarket.com/properties/20262641/1641692577/image-0-480x320.jpg",
+         "https://media.onthemarket.com/properties/20262641/1641692577/image-1-480x320.jpg",
+         "https://media.onthemarket.com/properties/20262641/1641692577/image-2-480x320.jpg",
+         "https://media.onthemarket.com/properties/20262641/1641692577/image-3-480x320.jpg",
+         "https://media.onthemarket.com/properties/20262641/1641692577/image-4-480x320.jpg"
+        ],
+        "match_type": "soft_violation",
+        "possibly_outdated": false,
+        "price": "£2000/month",
+        "property_type": "1 bed Flat",
+        "provider_address": "Highgate West Hill, London, N6",
+        "rank": 1,
+        "room_type": "whole",
+        "score": 37.29,
+        "score_breakdown": {
+         "freshness": 13.46,
+         "price": 8.23,
+         "semantic": 15.6
+        },
+        "source": "OnTheMarket (cached)",
+        "status_reason": "over_budget",
+        "unverified_features": [],
+        "url": "https://www.onthemarket.com/details/20262641/",
+        "verified_features": []
+       }
+      ],
+      "over_budget_alternatives_label": "Over-budget alternatives (up to 15% above your budget; not counted in the results above and not within your budget)",
+      "partial": false,
+      "partial_note": "",
+      "perfect_count": 0,
+      "possibly_outdated": false,
+      "recommendations": [],
+      "retrieval_outcome": "candidates_returned",
+      "search_criteria": {
+       "area": "Camden",
+       "areas": [
+        "Camden"
+       ],
+       "bedrooms": 1,
+       "bedrooms_minimum": false,
+       "budget_period": "month",
+       "commute_destination": null,
+       "destination": "Camden",
+       "max_budget": 1800.0,
+       "max_changes": null,
+       "max_travel_time": null,
+       "monthly_total_budget": null,
+       "move_in_date": null,
+       "no_commute": false,
+       "office_days_per_week": null,
+       "property_features": [],
+       "room_type": "whole",
+       "soft_preferences": []
+      },
+      "soft_count": 1,
+      "status": "found",
+      "success": true,
+      "summary": "I found 0 current listings in Camden (Whole property). Filters applied: budget ≤£1800.0/month, room type Whole property. Separately, 1 over-budget option (up to 15% above your budget) are listed as alternatives — not counted above and not within your budget. See the full listings in the right-hand panel.",
+      "total_found": 0,
+      "unverified_candidates": []
+     },
+     "success": true,
+     "tool": "search_properties",
+     "turn": 1
+    }
+   ],
+   "tool_decision": {},
+   "user_preferences": {
+    "excluded_areas": [],
+    "hard_preferences": [],
+    "required_amenities": [],
+    "safety_concerns": [],
+    "soft_preferences": []
+   },
+   "user_query": "Find a 1-bed in Camden under £1,800 a month."
+  }
+ },
+ "r18_adce1322": {
+  "checkpoint": "1f1cdd48-f036-6156-8005-adebccf9065a",
+  "critic_text": null,
+  "message": "What do you remember about me?",
+  "raw_draft": "Here's what I have saved about you:\n\n- Your budget is £2,000\n- Your partner works in Canary Wharf\n- You need a ground-floor flat\n- You're looking for a flat in Hackney\n- You have a cat\n\nThat's all five saved facts. I also keep some tentative inferences of my own (for example, that a ground-floor preference might relate to your cat, and that you'd want to stay within £2,000 in Hackney) — but those are just guesses on my part, not things you told me, so please correct me if they're off.\n\nWould you like me to search for pet-friendly ground-floor flats in Hackney within your budget, or update any of these details?",
+  "request_id": "adce132256c04fd7948f9aac94319db0",
+  "shipped": "Here's what I have saved about you:\n\n- Your budget is £2,000\n- Your partner works in Canary Wharf\n- You need a ground-floor flat\n- You're looking for a flat in Hackney\n- You have a cat\n\nThat's all five saved facts. I also keep some tentative inferences of my own (for example, that a ground-floor preference might relate to your cat, and that you'd want to stay within £2,000 in Hackney) — but those are just guesses on my part, not things you told me, so please correct me if they're off.\n\nWould you like me to search for pet-friendly ground-floor flats in Hackney within your budget, or update any of these details?",
+  "state": {
+   "accumulated_search_criteria": {
+    "amenities_of_interest": [],
+    "destination": null,
+    "max_budget": null,
+    "max_travel_time": null,
+    "property_features": [],
+    "soft_preferences": []
+   },
+   "candidate_validation": {},
+   "extracted_context": {
+    "current_date": "2026-10-22",
+    "current_message": "What do you remember about me?",
+    "history": [],
+    "memory_paused": false,
+    "reply_language": "en"
+   },
+   "memory_context": "What I remember about this user (all 5 saved facts are listed):\n[FACT] Budget £2,000\n[FACT] My partner works in Canary Wharf.\n[FACT] Please remember that I need a ground-floor flat.\n[FACT] Looking for a flat in Hackney\n[FACT] I have a cat\nThe assistant's own inferences: TENTATIVE guesses that may be wrong, NOT said or saved by the user (never apply them as search filters or preferences, never present them as things the user told you or asked to save, and never describe them as the user's requirements, limits or priorities):\n[INFERENCE] Having a cat may make the user favor ground-floor options, as outdoor access could be a factor.\n[INFERENCE] The user probably wants to stay within a £2,000 budget while finding a pet-friendly place in Hackney.",
+   "observations": [],
+   "tool_artifacts": [],
+   "tool_decision": {},
+   "user_preferences": {
+    "excluded_areas": [],
+    "hard_preferences": [],
+    "required_amenities": [],
+    "safety_concerns": [],
+    "soft_preferences": []
+   },
+   "user_query": "What do you remember about me?"
+  }
+ },
  "r18_c14fe21d": {
   "checkpoint": "1f1cdd44-ad5b-61de-8006-a4b17997c461",
   "critic_text": null,

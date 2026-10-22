@@ -5140,6 +5140,21 @@ def _collect_grounding_evidence(state: AgentState, tool_name: str) -> list:
     for key in ("property_price", "property_travel_time"):
         if extracted_context.get(key):
             pieces.append({key: extracted_context[key]})
+    # What the USER stated or saved is evidence for restating it: "Your budget is £2,000" in a
+    # recall answer quoted the saved "[FACT] Budget £2,000" and was flagged (r18 adce1322). Saved
+    # facts, recalled stated rows and earlier user messages only — never the assistant's
+    # inferences or its own earlier prose (the redactor's _user_stated_texts).
+    from core.candidate_validation import _user_stated_texts
+    stated = _user_stated_texts(state)
+    if stated:
+        pieces.append({"user_stated": stated})
+    # The server-held rows of listings shown earlier (``view_results``, never model prose) are
+    # price evidence too, as the owner ruled for the no-evidence contract (r6d).
+    shown = [{key: row.get(key) for key in ("address", "price", "budget_status", "travel_time")
+              if row.get(key) not in (None, "")}
+             for row in (extracted_context.get("view_results") or [])[:50] if isinstance(row, dict)]
+    if shown:
+        pieces.append({"view_results": shown})
     return pieces
 
 
@@ -5440,8 +5455,9 @@ def _make_critic_node():
                 final,
                 failed_lookups=failed_lookups,
                 retrieved_evidence=retrieved_evidence,
-                shown_listings=ec.get("view_results") or ec.get("last_results_full")
-                or ec.get("recommended_registry"),
+                shown_listings=list(ec.get("view_results") or ec.get("last_results_full")
+                                    or ec.get("recommended_registry") or [])
+                + list(ec.get("shown_alternatives") or []),   # shown, not matches (r6d)
                 user_message=ec.get("current_message") or _current_message(
                     state.get("user_query") or ""),
                 reply_language=_reply_language_from_ctx(

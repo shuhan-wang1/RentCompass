@@ -3729,6 +3729,10 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         g.reply_language = _reply_lang  # so the boundary fallback matches the conversation
     except Exception:
         pass
+    # The last assembly step: blocks appended after the answer (details, notices) may repeat
+    # a caveat line the answer already carries (r23 de60c6a8), in either language.
+    from core.candidate_validation import dedupe_caveat_lines
+    response_text = dedupe_caveat_lines(response_text)
     response_text, _dsml_hit = dsml_guard.sanitize_user_text(
         response_text, reply_language=_reply_lang)
     if _dsml_hit:

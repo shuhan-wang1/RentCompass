@@ -605,10 +605,13 @@ def unsupported_reply_prices(response: str, evidence: Any) -> list[float]:
             gaps.add(gap)
             supported.update(gap * n for n in ({_MONTHS_PER_YEAR} if year else set()) | set(months))
     # A move-in total on ONE rent R: R's deposit (5 or 6 weeks) plus R's first month — "6-week
-    # deposit £2,700 + first month £1,950 = £4,650" (r21 63fb6f8a). Never one listing's deposit
-    # plus another figure: that made "£3,190" a £3,000 rent's holding deposit + a £2,500 rent
-    # (r07 619c9e59); and no holding-week sums, which no recorded answer states and which
-    # made a suggested "£1,100" budget £900 + one week of it (r07 7955a79b).
+    # deposit £2,700 + first month £1,950 = £4,650" (r21 63fb6f8a). It is tied to the rent the
+    # claim names (see _move_in_total) and matched at the precision written, never with the
+    # pool's tolerance against every rent of the turn: the £875 flat share's 1,009.62 + 875 =
+    # 1,884.62 made a wrong five-week cap "£1,875 on this rent" (true £2,250 on £1,950)
+    # "supported" (r22 7f13d3b6). Never one listing's deposit plus another figure (r07
+    # 619c9e59: "£3,190"), and no holding-week sums (r07 7955a79b: "£1,100").
+    move_in: dict = {}
     for value, unit in evidence_money:
         if value < _FARE_LIKE_MAX or (unit == "unknown" and round(value, 2) in periodic):
             continue
@@ -616,7 +619,7 @@ def unsupported_reply_prices(response: str, evidence: Any) -> list[float]:
             week, month = weekly_from_monthly(value), value
         else:
             week, month = value, monthly_from_weekly(value)
-        supported.update({week * 5 + month, week * 6 + month})
+        move_in.setdefault(round(value, 2), set()).update({week * 5 + month, week * 6 + month})
     # A fare or daily cap: x 2 for the return trip, x the commuting days the answer states.
     counts = counts_stated(response)
     returning = bool(_RETURN_WORDS.search(response or ""))
@@ -644,6 +647,7 @@ def unsupported_reply_prices(response: str, evidence: Any) -> list[float]:
     spans = _money_mention_spans(answer)
     asserts_price = _price_assertions(answer, spans)
     supported_pool, gap_pool = _ClosePool(supported), _ClosePool(gaps)
+    move_in_total = _move_in_totals(answer, spans, move_in) if move_in else None
     for value, _unit, start, _end in spans:
         if (any(s0 <= start < s1 for s0, s1 in journey_results)
                 and not _CURRENCY_BEFORE.search(answer[max(0, start - 8):start])):
@@ -654,12 +658,76 @@ def unsupported_reply_prices(response: str, evidence: Any) -> list[float]:
             continue
         if _close_to_any(value, supported_pool) or round(value, 2) in arithmetic:
             continue
+        if move_in and move_in_total(value, start, _end):
+            continue
         if exempt_bounds_and_intervals and not asserts_price(value):
             continue
         unsupported.append(value)
     for match in _LONG_FIGURE.finditer(answer):
         unsupported.append(_to_float(match.group()) or float("inf"))
     return sorted(set(unsupported))
+
+
+_MOVE_IN_LIST_ITEM = re.compile(r"\s*(?:[-*•]|\d+[.)])\s")
+
+
+def _move_in_totals(answer: str, spans: list, move_in: dict):
+    """``is_total(value, start, end)``: a deposit + first-month total of a rent the claim itself
+    names, to the precision it is written ("£4,650", "£1,009.62"), or within the price
+    tolerance only when hedged. Where a claim names its rent: its sentence; for a list item,
+    the whole list block and the line that leads into it ("**Upfront cost on a £1,950/month
+    flat**" / "- Deposit …: £2,700" / "- First month's rent: £1,950" / "- Total: £4,650").
+    Lines, list blocks and the rents' positions are read once per reply."""
+    lines = answer.split("\n")
+    offsets, at = [], 0
+    for line in lines:
+        offsets.append(at)
+        at += len(line) + 1
+    listed = [bool(_MOVE_IN_LIST_ITEM.match(line)) for line in lines]
+    rents = sorted((s, e, round(v, 2)) for v, _unit, s, e in spans if round(v, 2) in move_in)
+    rent_starts = [s for s, _e, _v in rents]
+    block_cache: dict = {}
+    sentence_ends: dict = {}
+
+    def scope(start: int) -> tuple[int, int]:
+        index = max(0, bisect.bisect_right(offsets, start) - 1)
+        if listed[index]:
+            if index not in block_cache:
+                first = last = index
+                while first > 0 and listed[first - 1]:
+                    first -= 1
+                while last + 1 < len(lines) and listed[last + 1]:
+                    last += 1
+                lead = first - 1
+                while lead >= 0 and not lines[lead].strip():
+                    lead -= 1
+                block = (offsets[lead if lead >= 0 else first], offsets[last] + len(lines[last]))
+                for member in range(first, last + 1):
+                    block_cache[member] = block
+            return block_cache[index]
+        line_start, line = offsets[index], lines[index]
+        position = start - line_start
+        if index not in sentence_ends:
+            sentence_ends[index] = [m.end() for m in re.finditer(r"[.!?。！？](?=\s|$)", line)]
+        ends = sentence_ends[index]
+        at = bisect.bisect_right(ends, position)
+        begin = ends[at - 1] if at else 0
+        finish = ends[at] if at < len(ends) else len(line)
+        return line_start + begin, line_start + finish
+
+    def is_total(value: float, start: int, end: int) -> bool:
+        low, high = scope(start)
+        named = {v for s, e, v in rents[bisect.bisect_left(rent_starts, low):bisect.bisect_right(rent_starts, high)]
+                 if e <= high and (s, e) != (start, end)}
+        if not named:
+            return False
+        written = answer[start:end]
+        tolerance = 0.005 if "." in written.rstrip(".") else 0.5
+        hedged = bool(_HEDGED_BEFORE.search(answer[max(0, start - 24):start]))
+        return any(abs(value - total) <= tolerance + 1e-9 or (hedged and _close(value, total))
+                   for rent in named for total in move_in[rent])
+
+    return is_total
 
 
 # "£2750 rent + £201.60 = £2951.60 per month" is a sum of two tool figures. Unsupported, it

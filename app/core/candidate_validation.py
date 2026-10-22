@@ -10,6 +10,7 @@ structured fields and explicitly linked tool evidence.
 from __future__ import annotations
 
 import asyncio
+import bisect
 import functools
 import math
 import os
@@ -1157,10 +1158,18 @@ _FRAGMENT_SPLIT = re.compile(
     r"((?<!\d),|,(?!\d)|(?<!\d):|:(?!\d)|[，；;、。！？：|]|\.(?=\s|$)|[!?](?=\s|$)"
     r"|(?<!\s)\s+[–—-]\s+)")
 _BRACKET_SPAN = re.compile(r"[（(][^()（）\n]{0,400}[)）]")
-_SCOPE_SENTENCE_SPLIT = re.compile(r"(?<=[.!?。！？])\s+|\n|[；;]")
+# A sentence ends at a stop followed by blank space, and in Chinese at 。！？ (and the
+# half-width ｡) even with no blank after it — with any closing quote or bracket kept on the
+# sentence — so a withdrawn Chinese claim takes only its own sentence, not the whole run.
+_ZH_STOP = r"[。｡！？]"
+_ZH_CLOSE = r"[」』”’）\])]"
+_SCOPE_SENTENCE_SPLIT = re.compile(
+    r"(?<=[.!?。！？])\s+|\n|[；;]|"
+    r"(?:(?<=" + _ZH_STOP + r")|(?<=" + _ZH_STOP + _ZH_CLOSE + r"))(?=[^\s。｡！？!?」』”’）\])])")
 # "vs." too: "studio vs. a room in a shared flat vs. a whole one-bed" is one clause, and
 # splitting it there left "studio vs. a room in a shared flat vs." behind (stress B-02).
 _NAME_ABBREVIATION = r"(?:St|Dr|Mr|Mrs|Ms|Prof|Sr|Jr|vs)"
+_ABBREVIATION_BEFORE_POINT = re.compile(r"\b(?:" + _NAME_ABBREVIATION + r"|i\.e|e\.g)\.$", re.I)
 
 
 def _repair_abbreviation_breaks(text: str) -> str:
@@ -1169,7 +1178,8 @@ def _repair_abbreviation_breaks(text: str) -> str:
                   r"\1 ", str(text or ""))
 
 
-def _guard_text_parts(text: str, *, sentences: bool = False) -> list[str]:
+def _guard_text_parts(text: str, *, sentences: bool = False,
+                      separators: list[str] | None = None) -> list[str]:
     """Split genuine clauses/sentences, retaining punctuation inside facts and names.
 
     The clause form retains alternating separators like re.split's capturing group;
@@ -1183,6 +1193,15 @@ def _guard_text_parts(text: str, *, sentences: bool = False) -> list[str]:
         # (R3-01). Bounded and unnested, so linear.
         protected.extend((match.start() + 1, match.end() - 1)
                          for match in _BRACKET_SPAN.finditer(text))
+    # Merged and sorted once, so each split point is one bisect, not a scan of every span
+    # (a reply of thousands of brackets made this quadratic).
+    merged: list[list[int]] = []
+    for left, right in sorted(span for span in protected if span[0] < span[1]):
+        if merged and left <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], right)
+        else:
+            merged.append([left, right])
+    lefts = [left for left, _right in merged]
     parts = []
     start = 0
     pattern = _SCOPE_SENTENCE_SPLIT if sentences else _FRAGMENT_SPLIT
@@ -1190,11 +1209,14 @@ def _guard_text_parts(text: str, *, sentences: bool = False) -> list[str]:
         position = match.start()
         if sentences and text[position:position + 1].isspace() and position:
             position -= 1
-        if any(left <= position < right for left, right in protected):
+        at = bisect.bisect_right(lefts, position) - 1
+        if at >= 0 and position < merged[at][1]:
             continue
         if text[position:position + 1] == '.':
             # "192 minutes, i.e. 3 hours 12 minutes a month" is one clause (r17 8c35fd5b).
-            abbreviation = re.search(r"\b(?:" + _NAME_ABBREVIATION + r"|i\.e|e\.g)\.$", text[:position + 1], re.I)
+            # Looked for in the few characters before the point only (the pattern still sees
+            # the character before the window): the whole prefix made long replies quadratic.
+            abbreviation = _ABBREVIATION_BEFORE_POINT.search(text, max(0, position - 7), position + 1)
             decimal = (position > 0 and position + 1 < len(text)
                        and text[position - 1].isdigit() and text[position + 1].isdigit())
             ellipsis = text[max(0, position - 1):position] == '.' or text[position + 1:position + 2] == '.'
@@ -1203,8 +1225,12 @@ def _guard_text_parts(text: str, *, sentences: bool = False) -> list[str]:
         parts.append(text[start:match.start()])
         if not sentences:
             parts.append(match.group())
+        elif separators is not None:
+            separators.append(match.group())   # what followed that sentence ("\n\n", " ", ";")
         start = match.end()
     parts.append(text[start:])
+    if sentences and separators is not None:
+        separators.append("")
     return parts
 
 
@@ -1343,7 +1369,7 @@ def _asserts_commute(fragment: str) -> bool:
 def _period_total(text: str) -> bool:
     """A journey-time total stated in hours or words, or one per day/week."""
     text = str(text or "")
-    return bool(_HOURS_AND_MINUTES.search(text) or (
+    return bool(_HOURS_AND_MINUTES.search(text) or _arithmetic.WORD_HOURS.search(text) or (
         (_DAY_PERIOD.search(text) or _WEEK_PERIOD.search(text)) and _durations_in(text)))
 
 
@@ -1456,8 +1482,13 @@ def _clean_commute_fragments(text: str) -> tuple[str, bool]:
             r'^(?:(?:total\s+)?(?:journey|commute|travel)\s+time|通勤时间|总行程时间)'
             r'\s*[:：]\s*(?:(?:which|that is)\b|由\s*(?:TfL|交通)|$)', plain, re.I))
         empty_table_row = bool(re.fullmatch(r'\|\s*(?:commute|通勤)\s*\|\s*', plain, re.I))
-        orphan = bool(re.match(
-            r"^(?:which|and which|that is)\b.*(?:minute|cap|limit|within|under|over)|"
+        # A leftover CLAUSE ("which is under your limit"), never a paragraph of its own: "That is
+        # before any holding deposit … a deposit is normally capped at 5 weeks' rent …" went
+        # whole, silently (r21 63fb6f8a: "cap" inside "capped", and three sentences long).
+        single_clause = len(plain.split()) <= 20 and not re.search(r"[.!?。！？]\s+\S", plain)
+        orphan = bool(single_clause and re.match(
+            r"^(?:which|and which|that is)\b.*\b(?:minutes?|mins?|cap|limit|within|under|over)\b", plain, re.I)
+        ) or bool(re.match(
             r"^(?:basis|依据)\s*[:：\"'“\s]*(?:tfl_journey_plan|straight_line_estimate)|"
             r"^(?:No[.!]?\s*)?What is established\s*[:：]?$|"
             r"^Does this establish a reliable\s*$|^已确认这次只\s*$|"
@@ -1921,6 +1952,10 @@ def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
                 # equally specific "Bow" bindings made every Bow line ambiguous, and the header
                 # "Bow — 27 minutes each way" and its leg list went whole (r17 8c35fd5b).
                 route["labels"] = list(dict.fromkeys(route["labels"] + binding["labels"]))
+                if binding.get("minutes") is not None and binding["minutes"] != route["minutes"]:
+                    route["place_alternatives"] = sorted(set(route.get("place_alternatives") or [])
+                                                         | {binding["minutes"]})
+                    route["alt_minutes"] = sorted(set(route.get("alt_minutes") or []) | {binding["minutes"]})
                 binding.pop("area_row", None)
                 binding.update(route)
                 continue
@@ -2015,11 +2050,11 @@ def _per_period_line(line: str, fragment: str) -> bool:
 
 
 def _same_area_route(area: dict, route: dict) -> bool:
-    """An area-ranking row and a measured route from that same place, with the same time (or
-    a row the ranking could not time): one route. A different time stays a separate, competing
-    measurement, so a line naming the place still cannot pick one of them."""
+    """An area-ranking row and a measured route from that same place: one route. The route
+    (address/station level) is the more specific measurement and the line's binding; a
+    different ranking time is its alternative, so "Bow — 27 minutes" (the route) and "Bow (28
+    min)" (the ranking) both hold and nothing about Bow is ambiguous (r21 8f4f0a00)."""
     return bool(area.get("area_row") and route.get("minutes") is not None and route.get("labels")
-                and area.get("minutes") in (None, route["minutes"])
                 and set(map(_norm, area.get("labels") or [])) & set(map(_norm, route["labels"])))
 
 
@@ -2306,11 +2341,20 @@ def _zh_minutes(value: str, unit: str) -> float:
     return number * 60 if "时" in unit else number
 
 
+_PERIOD_AFTER_BOUND = re.compile(
+    r"\s*(?:(?:a|per|each|every|in\s+a|over\s+a)\s+(?:working\s+|office\s+|commuting\s+)?(?:day|week|month|year)\b"
+    r"|(?:daily|weekly|monthly|yearly)\b)", re.I)
+
+
 def _duration_bounds(fragment: str) -> list[tuple[str, float, tuple[int, int]]]:
     """``[(op, minutes, span)]`` for each journey-time bound ``fragment`` asserts."""
     text = str(fragment or "")
     bounds = []
     for match in _DURATION_BOUND.finditer(text):
+        if _PERIOD_AFTER_BOUND.match(text, match.end()):
+            # "just under an hour a week" bounds a weekly TOTAL, not the journey: the shared
+            # rule checks it against the derived total (r22 4a7fe20c), never a one-way time.
+            continue
         op = next(name for name, _words in _BOUND_OPERATORS if match.group(name))
         minutes = _duration_minutes(match.group("duration"))
         if minutes is not None:
@@ -2535,15 +2579,17 @@ def _arithmetic_evidenced(fragment: str, *, context: str, previous_clause: str, 
     95f29d0b). The redactor adds what only it judges: no other verdict may ride along, and
     "the fastest" must be the fastest."""
     routes = [{"labels": list(route.get("labels") or []), "minutes": route["minutes"],
-               "mode": route.get("mode") or "transit"}
+               "mode": route.get("mode") or "transit",
+               "alternatives": list(route.get("place_alternatives") or [])}
               for route in pool if route.get("minutes") is not None and route.get("labels")]
     measured = sorted({route["minutes"] for route in routes})
     if len(measured) < 2:
         return False
     text = str(fragment or "")
-    if not (_arithmetic.MINUTES.search(text) or _HOURS_AND_MINUTES.search(text)
-            or _arithmetic.JOURNEY_COUNT.search(text) or _arithmetic.products(text)
-            or any(phrase in text.lower() for phrase, _v in _arithmetic.DURATION_WORDS)):
+    # Any duration the shared rule reads, "four hours" in words too (r22 4a7fe20c: "and close
+    # to four hours a month at three office days a week" went as no arithmetic at all).
+    if not (_arithmetic.figure_spans(text) or _arithmetic.JOURNEY_COUNT.search(text)
+            or _arithmetic.products(text)):
         return False
     label = line[:80].split(":", 1)[0] if ":" in line[:80] else ""
     scope = f"{label} {previous_clause} {context} {text}"
@@ -2553,9 +2599,20 @@ def _arithmetic_evidenced(fragment: str, *, context: str, previous_clause: str, 
             or _arithmetic.JOURNEY_COUNT.search(text)
             or (caps and re.search(r"\b(?:limit|cap|max(?:imum)?|spare|headroom|margin|buffer)\b", scope, re.I))):
         return False      # no arithmetic here: cheap exit, before any line-wide work
-    if _line_has_wrong_base(line, tuple(measured), tuple(sorted(set(days) | set(user_days) | {5.0}))):
+    if all(_line_has_wrong_base(line, tuple(sorted({r["minutes"] for r in variant})),
+                                tuple(sorted(set(days) | set(user_days) | {5.0})))
+           for variant in _arithmetic.route_variants(routes)):
         return False      # consistency: a wrong base takes the line's totals with it
-    plain = _OVER_A_PERIOD.sub(" ", _ROUTE_COMPARATIVE.sub(" ", _SUPERLATIVE.sub(" ", text)))
+    # A bound on a period total ("just under an hour a week", "over 50 minutes a week") is the
+    # shared rule's: it is checked against the derived total there, as the critic checks it
+    # (r22 4a7fe20c), so its bound word is no fit verdict here.
+    unbounded = text
+    for start, end, _value in _arithmetic.figure_spans(text):
+        bound = _arithmetic._HEDGED_BOUND.search(text[max(0, start - 30):start])
+        if bound and _PERIOD_AFTER_BOUND.match(text, end):
+            at = max(0, start - 30) + bound.start()
+            unbounded = unbounded[:at] + " " * (start - at) + unbounded[start:]
+    plain = _OVER_A_PERIOD.sub(" ", _ROUTE_COMPARATIVE.sub(" ", _SUPERLATIVE.sub(" ", unbounded)))
     plain = re.sub(r"\b(?:over|than|versus|vs\.?|against)\s+(?:[A-Z][\w'’-]*\s*){1,3}", " ", plain)
     if caps:
         # A margin's own direction word is checked by the margin rule: "25 − 19 = 6 minutes
@@ -2598,7 +2655,8 @@ def _owned_by_named_routes(fragment: str, bindings: list, caps: set) -> bool:
         return False
     key = f" {_label_key(text)} "
     for index, figure in enumerate(figures):
-        head = f" {_label_key(text[:figure.start()])} "
+        # "versus Stratford's 4-minute walk": the possessive names Stratford (r21 8f4f0a00)
+        head = f" {_label_key(_POSSESSIVE.sub('', text[:figure.start()]))} "
         best, best_at = None, -1
         for binding in bindings:
             if binding.get("members") or binding.get("minutes") is None:
@@ -2837,6 +2895,15 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
     # the DIFFERENCE of two of this turn's measurements, quoted with a comparative (R2-25).
     measured = sorted({c["minutes"] for c in pool if c.get("minutes") is not None})[:40]
     differences = {round(abs(a - b), 2) for i, a in enumerate(measured) for b in measured[i + 1:]}
+    # ... under each consistent choice of a place's measurements (r21 8f4f0a00)
+    for variant in _arithmetic.route_variants(
+            [{"labels": list(c.get("labels") or []), "minutes": c["minutes"],
+              "alternatives": list(c.get("place_alternatives") or [])}
+             for c in pool if c.get("minutes") is not None and c.get("place_alternatives")] +
+            [{"labels": list(c.get("labels") or []), "minutes": c["minutes"]}
+             for c in pool if c.get("minutes") is not None and not c.get("place_alternatives")]):
+        values = sorted({r["minutes"] for r in variant})
+        differences |= {round(abs(a - b), 2) for i, a in enumerate(values) for b in values[i + 1:]}
     lines: list[str] = []
     source_lines = str(text or "").split("\n")
     # Period tables (rows = periods, columns = routes or the saving) are judged cell by cell by
@@ -2844,7 +2911,9 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
     # table that loses every row goes with its header (r19 de1fba15).
     table_rows = _arithmetic.period_table_rows(
         text, [{"labels": list(c.get("labels") or []), "minutes": c["minutes"],
-                "mode": c.get("mode") or "transit"} for c in pool if c.get("minutes") is not None],
+                "mode": c.get("mode") or "transit",
+                "alternatives": list(c.get("place_alternatives") or [])}
+               for c in pool if c.get("minutes") is not None],
         user_days=user_days, answer_days=answer_days)
     tables_kept: dict = {}
     produced_at: list[int] = []        # len(lines) before each source line was processed
@@ -2972,8 +3041,11 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 (re.match(r"\s*by\b", fragment, re.I)
                  or re.search(r"\b(?:each|one)\s+way\b|\bper\s+(?:trip|journey)\b", fragment, re.I))
                 and (_COMPARATIVE_DIFFERENCE.search(previous_clause) or _VERSUS.search(previous_clause))))
+            # ... and nothing else: "saves you 7 minutes each way and roughly 5 hours a month"
+            # is a period total too, which the arithmetic below judges (r21 8f4f0a00).
             if (values and differences and comparative
-                    and all(round(value, 2) in differences for value in values)):
+                    and all(round(value, 2) in differences for value in values)
+                    and not _HOURS_AND_MINUTES.search(fragment)):
                 return True
             if _arithmetic_evidenced(fragment, context=context, previous_clause=previous_clause,
                                      line=line, pool=pool, days=answer_days, subject=effective,
@@ -3087,7 +3159,13 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                         and not local.get("members")):
                     own = local
             heading_now[0] = heading if m.start() < heading_reach else ""
-            if not _evidenced(m.group(0), own, context=attached,
+            # "Per week: 54 minutes (18 minutes × 3 days)": the aside is the working of the
+            # total before it, judged as one product with it (the critic reads the same
+            # sentence the same way), not as a figure of its own (r22 4a7fe20c).
+            combined = f"{attached}{m.group(0)}"
+            working = any(p["span"][1] == len(combined) and p["span"][0] < len(attached)
+                          for p in _arithmetic.products(combined))
+            if not _evidenced(combined if working else m.group(0), own, context="" if working else attached,
                               sentence_marked=bool(_ESTIMATE_MARKER.search(
                                   _sentence_around(m.start(), m.end())))):
                 removed.append(m.group(0))
@@ -3172,6 +3250,21 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             named = _line_binding(plain, bindings) if plain else None
             return bool(named and named.get("labels") and not named.get("members")
                         and _label_key(plain) in {_label_key(label) for label in named["labels"]})
+
+        def _drop_orphan_enumeration() -> None:
+            # The withdrawn clause was the tail and predicate of an enumeration: "…, so nearby
+            # areas such as Islington, Hoxton, Bethnal Green, <Whitechapel or Clerkenwell often
+            # give more options within a 25-minute commute>." left "…such as Islington, Hoxton,
+            # Bethnal Green." (r20 3745b76a). The enumeration has no predicate left, so it goes
+            # with it, back to the clause that opened it.
+            end = len(kept)
+            while (end > sentence_start + 1 and _ENUMERATION_ITEM.fullmatch(kept[end - 1].strip(" ,，、\t"))
+                   and not _FINITE_VERB.search(kept[end - 1])):
+                end -= 1
+            if end < len(kept) and end > sentence_start and _ENUMERATION_LEAD.search(kept[end - 1].rstrip(" ,，、\t")) \
+                    and not _FINITE_VERB.search(_ENUMERATION_LEAD.split(kept[end - 1])[-1]):
+                removed.extend(kept[end - 1:])
+                del kept[end - 1:]
 
         def _close_sentence() -> None:
             # A sentence that lost its claim and kept only a lead-in ("If you want to continue
@@ -3317,6 +3410,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                     # The sentence ends with the withdrawn clause. What is left of it either
                     # goes whole (a stub) or keeps the full stop, so it does not run on into
                     # the next sentence ("B is nice, C is nice.").
+                    _drop_orphan_enumeration()
                     opened_at = sentence_start
                     _close_sentence()
                     if len(kept) > opened_at:
@@ -3533,6 +3627,12 @@ def _without_touched_sentences(body: str, removed_fragments: list) -> str:
     if len(kept) == len(sentences):
         return ""            # the withdrawal cannot be located: keep nothing of this line
     return "".join(kept).strip()
+
+
+# A bare item of an enumeration ("Hoxton", "Bethnal Green", "and King's Cross"), and the
+# words that open one ("such as Islington").
+_ENUMERATION_ITEM = re.compile(r"(?:(?:and|or)\s+)?[A-Z][\w'’.-]*(?:\s+[A-Z][\w'’.-]*){0,3}")
+_ENUMERATION_LEAD = re.compile(r"\b(?:such\s+as|including|like|e\.g\.?|for\s+example)\s+(?=[A-Z])")
 
 
 def _stub_remnant(text: str) -> bool:
@@ -3850,6 +3950,33 @@ def render_structured_evidence_fallback(state: dict, *, language: str | None = N
     return "\n".join(lines)
 
 
+_ORDINAL_LEAD = re.compile(r"^\s*(?:first(?:ly)?|second(?:ly)?|third(?:ly)?|fourth(?:ly)?|finally|lastly)\s*[,:]\s*", re.I)
+_COUNT_LEAD_IN = re.compile(
+    r"^\s*(?:two|three|four|a\s+couple\s+of|a\s+few)\s+(?:more\s+)?(?:things|points|caveats|notes|details|"
+    r"reminders)\b[^.!?]{0,60}[.!?:]\s*$", re.I)
+
+
+# What a sentence ASSERTS about the listing being live, without the clauses that assert
+# nothing (r07 9f5e1f70): an indirect question ("Ask the agent whether the flat is still
+# available"), a question ("Is the property still available, and from what date?") and an
+# offer of a future lookup ("I can also fetch live TfL fare and journey information").
+# "It is still available — want me to book?" keeps its claim; so does "I can confirm it is
+# still available" (confirm is not an offer of a lookup).
+_INDIRECT_QUESTION = re.compile(r"\b(?:whether|if)\b[^.;!?,—–:()]*", re.I)
+_LOOKUP_OFFER = re.compile(
+    r"\b(?:I|we)\s+(?:can|could|will|['’]ll|would\s+be\s+happy\s+to|am\s+happy\s+to|['’]m\s+happy\s+to)"
+    r"\s+(?:also\s+)?(?:re-?)?(?:fetch|pull|get|check|look\s+up|run|bring\s+up|show)\b[^.;!?,—–:()]*", re.I)
+
+
+def _asserted_part(sentence: str) -> str:
+    body = sentence.rstrip(" \t*_)]")
+    if body.endswith(("?", "？")):
+        # the question is its last clause: what follows the last stop, dash or colon before it
+        cut = max(body.rfind(mark, 0, len(body) - 1) for mark in ".;!?。！？—–:")
+        sentence = sentence[:cut + 1]
+    return _INDIRECT_QUESTION.sub(" ", _LOOKUP_OFFER.sub(" ", sentence))
+
+
 def validate_evidence_scope(response: str, state: dict) -> str:
     """Withdraw provenance/scope claims unsupported by the relevant tool's OWN result.
 
@@ -3902,8 +4029,12 @@ def validate_evidence_scope(response: str, state: dict) -> str:
                   "gp": re.compile(r"\bgps?\b|\bdoctors?\b|medical\s+cent(?:er|re)|\bclinics?\b|全科|诊所|医疗中心", re.I)}
     changed: set[str] = set()
     kept = []
+    kept_separators: list[str] = []
+    dropped_ordinal = False
     safety_context = False
-    for sentence in _guard_text_parts(text, sentences=True):
+    separators: list[str] = []
+    sentences = _guard_text_parts(text, sentences=True, separators=separators)
+    for sentence, separator in zip(sentences, separators):
         if safety_topic.search(sentence):
             safety_context = True
         elif re.search(r"nearby|amenities|weather|listing details|周边|天气|房源详情", sentence, re.I):
@@ -3914,7 +4045,12 @@ def validate_evidence_scope(response: str, state: dict) -> str:
             r"does\s+not\s+(?:verify|prove|confirm).{0,80}(?:coordinates?|point|used)|"
             r"(?:coordinates?|reference).{0,35}(?:not verified|not confirmed|unknown)|"
             r"(?:safety|police|crime).{0,35}(?:not checked|not verified)|"
-            r"(?:无法|未|不能)(?:确认|核实|证明).{0,25}(?:坐标|参考点)|不能从周边设施查询推断", sentence, re.I))
+            r"(?:无法|未|不能)(?:确认|核实|证明).{0,25}(?:坐标|参考点)|不能从周边设施查询推断|"
+            # "…the geocoded centre of the area, not any particular street or home", "…the EC1V
+            # postcode district centre, not the flat itself", "…不是这套房源的具体门牌坐标" say the
+            # check was NOT on the listing (r07 0b47cbae, d5379b52, 317d972f; r10 04df255b)
+            r"\bnot\s+(?:any\s+particular|a\s+specific|the|this|that)\s+(?:street|home|flat|property|listing|address)\b|"
+            r"不是(?:这套|该|此)?(?:房源|公寓|住宅)", sentence, re.I))
         if safety_context and not point_caveat:
             refs = [(raw.get("reference_point") or (raw.get("crime_data") or {}).get("reference_point") or {})
                     for raw in safety]
@@ -3925,18 +4061,25 @@ def validate_evidence_scope(response: str, state: dict) -> str:
                     for ref in refs) for lat, lon in pairs):
                 drop = True
                 changed.add("safety")
-            if point_claim.search(sentence):
+            if point_claim.search(_asserted_part(sentence)):     # an offer to re-run it asserts nothing
                 # Supplied coordinates establish the queried point, not the identity of a
                 # listing. Only an explicit identity attestation can support that claim.
                 if not refs or not all(ref.get("coordinate_identity_verified") is True for ref in refs):
                     drop = True
                     changed.add("safety")
+        # "not a live check", "have not been verified as current" are caveats too (r21 0136f2f6).
         live_caveat = bool(re.search(
-            r"\bnot\s+(?:live|real.time)|not\s+(?:yet\s+)?(?:verified|confirmed|checked).{0,20}(?:live|current)|"
+            r"\bnot\s+(?:a\s+)?(?:live|real.time)|"
+            r"(?:not|never|n['’]t)\s+(?:yet\s+)?(?:been\s+)?(?:verified|confirmed|checked).{0,20}(?:live|current)|"
+            r"\b(?:prices?|rents?|availability)\b[^.;!?]{0,25}\b(?:are|is|remains?|stays?)\s+unverified\b|"
             r"(?:cannot|can't)\s+(?:confirm|verify).{0,35}(?:current|availability|live)|"
             r"current\s+(?:price|rent|availability).{0,20}(?:unknown|unverified)|"
-            r"(?:未|不|无法)(?:能|曾)?(?:实时|核实|确认)|并非实时|不是实时", sentence, re.I))
-        if cache_only and live_claim.search(sentence) and not live_caveat:
+            r"(?:未|不|无法)(?:能|曾)?(?:实时|核实|确认)|并非实时|不是实时|"
+            # "没有实时核实", "未经实时核实" (r07 51baa15d, 948b7745); "实时租金请向中介确认" is the
+            # advice to get the live rent from the agent (r07 d3b985eb)
+            r"(?:没有|没|未经|尚未|并未)(?:经过)?(?:实时|核实)|"
+            r"实时[^，。；,;]{0,8}请(?:先)?(?:向|跟|与|和)?中介(?:确认|核实|询问)", sentence, re.I))
+        if cache_only and live_claim.search(_asserted_part(sentence)) and not live_caveat:
             drop = True
             changed.add("cache")
         no_query_claim = bool(re.search(
@@ -3960,8 +4103,25 @@ def validate_evidence_scope(response: str, state: dict) -> str:
                         changed.add(kind)
         if not drop:
             kept.append(sentence)
+            kept_separators.append(separator)
+        else:
+            dropped_ordinal = dropped_ordinal or bool(_ORDINAL_LEAD.match(sentence))
+            if kept_separators and "\n" in separator and "\n" not in kept_separators[-1]:
+                # the last sentence of a paragraph went: its paragraph break stays
+                kept_separators[-1] = separator
     if not changed:
         return text
+    if dropped_ordinal:
+        # "Two things to keep in mind. First, <withdrawn>. Second, …" must not ship as "Two
+        # things to keep in mind. Second, …" (r21 0136f2f6): the count goes, and so do the
+        # ordinals of the items that stay.
+        lead_ins = [index for index, sentence in enumerate(kept) if _COUNT_LEAD_IN.match(sentence)]
+        for index in reversed(lead_ins):
+            if index and "\n" in kept_separators[index] and "\n" not in kept_separators[index - 1]:
+                kept_separators[index - 1] = kept_separators[index]
+            del kept[index], kept_separators[index]
+        kept = [_ORDINAL_LEAD.sub(lambda m: "", sentence, count=1) for sentence in kept]
+        kept = [sentence[:1].upper() + sentence[1:] if sentence[:1].islower() else sentence for sentence in kept]
     notes = []
     if "safety" in changed:
         for raw in safety:
@@ -3988,7 +4148,12 @@ def validate_evidence_scope(response: str, state: dict) -> str:
     evidence = render_structured_evidence_fallback(state)
     if evidence:
         notes.append(evidence)
-    return "\n".join(part for part in kept + notes if part.strip()).strip()
+    # Paragraphs, list items and line breaks as written (they used to come back one sentence
+    # per line, r07 9f5e1f70); the notes follow as a paragraph of their own.
+    body = "".join(sentence + separator for sentence, separator in zip(kept, kept_separators)).strip()
+    body = re.sub(r"\n{3,}", "\n\n", body)
+    return "\n\n".join(part for part in [body, "\n".join(note for note in notes if note.strip())]
+                       if part.strip()).strip()
 
 
 # Below this a reply is one claim, and the fixed sentence IS the honest answer.

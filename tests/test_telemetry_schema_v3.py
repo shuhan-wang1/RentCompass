@@ -34,7 +34,6 @@ if str(_ROOT / "app") not in sys.path:
 from core import canary_telemetry as ct  # noqa: E402
 from core import turn_observations as tobs  # noqa: E402
 
-os.environ.setdefault("CANARY_USER_HASH_KEY", "schema-v3-test-key")
 
 
 def _load_report():

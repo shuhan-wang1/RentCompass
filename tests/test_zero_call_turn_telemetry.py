@@ -42,7 +42,6 @@ from core.canary_telemetry import (  # noqa: E402
 )
 import canary_report  # noqa: E402
 
-os.environ.setdefault("CANARY_USER_HASH_KEY", "zero-call-test-key")
 
 _SHA = "042c4775670ec5f8f2260dbffb65b911a8d1b234"
 _T0 = datetime(2026, 7, 25, 12, 0, 0, tzinfo=timezone.utc)

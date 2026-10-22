@@ -35,7 +35,6 @@ def _load_report_module():
 
 cr = _load_report_module()
 NOW = datetime(2026, 8, 30, 12, 0, 0, tzinfo=timezone.utc)
-os.environ.setdefault("CANARY_USER_HASH_KEY", "rollout-identity-test-key")
 
 
 def _signals(*, forbidden_write: int = 0) -> dict:

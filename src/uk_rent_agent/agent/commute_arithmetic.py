@@ -25,9 +25,10 @@ whether "40 minutes a week" follows from Holloway 25 and Kentish Town 21 (r13 22
 """
 from __future__ import annotations
 
+import bisect
 import functools
 import re
-from itertools import combinations
+from itertools import combinations, product as _cartesian
 from typing import Any, Iterable
 
 STANDARD_DAYS = 5.0
@@ -53,21 +54,31 @@ DAY_PERIOD = re.compile(r"\b(?:a|per|each|every)\s+(?:working\s+|office\s+|commu
                         r"\bthere\s+and\s+back\b|\btwo\s+journeys\b|\b2\s+journeys\b", re.I)
 WEEK_PERIOD = re.compile(r"\b(?:a|per|each|every)\s+week\b|\bweekly\b|\bweek\b", re.I)
 # A product: "12 minutes × 2 journeys × 5 days = **120 minutes (2 hours) a week**".
-_UNITS = r"minutes?|mins?|journeys?|trips?|ways?|days?|times|legs?|weeks?|months?"
+_UNITS = r"minutes?|mins?|journeys?|trips?|ways?|(?:office\s+|working\s+|commuting\s+)?days?|times|legs?|weeks?|months?"
 _OPERAND = r"(\d+(?:\.\d+)?)\s*(" + _UNITS + r")?\b"
 _OPERAND_NC = r"\d+(?:\.\d+)?\s*(?:" + _UNITS + r")?\b"
 # A bare result is minutes when the period follows it: "38 x 3 = 114 a week" (r19 W3b) was
 # no product at all, so a wrong step on a removed figure shipped unjudged. Money is no operand.
+# The operator may be written in words: "54 minutes times 4 = 216 minutes", "18 minutes
+# multiplied by 3 days" (r22 4a7fe20c) — never a bare "by" ("faster by 9 minutes").
+_TIMES = r"(?:[×x*]|\btimes\b|\bmultiplied\s+by\b)"
 PRODUCT = re.compile(
-    r"(?<![\d.,£$€])" + _OPERAND + r"((?:\s*[×x*]\s*" + _OPERAND_NC + r"){1,3})"
+    r"(?<![\d.,£$€])" + _OPERAND + r"((?:\s*" + _TIMES + r"\s*" + _OPERAND_NC + r"){1,3})"
     r"\s*=\s*[*_]*\s*(\d+(?:\.\d+)?)[ \t]{0,3}(?:(minutes?|mins?|hours?|hrs?)"
     r"|(?=(?:a|per|each|every)[ \t]{1,3}(?:day|week|month|year)\b))", re.I)
-_PRODUCT_TERM = re.compile(r"[×x*]\s*" + _OPERAND, re.I)
+# ... or as an aside on the total it explains: "Per week: 54 minutes (18 minutes × 3 days)",
+# "(3 days × 18 minutes)" — the operands are the total's working, not claims of their own.
+PRODUCT_ASIDE = re.compile(
+    r"(?<![\d.,£$€])(\d+(?:\.\d+)?)[ \t]{0,3}(minutes?|mins?|hours?|hrs?)[ \t]{0,3}[*_]{0,3}[ \t]{0,3}\("
+    r"[ \t]{0,3}" + _OPERAND + r"((?:[ \t]{0,3}" + _TIMES + r"[ \t]{0,3}" + _OPERAND_NC + r"){1,3})"
+    r"(?:[ \t]{0,3}(?:a|per|each)[ \t]{1,3}week)?[ \t]{0,3}\)", re.I)
+_PRODUCT_TERM = re.compile(_TIMES + r"\s*" + _OPERAND, re.I)
 _COUNT_UNITS = ("journey", "trip", "way", "time", "leg")
 
 
 _WORD_HOURS = re.compile(
     r"\b(one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:and\s+an?\s+(half|quarter)\s+)?hours?\b", re.I)
+WORD_HOURS = _WORD_HOURS            # "four hours", "two and a half hours", for the redactor
 _HOUR_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
                "nine": 9, "ten": 10}
 
@@ -85,15 +96,21 @@ def durations(text: Any) -> list[float]:
 def days_stated(text: Any) -> set[float]:
     """Commuting days per week a text states: "a five-day week", "3 days a week", "three
     office days", "4 days in the office" (r14 95f29d0b)."""
+    return set(_days_stated(str(text or "")))
+
+
+# Cached: figure_days asks for the sentence's days once per figure (quadratic on a long one).
+@functools.lru_cache(maxsize=256)
+def _days_stated(text: str) -> frozenset:
     days = set()
     pattern = (r"\b(" + _NUMBER_WORD + r")[\s-]*(?:office\s+)?days?"
                r"(?:\s+(?:a|per)\s+week|[\s-]+(?:office\s+)?(?:week|commute)|\s+in\s+the\s+office)"
                r"|\b(" + _NUMBER_WORD + r")\s+office\s+days?\b"
                r"|\bon\s+(" + _NUMBER_WORD + r")\s+days\b")
-    for match in re.finditer(pattern, str(text or ""), re.I):
+    for match in re.finditer(pattern, text, re.I):
         word = (match.group(1) or match.group(2) or match.group(3)).lower()
         days.add(float(WORD_NUMBERS.get(word) or int(word)))
-    return days
+    return frozenset(days)
 
 
 def differences(measured: Iterable[float]) -> dict[float, list[tuple[float, float]]]:
@@ -118,7 +135,7 @@ def close(value: float, target: float, hedged: bool, rounding: float = 0.5) -> b
 
 # A month is 52/12 weeks however the answer writes the factor; four weeks only when it says so.
 WEEKS_PER_MONTH = (52.0 / 12.0, 4.3, 4.33, 4.345)
-FOUR_WEEK_MONTH = re.compile(r"\b(?:4|four)[\s-]*weeks?\b|[×x*]\s*4(?![\d.])", re.I)
+FOUR_WEEK_MONTH = re.compile(r"\b(?:4|four)[\s-]*weeks?\b|(?:[×x*]|\btimes\b|\bmultiplied\s+by\b)\s*4(?![\d.])", re.I)
 LONG_PERIOD = re.compile(r"\b(?:a|per|each|every|over\s+(?:a|the)(?:\s+typical)?|in\s+a)\s+(?:month|year)\b|"
                          r"\bmonthly\b|\byearly\b|\bannual(?:ly)?\b", re.I)
 # The rent's period is not the commute's: "£2,350 a month", "2,350 pcm".
@@ -132,17 +149,34 @@ _MONEY_PERIOD = re.compile(
 
 def without_money(text: str) -> str:
     """``text`` with each money figure and the period it is quoted for blanked, in place."""
-    return _MONEY_PERIOD.sub(lambda m: " " * len(m.group()), str(text or ""))
+    return _without_money(str(text or ""))
+
+
+@functools.lru_cache(maxsize=256)
+def _without_money(text: str) -> str:
+    # Cached: figure_unit asks for the whole text and sentence once per FIGURE, which made a
+    # long answer quadratic (25 KB of "about 3 hours a month, …" took 11 s in the critic).
+    return _MONEY_PERIOD.sub(lambda m: " " * len(m.group()), text)
 
 
 _DECIMAL_HOURS = re.compile(r"\s*\d+\.(\d+)\s*(?:hours?|hrs?|h)\b", re.I)
 
 
+_WHOLE_HOURS = re.compile(r"\s*(\d{1,2})\s*" + _MORE + r"(?:hours?|hrs?)\b(?!\s*(?:and\s+)?\d)", re.I)
+
+
 def written_rounding(figure: str) -> float:
     """Half a unit of the last digit ``figure`` is written to, in minutes: "3.5 hours" is any
-    time from 3.45 to 3.55 hours (3 minutes either way); "208 minutes" is 207.5 to 208.5."""
+    time from 3.45 to 3.55 hours (3 minutes either way); "208 minutes" is 207.5 to 208.5; "3
+    hours" (two or more whole hours, no minutes) is written to the hour — "the 3 hours a month"
+    for 182 minutes (r21 8f4f0a00)."""
     match = _DECIMAL_HOURS.match(str(figure or ""))
-    return max(0.5, 30.0 * 10 ** -len(match.group(1))) if match else 0.5
+    if match:
+        return max(0.5, 30.0 * 10 ** -len(match.group(1)))
+    whole = _WHOLE_HOURS.match(str(figure or ""))
+    if whole and int(whole.group(1)) >= 2:
+        return 29.0       # to the nearest hour; an exact half ("2 hours" for 90 minutes) is not
+    return 0.5
 
 
 def is_difference(value: float, measured: Iterable[float], involving: float | None = None) -> bool:
@@ -164,15 +198,32 @@ def is_derived_total(value: float, measured: Iterable[float], days: Iterable[flo
     return False
 
 
+def _unit_word(unit: str | None) -> str:
+    """An operand's unit, lower-cased, "3 office days" read as "3 days"."""
+    return re.sub(r"^(?:office|working|commuting)\s+", "", (unit or "").lower())
+
+
 def products(text: Any) -> list[dict]:
     """Every explicit product in ``text``: operands with units, stated result in minutes."""
     found = []
-    for match in PRODUCT.finditer(str(text or "")):
-        operands = [(float(match.group(1)), (match.group(2) or "").lower())]
-        operands += [(float(term.group(1)), (term.group(2) or "").lower())
+    text = str(text or "")
+    for match in PRODUCT.finditer(text):
+        operands = [(float(match.group(1)), _unit_word(match.group(2)))]
+        operands += [(float(term.group(1)), _unit_word(term.group(2)))
                      for term in _PRODUCT_TERM.finditer(match.group(3))]
         result = float(match.group(4)) * (60.0 if (match.group(5) or "").lower().startswith("h") else 1.0)
         found.append({"operands": operands, "result": result, "span": match.span()})
+    for match in PRODUCT_ASIDE.finditer(text):
+        if any(f["span"][0] < match.end() and match.start() < f["span"][1] for f in found):
+            continue
+        operands = [(float(match.group(3)), _unit_word(match.group(4)))]
+        operands += [(float(term.group(1)), _unit_word(term.group(2)))
+                     for term in _PRODUCT_TERM.finditer(match.group(5))]
+        if not any(unit.startswith("min") for _value, unit in operands):
+            continue          # "(3 × 2)" with no minutes is no journey working
+        result = float(match.group(1)) * (60.0 if match.group(2).lower().startswith("h") else 1.0)
+        found.append({"operands": operands, "result": result, "span": match.span()})
+    found.sort(key=lambda f: f["span"])
     return found
 
 
@@ -290,7 +341,7 @@ _SENTENCE = re.compile(r"(?:[^.!?\n]|\.(?=\d)|(?<=\b(?:St|Dr|Mr|Ms|vs|No))\.|(?<
 _ARITHMETIC_CUE = re.compile(
     r"\b(?:each|one)\s+way\b|\bper\s+(?:trip|journey)\b|\bsaves?\b|\bsaving\b|\bdifference\b|\bgap\b|"
     r"\b(?:quicker|faster|shorter|longer|slower|less|more|extra)\b|\bversus\b|\bvs\.?|\bover\b|\bthan\b|"
-    r"\bagainst\b|[×*−]|\bx\s*\d|\bminus\b", re.I)
+    r"\bagainst\b|[×*−]|\bx\s*\d|\bminus\b|\btimes\s*\d|\bmultiplied\s+by\b", re.I)
 COMPARISON_CUE = re.compile(
     r"\b(?:versus|vs\.?|over|than|compared|against|saves?|saving|difference|gap|quicker|faster|"
     r"shorter|longer|slower|less|more|extra|instead\s+of|minus)\b|[−]", re.I)
@@ -304,14 +355,26 @@ BASE_FIGURE = re.compile(
 
 
 def _key(text: Any) -> str:
-    lowered = re.sub(r"(?<=[a-z])['’]s\b", "", str(text or "").lower())
+    return _key_of(str(text or ""))
+
+
+# Cached: every figure asks for its sentence's key once per route, which made a long answer
+# quadratic (17 KB of "Stratford 20 minutes versus Bow 27 minutes, …" took 6 s).
+@functools.lru_cache(maxsize=1024)
+def _key_of(text: str) -> str:
+    lowered = re.sub(r"(?<=[a-z])['’]s\b", "", text.lower())
     return " ".join(re.sub(r"[^a-z0-9一-鿿]+", " ", lowered.replace("’", "").replace("'", "")).split())
+
+
+@functools.lru_cache(maxsize=256)
+def _padded_key(text: str) -> str:
+    return f" {_key_of(text)} "
 
 
 def _mentions(text: Any, label: Any) -> int:
     """Position of ``label`` in ``text`` as whole words (on the normalised text), or -1."""
     key = _key(label)
-    return f" {_key(text)} ".find(f" {key} ") if key else -1
+    return _padded_key(str(text or "")).find(f" {key} ") if key else -1
 
 
 # A journey by bike or by car is a DIFFERENT journey from the public-transport one the turn
@@ -443,10 +506,14 @@ def _bases_uncached(text: str, measured: list, days: set) -> tuple[set, bool]:
     for product in products(text):
         if any(s0 < product["span"][1] and product["span"][0] < s1 for s0, s1 in conversions):
             continue
-        first = product["operands"][0][0]
+        # the minutes operand, wherever it is written: "(3 days × 18 minutes)" (r22 4a7fe20c)
+        first = next((v for v, unit in product["operands"] if unit.startswith("min")),
+                     next((v for v, unit in product["operands"] if not unit), product["operands"][0][0]))
         if is_difference(first, measured):
             valid.add(first)
-        elif not (any(abs(first - m) < 1e-9 for m in measured) or _derived_exactly(first, valid, days)):
+        elif not (any(abs(first - m) < 1e-9 for m in measured) or _derived_exactly(first, valid, days)
+                  # "- Per week: 14 × 3 = 42" chains the "7 × 2 = 14" of the line before (r21)
+                  or (not valid and _derived_exactly(first, set(differences(measured)), days))):
             wrong = True
     return valid, wrong
 
@@ -477,13 +544,15 @@ def _own_time_each_way(text: str, match, measured: Iterable[float]) -> bool:
     return not COMPARISON_CUE.search(_SIDE_BY_SIDE.sub(" ", lead))
 
 
+_ROUTE_AFTER_STOP = re.compile(r"\d|[,;()]|\s(?:and|but|while)\s|[—–]")
+
+
 def _route_after(text: str, start: int, routes: list) -> dict | None:
     """The route compared WITH right after a figure, inside the figure's own clause: "18
     minutes vs Holloway, 96 minutes vs Camden" (r16) gives each figure its own target, while
     "(about half an hour) and … against Camden (…)" gives "half an hour" none."""
-    segment = text[start:]
-    stop = re.search(r"\d|[,;()]|\s(?:and|but|while)\s|[—–]", segment)
-    segment = segment[:stop.start()] if stop else segment
+    stop = _ROUTE_AFTER_STOP.search(text, start)       # from ``start``: no copy of the rest
+    segment = text[start:stop.start()] if stop else text[start:]
     match = re.search(r"\b(?:over|versus|vs\.?|than|compared\s+(?:with|to)|against)\s+(.{1,60})", segment, re.I)
     if not match:
         return None
@@ -504,15 +573,74 @@ def _first_route(text: str, routes: list, *, other_than: dict | None = None) -> 
 
 
 def _route_before(text: str, end: int, routes: list) -> dict | None:
+    """The route named last before ``end``: the rightmost whole-word mention of one of its
+    labels in ``_key(text[:end])``. Answered from the text's token index (built once per text)
+    instead of the key of the whole prefix per figure, which made a long answer quadratic."""
+    text = str(text or "")
+    index = _token_index(text)
+    starts, ends, before, tokens = index
+    chunk = bisect.bisect_right(starts, end - 1) - 1
+    tail: list = []
+    if chunk < 0:
+        complete = 0
+    elif ends[chunk] <= end:
+        complete = before[chunk + 1]
+    else:
+        complete = before[chunk]              # the chunk ``end`` cuts: its own prefix's tokens
+        tail = _key(text[starts[chunk]:end]).split()
+
+    def token(i: int) -> str:
+        return tokens[i] if i < complete else tail[i - complete]
+
     best, best_at = None, -1
-    head = f" {_key(text[:end])} "
     for route in routes:
         for label in route["labels"]:
             key = _key(label)
-            at = head.rfind(f" {key} ") if key else -1
+            if not key:
+                continue
+            words = key.split()
+            n = len(words)
+            at = -1
+            for s in range(complete + len(tail) - n, max(0, complete - n + 1) - 1, -1):
+                if all(token(s + k) == words[k] for k in range(n)):
+                    at = s                     # a mention reaching into the cut chunk
+                    break
+            if at < 0:
+                found = _key_occurrences(text, key)
+                j = bisect.bisect_right(found, complete - n) - 1
+                at = found[j] if j >= 0 else -1
             if at > best_at:
                 best, best_at = route, at
     return best
+
+
+# Characters that end a token in every step of ``_key`` (not a word character, not an
+# apostrophe, lower-cased to themselves): the key of a text is the keys of the runs between
+# them, joined, so a prefix's key is the complete runs' tokens plus the cut run's own.
+_TOKEN_BOUNDARY = re.compile(r"[\s!-&(-/:-@\[-^`{-~，。；：！？、（）「」『』【】《》“”‘—–…·]")
+
+
+@functools.lru_cache(maxsize=64)
+def _token_index(text: str) -> tuple:
+    starts, ends, before, tokens = [], [], [0], []
+    position = 0
+    for match in _TOKEN_BOUNDARY.finditer(text + " "):
+        if match.start() > position:
+            starts.append(position)
+            ends.append(match.start())
+            tokens.extend(_key(text[position:match.start()]).split())
+            before.append(len(tokens))
+        position = match.end()
+    return starts, ends, before, tokens
+
+
+@functools.lru_cache(maxsize=256)
+def _key_occurrences(text: str, key: str) -> list:
+    """Token offsets of every whole-word mention of ``key`` in the text's token index."""
+    tokens = _token_index(text)[3]
+    words = key.split()
+    n = len(words)
+    return [i for i in range(len(tokens) - n + 1) if tokens[i] == words[0] and tokens[i:i + n] == words]
 
 
 _COMPARED_WORD = r"(?:over|versus|vs\.?|than|compared\s+(?:with|to)|against)"
@@ -536,12 +664,18 @@ def _route_just_before(text: str, start: int, routes: list) -> dict | None:
 
 def _compared_routes(sentence: str, routes: list) -> list:
     """Routes the sentence names right after a comparison word ("over X", "against X")."""
-    out = []
-    for route in routes:
-        if any(re.search(r"\b" + _COMPARED_WORD + r"\s+(?:the\s+)?" + re.escape(str(label)) + r"\b", sentence, re.I)
-               for label in route["labels"] if str(label).strip()):
-            out.append(route)
-    return out
+    chosen = _compared_route_indices(str(sentence or ""), tuple(tuple(str(label) for label in route["labels"])
+                                                              for route in routes))
+    return [routes[index] for index in chosen]
+
+
+@functools.lru_cache(maxsize=256)
+def _compared_route_indices(sentence: str, labels: tuple) -> tuple:
+    # Cached: asked once per figure of the sentence, each a scan of the whole sentence
+    # (quadratic on a long one: 35 KB of "Stratford 20 minutes versus Bow 27 minutes, …").
+    return tuple(index for index, route_labels in enumerate(labels)
+                 if any(re.search(r"\b" + _COMPARED_WORD + r"\s+(?:the\s+)?" + re.escape(label) + r"\b", sentence, re.I)
+                        for label in route_labels if label.strip()))
 
 
 def pair_differences(*, text: str, at: int, sentence: str, line: str, label: str, routes: list,
@@ -617,6 +751,11 @@ _BEFORE_OVER = re.compile(r"(?:over|above|beyond|past|outside|exceeds?|misses)\s
                           + _HEDGE_WORDS + r"$", re.I)
 
 
+@functools.lru_cache(maxsize=256)
+def _cap_named(sentence: str) -> bool:
+    return bool(CAP_NAMED.search(sentence))
+
+
 def margin_side(text: str, start: int, end: int, sentence: str, caps_known: bool = False,
                 lead: str = "") -> str | None:
     """'under' / 'over' when the figure at [start, end) is a margin against the user's limit:
@@ -630,9 +769,34 @@ def margin_side(text: str, start: int, end: int, sentence: str, caps_known: bool
         return "under"
     if _AFTER_OVER_CAP.search(after) or _BEFORE_OVER.search(before):
         return "over"
-    if _AFTER_OVER_BARE.search(after) and (caps_known or CAP_NAMED.search(sentence)):
+    if _AFTER_OVER_BARE.search(after) and (caps_known or _cap_named(str(sentence or ""))):
         return "over"
     return None
+
+
+# A bound right before a figure, hedged or plain: "just under an hour", "nearly 4 hours", "a
+# bit over 50 minutes", "close to four hours", "under an hour", "over 50 minutes".
+_HEDGED_BOUND = re.compile(
+    r"\b(?:(?P<below>just\s+(?:under|below|short\s+of)|(?:a\s+(?:little|bit)|slightly)\s+(?:under|below|less\s+than)|"
+    r"nearly|almost|not\s+quite)|(?P<above>just\s+(?:over|above)|(?:a\s+(?:little|bit)|slightly)\s+(?:over|above|more\s+than))|"
+    r"(?P<near>close\s+to|approaching)|"
+    r"(?P<le>under|below|less\s+than|fewer\s+than|within|no\s+more\s+than|at\s+most|up\s+to)|"
+    r"(?P<ge>over|above|more\s+than|at\s+least|beyond))\s+$", re.I)
+
+
+def _bound_holds(bound, value: float, total: float) -> bool:
+    """The derived ``total`` satisfies the hedged bound on ``value``: just under / nearly — at
+    most ``value`` and within 15% below it; just over — at least it and within 15% above; close
+    to — within 10% either side."""
+    if bound.group("below"):
+        return value * 0.85 - 1e-9 <= total <= value + 1e-9
+    if bound.group("above"):
+        return value - 1e-9 <= total <= value * 1.15 + 1e-9
+    if bound.group("le"):
+        return total <= value + 1e-9
+    if bound.group("ge"):
+        return total >= value - 1e-9
+    return abs(total - value) <= 0.10 * value + 1e-9
 
 
 _BOUND_BEFORE = re.compile(
@@ -650,7 +814,7 @@ _UNIT_PHRASES = (
                         r"\bannual(?:ly)?\b", re.I)),
     ("week", re.compile(r"\b(?:a|per|each|every|the|over\s+(?:a|the)|in\s+a|across\s+the)\s+"
                         r"(?:[\w-]+\s+){0,2}?week\b|\bweekly\b|\bweek\b", re.I)),
-    ("day", re.compile(r"\b(?:a|per|each|every)\s+(?:working\s+|office\s+)?day\b|\bdaily\b", re.I)),
+    ("day", re.compile(r"\b(?:a|per|each|every)\s+(?:working\s+|office\s+|commuting\s+)?day\b|\bdaily\b", re.I)),
 )
 _CLAUSE_BREAK = re.compile(r"[,;:—–()]|\s-\s|(?<=[.!?])\s")
 _ONE_WAY = re.compile(r"\b(?:one[\s-]way|each\s+way|in\s+each\s+direction|per\s+direction)\b", re.I)
@@ -747,10 +911,10 @@ def total_matches(value: float, diffs: Iterable[float], unit: str | None, days: 
 # Every gap is bounded (the B-01 class).
 _GAP = r"[ \t]{0,3}"
 PERIOD_STEP = re.compile(
-    r"(?<![\d.])(\d+(?:\.\d+)?)(?:" + _GAP + r"(?:minutes?|mins?))?" + _GAP + r"[×x*]" + _GAP +
+    r"(?<![\d.])(\d+(?:\.\d+)?)(?:" + _GAP + r"(?:minutes?|mins?))?" + _GAP + _TIMES + _GAP +
     r"(\d+(?:\.\d+)?)(?:" + _GAP + r"(weeks?|months?))?"
     r"(?:" + _GAP + r"(?:÷|/)" + _GAP + r"(\d+(?:\.\d+)?)(?:" + _GAP + r"months?)?)?"
-    r"(?![\d.]|" + _GAP + r"[×x*]" + _GAP + r"\d)"
+    r"(?![\d.]|" + _GAP + _TIMES + _GAP + r"\d)"
     r"(?:" + _GAP + r"=" + _GAP + r"[*_]{0,3}" + _GAP +
     r"((?:about|roughly|around|approximately|approx\.?|nearly|almost|~|≈)" + _GAP + r")?"
     r"(\d[\d,]*(?:\.\d+)?)" + _GAP + r"(minutes?|mins?|hours?|hrs?))?", re.I)
@@ -909,17 +1073,90 @@ def figure_spans(text: str) -> list:
 def _period_owned_elsewhere(sentence: str, unit: str, value: float) -> bool:
     """Every phrase of ``unit`` in ``sentence`` follows ANOTHER figure in its own clause ("about
     3.5 hours a month", "3.5 hours less commuting per month"), so none is this figure's."""
+    phrased, unowned, owners = _period_owners(str(sentence or ""), unit)
+    return phrased and not unowned and not any(abs(v - value) < 1e-9 for v in owners)
+
+
+@functools.lru_cache(maxsize=256)
+def _period_owners(sentence: str, unit: str) -> tuple[bool, bool, frozenset]:
+    """``(any phrase of unit, a phrase with no figure of its own, every owning figure)`` — once
+    per sentence and unit, not once per figure x phrase x figure (cubic on a long sentence)."""
     pattern = dict(_UNIT_PHRASES).get(unit)
     phrases = list(pattern.finditer(sentence)) if pattern else []
     if not phrases:
-        return False
-    spans = figure_spans(sentence)
+        return False, False, frozenset()
+    spans = sorted(figure_spans(sentence), key=lambda span: span[1])
+    ends = [e for _s, e, _v in spans]
+    unowned, owners = False, set()
     for phrase in phrases:
-        owners = [v for _s, e, v in spans if e <= phrase.start() and phrase.start() - e <= 30
-                  and not re.search(r"[\d,;:—–()]", sentence[e:phrase.start()])]
-        if not owners or any(abs(v - value) < 1e-9 for v in owners):
-            return False
-    return True
+        at = phrase.start()
+        found = [v for _s, e, v in spans[bisect.bisect_left(ends, at - 30):bisect.bisect_right(ends, at)]
+                 if not re.search(r"[\d,;:—–()]", sentence[e:at])]
+        if not found:
+            unowned = True
+        owners.update(found)
+    return True, unowned, frozenset(owners)
+
+
+# ONE PLACE, SEVERAL MEASUREMENTS (r21 8f4f0a00): calculate_commute timed "Bow, London" at 27,
+# the area ranking timed "Bow" at 28. A route may carry ``alternatives`` — the same place's
+# other measured times — and a claim holds when it holds under ONE consistent choice per place
+# (all of a sentence on 27, or all of it on 28): "27 each way" with "28 x 2 x 3" in one chain
+# holds under neither. The more specific measurement (the longer place name) is the first choice.
+_MAX_VARIANTS = 16
+
+
+def merge_same_place(routes: list) -> list:
+    """Routes of one place and mode as ONE route: the more specific measurement first, the
+    others' different times as its ``alternatives``."""
+    merged: list = []
+    for route in routes:
+        if route.get("minutes") is None:
+            merged.append(route)
+            continue
+        head = _place_head(route)
+        mode = route.get("mode") or "transit"
+        # The same PLACE, by its most specific name ("Bow, London" and "Bow"); a listing row
+        # that merely carries "area": "Islington" is not the Islington area route (r07 d8b4e4a1).
+        home = next((m for m in merged if m.get("minutes") is not None and head
+                     and (m.get("mode") or "transit") == mode and _place_head(m) == head), None)
+        if home is None:
+            merged.append({**route, "alternatives": list(route.get("alternatives") or [])})
+            continue
+        specific = max(len(str(l)) for l in route.get("labels") or [""]) > \
+            max(len(str(l)) for l in home.get("labels") or [""])
+        labels = list(dict.fromkeys(list(home.get("labels") or []) + list(route.get("labels") or [])))
+        if route["minutes"] != home["minutes"]:
+            if specific:
+                alternatives = [home["minutes"]] + list(home.get("alternatives") or [])
+                home.update({**route, "labels": labels})
+                home["alternatives"] = alternatives
+            elif route["minutes"] not in home.get("alternatives", []):
+                home.setdefault("alternatives", []).append(route["minutes"])
+        home["labels"] = labels
+    return merged
+
+
+def _place_head(route: dict) -> str:
+    """The key of a route's most specific place name, before its first comma."""
+    labels = [str(label) for label in route.get("labels") or [] if str(label).strip()]
+    if not labels:
+        return ""
+    return _key(max(labels, key=len).split(",", 1)[0])
+
+
+def route_variants(routes: list) -> list:
+    """Every consistent choice of one time per place, the first choice first (bounded)."""
+    options = [[{k: v for k, v in r.items() if k != "alternatives"}]
+               + [{**{k: v for k, v in r.items() if k != "alternatives"}, "minutes": float(a)}
+                  for a in r.get("alternatives") or [] if a != r.get("minutes")]
+               for r in routes]
+    out = []
+    for combo in _cartesian(*options):
+        out.append(list(combo))
+        if len(out) >= _MAX_VARIANTS:
+            break
+    return out
 
 
 def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", context: str = "",
@@ -927,6 +1164,95 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
                   known: Iterable[float] = (), skip_bounds: bool = False,
                   caps: Iterable[float] = (), user_days: Iterable[float] = (),
                   lead: str = "") -> tuple[bool, bool]:
+    """THE derived-figure rule, under each consistent choice of measurement per place."""
+    known = _sorted_figures(known)       # once for every variant (and safe for an iterator)
+    caps = _distinct_caps(caps)
+    kwargs = dict(sentence=sentence, line=line, label=label, context=context, days=days, known=known,
+                  skip_bounds=skip_bounds, caps=caps, user_days=user_days, lead=lead)
+    if not any(r.get("alternatives") for r in routes):
+        return _check_figures(text, routes=[{k: v for k, v in r.items() if k != "alternatives"} for r in routes],
+                              subject=subject, **kwargs)
+    results = []
+    for variant in route_variants(routes):
+        chosen = subject
+        if subject is not None:
+            keys = {_key(label) for label in subject.get("labels") or [] if _key(label)}
+            twin = next((r for r in variant if keys & {_key(l) for l in r.get("labels") or []}), None)
+            if twin is not None:
+                chosen = {**subject, "minutes": twin["minutes"]}
+        results.append(_check_figures(text, routes=variant, subject=chosen, **kwargs))
+        if results[-1] == (True, True):
+            return True, True
+    if any(ok for ok, _seen in results):
+        return True, False
+    return False, any(seen for _ok, seen in results)
+
+
+@functools.lru_cache(maxsize=256)
+def _scope_flags(scope: str) -> tuple[bool, bool, bool]:
+    """``(names a period, compares, a four-week month)`` for a check's scope."""
+    return (bool(DAY_PERIOD.search(scope) or WEEK_PERIOD.search(scope) or LONG_PERIOD.search(without_money(scope))),
+            bool(COMPARISON_CUE.search(scope)), bool(FOUR_WEEK_MONTH.search(scope)))
+
+
+@functools.lru_cache(maxsize=256)
+def _correct_results(text: str, measured: tuple, days: tuple) -> tuple:
+    """The results of the correct product steps of ``text``."""
+    return tuple(p["result"] for p in products(text) if product_is_correct(p, list(measured), set(days)))
+
+
+class SortedFigures(tuple):
+    """Figures sorted once (a caller checking many sentences against one evidence pool builds
+    it once); :func:`_near` reads it by bisection."""
+
+
+def _sorted_figures(figures: Iterable[float]) -> SortedFigures:
+    if isinstance(figures, SortedFigures):
+        return figures
+    return SortedFigures(sorted(float(f) for f in figures))
+
+
+def _near(value: float, figures: SortedFigures, tolerance: float = 0.01) -> bool:
+    """``any(abs(value - f) <= tolerance for f in figures)``, by bisection."""
+    low = bisect.bisect_left(figures, value - tolerance - 1e-9)
+    high = bisect.bisect_right(figures, value + tolerance + 1e-9)
+    return any(abs(value - f) <= tolerance for f in figures[low:high])
+
+
+class SortedCaps(tuple):
+    """The user's limits, distinct, non-zero and sorted once per text (see SortedFigures)."""
+
+
+def _distinct_caps(caps: Iterable[float]) -> SortedCaps:
+    if isinstance(caps, SortedCaps):
+        return caps
+    return SortedCaps(sorted({float(c) for c in caps if c}))
+
+
+def _is_cap(value: float, caps: list) -> bool:
+    """``any(abs(value - cap) < 1e-9 for cap in caps)`` on the sorted caps, by bisection."""
+    low = bisect.bisect_left(caps, value - 1e-6)
+    return any(abs(value - cap) < 1e-9 for cap in caps[low:bisect.bisect_right(caps, value + 1e-6)])
+
+
+def _blanked(text: str, spans: list) -> str:
+    """``text`` with each span blanked, in one pass (span by span re-copied the whole text)."""
+    pieces, at = [], 0
+    for start, end in sorted(spans):
+        start = max(start, at)
+        if end <= start:
+            continue
+        pieces += [text[at:start], " " * (end - start)]
+        at = end
+    pieces.append(text[at:])
+    return "".join(pieces)
+
+
+def _check_figures(text: str, *, sentence: str, line: str = "", label: str = "", context: str = "",
+                   routes: list, days: Iterable[float], subject: dict | None = None,
+                   known: Iterable[float] = (), skip_bounds: bool = False,
+                   caps: Iterable[float] = (), user_days: Iterable[float] = (),
+                   lead: str = "") -> tuple[bool, bool]:
     """``(every figure of text is evidenced, text does arithmetic)`` — THE derived-figure rule.
 
     A figure is evidenced when it is a correct product or subtraction step (or restates the
@@ -944,10 +1270,13 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
     user_days = {float(d) for d in user_days if d}
     days = answer_days | user_days | {STANDARD_DAYS}       # every week length anyone stated
     scope = f"{label} {sentence} {context}"
+    # The sentence-wide reads are cached by content: the redactor checks every clause of a line
+    # against the same line, which made a long one-line answer quadratic (25 KB took 7 s).
+    period, comparison, four_weeks = _scope_flags(scope)
     _, wrong_base = _bases(line or sentence, measured, days)
     if wrong_base:
         return False, True
-    caps = sorted({float(c) for c in caps if c})
+    caps = _distinct_caps(caps)
     covered, results, seen = [], [], False
     periods: dict = {}          # the period a step's result is FOR, where the step names one
     for step in subtractions(text):
@@ -958,7 +1287,7 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
         seen = True
     # Earlier correct steps of the sentence (or of the clause a parenthetical belongs to) are
     # operands a conversion may build on: "8 x 2 x 3 = 48 …; 48 x 4.33 = about 208".
-    earlier = [p["result"] for p in products(f"{sentence} {context}") if product_is_correct(p, measured, days)]
+    earlier = list(_correct_results(f"{sentence} {context}", tuple(measured), tuple(sorted(days))))
     steps = period_steps(text, sentence)
     for step in steps:
         start_, end_ = step["span"]
@@ -1016,15 +1345,10 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
             return False, True
         seen = True
     results += [p["result"] for p in products(context) if product_is_correct(p, measured, days)]
-    rest = text
-    for start, end in sorted(covered, reverse=True):
-        rest = rest[:start] + " " * (end - start) + rest[end:]
-    period = bool(DAY_PERIOD.search(scope) or WEEK_PERIOD.search(scope)
-                  or LONG_PERIOD.search(without_money(scope)))
-    comparison = bool(COMPARISON_CUE.search(scope))
+    rest = _blanked(text, covered)
     hedged = bool(HEDGE.search(text))
-    known = [float(k) for k in known]
-    caps = sorted({float(c) for c in caps if c})
+    known = _sorted_figures(known)
+    caps = _distinct_caps(caps)
     for start, end, value in figure_spans(rest):
         # The same total restated ("192 minutes, i.e. 3 hours 12 minutes a month"), but never for
         # another period: "= 54 minutes a week — roughly 54 minutes a month" is not a restatement.
@@ -1033,7 +1357,7 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
                for i, r in enumerate(results)):
             seen = True
             continue
-        if caps and any(abs(value - cap) < 1e-9 for cap in caps) and CAP_NAMED.search(
+        if caps and _is_cap(value, caps) and CAP_NAMED.search(
                 rest[max(0, start - 12):end + 20]):
             continue          # the user's limit itself: "your 25-minute limit"
         side = margin_side(rest, start, end, sentence, caps_known=bool(caps), lead=lead)
@@ -1066,7 +1390,7 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
         diffs, fixed = pair_reference(text=rest, at=end, sentence=sentence, line=line, label=label,
                                       routes=routes, measured=measured, days=days, subject=subject,
                                       start=start)
-        if known and not fixed and any(abs(value - k) <= 0.01 for k in known):
+        if known and not fixed and _near(value, known):
             continue          # the evidence states it outright and nothing fixes a reference
         if skip_bounds and _BOUND_BEFORE.search(rest[max(0, start - 40):start]):
             continue          # "still under half an hour" is a verdict, not arithmetic
@@ -1084,6 +1408,20 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
             # still holds.
             if figure_unit(rest, start, end, "") is None and _period_owned_elsewhere(sentence or rest, unit, value):
                 unit = None
+        near = _HEDGED_BOUND.search(rest[max(0, start - 30):start])
+        if near and unit in ("day", "week", "month", "year") and diffs and (fixed or len(diffs) == 1):
+            # A hedged bound is a bound on the derived total, not a hedged figure: "just under an
+            # hour a week" for 9 x 2 x 3 = 54 holds (it is not 60 ± 10%), and for 75 it does not
+            # (r22 4a7fe20c).
+            clause = _clause_of(rest, start, end)
+            totals = [d * f for d in diffs
+                      for f in period_factors(unit, figure_days(clause, sentence, user_days, answer_days),
+                                              one_way=bool(_ONE_WAY.search(rest[end:end + 40])),
+                                              four_weeks=True)]
+            if any(_bound_holds(near, value, total) for total in totals):
+                seen = True
+                continue
+            return False, True
         if unit in ("month", "year"):
             # A monthly total is the weekly one x 52/12 (x 4 framed as four weeks); a yearly one
             # x 52 or the month x 12, to the precision written ("about 3.5 hours", r17 8c35fd5b).
@@ -1092,7 +1430,7 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
             clause = _clause_of(rest, start, end)
             if total_matches(value, diffs, unit, figure_days(clause, sentence, user_days, answer_days),
                              hedged=hedged and fixed, one_way=bool(_ONE_WAY.search(rest[end:end + 40])),
-                             four_weeks=bool(FOUR_WEEK_MONTH.search(f"{label} {sentence} {context}")),
+                             four_weeks=four_weeks,
                              rounding=written_rounding(rest[start:end])):
                 seen = True
                 continue
@@ -1115,7 +1453,7 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
         owner = _route_before(rest, start, routes) or subject
         if owner is not None and owner.get("minutes") is not None and abs(owner["minutes"] - value) < 1e-9:
             continue
-        if any(abs(value - k) <= 0.01 for k in known):
+        if _near(value, known):
             continue          # an evidence figure (a leg, …) quoted beside the comparison
         return False, True if (seen or period or comparison) else False
     return True, seen
@@ -1163,7 +1501,26 @@ def _row_factors(label: str, user_days: Iterable[float], answer_days: Iterable[f
 def period_table_rows(text: str, routes: list, *, user_days: Iterable[float] = (),
                       answer_days: Iterable[float] = ()) -> dict:
     """``{line index: {"table": header index, "ok": bool}}`` for every data row of a period
-    table in ``text`` that carries a judged figure; ``ok`` is every judged cell holding."""
+    table in ``text`` that carries a judged figure; ``ok`` is every judged cell holding under
+    ONE consistent choice of measurement per place for the whole table (a table is one chain:
+    a Bow column on 27 a day and on 28 a week holds under neither)."""
+    routes = merge_same_place([r for r in routes if r.get("minutes") is not None])
+    verdicts: list = []
+    for variant in route_variants(routes):
+        verdicts.append(_period_table_rows(text, variant, user_days=user_days, answer_days=answer_days))
+        if all(v["ok"] for v in verdicts[-1].values()):
+            break          # every table holds under this choice: the others cannot do better
+    out: dict = {}
+    for table in sorted({v["table"] for verdict in verdicts for v in verdict.values()}):
+        rows = [{row: v for row, v in verdict.items() if v["table"] == table} for verdict in verdicts]
+        # the first choice under which every row holds, else the one with the most rows holding
+        out.update(max(rows, key=lambda r: (all(v["ok"] for v in r.values()),
+                                            sum(v["ok"] for v in r.values()), -rows.index(r))))
+    return out
+
+
+def _period_table_rows(text: str, routes: list, *, user_days: Iterable[float] = (),
+                       answer_days: Iterable[float] = ()) -> dict:
     routes = [r for r in routes if r.get("minutes") is not None and (r.get("mode") or "transit") == "transit"]
     lines = str(text or "").split("\n")
     out: dict = {}
@@ -1202,6 +1559,40 @@ def period_table_rows(text: str, routes: list, *, user_days: Iterable[float] = (
                     if not factors:
                         continue
                     bases = [route["minutes"]] if kind == "route" else list(diffs)
+                    verdicts.append(all(any(close(value, base * factor, hedged, written_rounding(cell[start:])
+                                                  if not hedged else 0.5)
+                                            for base in bases for factor in factors)
+                                        for start, _end, value in spans))
+                if verdicts:
+                    out[row] = {"table": index, "ok": all(verdicts)}
+                row += 1
+        elif any(_unit_in(without_money(cell)) or _RETURN_ROW.search(cell) for cell in _table_cells(header)[1:]):
+            # The same table turned round: the columns are the periods and each row is a route
+            # or a comparison — "| | Per day (return) | Per week (3 office days) | Per month |" /
+            # "| Stratford vs Bow | 18 min | 54 min | about 3 h 54 min |" (r22 4a7fe20c).
+            heads = _table_cells(header)
+            while row < len(lines) and lines[row].strip().startswith("|"):
+                cells = _table_cells(lines[row])
+                label = cells[0] if cells else ""
+                named = list({id(r): r for r in routes
+                              if any(_mentions(label, name) >= 0 for name in r["labels"] if name)}.values())
+                if len(named) == 1:
+                    bases = [named[0]["minutes"]]
+                elif len(named) == 2:
+                    bases = [round(abs(named[0]["minutes"] - named[1]["minutes"]), 2)]
+                elif _SAVING_COLUMN.search(label):
+                    bases = list(differences(sorted({r["minutes"] for r in routes})))
+                else:
+                    bases = []
+                verdicts = []
+                for position, cell in enumerate(cells[1:], start=1):
+                    spans = figure_spans(cell)
+                    if not bases or not spans or position >= len(heads):
+                        continue
+                    hedged = bool(HEDGE.search(cell))
+                    factors = _row_factors(heads[position], user_days, answer_days, hedged)
+                    if not factors:
+                        continue
                     verdicts.append(all(any(close(value, base * factor, hedged, written_rounding(cell[start:])
                                                   if not hedged else 0.5)
                                             for base in bases for factor in factors)
@@ -1257,6 +1648,7 @@ def unsupported_arithmetic(text: str, routes: list, days: Iterable[float],
     a comparison with a figure) is judged; every figure of it must pass ``check_figures``.
     Hypothetical "would save you …" prose is judged too: a saving is arithmetic either way."""
     days = set(days) | days_stated(text)
+    known, limits = _sorted_figures(known), _distinct_caps(limits)
     bad = []
     for sentence, line, subject in _with_header_subjects(text, routes):
         if not figure_spans(sentence) and not products(sentence) and not JOURNEY_COUNT.search(sentence):
@@ -1281,14 +1673,37 @@ def supported_in_text(value: float, text: str, routes_or_measured: Iterable, day
                       user_days: Iterable[float] = ()) -> bool:
     """For the critic: ``value`` (a figure the evidence lacks) sits in an arithmetic sentence
     of ``text`` whose figures all derive under the pair rule."""
+    return value in supported_values_in_text([value], text, routes_or_measured, days, known=known, caps=caps,
+                                             user_days=user_days)
+
+
+def supported_values_in_text(values: Iterable[float], text: str, routes_or_measured: Iterable,
+                             days: Iterable[float], known: Iterable[float] = (), caps: Iterable[float] = (),
+                             user_days: Iterable[float] = ()) -> set:
+    """:func:`supported_in_text` for several values at once: a sentence's verdict does not
+    depend on the value, so each sentence is checked once, not once per value (a long answer
+    with many distinct figures was quadratic)."""
     routes = [r if isinstance(r, dict) else {"labels": [], "minutes": float(r)} for r in routes_or_measured]
     days = set(days) | days_stated(text)
-    token = re.compile(r"(?<![\d.])" + re.escape(f"{value:g}") + r"(?![\d.])")
-    for sentence, line, subject in _with_header_subjects(text, routes):
-        if not token.search(sentence):
-            continue
-        ok, seen = check_figures(sentence, sentence=sentence, line=line, routes=routes, days=days,
-                                 known=known, caps=caps, user_days=user_days, subject=subject)
-        if ok and seen:
-            return True
-    return False
+    known, caps = _sorted_figures(known), _distinct_caps(caps)
+    sentences = list(_with_header_subjects(text, routes))
+    # "(?<![\d.])20(?![\d.])" finds 20 exactly where a maximal run of digits and points is "20":
+    # each sentence's runs are read once, not searched once per value.
+    runs = [set(re.findall(r"[\d.]+", sentence)) for sentence, _line, _subject in sentences]
+    verdicts: dict = {}
+    supported = set()
+    for value in values:
+        written = f"{value:g}"
+        plain = bool(re.fullmatch(r"[\d.]+", written))
+        token = None if plain else re.compile(r"(?<![\d.])" + re.escape(written) + r"(?![\d.])")
+        for index, (sentence, line, subject) in enumerate(sentences):
+            if not (written in runs[index] if plain else token.search(sentence)):
+                continue
+            if index not in verdicts:
+                verdicts[index] = check_figures(sentence, sentence=sentence, line=line, routes=routes, days=days,
+                                                known=known, caps=caps, user_days=user_days, subject=subject)
+            ok, seen = verdicts[index]
+            if ok and seen:
+                supported.add(value)
+                break
+    return supported

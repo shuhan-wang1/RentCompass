@@ -29,7 +29,6 @@ os.environ["CONVERSATION_DB_PATH"] = os.path.join(
 os.environ["USE_MCP_TOOLS"] = "0"
 os.environ["PROPERTY_SOURCE"] = "csv"
 os.environ["ALLOW_LEGACY_CLIENT_USER_ID"] = "1"
-os.environ.setdefault("CANARY_USER_HASH_KEY", "test-only-canary-hash-key")
 
 import app as appmod  # noqa: E402
 from core import dsml_guard as guard  # noqa: E402

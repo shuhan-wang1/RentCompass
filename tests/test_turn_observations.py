@@ -35,12 +35,7 @@ os.environ["USE_MCP_TOOLS"] = "0"
 os.environ["PROPERTY_SOURCE"] = "csv"
 os.environ["ALLOW_LEGACY_CLIENT_USER_ID"] = "1"
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
-# Without a stable secret every emitted record carries user_id_hash_status=
-# "unkeyed_no_stable_secret", which the report scores as an instrumentation
-# violation — so a test asserting a CLEAN record fails for a reason unrelated to
-# what it is testing, and only when the runner happens not to export one.
-# setdefault, so a real ambient key still wins.
-os.environ.setdefault("CANARY_USER_HASH_KEY", "test-only-canary-hash-key")
+# The canary hash key is set once for the session in tests/conftest.py.
 
 import app as appmod  # noqa: E402
 from core import turn_observations as tobs  # noqa: E402

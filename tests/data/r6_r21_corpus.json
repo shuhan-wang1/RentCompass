@@ -1,0 +1,2422 @@
+{
+ "r21_0136f2f6": {
+  "checkpoint": "1f1cdee9-ae43-6d6f-8010-a6bba8ab7671",
+  "critic_text": null,
+  "message": "Tell me more about Jacob House in Hackney.",
+  "raw_draft": "Here is what the listing record holds for Jacob House, London, E8:\n\n- Price: £1,950 per month — £50 above your £1,900 ceiling\n- Type: 1-bedroom flat\n- Description: \"1 bedroom flat to rent in Jacob House, London, E8\" — that is the whole description, so there is no detail on size, floor, furnishing or condition\n- Amenities listed: no agent fees, students can enquire\n- Available from: contact agent (no date given)\n- Guest policy, payment rules and excluded features: not stated in the record\n- Source: OnTheMarket, cached snapshot taken 21 July 2026\n\nTwo things to keep in mind. First, this is a cached record, not a live check — the price and availability have not been verified as current, so confirm both with the agent before relying on them. Second, it is still over your budget, so it remains an alternative rather than a match.\n\nIf you want, I can check what is within walking distance of it (supermarkets, stations, gyms) or how long the commute would be to a specific destination — just tell me where you would be travelling to.",
+  "request_id": "0136f2f655ee49018480dad5544cae66",
+  "shipped": "Here is what the listing record holds for Jacob House, London, E8:\n\n- Price: £1,950 per month — £50 above your £1,900 ceiling\n- Type: 1-bedroom flat\n- Description: \"1 bedroom flat to rent in Jacob House, London, E8\" — that is the whole description, so there is no detail on size, floor, furnishing or condition\n- Amenities listed: no agent fees, students can enquire\n- Available from: contact agent (no date given)\n- Guest policy, payment rules and excluded features: not stated in the record\n- Source: OnTheMarket, cached snapshot taken 21 July 2026\n\nTwo things to keep in mind. First, this is a cached record, not a live check — the price and availability have not been verified as current, so confirm both with the agent before relying on them. Second, it is still over your budget, so it remains an alternative rather than a match.\n\nIf you want, I can check what is within walking distance of it (supermarkets, stations, gyms) or how long the commute would be to a specific destination — just tell me where you would be travelling to.",
+  "state": {
+   "accumulated_search_criteria": {
+    "amenities_of_interest": [],
+    "area": "Hackney",
+    "areas": [
+     "Hackney"
+    ],
+    "bedrooms": 1,
+    "bedrooms_minimum": false,
+    "budget_period": "month",
+    "constraint_sources": {
+     "area": {
+      "source": "user_message",
+      "text": "Find me a 1-bed in Hackney under £1,900.",
+      "value": "Hackney"
+     },
+     "areas": {
+      "source": "user_message",
+      "text": "Find me a 1-bed in Hackney under £1,900.",
+      "value": [
+       "Hackney"
+      ]
+     },
+     "bedrooms": {
+      "source": "user_message",
+      "text": "Find me a 1-bed in Hackney under £1,900.",
+      "value": 1
+     },
+     "bedrooms_minimum": {
+      "source": "user_message",
+      "text": "Find me a 1-bed in Hackney under £1,900.",
+      "value": false
+     },
+     "budget_period": {
+      "source": "user_message",
+      "text": "Find me a 1-bed in Hackney under £1,900.",
+      "value": "month"
+     },
+     "max_budget": {
+      "source": "user_message",
+      "text": "Find me a 1-bed in Hackney under £1,900.",
+      "value": 1900
+     },
+     "room_type": {
+      "source": "user_message",
+      "text": "Find me a 1-bed in Hackney under £1,900.",
+      "value": "whole"
+     }
+    },
+    "destination": null,
+    "max_budget": 1900,
+    "max_travel_time": null,
+    "no_commute": false,
+    "property_features": [],
+    "room_type": "whole",
+    "soft_preferences": []
+   },
+   "candidate_validation": {},
+   "extracted_context": {
+    "current_date": "2026-10-22",
+    "current_message": "Tell me more about Jacob House in Hackney.",
+    "history": [
+     {
+      "assistant": "- No listing is both fully eligible and verified.\nExcluded / does not meet:\n- Jacob House, London, E8: alternative is outside the declared hard result set; monthly price 1950 exceeds budget 1900\nThese listings are cached; prices and availability may have changed. Confirm with the agent.",
+      "user": "Find me a 1-bed in Hackney under £1,900."
+     }
+    ],
+    "last_results": [
+     {
+      "address": "Jacob House, London, E8",
+      "area": "Hackney",
+      "availability_status": "",
+      "available_from": "",
+      "bedrooms": 1,
+      "budget_status": "⚠️ Over budget by £50",
+      "description": "",
+      "explanation": "1 bedroom flat to rent in Jacob House, London, E8",
+      "geo_location": "51.554058, -0.06814",
+      "name": "Jacob House",
+      "price": "£1950/month",
+      "property_type": "1 bed Flat",
+      "source": "OnTheMarket (cached)",
+      "travel_time": "N/A",
+      "url": "https://www.onthemarket.com/details/19970243/"
+     }
+    ],
+    "last_results_full": [
+     {
+      "absent_features": [],
+      "address": "Jacob House, London, E8",
+      "alternative": true,
+      "area": "Hackney",
+      "availability_status": "",
+      "available_from": "",
+      "bedrooms": 1,
+      "budget_basis": 1900.0,
+      "budget_status": "⚠️ Over budget by £50",
+      "budget_status_code": "over",
+      "candidate_reasons": [
+       "alternative is outside the declared hard result set",
+       "monthly price 1950 exceeds budget 1900"
+      ],
+      "candidate_status": "excluded",
+      "candidate_unknown_reasons": [],
+      "description": "",
+      "distance_miles": 1.1,
+      "explanation": "1 bedroom flat to rent in Jacob House, London, E8",
+      "geo_location": "51.554058, -0.06814",
+      "images": [
+       "https://media.onthemarket.com/properties/19970243/1630741305/image-0-480x320.jpg",
+       "https://media.onthemarket.com/properties/19970243/1630741305/image-1-480x320.jpg",
+       "https://media.onthemarket.com/properties/19970243/1630741305/image-2-480x320.jpg",
+       "https://media.onthemarket.com/properties/19970243/1630741305/image-3-480x320.jpg",
+       "https://media.onthemarket.com/properties/19970243/1630741305/image-4-480x320.jpg"
+      ],
+      "match_type": "soft_violation",
+      "possibly_outdated": false,
+      "price": "£1950/month",
+      "property_type": "1 bed Flat",
+      "provider_address": "Jacob House, London, E8",
+      "qualification": {
+       "constraints": {
+        "areas": [
+         "hackney"
+        ],
+        "bedrooms": 1.0,
+        "bedrooms_minimum": false,
+        "commute_destination": null,
+        "max_budget_monthly": 1900.0,
+        "max_changes": null,
+        "max_commute_minutes": null,
+        "monthly_total_budget": null,
+        "move_in_date": null,
+        "no_commute": false,
+        "office_days_per_week": null,
+        "property_features": [],
+        "room_type": "whole"
+       },
+       "reason_messages": {
+        "en": [
+         "alternative is outside the declared hard result set",
+         "monthly price 1950 exceeds budget 1900"
+        ],
+        "zh": [
+         "该房源是备选，未满足全部已声明条件",
+         "月租 £1950 超过预算 £1900"
+        ]
+       },
+       "reasons": [
+        "alternative is outside the declared hard result set",
+        "monthly price 1950 exceeds budget 1900"
+       ],
+       "source": "structured_listing",
+       "status": "excluded",
+       "unknown_reasons": []
+      },
+      "rank": 1,
+      "room_type": "whole",
+      "score": 53.64,
+      "score_breakdown": {
+       "freshness": 13.46,
+       "price": 26.16,
+       "semantic": 14.02
+      },
+      "source": "OnTheMarket (cached)",
+      "status_reason": "over_budget",
+      "unverified_features": [],
+      "url": "https://www.onthemarket.com/details/19970243/",
+      "verified_features": []
+     }
+    ],
+    "memory_paused": false,
+    "previous_search_results": "\n1. **Jacob House**\n   - Full Address: Jacob House, London, E8\n   - Price: £1950/month\n   - Commute: N/A\n   - Bedrooms: 1\n   - Type: 1 bed Flat\n   - Area: Hackney\n   - Budget: ⚠️ Over budget by £50\n   - URL: https://www.onthemarket.com/details/19970243/\n\n",
+    "recommended_index": "=== SHOWN ALTERNATIVES (listed to the user as NOT meeting their criteria; not recommendations) ===\nEach line is a SUMMARY of a listing the last search showed as an alternative. It is not a match: never present it as one. For its full details call get_property_details with its exact URL below.\nJacob House, London, E8 | price £1950/month | area Hackney | over budget | https://www.onthemarket.com/details/19970243/\n=== END SHOWN ALTERNATIVES ===",
+    "recommended_registry": [],
+    "reply_language": "en",
+    "search_retrieval": {
+     "area_status": {
+      "Hackney": "results"
+     },
+     "data_source": "OnTheMarket (cached)",
+     "incomplete_areas": [],
+     "partial": false,
+     "retrieval_outcome": "candidates_returned"
+    },
+    "shown_alternatives": [
+     {
+      "address": "Jacob House, London, E8",
+      "alternative": true,
+      "area": "Hackney",
+      "bedrooms": 1,
+      "budget_status": "⚠️ Over budget by £50",
+      "candidate_status": "excluded",
+      "geo_location": "51.554058, -0.06814",
+      "match_type": "soft_violation",
+      "price": "£1950/month",
+      "property_type": "1 bed Flat",
+      "provider_address": "Jacob House, London, E8",
+      "room_type": "whole",
+      "status_reason": "over_budget",
+      "url": "https://www.onthemarket.com/details/19970243/"
+     }
+    ],
+    "view_results": [
+     {
+      "absent_features": [],
+      "address": "Jacob House, London, E8",
+      "alternative": true,
+      "area": "Hackney",
+      "availability_status": "",
+      "available_from": "",
+      "bedrooms": 1,
+      "budget_basis": 1900.0,
+      "budget_status": "⚠️ Over budget by £50",
+      "budget_status_code": "over",
+      "candidate_reasons": [
+       "alternative is outside the declared hard result set",
+       "monthly price 1950 exceeds budget 1900"
+      ],
+      "candidate_status": "excluded",
+      "candidate_unknown_reasons": [],
+      "description": "",
+      "distance_miles": 1.1,
+      "explanation": "1 bedroom flat to rent in Jacob House, London, E8",
+      "geo_location": "51.554058, -0.06814",
+      "images": [
+       "https://media.onthemarket.com/properties/19970243/1630741305/image-0-480x320.jpg",
+       "https://media.onthemarket.com/properties/19970243/1630741305/image-1-480x320.jpg",
+       "https://media.onthemarket.com/properties/19970243/1630741305/image-2-480x320.jpg",
+       "https://media.onthemarket.com/properties/19970243/1630741305/image-3-480x320.jpg",
+       "https://media.onthemarket.com/properties/19970243/1630741305/image-4-480x320.jpg"
+      ],
+      "match_type": "soft_violation",
+      "possibly_outdated": false,
+      "price": "£1950/month",
+      "property_type": "1 bed Flat",
+      "provider_address": "Jacob House, London, E8",
+      "qualification": {
+       "constraints": {
+        "areas": [
+         "hackney"
+        ],
+        "bedrooms": 1.0,
+        "bedrooms_minimum": false,
+        "commute_destination": null,
+        "max_budget_monthly": 1900.0,
+        "max_changes": null,
+        "max_commute_minutes": null,
+        "monthly_total_budget": null,
+        "move_in_date": null,
+        "no_commute": false,
+        "office_days_per_week": null,
+        "property_features": [],
+        "room_type": "whole"
+       },
+       "reason_messages": {
+        "en": [
+         "alternative is outside the declared hard result set",
+         "monthly price 1950 exceeds budget 1900"
+        ],
+        "zh": [
+         "该房源是备选，未满足全部已声明条件",
+         "月租 £1950 超过预算 £1900"
+        ]
+       },
+       "reasons": [
+        "alternative is outside the declared hard result set",
+        "monthly price 1950 exceeds budget 1900"
+       ],
+       "source": "structured_listing",
+       "status": "excluded",
+       "unknown_reasons": []
+      },
+      "rank": 1,
+      "room_type": "whole",
+      "score": 53.64,
+      "score_breakdown": {
+       "freshness": 13.46,
+       "price": 26.16,
+       "semantic": 14.02
+      },
+      "source": "OnTheMarket (cached)",
+      "status_reason": "over_budget",
+      "unverified_features": [],
+      "url": "https://www.onthemarket.com/details/19970243/",
+      "verified_features": []
+     }
+    ]
+   },
+   "final_response": "Here is what the listing record holds for Jacob House, London, E8:\n\n- Price: £1,950 per month — £50 above your £1,900 ceiling\n- Type: 1-bedroom flat\n- Description: \"1 bedroom flat to rent in Jacob House, London, E8\" — that is the whole description, so there is no detail on size, floor, furnishing or condition\n- Amenities listed: no agent fees, students can enquire\n- Available from: contact agent (no date given)\n- Guest policy, payment rules and excluded features: not stated in the record\n- Source: OnTheMarket, cached snapshot taken 21 July 2026\n\nTwo things to keep in mind. First, this is a cached record, not a live check — the price and availability have not been verified as current, so confirm both with the agent before relying on them. Second, it is still over your budget, so it remains an alternative rather than a match.\n\nIf you want, I can check what is within walking distance of it (supermarkets, stations, gyms) or how long the commute would be to a specific destination — just tell me where you would be travelling to.",
+   "memory_context": "What I remember about this user:\n[FACT] in Hackney\n[FACT] 1-bed\n[FACT] under £1,900\n[PAST] User asked: Find me a 1-bed in Hackney under £1,900.",
+   "observations": [],
+   "tool_artifacts": [
+    {
+     "elapsed_ms": 123,
+     "error": null,
+     "params_digest": "52e260ce5ccab33e",
+     "raw_data": {
+      "cache_age_seconds": 8010103.336,
+      "cache_status": "fresh",
+      "cache_ttl_seconds": 315360000.0,
+      "data_source": "OnTheMarket (cached)",
+      "fetched_at": "2026-07-21T14:58:24.982049+00:00",
+      "formatted_details": "✅ Identity confirmed by listing URL: this IS the listing you asked about (Jacob House, London, E8).\n\nCached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.\n\n📍 **Jacob House, London, E8**\n\n💰 **Price**: £1,950 pcm\n🏠 **Room type**: 1 bed Flat\n📅 **Available from**: Contact agent\n\n📝 **Description**:\n1 bedroom flat to rent in Jacob House, London, E8\n\n✨ **Amenities and features**:\nNo Agent Fees, Students Can Enquire\n\n👥 **Guest policy**:\n\n\n💳 **Payment rules**:\n\n\n⛔ **Not included**:\n\n\n🔗 **Link**: https://www.onthemarket.com/details/19970243/",
+      "found": true,
+      "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+      "from_cache": true,
+      "live_verified": false,
+      "match": {
+       "corroborated_by": [
+        "listing_url"
+       ],
+       "reasons": [],
+       "requested": "https://www.onthemarket.com/details/19970243/ Jacob House Jacob House, London, E8",
+       "requested_name": "jacob",
+       "requested_postcode": "e8",
+       "resolved": "Jacob House, London, E8",
+       "resolved_postcode": "e8",
+       "verdict": "exact_url"
+      },
+      "message": "Found property: Jacob House, London, E8 (identity checked against the request)",
+      "possibly_outdated": true,
+      "property": {
+       "address": "Jacob House, London, E8",
+       "amenities": "No Agent Fees, Students Can Enquire",
+       "available_from": "Contact agent",
+       "cache_age_seconds": 8010103.336,
+       "cache_status": "fresh",
+       "cache_ttl_seconds": 315360000.0,
+       "data_source": "OnTheMarket (cached)",
+       "description": "1 bedroom flat to rent in Jacob House, London, E8",
+       "excluded_features": "",
+       "fetched_at": "2026-07-21T14:58:24.982049+00:00",
+       "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+       "from_cache": true,
+       "geo_location": "51.554058, -0.06814",
+       "guest_policy": "",
+       "live_verified": false,
+       "payment_rules": "",
+       "possibly_outdated": true,
+       "price": "£1,950 pcm",
+       "room_type": "1 bed Flat",
+       "source": "OnTheMarket (cached)",
+       "source_url": "https://www.onthemarket.com/details/19970243/",
+       "url": "https://www.onthemarket.com/details/19970243/"
+      },
+      "provenance": {
+       "cache_age_seconds": 8010103.336,
+       "cache_status": "fresh",
+       "cache_ttl_seconds": 315360000.0,
+       "data_source": "OnTheMarket (cached)",
+       "fetched_at": "2026-07-21T14:58:24.982049+00:00",
+       "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+       "from_cache": true,
+       "live_verified": false,
+       "possibly_outdated": true,
+       "source": "OnTheMarket (cached)",
+       "source_url": "https://www.onthemarket.com/details/19970243/"
+      },
+      "room_type_analysis": {
+       "has_private_kitchen": false,
+       "is_ensuite": false,
+       "is_shared_room": false,
+       "is_studio": false,
+       "room_type_category": "1 bed Flat"
+      },
+      "search_query": "https://www.onthemarket.com/details/19970243/ Jacob House Jacob House, London, E8",
+      "source": "OnTheMarket (cached)",
+      "source_url": "https://www.onthemarket.com/details/19970243/",
+      "success": true,
+      "total_matches": 1
+     },
+     "success": true,
+     "tool": "get_property_details",
+     "turn": 1
+    }
+   ],
+   "tool_decision": {},
+   "tool_raw_data": null,
+   "user_preferences": {
+    "excluded_areas": [],
+    "hard_preferences": [],
+    "required_amenities": [],
+    "safety_concerns": [],
+    "soft_preferences": []
+   },
+   "user_query": "Previous conversation:\nUser: Find me a 1-bed in Hackney under £1,900.\nAlex: - No listing is both fully eligible and verified.\nExcluded / does not meet:\n- Jacob House, London, E8: alternative is outside the declared hard result set; monthly price 1950 exceeds budget 1900\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nCurrent user message: Tell me more about Jacob House in Hackney."
+  }
+ },
+ "r21_63fb6f8a": {
+  "checkpoint": "1f1cdeee-6a81-61f5-8007-36ba23140f68",
+  "critic_text": null,
+  "message": "What would a 6-week deposit and the first month's rent come to for a £1,950/month flat in Hackney? Find me one under £2,000 too.",
+  "raw_draft": "**Upfront cost on a £1,950/month flat**\n\n- Deposit at 6 weeks: £1,950 × 12 ÷ 52 × 6 = **£2,700**\n- First month's rent: **£1,950**\n- **Total: £4,650**\n\nThat is before any holding deposit, referencing fees or agency admin charges, and before bills. Note that under the Tenant Fees Act a deposit is normally capped at 5 weeks' rent (£2,250 on this rent) for an assured shorthold tenancy — 6 weeks is only lawful where the annual rent is above £50,000, so it is worth querying that figure with the agent.\n\n**Hackney listings under £2,000/month** (from cached OnTheMarket listings — prices are recorded snapshots, so confirm current asking rent and availability with the agent):\n\n1. **Flat share, Bethnal Green — £875/month**, 1 bed flat share, all bills and wifi included, about 1.06 miles out. Cheapest by far, but it is a room in a shared flat rather than a whole home.\n2. **Cosy Studio, Shoreditch (419-437 Tower Hamlets Road, E2) — £1,749/month**, studio, about 0.98 miles out.\n3. **Jacob House, London E8 — £1,950/month**, 1 bed flat, about 1.1 miles out. This is the one matching your £1,950 figure — deposit £2,700 plus £1,950 rent, so £4,650 upfront.\n\nThere were also two 2-bed/1-bed options at £2,200 (Kingsland Road and Arbutus Street, Haggerston), but those are £250 over your ceiling.\n\nWant me to pull the full details on any of these three, or check the commute from one to a campus or office?",
+  "request_id": "63fb6f8a0c614f16b6ce2592e2d41ec2",
+  "shipped": "Meets all declared conditions (verified):\n- Flat Share - ALL Bills & Wifi Included - Bethnal Green (£875/month)\n- Plot Cosy Studio21July, Cosy Studio21July at Shoreditch, 419-437, Tower Hamlets Road E2 (£1749/month)\n- Jacob House, London, E8 (£1950/month)\nExcluded / does not meet:\n- Kingsland Road, London, E8: alternative is outside the declared hard result set; monthly price 2200 exceeds budget 1950\n- Arbutus Street, Haggerston, London, E8: alternative is outside the declared hard result set; monthly price 2200 exceeds budget 1950\nThese listings are cached; prices and availability may have changed. Confirm with the agent.",
+  "state": {
+   "accumulated_search_criteria": {
+    "amenities_of_interest": [],
+    "area": "Hackney",
+    "areas": [
+     "Hackney"
+    ],
+    "budget_period": "month",
+    "constraint_sources": {
+     "area": {
+      "source": "user_message",
+      "text": "What would a 6-week deposit and the first month's rent come to for a £1,950/month flat in Hackney? Find me one under £2,000 too.",
+      "value": "Hackney"
+     },
+     "areas": {
+      "source": "user_message",
+      "text": "What would a 6-week deposit and the first month's rent come to for a £1,950/month flat in Hackney? Find me one under £2,000 too.",
+      "value": [
+       "Hackney"
+      ]
+     },
+     "budget_period": {
+      "source": "user_message",
+      "text": "What would a 6-week deposit and the first month's rent come to for a £1,950/month flat in Hackney? Find me one under £2,000 too.",
+      "value": "month"
+     },
+     "max_budget": {
+      "source": "user_message",
+      "text": "What would a 6-week deposit and the first month's rent come to for a £1,950/month flat in Hackney? Find me one under £2,000 too.",
+      "value": 1950
+     }
+    },
+    "destination": null,
+    "max_budget": 1950,
+    "max_travel_time": null,
+    "property_features": [],
+    "soft_preferences": []
+   },
+   "candidate_validation": {
+    "constraints": {
+     "areas": [
+      "hackney"
+     ],
+     "bedrooms": null,
+     "bedrooms_minimum": false,
+     "commute_destination": "Hackney",
+     "max_budget_monthly": 1950.0,
+     "max_changes": null,
+     "max_commute_minutes": null,
+     "monthly_total_budget": null,
+     "move_in_date": null,
+     "no_commute": false,
+     "office_days_per_week": null,
+     "property_features": [],
+     "room_type": null
+    },
+    "eligible": [
+     {
+      "candidate": {
+       "absent_features": [],
+       "address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+       "area": "Hackney",
+       "availability_status": "",
+       "available_from": "",
+       "bedrooms": 1,
+       "budget_status": "✅ Within budget",
+       "candidate_reasons": [],
+       "candidate_status": "eligible",
+       "candidate_unknown_reasons": [],
+       "description": "",
+       "distance_miles": 1.06,
+       "explanation": "1 bedroom in a flat share to rent in Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+       "geo_location": "51.528986, -0.058316",
+       "images": [
+        "https://media.onthemarket.com/properties/11897043/1630917749/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/11897043/1630917749/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/11897043/1630917749/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/11897043/1630917749/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/11897043/1630917749/image-4-480x320.jpg"
+       ],
+       "match_type": "perfect",
+       "possibly_outdated": false,
+       "price": "£875/month",
+       "property_type": "1 bed Flat share",
+       "provider_address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+       "rank": 1,
+       "room_type": null,
+       "score": 71.39,
+       "score_breakdown": {
+        "freshness": 13.46,
+        "price": 46.04,
+        "semantic": 11.89
+       },
+       "source": "OnTheMarket (cached)",
+       "unverified_features": [],
+       "url": "https://www.onthemarket.com/details/11897043/",
+       "verified_features": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/11897043",
+      "evidence_status": "not_required",
+      "index": 0,
+      "reasons": [],
+      "status": "eligible",
+      "transport_cost_evidence_status": "not_required",
+      "unknown_reasons": []
+     },
+     {
+      "candidate": {
+       "absent_features": [],
+       "address": "Plot Cosy Studio21July, Cosy Studio21July at Shoreditch, 419-437, Tower Hamlets Road E2",
+       "area": "Hackney",
+       "availability_status": "",
+       "available_from": "",
+       "bedrooms": "Studio",
+       "budget_status": "✅ Within budget",
+       "candidate_reasons": [],
+       "candidate_status": "eligible",
+       "candidate_unknown_reasons": [],
+       "description": "",
+       "distance_miles": 0.98,
+       "explanation": "Studio to rent in Plot Cosy Studio21July, Cosy Studio21July at Shoreditch, 419-437, Hackney Road E2",
+       "geo_location": "51.531803, -0.062782",
+       "images": [
+        "https://media.onthemarket.com/properties/19970901/1630806694/image-0-480x320.webp",
+        "https://media.onthemarket.com/properties/19970901/1630806694/image-1-480x320.webp",
+        "https://media.onthemarket.com/properties/19970901/1630806694/image-2-480x320.webp",
+        "https://media.onthemarket.com/properties/19970901/1630806694/image-3-480x320.webp",
+        "https://media.onthemarket.com/properties/19970901/1630806694/image-4-480x320.webp"
+       ],
+       "match_type": "perfect",
+       "possibly_outdated": false,
+       "price": "£1749/month",
+       "property_type": "Studio",
+       "provider_address": "Plot Cosy Studio21July, Cosy Studio21July at Shoreditch, 419-437, Hackney Road E2",
+       "rank": 2,
+       "room_type": null,
+       "score": 59.27,
+       "score_breakdown": {
+        "freshness": 13.46,
+        "price": 34.41,
+        "semantic": 11.4
+       },
+       "source": "OnTheMarket (cached)",
+       "unverified_features": [],
+       "url": "https://www.onthemarket.com/details/19970901/",
+       "verified_features": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/19970901",
+      "evidence_status": "not_required",
+      "index": 1,
+      "reasons": [],
+      "status": "eligible",
+      "transport_cost_evidence_status": "not_required",
+      "unknown_reasons": []
+     },
+     {
+      "candidate": {
+       "absent_features": [],
+       "address": "Jacob House, London, E8",
+       "area": "Hackney",
+       "availability_status": "",
+       "available_from": "",
+       "bedrooms": 1,
+       "budget_status": "✅ Within budget",
+       "candidate_reasons": [],
+       "candidate_status": "eligible",
+       "candidate_unknown_reasons": [],
+       "description": "",
+       "distance_miles": 1.1,
+       "explanation": "1 bedroom flat to rent in Jacob House, London, E8",
+       "geo_location": "51.554058, -0.06814",
+       "images": [
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-4-480x320.jpg"
+       ],
+       "match_type": "perfect",
+       "possibly_outdated": false,
+       "price": "£1950/month",
+       "property_type": "1 bed Flat",
+       "provider_address": "Jacob House, London, E8",
+       "rank": 3,
+       "room_type": null,
+       "score": 59.3,
+       "score_breakdown": {
+        "freshness": 13.46,
+        "price": 31.73,
+        "semantic": 14.11
+       },
+       "source": "OnTheMarket (cached)",
+       "unverified_features": [],
+       "url": "https://www.onthemarket.com/details/19970243/",
+       "verified_features": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/19970243",
+      "evidence_status": "not_required",
+      "index": 2,
+      "reasons": [],
+      "status": "eligible",
+      "transport_cost_evidence_status": "not_required",
+      "unknown_reasons": []
+     }
+    ],
+    "excluded": [
+     {
+      "candidate": {
+       "absent_features": [],
+       "address": "Kingsland Road, London, E8",
+       "alternative": true,
+       "area": "Hackney",
+       "availability_status": "",
+       "available_from": "",
+       "bedrooms": 2,
+       "budget_status": "⚠️ Over budget by £250",
+       "candidate_reasons": [
+        "alternative is outside the declared hard result set",
+        "monthly price 2200 exceeds budget 1950"
+       ],
+       "candidate_status": "excluded",
+       "candidate_unknown_reasons": [],
+       "description": "",
+       "distance_miles": 1.14,
+       "explanation": "2 bedroom apartment to rent in Kingsland Road, London, E8",
+       "geo_location": "51.542534, -0.075841",
+       "images": [
+        "https://media.onthemarket.com/properties/12420836/1630908353/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/12420836/1630908353/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/12420836/1630908353/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/12420836/1630908353/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/12420836/1630908353/image-4-480x320.jpg"
+       ],
+       "match_type": "soft_violation",
+       "possibly_outdated": false,
+       "price": "£2200/month",
+       "property_type": "2 bed Apartment",
+       "provider_address": "Kingsland Road, London, E8",
+       "rank": 1,
+       "room_type": null,
+       "score": 33.14,
+       "score_breakdown": {
+        "freshness": 13.46,
+        "price": 4.61,
+        "semantic": 15.07
+       },
+       "source": "OnTheMarket (cached)",
+       "unverified_features": [],
+       "url": "https://www.onthemarket.com/details/12420836/",
+       "verified_features": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/12420836",
+      "evidence_status": "not_required",
+      "index": 3,
+      "reasons": [
+       "alternative is outside the declared hard result set",
+       "monthly price 2200 exceeds budget 1950"
+      ],
+      "status": "excluded",
+      "transport_cost_evidence_status": "not_required",
+      "unknown_reasons": []
+     },
+     {
+      "candidate": {
+       "absent_features": [],
+       "address": "Arbutus Street, Haggerston, London, E8",
+       "alternative": true,
+       "area": "Hackney",
+       "availability_status": "",
+       "available_from": "",
+       "bedrooms": 1,
+       "budget_status": "⚠️ Over budget by £250",
+       "candidate_reasons": [
+        "alternative is outside the declared hard result set",
+        "monthly price 2200 exceeds budget 1950"
+       ],
+       "candidate_status": "excluded",
+       "candidate_unknown_reasons": [],
+       "description": "",
+       "distance_miles": 1.18,
+       "explanation": "1 bedroom flat to rent in Arbutus Street, Haggerston, London, E8",
+       "geo_location": "51.539025, -0.075944",
+       "images": [
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-4-480x320.jpg"
+       ],
+       "match_type": "soft_violation",
+       "possibly_outdated": false,
+       "price": "£2200/month",
+       "property_type": "1 bed Flat",
+       "provider_address": "Arbutus Street, Haggerston, London, E8",
+       "rank": 2,
+       "room_type": null,
+       "score": 32.54,
+       "score_breakdown": {
+        "freshness": 13.46,
+        "price": 4.61,
+        "semantic": 14.47
+       },
+       "source": "OnTheMarket (cached)",
+       "unverified_features": [],
+       "url": "https://www.onthemarket.com/details/19973895/",
+       "verified_features": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/19973895",
+      "evidence_status": "not_required",
+      "index": 4,
+      "reasons": [
+       "alternative is outside the declared hard result set",
+       "monthly price 2200 exceeds budget 1950"
+      ],
+      "status": "excluded",
+      "transport_cost_evidence_status": "not_required",
+      "unknown_reasons": []
+     }
+    ],
+    "statuses": [
+     {
+      "candidate": {
+       "absent_features": [],
+       "address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+       "area": "Hackney",
+       "availability_status": "",
+       "available_from": "",
+       "bedrooms": 1,
+       "budget_status": "✅ Within budget",
+       "candidate_reasons": [],
+       "candidate_status": "eligible",
+       "candidate_unknown_reasons": [],
+       "description": "",
+       "distance_miles": 1.06,
+       "explanation": "1 bedroom in a flat share to rent in Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+       "geo_location": "51.528986, -0.058316",
+       "images": [
+        "https://media.onthemarket.com/properties/11897043/1630917749/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/11897043/1630917749/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/11897043/1630917749/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/11897043/1630917749/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/11897043/1630917749/image-4-480x320.jpg"
+       ],
+       "match_type": "perfect",
+       "possibly_outdated": false,
+       "price": "£875/month",
+       "property_type": "1 bed Flat share",
+       "provider_address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+       "rank": 1,
+       "room_type": null,
+       "score": 71.39,
+       "score_breakdown": {
+        "freshness": 13.46,
+        "price": 46.04,
+        "semantic": 11.89
+       },
+       "source": "OnTheMarket (cached)",
+       "unverified_features": [],
+       "url": "https://www.onthemarket.com/details/11897043/",
+       "verified_features": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/11897043",
+      "evidence_status": "not_required",
+      "index": 0,
+      "reasons": [],
+      "status": "eligible",
+      "transport_cost_evidence_status": "not_required",
+      "unknown_reasons": []
+     },
+     {
+      "candidate": {
+       "absent_features": [],
+       "address": "Plot Cosy Studio21July, Cosy Studio21July at Shoreditch, 419-437, Tower Hamlets Road E2",
+       "area": "Hackney",
+       "availability_status": "",
+       "available_from": "",
+       "bedrooms": "Studio",
+       "budget_status": "✅ Within budget",
+       "candidate_reasons": [],
+       "candidate_status": "eligible",
+       "candidate_unknown_reasons": [],
+       "description": "",
+       "distance_miles": 0.98,
+       "explanation": "Studio to rent in Plot Cosy Studio21July, Cosy Studio21July at Shoreditch, 419-437, Hackney Road E2",
+       "geo_location": "51.531803, -0.062782",
+       "images": [
+        "https://media.onthemarket.com/properties/19970901/1630806694/image-0-480x320.webp",
+        "https://media.onthemarket.com/properties/19970901/1630806694/image-1-480x320.webp",
+        "https://media.onthemarket.com/properties/19970901/1630806694/image-2-480x320.webp",
+        "https://media.onthemarket.com/properties/19970901/1630806694/image-3-480x320.webp",
+        "https://media.onthemarket.com/properties/19970901/1630806694/image-4-480x320.webp"
+       ],
+       "match_type": "perfect",
+       "possibly_outdated": false,
+       "price": "£1749/month",
+       "property_type": "Studio",
+       "provider_address": "Plot Cosy Studio21July, Cosy Studio21July at Shoreditch, 419-437, Hackney Road E2",
+       "rank": 2,
+       "room_type": null,
+       "score": 59.27,
+       "score_breakdown": {
+        "freshness": 13.46,
+        "price": 34.41,
+        "semantic": 11.4
+       },
+       "source": "OnTheMarket (cached)",
+       "unverified_features": [],
+       "url": "https://www.onthemarket.com/details/19970901/",
+       "verified_features": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/19970901",
+      "evidence_status": "not_required",
+      "index": 1,
+      "reasons": [],
+      "status": "eligible",
+      "transport_cost_evidence_status": "not_required",
+      "unknown_reasons": []
+     },
+     {
+      "candidate": {
+       "absent_features": [],
+       "address": "Jacob House, London, E8",
+       "area": "Hackney",
+       "availability_status": "",
+       "available_from": "",
+       "bedrooms": 1,
+       "budget_status": "✅ Within budget",
+       "candidate_reasons": [],
+       "candidate_status": "eligible",
+       "candidate_unknown_reasons": [],
+       "description": "",
+       "distance_miles": 1.1,
+       "explanation": "1 bedroom flat to rent in Jacob House, London, E8",
+       "geo_location": "51.554058, -0.06814",
+       "images": [
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/19970243/1630741305/image-4-480x320.jpg"
+       ],
+       "match_type": "perfect",
+       "possibly_outdated": false,
+       "price": "£1950/month",
+       "property_type": "1 bed Flat",
+       "provider_address": "Jacob House, London, E8",
+       "rank": 3,
+       "room_type": null,
+       "score": 59.3,
+       "score_breakdown": {
+        "freshness": 13.46,
+        "price": 31.73,
+        "semantic": 14.11
+       },
+       "source": "OnTheMarket (cached)",
+       "unverified_features": [],
+       "url": "https://www.onthemarket.com/details/19970243/",
+       "verified_features": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/19970243",
+      "evidence_status": "not_required",
+      "index": 2,
+      "reasons": [],
+      "status": "eligible",
+      "transport_cost_evidence_status": "not_required",
+      "unknown_reasons": []
+     },
+     {
+      "candidate": {
+       "absent_features": [],
+       "address": "Kingsland Road, London, E8",
+       "alternative": true,
+       "area": "Hackney",
+       "availability_status": "",
+       "available_from": "",
+       "bedrooms": 2,
+       "budget_status": "⚠️ Over budget by £250",
+       "candidate_reasons": [
+        "alternative is outside the declared hard result set",
+        "monthly price 2200 exceeds budget 1950"
+       ],
+       "candidate_status": "excluded",
+       "candidate_unknown_reasons": [],
+       "description": "",
+       "distance_miles": 1.14,
+       "explanation": "2 bedroom apartment to rent in Kingsland Road, London, E8",
+       "geo_location": "51.542534, -0.075841",
+       "images": [
+        "https://media.onthemarket.com/properties/12420836/1630908353/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/12420836/1630908353/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/12420836/1630908353/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/12420836/1630908353/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/12420836/1630908353/image-4-480x320.jpg"
+       ],
+       "match_type": "soft_violation",
+       "possibly_outdated": false,
+       "price": "£2200/month",
+       "property_type": "2 bed Apartment",
+       "provider_address": "Kingsland Road, London, E8",
+       "rank": 1,
+       "room_type": null,
+       "score": 33.14,
+       "score_breakdown": {
+        "freshness": 13.46,
+        "price": 4.61,
+        "semantic": 15.07
+       },
+       "source": "OnTheMarket (cached)",
+       "unverified_features": [],
+       "url": "https://www.onthemarket.com/details/12420836/",
+       "verified_features": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/12420836",
+      "evidence_status": "not_required",
+      "index": 3,
+      "reasons": [
+       "alternative is outside the declared hard result set",
+       "monthly price 2200 exceeds budget 1950"
+      ],
+      "status": "excluded",
+      "transport_cost_evidence_status": "not_required",
+      "unknown_reasons": []
+     },
+     {
+      "candidate": {
+       "absent_features": [],
+       "address": "Arbutus Street, Haggerston, London, E8",
+       "alternative": true,
+       "area": "Hackney",
+       "availability_status": "",
+       "available_from": "",
+       "bedrooms": 1,
+       "budget_status": "⚠️ Over budget by £250",
+       "candidate_reasons": [
+        "alternative is outside the declared hard result set",
+        "monthly price 2200 exceeds budget 1950"
+       ],
+       "candidate_status": "excluded",
+       "candidate_unknown_reasons": [],
+       "description": "",
+       "distance_miles": 1.18,
+       "explanation": "1 bedroom flat to rent in Arbutus Street, Haggerston, London, E8",
+       "geo_location": "51.539025, -0.075944",
+       "images": [
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/19973895/1630862996/image-4-480x320.jpg"
+       ],
+       "match_type": "soft_violation",
+       "possibly_outdated": false,
+       "price": "£2200/month",
+       "property_type": "1 bed Flat",
+       "provider_address": "Arbutus Street, Haggerston, London, E8",
+       "rank": 2,
+       "room_type": null,
+       "score": 32.54,
+       "score_breakdown": {
+        "freshness": 13.46,
+        "price": 4.61,
+        "semantic": 14.47
+       },
+       "source": "OnTheMarket (cached)",
+       "unverified_features": [],
+       "url": "https://www.onthemarket.com/details/19973895/",
+       "verified_features": []
+      },
+      "candidate_key": "url:https://www.onthemarket.com/details/19973895",
+      "evidence_status": "not_required",
+      "index": 4,
+      "reasons": [
+       "alternative is outside the declared hard result set",
+       "monthly price 2200 exceeds budget 1950"
+      ],
+      "status": "excluded",
+      "transport_cost_evidence_status": "not_required",
+      "unknown_reasons": []
+     }
+    ],
+    "unknown": []
+   },
+   "extracted_context": {
+    "current_date": "2026-10-22",
+    "current_message": "What would a 6-week deposit and the first month's rent come to for a £1,950/month flat in Hackney? Find me one under £2,000 too.",
+    "history": [],
+    "memory_paused": false,
+    "reply_language": "en"
+   },
+   "final_response": "Meets all declared conditions (verified):\n- Flat Share - ALL Bills & Wifi Included - Bethnal Green (£875/month)\n- Plot Cosy Studio21July, Cosy Studio21July at Shoreditch, 419-437, Tower Hamlets Road E2 (£1749/month)\n- Jacob House, London, E8 (£1950/month)\nExcluded / does not meet:\n- Kingsland Road, London, E8: alternative is outside the declared hard result set; monthly price 2200 exceeds budget 1950\n- Arbutus Street, Haggerston, London, E8: alternative is outside the declared hard result set; monthly price 2200 exceeds budget 1950\nThese listings are cached; prices and availability may have changed. Confirm with the agent.",
+   "memory_context": "",
+   "observations": [],
+   "tool_artifacts": [
+    {
+     "elapsed_ms": 1175,
+     "error": null,
+     "params_digest": "e0de8af2bd7337ee",
+     "raw_data": {
+      "area_recommendations": [],
+      "area_status": {
+       "Hackney": "results"
+      },
+      "cache_stats": {
+       "hits": 1,
+       "misses": 0
+      },
+      "candidate_states": [
+       {
+        "candidate": {
+         "absent_features": [],
+         "address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+         "area": "Hackney",
+         "availability_status": "",
+         "available_from": "",
+         "bedrooms": 1,
+         "budget_status": "✅ Within budget",
+         "candidate_reasons": [],
+         "candidate_status": "eligible",
+         "candidate_unknown_reasons": [],
+         "description": "",
+         "distance_miles": 1.06,
+         "explanation": "1 bedroom in a flat share to rent in Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+         "geo_location": "51.528986, -0.058316",
+         "images": [
+          "https://media.onthemarket.com/properties/11897043/1630917749/image-0-480x320.jpg",
+          "https://media.onthemarket.com/properties/11897043/1630917749/image-1-480x320.jpg",
+          "https://media.onthemarket.com/properties/11897043/1630917749/image-2-480x320.jpg",
+          "https://media.onthemarket.com/properties/11897043/1630917749/image-3-480x320.jpg",
+          "https://media.onthemarket.com/properties/11897043/1630917749/image-4-480x320.jpg"
+         ],
+         "match_type": "perfect",
+         "possibly_outdated": false,
+         "price": "£875/month",
+         "property_type": "1 bed Flat share",
+         "provider_address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+         "rank": 1,
+         "room_type": null,
+         "score": 71.39,
+         "score_breakdown": {
+          "freshness": 13.46,
+          "price": 46.04,
+          "semantic": 11.89
+         },
+         "source": "OnTheMarket (cached)",
+         "unverified_features": [],
+         "url": "https://www.onthemarket.com/details/11897043/",
+         "verified_features": []
+        },
+        "candidate_key": "url:https://www.onthemarket.com/details/11897043",
+        "evidence_status": "not_required",
+        "index": 0,
+        "reasons": [],
+        "status": "eligible",
+        "transport_cost_evidence_status": "not_required",
+        "unknown_reasons": []
+       },
+       {
+        "candidate": {
+         "absent_features": [],
+         "address": "Plot Cosy Studio21July, Cosy Studio21July at Shoreditch, 419-437, Tower Hamlets Road E2",
+         "area": "Hackney",
+         "availability_status": "",
+         "available_from": "",
+         "bedrooms": "Studio",
+         "budget_status": "✅ Within budget",
+         "candidate_reasons": [],
+         "candidate_status": "eligible",
+         "candidate_unknown_reasons": [],
+         "description": "",
+         "distance_miles": 0.98,
+         "explanation": "Studio to rent in Plot Cosy Studio21July, Cosy Studio21July at Shoreditch, 419-437, Hackney Road E2",
+         "geo_location": "51.531803, -0.062782",
+         "images": [
+          "https://media.onthemarket.com/properties/19970901/1630806694/image-0-480x320.webp",
+          "https://media.onthemarket.com/properties/19970901/1630806694/image-1-480x320.webp",
+          "https://media.onthemarket.com/properties/19970901/1630806694/image-2-480x320.webp",
+          "https://media.onthemarket.com/properties/19970901/1630806694/image-3-480x320.webp",
+          "https://media.onthemarket.com/properties/19970901/1630806694/image-4-480x320.webp"
+         ],
+         "match_type": "perfect",
+         "possibly_outdated": false,
+         "price": "£1749/month",
+         "property_type": "Studio",
+         "provider_address": "Plot Cosy Studio21July, Cosy Studio21July at Shoreditch, 419-437, Hackney Road E2",
+         "rank": 2,
+         "room_type": null,
+         "score": 59.27,
+         "score_breakdown": {
+          "freshness": 13.46,
+          "price": 34.41,
+          "semantic": 11.4
+         },
+         "source": "OnTheMarket (cached)",
+         "unverified_features": [],
+         "url": "https://www.onthemarket.com/details/19970901/",
+         "verified_features": []
+        },
+        "candidate_key": "url:https://www.onthemarket.com/details/19970901",
+        "evidence_status": "not_required",
+        "index": 1,
+        "reasons": [],
+        "status": "eligible",
+        "transport_cost_evidence_status": "not_required",
+        "unknown_reasons": []
+       },
+       {
+        "candidate": {
+         "absent_features": [],
+         "address": "Jacob House, London, E8",
+         "area": "Hackney",
+         "availability_status": "",
+         "available_from": "",
+         "bedrooms": 1,
+         "budget_status": "✅ Within budget",
+         "candidate_reasons": [],
+         "candidate_status": "eligible",
+         "candidate_unknown_reasons": [],
+         "description": "",
+         "distance_miles": 1.1,
+         "explanation": "1 bedroom flat to rent in Jacob House, London, E8",
+         "geo_location": "51.554058, -0.06814",
+         "images": [
+          "https://media.onthemarket.com/properties/19970243/1630741305/image-0-480x320.jpg",
+          "https://media.onthemarket.com/properties/19970243/1630741305/image-1-480x320.jpg",
+          "https://media.onthemarket.com/properties/19970243/1630741305/image-2-480x320.jpg",
+          "https://media.onthemarket.com/properties/19970243/1630741305/image-3-480x320.jpg",
+          "https://media.onthemarket.com/properties/19970243/1630741305/image-4-480x320.jpg"
+         ],
+         "match_type": "perfect",
+         "possibly_outdated": false,
+         "price": "£1950/month",
+         "property_type": "1 bed Flat",
+         "provider_address": "Jacob House, London, E8",
+         "rank": 3,
+         "room_type": null,
+         "score": 59.3,
+         "score_breakdown": {
+          "freshness": 13.46,
+          "price": 31.73,
+          "semantic": 14.11
+         },
+         "source": "OnTheMarket (cached)",
+         "unverified_features": [],
+         "url": "https://www.onthemarket.com/details/19970243/",
+         "verified_features": []
+        },
+        "candidate_key": "url:https://www.onthemarket.com/details/19970243",
+        "evidence_status": "not_required",
+        "index": 2,
+        "reasons": [],
+        "status": "eligible",
+        "transport_cost_evidence_status": "not_required",
+        "unknown_reasons": []
+       },
+       {
+        "candidate": {
+         "absent_features": [],
+         "address": "Kingsland Road, London, E8",
+         "alternative": true,
+         "area": "Hackney",
+         "availability_status": "",
+         "available_from": "",
+         "bedrooms": 2,
+         "budget_status": "⚠️ Over budget by £250",
+         "candidate_reasons": [
+          "alternative is outside the declared hard result set",
+          "monthly price 2200 exceeds budget 1950"
+         ],
+         "candidate_status": "excluded",
+         "candidate_unknown_reasons": [],
+         "description": "",
+         "distance_miles": 1.14,
+         "explanation": "2 bedroom apartment to rent in Kingsland Road, London, E8",
+         "geo_location": "51.542534, -0.075841",
+         "images": [
+          "https://media.onthemarket.com/properties/12420836/1630908353/image-0-480x320.jpg",
+          "https://media.onthemarket.com/properties/12420836/1630908353/image-1-480x320.jpg",
+          "https://media.onthemarket.com/properties/12420836/1630908353/image-2-480x320.jpg",
+          "https://media.onthemarket.com/properties/12420836/1630908353/image-3-480x320.jpg",
+          "https://media.onthemarket.com/properties/12420836/1630908353/image-4-480x320.jpg"
+         ],
+         "match_type": "soft_violation",
+         "possibly_outdated": false,
+         "price": "£2200/month",
+         "property_type": "2 bed Apartment",
+         "provider_address": "Kingsland Road, London, E8",
+         "rank": 1,
+         "room_type": null,
+         "score": 33.14,
+         "score_breakdown": {
+          "freshness": 13.46,
+          "price": 4.61,
+          "semantic": 15.07
+         },
+         "source": "OnTheMarket (cached)",
+         "unverified_features": [],
+         "url": "https://www.onthemarket.com/details/12420836/",
+         "verified_features": []
+        },
+        "candidate_key": "url:https://www.onthemarket.com/details/12420836",
+        "evidence_status": "not_required",
+        "index": 3,
+        "reasons": [
+         "alternative is outside the declared hard result set",
+         "monthly price 2200 exceeds budget 1950"
+        ],
+        "status": "excluded",
+        "transport_cost_evidence_status": "not_required",
+        "unknown_reasons": []
+       },
+       {
+        "candidate": {
+         "absent_features": [],
+         "address": "Arbutus Street, Haggerston, London, E8",
+         "alternative": true,
+         "area": "Hackney",
+         "availability_status": "",
+         "available_from": "",
+         "bedrooms": 1,
+         "budget_status": "⚠️ Over budget by £250",
+         "candidate_reasons": [
+          "alternative is outside the declared hard result set",
+          "monthly price 2200 exceeds budget 1950"
+         ],
+         "candidate_status": "excluded",
+         "candidate_unknown_reasons": [],
+         "description": "",
+         "distance_miles": 1.18,
+         "explanation": "1 bedroom flat to rent in Arbutus Street, Haggerston, London, E8",
+         "geo_location": "51.539025, -0.075944",
+         "images": [
+          "https://media.onthemarket.com/properties/19973895/1630862996/image-0-480x320.jpg",
+          "https://media.onthemarket.com/properties/19973895/1630862996/image-1-480x320.jpg",
+          "https://media.onthemarket.com/properties/19973895/1630862996/image-2-480x320.jpg",
+          "https://media.onthemarket.com/properties/19973895/1630862996/image-3-480x320.jpg",
+          "https://media.onthemarket.com/properties/19973895/1630862996/image-4-480x320.jpg"
+         ],
+         "match_type": "soft_violation",
+         "possibly_outdated": false,
+         "price": "£2200/month",
+         "property_type": "1 bed Flat",
+         "provider_address": "Arbutus Street, Haggerston, London, E8",
+         "rank": 2,
+         "room_type": null,
+         "score": 32.54,
+         "score_breakdown": {
+          "freshness": 13.46,
+          "price": 4.61,
+          "semantic": 14.47
+         },
+         "source": "OnTheMarket (cached)",
+         "unverified_features": [],
+         "url": "https://www.onthemarket.com/details/19973895/",
+         "verified_features": []
+        },
+        "candidate_key": "url:https://www.onthemarket.com/details/19973895",
+        "evidence_status": "not_required",
+        "index": 4,
+        "reasons": [
+         "alternative is outside the declared hard result set",
+         "monthly price 2200 exceeds budget 1950"
+        ],
+        "status": "excluded",
+        "transport_cost_evidence_status": "not_required",
+        "unknown_reasons": []
+       }
+      ],
+      "candidate_validation": {
+       "constraints": {
+        "areas": [
+         "hackney"
+        ],
+        "bedrooms": null,
+        "bedrooms_minimum": false,
+        "commute_destination": "Hackney",
+        "max_budget_monthly": 1950.0,
+        "max_changes": null,
+        "max_commute_minutes": null,
+        "monthly_total_budget": null,
+        "move_in_date": null,
+        "no_commute": false,
+        "office_days_per_week": null,
+        "property_features": [],
+        "room_type": null
+       },
+       "eligible": [
+        {
+         "candidate": {
+          "absent_features": [],
+          "address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+          "area": "Hackney",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 1,
+          "budget_status": "✅ Within budget",
+          "candidate_reasons": [],
+          "candidate_status": "eligible",
+          "candidate_unknown_reasons": [],
+          "description": "",
+          "distance_miles": 1.06,
+          "explanation": "1 bedroom in a flat share to rent in Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+          "geo_location": "51.528986, -0.058316",
+          "images": [
+           "https://media.onthemarket.com/properties/11897043/1630917749/image-0-480x320.jpg",
+           "https://media.onthemarket.com/properties/11897043/1630917749/image-1-480x320.jpg",
+           "https://media.onthemarket.com/properties/11897043/1630917749/image-2-480x320.jpg",
+           "https://media.onthemarket.com/properties/11897043/1630917749/image-3-480x320.jpg",
+           "https://media.onthemarket.com/properties/11897043/1630917749/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": false,
+          "price": "£875/month",
+          "property_type": "1 bed Flat share",
+          "provider_address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+          "rank": 1,
+          "room_type": null,
+          "score": 71.39,
+          "score_breakdown": {
+           "freshness": 13.46,
+           "price": 46.04,
+           "semantic": 11.89
+          },
+          "source": "OnTheMarket (cached)",
+          "unverified_features": [],
+          "url": "https://www.onthemarket.com/details/11897043/",
+          "verified_features": []
+         },
+         "candidate_key": "url:https://www.onthemarket.com/details/11897043",
+         "evidence_status": "not_required",
+         "index": 0,
+         "reasons": [],
+         "status": "eligible",
+         "transport_cost_evidence_status": "not_required",
+         "unknown_reasons": []
+        },
+        {
+         "candidate": {
+          "absent_features": [],
+          "address": "Plot Cosy Studio21July, Cosy Studio21July at Shoreditch, 419-437, Tower Hamlets Road E2",
+          "area": "Hackney",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": "Studio",
+          "budget_status": "✅ Within budget",
+          "candidate_reasons": [],
+          "candidate_status": "eligible",
+          "candidate_unknown_reasons": [],
+          "description": "",
+          "distance_miles": 0.98,
+          "explanation": "Studio to rent in Plot Cosy Studio21July, Cosy Studio21July at Shoreditch, 419-437, Hackney Road E2",
+          "geo_location": "51.531803, -0.062782",
+          "images": [
+           "https://media.onthemarket.com/properties/19970901/1630806694/image-0-480x320.webp",
+           "https://media.onthemarket.com/properties/19970901/1630806694/image-1-480x320.webp",
+           "https://media.onthemarket.com/properties/19970901/1630806694/image-2-480x320.webp",
+           "https://media.onthemarket.com/properties/19970901/1630806694/image-3-480x320.webp",
+           "https://media.onthemarket.com/properties/19970901/1630806694/image-4-480x320.webp"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": false,
+          "price": "£1749/month",
+          "property_type": "Studio",
+          "provider_address": "Plot Cosy Studio21July, Cosy Studio21July at Shoreditch, 419-437, Hackney Road E2",
+          "rank": 2,
+          "room_type": null,
+          "score": 59.27,
+          "score_breakdown": {
+           "freshness": 13.46,
+           "price": 34.41,
+           "semantic": 11.4
+          },
+          "source": "OnTheMarket (cached)",
+          "unverified_features": [],
+          "url": "https://www.onthemarket.com/details/19970901/",
+          "verified_features": []
+         },
+         "candidate_key": "url:https://www.onthemarket.com/details/19970901",
+         "evidence_status": "not_required",
+         "index": 1,
+         "reasons": [],
+         "status": "eligible",
+         "transport_cost_evidence_status": "not_required",
+         "unknown_reasons": []
+        },
+        {
+         "candidate": {
+          "absent_features": [],
+          "address": "Jacob House, London, E8",
+          "area": "Hackney",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 1,
+          "budget_status": "✅ Within budget",
+          "candidate_reasons": [],
+          "candidate_status": "eligible",
+          "candidate_unknown_reasons": [],
+          "description": "",
+          "distance_miles": 1.1,
+          "explanation": "1 bedroom flat to rent in Jacob House, London, E8",
+          "geo_location": "51.554058, -0.06814",
+          "images": [
+           "https://media.onthemarket.com/properties/19970243/1630741305/image-0-480x320.jpg",
+           "https://media.onthemarket.com/properties/19970243/1630741305/image-1-480x320.jpg",
+           "https://media.onthemarket.com/properties/19970243/1630741305/image-2-480x320.jpg",
+           "https://media.onthemarket.com/properties/19970243/1630741305/image-3-480x320.jpg",
+           "https://media.onthemarket.com/properties/19970243/1630741305/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": false,
+          "price": "£1950/month",
+          "property_type": "1 bed Flat",
+          "provider_address": "Jacob House, London, E8",
+          "rank": 3,
+          "room_type": null,
+          "score": 59.3,
+          "score_breakdown": {
+           "freshness": 13.46,
+           "price": 31.73,
+           "semantic": 14.11
+          },
+          "source": "OnTheMarket (cached)",
+          "unverified_features": [],
+          "url": "https://www.onthemarket.com/details/19970243/",
+          "verified_features": []
+         },
+         "candidate_key": "url:https://www.onthemarket.com/details/19970243",
+         "evidence_status": "not_required",
+         "index": 2,
+         "reasons": [],
+         "status": "eligible",
+         "transport_cost_evidence_status": "not_required",
+         "unknown_reasons": []
+        }
+       ],
+       "excluded": [
+        {
+         "candidate": {
+          "absent_features": [],
+          "address": "Kingsland Road, London, E8",
+          "alternative": true,
+          "area": "Hackney",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_status": "⚠️ Over budget by £250",
+          "candidate_reasons": [
+           "alternative is outside the declared hard result set",
+           "monthly price 2200 exceeds budget 1950"
+          ],
+          "candidate_status": "excluded",
+          "candidate_unknown_reasons": [],
+          "description": "",
+          "distance_miles": 1.14,
+          "explanation": "2 bedroom apartment to rent in Kingsland Road, London, E8",
+          "geo_location": "51.542534, -0.075841",
+          "images": [
+           "https://media.onthemarket.com/properties/12420836/1630908353/image-0-480x320.jpg",
+           "https://media.onthemarket.com/properties/12420836/1630908353/image-1-480x320.jpg",
+           "https://media.onthemarket.com/properties/12420836/1630908353/image-2-480x320.jpg",
+           "https://media.onthemarket.com/properties/12420836/1630908353/image-3-480x320.jpg",
+           "https://media.onthemarket.com/properties/12420836/1630908353/image-4-480x320.jpg"
+          ],
+          "match_type": "soft_violation",
+          "possibly_outdated": false,
+          "price": "£2200/month",
+          "property_type": "2 bed Apartment",
+          "provider_address": "Kingsland Road, London, E8",
+          "rank": 1,
+          "room_type": null,
+          "score": 33.14,
+          "score_breakdown": {
+           "freshness": 13.46,
+           "price": 4.61,
+           "semantic": 15.07
+          },
+          "source": "OnTheMarket (cached)",
+          "unverified_features": [],
+          "url": "https://www.onthemarket.com/details/12420836/",
+          "verified_features": []
+         },
+         "candidate_key": "url:https://www.onthemarket.com/details/12420836",
+         "evidence_status": "not_required",
+         "index": 3,
+         "reasons": [
+          "alternative is outside the declared hard result set",
+          "monthly price 2200 exceeds budget 1950"
+         ],
+         "status": "excluded",
+         "transport_cost_evidence_status": "not_required",
+         "unknown_reasons": []
+        },
+        {
+         "candidate": {
+          "absent_features": [],
+          "address": "Arbutus Street, Haggerston, London, E8",
+          "alternative": true,
+          "area": "Hackney",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 1,
+          "budget_status": "⚠️ Over budget by £250",
+          "candidate_reasons": [
+           "alternative is outside the declared hard result set",
+           "monthly price 2200 exceeds budget 1950"
+          ],
+          "candidate_status": "excluded",
+          "candidate_unknown_reasons": [],
+          "description": "",
+          "distance_miles": 1.18,
+          "explanation": "1 bedroom flat to rent in Arbutus Street, Haggerston, London, E8",
+          "geo_location": "51.539025, -0.075944",
+          "images": [
+           "https://media.onthemarket.com/properties/19973895/1630862996/image-0-480x320.jpg",
+           "https://media.onthemarket.com/properties/19973895/1630862996/image-1-480x320.jpg",
+           "https://media.onthemarket.com/properties/19973895/1630862996/image-2-480x320.jpg",
+           "https://media.onthemarket.com/properties/19973895/1630862996/image-3-480x320.jpg",
+           "https://media.onthemarket.com/properties/19973895/1630862996/image-4-480x320.jpg"
+          ],
+          "match_type": "soft_violation",
+          "possibly_outdated": false,
+          "price": "£2200/month",
+          "property_type": "1 bed Flat",
+          "provider_address": "Arbutus Street, Haggerston, London, E8",
+          "rank": 2,
+          "room_type": null,
+          "score": 32.54,
+          "score_breakdown": {
+           "freshness": 13.46,
+           "price": 4.61,
+           "semantic": 14.47
+          },
+          "source": "OnTheMarket (cached)",
+          "unverified_features": [],
+          "url": "https://www.onthemarket.com/details/19973895/",
+          "verified_features": []
+         },
+         "candidate_key": "url:https://www.onthemarket.com/details/19973895",
+         "evidence_status": "not_required",
+         "index": 4,
+         "reasons": [
+          "alternative is outside the declared hard result set",
+          "monthly price 2200 exceeds budget 1950"
+         ],
+         "status": "excluded",
+         "transport_cost_evidence_status": "not_required",
+         "unknown_reasons": []
+        }
+       ],
+       "statuses": [
+        {
+         "candidate": {
+          "absent_features": [],
+          "address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+          "area": "Hackney",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 1,
+          "budget_status": "✅ Within budget",
+          "candidate_reasons": [],
+          "candidate_status": "eligible",
+          "candidate_unknown_reasons": [],
+          "description": "",
+          "distance_miles": 1.06,
+          "explanation": "1 bedroom in a flat share to rent in Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+          "geo_location": "51.528986, -0.058316",
+          "images": [
+           "https://media.onthemarket.com/properties/11897043/1630917749/image-0-480x320.jpg",
+           "https://media.onthemarket.com/properties/11897043/1630917749/image-1-480x320.jpg",
+           "https://media.onthemarket.com/properties/11897043/1630917749/image-2-480x320.jpg",
+           "https://media.onthemarket.com/properties/11897043/1630917749/image-3-480x320.jpg",
+           "https://media.onthemarket.com/properties/11897043/1630917749/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": false,
+          "price": "£875/month",
+          "property_type": "1 bed Flat share",
+          "provider_address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+          "rank": 1,
+          "room_type": null,
+          "score": 71.39,
+          "score_breakdown": {
+           "freshness": 13.46,
+           "price": 46.04,
+           "semantic": 11.89
+          },
+          "source": "OnTheMarket (cached)",
+          "unverified_features": [],
+          "url": "https://www.onthemarket.com/details/11897043/",
+          "verified_features": []
+         },
+         "candidate_key": "url:https://www.onthemarket.com/details/11897043",
+         "evidence_status": "not_required",
+         "index": 0,
+         "reasons": [],
+         "status": "eligible",
+         "transport_cost_evidence_status": "not_required",
+         "unknown_reasons": []
+        },
+        {
+         "candidate": {
+          "absent_features": [],
+          "address": "Plot Cosy Studio21July, Cosy Studio21July at Shoreditch, 419-437, Tower Hamlets Road E2",
+          "area": "Hackney",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": "Studio",
+          "budget_status": "✅ Within budget",
+          "candidate_reasons": [],
+          "candidate_status": "eligible",
+          "candidate_unknown_reasons": [],
+          "description": "",
+          "distance_miles": 0.98,
+          "explanation": "Studio to rent in Plot Cosy Studio21July, Cosy Studio21July at Shoreditch, 419-437, Hackney Road E2",
+          "geo_location": "51.531803, -0.062782",
+          "images": [
+           "https://media.onthemarket.com/properties/19970901/1630806694/image-0-480x320.webp",
+           "https://media.onthemarket.com/properties/19970901/1630806694/image-1-480x320.webp",
+           "https://media.onthemarket.com/properties/19970901/1630806694/image-2-480x320.webp",
+           "https://media.onthemarket.com/properties/19970901/1630806694/image-3-480x320.webp",
+           "https://media.onthemarket.com/properties/19970901/1630806694/image-4-480x320.webp"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": false,
+          "price": "£1749/month",
+          "property_type": "Studio",
+          "provider_address": "Plot Cosy Studio21July, Cosy Studio21July at Shoreditch, 419-437, Hackney Road E2",
+          "rank": 2,
+          "room_type": null,
+          "score": 59.27,
+          "score_breakdown": {
+           "freshness": 13.46,
+           "price": 34.41,
+           "semantic": 11.4
+          },
+          "source": "OnTheMarket (cached)",
+          "unverified_features": [],
+          "url": "https://www.onthemarket.com/details/19970901/",
+          "verified_features": []
+         },
+         "candidate_key": "url:https://www.onthemarket.com/details/19970901",
+         "evidence_status": "not_required",
+         "index": 1,
+         "reasons": [],
+         "status": "eligible",
+         "transport_cost_evidence_status": "not_required",
+         "unknown_reasons": []
+        },
+        {
+         "candidate": {
+          "absent_features": [],
+          "address": "Jacob House, London, E8",
+          "area": "Hackney",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 1,
+          "budget_status": "✅ Within budget",
+          "candidate_reasons": [],
+          "candidate_status": "eligible",
+          "candidate_unknown_reasons": [],
+          "description": "",
+          "distance_miles": 1.1,
+          "explanation": "1 bedroom flat to rent in Jacob House, London, E8",
+          "geo_location": "51.554058, -0.06814",
+          "images": [
+           "https://media.onthemarket.com/properties/19970243/1630741305/image-0-480x320.jpg",
+           "https://media.onthemarket.com/properties/19970243/1630741305/image-1-480x320.jpg",
+           "https://media.onthemarket.com/properties/19970243/1630741305/image-2-480x320.jpg",
+           "https://media.onthemarket.com/properties/19970243/1630741305/image-3-480x320.jpg",
+           "https://media.onthemarket.com/properties/19970243/1630741305/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": false,
+          "price": "£1950/month",
+          "property_type": "1 bed Flat",
+          "provider_address": "Jacob House, London, E8",
+          "rank": 3,
+          "room_type": null,
+          "score": 59.3,
+          "score_breakdown": {
+           "freshness": 13.46,
+           "price": 31.73,
+           "semantic": 14.11
+          },
+          "source": "OnTheMarket (cached)",
+          "unverified_features": [],
+          "url": "https://www.onthemarket.com/details/19970243/",
+          "verified_features": []
+         },
+         "candidate_key": "url:https://www.onthemarket.com/details/19970243",
+         "evidence_status": "not_required",
+         "index": 2,
+         "reasons": [],
+         "status": "eligible",
+         "transport_cost_evidence_status": "not_required",
+         "unknown_reasons": []
+        },
+        {
+         "candidate": {
+          "absent_features": [],
+          "address": "Kingsland Road, London, E8",
+          "alternative": true,
+          "area": "Hackney",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_status": "⚠️ Over budget by £250",
+          "candidate_reasons": [
+           "alternative is outside the declared hard result set",
+           "monthly price 2200 exceeds budget 1950"
+          ],
+          "candidate_status": "excluded",
+          "candidate_unknown_reasons": [],
+          "description": "",
+          "distance_miles": 1.14,
+          "explanation": "2 bedroom apartment to rent in Kingsland Road, London, E8",
+          "geo_location": "51.542534, -0.075841",
+          "images": [
+           "https://media.onthemarket.com/properties/12420836/1630908353/image-0-480x320.jpg",
+           "https://media.onthemarket.com/properties/12420836/1630908353/image-1-480x320.jpg",
+           "https://media.onthemarket.com/properties/12420836/1630908353/image-2-480x320.jpg",
+           "https://media.onthemarket.com/properties/12420836/1630908353/image-3-480x320.jpg",
+           "https://media.onthemarket.com/properties/12420836/1630908353/image-4-480x320.jpg"
+          ],
+          "match_type": "soft_violation",
+          "possibly_outdated": false,
+          "price": "£2200/month",
+          "property_type": "2 bed Apartment",
+          "provider_address": "Kingsland Road, London, E8",
+          "rank": 1,
+          "room_type": null,
+          "score": 33.14,
+          "score_breakdown": {
+           "freshness": 13.46,
+           "price": 4.61,
+           "semantic": 15.07
+          },
+          "source": "OnTheMarket (cached)",
+          "unverified_features": [],
+          "url": "https://www.onthemarket.com/details/12420836/",
+          "verified_features": []
+         },
+         "candidate_key": "url:https://www.onthemarket.com/details/12420836",
+         "evidence_status": "not_required",
+         "index": 3,
+         "reasons": [
+          "alternative is outside the declared hard result set",
+          "monthly price 2200 exceeds budget 1950"
+         ],
+         "status": "excluded",
+         "transport_cost_evidence_status": "not_required",
+         "unknown_reasons": []
+        },
+        {
+         "candidate": {
+          "absent_features": [],
+          "address": "Arbutus Street, Haggerston, London, E8",
+          "alternative": true,
+          "area": "Hackney",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 1,
+          "budget_status": "⚠️ Over budget by £250",
+          "candidate_reasons": [
+           "alternative is outside the declared hard result set",
+           "monthly price 2200 exceeds budget 1950"
+          ],
+          "candidate_status": "excluded",
+          "candidate_unknown_reasons": [],
+          "description": "",
+          "distance_miles": 1.18,
+          "explanation": "1 bedroom flat to rent in Arbutus Street, Haggerston, London, E8",
+          "geo_location": "51.539025, -0.075944",
+          "images": [
+           "https://media.onthemarket.com/properties/19973895/1630862996/image-0-480x320.jpg",
+           "https://media.onthemarket.com/properties/19973895/1630862996/image-1-480x320.jpg",
+           "https://media.onthemarket.com/properties/19973895/1630862996/image-2-480x320.jpg",
+           "https://media.onthemarket.com/properties/19973895/1630862996/image-3-480x320.jpg",
+           "https://media.onthemarket.com/properties/19973895/1630862996/image-4-480x320.jpg"
+          ],
+          "match_type": "soft_violation",
+          "possibly_outdated": false,
+          "price": "£2200/month",
+          "property_type": "1 bed Flat",
+          "provider_address": "Arbutus Street, Haggerston, London, E8",
+          "rank": 2,
+          "room_type": null,
+          "score": 32.54,
+          "score_breakdown": {
+           "freshness": 13.46,
+           "price": 4.61,
+           "semantic": 14.47
+          },
+          "source": "OnTheMarket (cached)",
+          "unverified_features": [],
+          "url": "https://www.onthemarket.com/details/19973895/",
+          "verified_features": []
+         },
+         "candidate_key": "url:https://www.onthemarket.com/details/19973895",
+         "evidence_status": "not_required",
+         "index": 4,
+         "reasons": [
+          "alternative is outside the declared hard result set",
+          "monthly price 2200 exceeds budget 1950"
+         ],
+         "status": "excluded",
+         "transport_cost_evidence_status": "not_required",
+         "unknown_reasons": []
+        }
+       ],
+       "unknown": []
+      },
+      "commute_evidence": [],
+      "commute_note": "",
+      "commute_unverified": false,
+      "data_source": "OnTheMarket (cached)",
+      "excluded_candidates": [
+       {
+        "absent_features": [],
+        "address": "Kingsland Road, London, E8",
+        "alternative": true,
+        "area": "Hackney",
+        "availability_status": "",
+        "available_from": "",
+        "bedrooms": 2,
+        "budget_status": "⚠️ Over budget by £250",
+        "candidate_reasons": [
+         "alternative is outside the declared hard result set",
+         "monthly price 2200 exceeds budget 1950"
+        ],
+        "candidate_status": "excluded",
+        "candidate_unknown_reasons": [],
+        "description": "",
+        "distance_miles": 1.14,
+        "explanation": "2 bedroom apartment to rent in Kingsland Road, London, E8",
+        "geo_location": "51.542534, -0.075841",
+        "images": [
+         "https://media.onthemarket.com/properties/12420836/1630908353/image-0-480x320.jpg",
+         "https://media.onthemarket.com/properties/12420836/1630908353/image-1-480x320.jpg",
+         "https://media.onthemarket.com/properties/12420836/1630908353/image-2-480x320.jpg",
+         "https://media.onthemarket.com/properties/12420836/1630908353/image-3-480x320.jpg",
+         "https://media.onthemarket.com/properties/12420836/1630908353/image-4-480x320.jpg"
+        ],
+        "match_type": "soft_violation",
+        "possibly_outdated": false,
+        "price": "£2200/month",
+        "property_type": "2 bed Apartment",
+        "provider_address": "Kingsland Road, London, E8",
+        "rank": 1,
+        "room_type": null,
+        "score": 33.14,
+        "score_breakdown": {
+         "freshness": 13.46,
+         "price": 4.61,
+         "semantic": 15.07
+        },
+        "source": "OnTheMarket (cached)",
+        "unverified_features": [],
+        "url": "https://www.onthemarket.com/details/12420836/",
+        "verified_features": []
+       },
+       {
+        "absent_features": [],
+        "address": "Arbutus Street, Haggerston, London, E8",
+        "alternative": true,
+        "area": "Hackney",
+        "availability_status": "",
+        "available_from": "",
+        "bedrooms": 1,
+        "budget_status": "⚠️ Over budget by £250",
+        "candidate_reasons": [
+         "alternative is outside the declared hard result set",
+         "monthly price 2200 exceeds budget 1950"
+        ],
+        "candidate_status": "excluded",
+        "candidate_unknown_reasons": [],
+        "description": "",
+        "distance_miles": 1.18,
+        "explanation": "1 bedroom flat to rent in Arbutus Street, Haggerston, London, E8",
+        "geo_location": "51.539025, -0.075944",
+        "images": [
+         "https://media.onthemarket.com/properties/19973895/1630862996/image-0-480x320.jpg",
+         "https://media.onthemarket.com/properties/19973895/1630862996/image-1-480x320.jpg",
+         "https://media.onthemarket.com/properties/19973895/1630862996/image-2-480x320.jpg",
+         "https://media.onthemarket.com/properties/19973895/1630862996/image-3-480x320.jpg",
+         "https://media.onthemarket.com/properties/19973895/1630862996/image-4-480x320.jpg"
+        ],
+        "match_type": "soft_violation",
+        "possibly_outdated": false,
+        "price": "£2200/month",
+        "property_type": "1 bed Flat",
+        "provider_address": "Arbutus Street, Haggerston, London, E8",
+        "rank": 2,
+        "room_type": null,
+        "score": 32.54,
+        "score_breakdown": {
+         "freshness": 13.46,
+         "price": 4.61,
+         "semantic": 14.47
+        },
+        "source": "OnTheMarket (cached)",
+        "unverified_features": [],
+        "url": "https://www.onthemarket.com/details/19973895/",
+        "verified_features": []
+       }
+      ],
+      "incomplete_areas": [],
+      "known_criteria": {
+       "area": "Hackney",
+       "areas": [
+        "Hackney"
+       ],
+       "bedrooms": null,
+       "bedrooms_minimum": false,
+       "budget_period": "month",
+       "commute_destination": null,
+       "max_budget": 1950.0,
+       "max_changes": null,
+       "max_travel_time": null,
+       "monthly_total_budget": null,
+       "move_in_date": null,
+       "no_commute": false,
+       "office_days_per_week": null,
+       "property_features": [],
+       "room_type": null,
+       "soft_preferences": []
+      },
+      "over_budget_alternatives": [
+       {
+        "absent_features": [],
+        "address": "Kingsland Road, London, E8",
+        "alternative": true,
+        "area": "Hackney",
+        "availability_status": "",
+        "available_from": "",
+        "bedrooms": 2,
+        "budget_status": "⚠️ Over budget by £250",
+        "description": "",
+        "distance_miles": 1.14,
+        "explanation": "2 bedroom apartment to rent in Kingsland Road, London, E8",
+        "geo_location": "51.542534, -0.075841",
+        "images": [
+         "https://media.onthemarket.com/properties/12420836/1630908353/image-0-480x320.jpg",
+         "https://media.onthemarket.com/properties/12420836/1630908353/image-1-480x320.jpg",
+         "https://media.onthemarket.com/properties/12420836/1630908353/image-2-480x320.jpg",
+         "https://media.onthemarket.com/properties/12420836/1630908353/image-3-480x320.jpg",
+         "https://media.onthemarket.com/properties/12420836/1630908353/image-4-480x320.jpg"
+        ],
+        "match_type": "soft_violation",
+        "possibly_outdated": false,
+        "price": "£2200/month",
+        "property_type": "2 bed Apartment",
+        "provider_address": "Kingsland Road, London, E8",
+        "rank": 1,
+        "room_type": null,
+        "score": 33.14,
+        "score_breakdown": {
+         "freshness": 13.46,
+         "price": 4.61,
+         "semantic": 15.07
+        },
+        "source": "OnTheMarket (cached)",
+        "unverified_features": [],
+        "url": "https://www.onthemarket.com/details/12420836/",
+        "verified_features": []
+       },
+       {
+        "absent_features": [],
+        "address": "Arbutus Street, Haggerston, London, E8",
+        "alternative": true,
+        "area": "Hackney",
+        "availability_status": "",
+        "available_from": "",
+        "bedrooms": 1,
+        "budget_status": "⚠️ Over budget by £250",
+        "description": "",
+        "distance_miles": 1.18,
+        "explanation": "1 bedroom flat to rent in Arbutus Street, Haggerston, London, E8",
+        "geo_location": "51.539025, -0.075944",
+        "images": [
+         "https://media.onthemarket.com/properties/19973895/1630862996/image-0-480x320.jpg",
+         "https://media.onthemarket.com/properties/19973895/1630862996/image-1-480x320.jpg",
+         "https://media.onthemarket.com/properties/19973895/1630862996/image-2-480x320.jpg",
+         "https://media.onthemarket.com/properties/19973895/1630862996/image-3-480x320.jpg",
+         "https://media.onthemarket.com/properties/19973895/1630862996/image-4-480x320.jpg"
+        ],
+        "match_type": "soft_violation",
+        "possibly_outdated": false,
+        "price": "£2200/month",
+        "property_type": "1 bed Flat",
+        "provider_address": "Arbutus Street, Haggerston, London, E8",
+        "rank": 2,
+        "room_type": null,
+        "score": 32.54,
+        "score_breakdown": {
+         "freshness": 13.46,
+         "price": 4.61,
+         "semantic": 14.47
+        },
+        "source": "OnTheMarket (cached)",
+        "unverified_features": [],
+        "url": "https://www.onthemarket.com/details/19973895/",
+        "verified_features": []
+       }
+      ],
+      "over_budget_alternatives_label": "Over-budget alternatives (up to 15% above your budget; not counted in the results above and not within your budget)",
+      "partial": false,
+      "partial_note": "",
+      "perfect_count": 3,
+      "possibly_outdated": false,
+      "recommendations": [
+       {
+        "absent_features": [],
+        "address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+        "area": "Hackney",
+        "availability_status": "",
+        "available_from": "",
+        "bedrooms": 1,
+        "budget_status": "✅ Within budget",
+        "description": "",
+        "distance_miles": 1.06,
+        "explanation": "1 bedroom in a flat share to rent in Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+        "geo_location": "51.528986, -0.058316",
+        "images": [
+         "https://media.onthemarket.com/properties/11897043/1630917749/image-0-480x320.jpg",
+         "https://media.onthemarket.com/properties/11897043/1630917749/image-1-480x320.jpg",
+         "https://media.onthemarket.com/properties/11897043/1630917749/image-2-480x320.jpg",
+         "https://media.onthemarket.com/properties/11897043/1630917749/image-3-480x320.jpg",
+         "https://media.onthemarket.com/properties/11897043/1630917749/image-4-480x320.jpg"
+        ],
+        "match_type": "perfect",
+        "possibly_outdated": false,
+        "price": "£875/month",
+        "property_type": "1 bed Flat share",
+        "provider_address": "Flat Share - ALL Bills & Wifi Included - Bethnal Green",
+        "rank": 1,
+        "room_type": null,
+        "score": 71.39,
+        "score_breakdown": {
+         "freshness": 13.46,
+         "price": 46.04,
+         "semantic": 11.89
+        },
+        "source": "OnTheMarket (cached)",
+        "unverified_features": [],
+        "url": "https://www.onthemarket.com/details/11897043/",
+        "verified_features": []
+       },
+       {
+        "absent_features": [],
+        "address": "Plot Cosy Studio21July, Cosy Studio21July at Shoreditch, 419-437, Tower Hamlets Road E2",
+        "area": "Hackney",
+        "availability_status": "",
+        "available_from": "",
+        "bedrooms": "Studio",
+        "budget_status": "✅ Within budget",
+        "description": "",
+        "distance_miles": 0.98,
+        "explanation": "Studio to rent in Plot Cosy Studio21July, Cosy Studio21July at Shoreditch, 419-437, Hackney Road E2",
+        "geo_location": "51.531803, -0.062782",
+        "images": [
+         "https://media.onthemarket.com/properties/19970901/1630806694/image-0-480x320.webp",
+         "https://media.onthemarket.com/properties/19970901/1630806694/image-1-480x320.webp",
+         "https://media.onthemarket.com/properties/19970901/1630806694/image-2-480x320.webp",
+         "https://media.onthemarket.com/properties/19970901/1630806694/image-3-480x320.webp",
+         "https://media.onthemarket.com/properties/19970901/1630806694/image-4-480x320.webp"
+        ],
+        "match_type": "perfect",
+        "possibly_outdated": false,
+        "price": "£1749/month",
+        "property_type": "Studio",
+        "provider_address": "Plot Cosy Studio21July, Cosy Studio21July at Shoreditch, 419-437, Hackney Road E2",
+        "rank": 2,
+        "room_type": null,
+        "score": 59.27,
+        "score_breakdown": {
+         "freshness": 13.46,
+         "price": 34.41,
+         "semantic": 11.4
+        },
+        "source": "OnTheMarket (cached)",
+        "unverified_features": [],
+        "url": "https://www.onthemarket.com/details/19970901/",
+        "verified_features": []
+       },
+       {
+        "absent_features": [],
+        "address": "Jacob House, London, E8",
+        "area": "Hackney",
+        "availability_status": "",
+        "available_from": "",
+        "bedrooms": 1,
+        "budget_status": "✅ Within budget",
+        "description": "",
+        "distance_miles": 1.1,
+        "explanation": "1 bedroom flat to rent in Jacob House, London, E8",
+        "geo_location": "51.554058, -0.06814",
+        "images": [
+         "https://media.onthemarket.com/properties/19970243/1630741305/image-0-480x320.jpg",
+         "https://media.onthemarket.com/properties/19970243/1630741305/image-1-480x320.jpg",
+         "https://media.onthemarket.com/properties/19970243/1630741305/image-2-480x320.jpg",
+         "https://media.onthemarket.com/properties/19970243/1630741305/image-3-480x320.jpg",
+         "https://media.onthemarket.com/properties/19970243/1630741305/image-4-480x320.jpg"
+        ],
+        "match_type": "perfect",
+        "possibly_outdated": false,
+        "price": "£1950/month",
+        "property_type": "1 bed Flat",
+        "provider_address": "Jacob House, London, E8",
+        "rank": 3,
+        "room_type": null,
+        "score": 59.3,
+        "score_breakdown": {
+         "freshness": 13.46,
+         "price": 31.73,
+         "semantic": 14.11
+        },
+        "source": "OnTheMarket (cached)",
+        "unverified_features": [],
+        "url": "https://www.onthemarket.com/details/19970243/",
+        "verified_features": []
+       }
+      ],
+      "retrieval_outcome": "candidates_returned",
+      "search_criteria": {
+       "area": "Hackney",
+       "areas": [
+        "Hackney"
+       ],
+       "bedrooms": null,
+       "bedrooms_minimum": false,
+       "budget_period": "month",
+       "commute_destination": null,
+       "destination": "Hackney",
+       "max_budget": 1950.0,
+       "max_changes": null,
+       "max_travel_time": null,
+       "monthly_total_budget": null,
+       "move_in_date": null,
+       "no_commute": false,
+       "office_days_per_week": null,
+       "property_features": [],
+       "room_type": null,
+       "soft_preferences": []
+      },
+      "soft_count": 2,
+      "status": "found",
+      "success": true,
+      "summary": "I found 3 current listings in Hackney. Prices range £875–£1950/month (median ~£1749). Filters applied: budget ≤£1950.0/month. Separately, 2 over-budget options (up to 15% above your budget) are listed as alternatives — not counted above and not within your budget. See the full listings in the right-hand panel.",
+      "total_found": 3,
+      "unverified_candidates": []
+     },
+     "success": true,
+     "tool": "search_properties",
+     "turn": 1
+    }
+   ],
+   "tool_decision": {},
+   "tool_raw_data": null,
+   "user_preferences": {
+    "excluded_areas": [],
+    "hard_preferences": [],
+    "required_amenities": [],
+    "safety_concerns": [],
+    "soft_preferences": []
+   },
+   "user_query": "What would a 6-week deposit and the first month's rent come to for a £1,950/month flat in Hackney? Find me one under £2,000 too."
+  }
+ },
+ "r21_8f4f0a00": {
+  "checkpoint": "1f1cdeed-ece8-6779-8009-203ebd796e8d",
+  "critic_text": "**Commute comparison: Stratford vs Bow to Liverpool Street**\n\nBoth areas have real, measured commute times from the TfL Journey Planner. Here is how they stack up.\n\n**Stratford — 20 minutes each way**\n- Walk to Stratford Underground Station: 4 min\n- Central line to Liverpool Street: 10 min\n- Walk to the office: 6 min\n- No changes required\n\n**Bow — 27 minutes each way**\n- Walk to Bow Road Underground Station: 13 min\n- District line to Mile End: 1 min\n- Central line to Liverpool Street: 6 min\n- Walk to the office: 6 min\n- One change required\n\n**Time saved by choosing Stratford**\n\nStratford is the faster option by 7 minutes per single journey (27 − 20 = 7).\n\n- Per day (return trip, 3 office days a week): 7 × 2 = 14 minutes saved per office day\n- Per week: 14 × 3 = 42 minutes saved\n- Per month (using 4 weeks): 42 × 4 = 168 minutes, i.e. 2 hours 48 minutes saved\n\nSo Stratford saves you roughly 14 minutes a day, 42 minutes a week, and about 2 hours 48 minutes a month compared with Bow — plus it is a direct Central line ride with no interchange, which matters on busy mornings.\n\n**Rent context**\n\nThe data I have covers Bow only: cached listings show a minimum of £1,650, a maximum of £4,050, and a median of £2,350 per month (30 listings, cache about 89 days old, mixed room types, not live-verified). No rent figures for Stratford were returned, so I cannot compare prices between the two — search results don't cover Stratford rents. For that, check rightmove.co.uk or zoopla.co.uk.\n\n**One caveat on ranking**\n\nThe area-ranking tool only evaluated Bow (it scored 100 on its composite measure, weighted heavily toward commute). Stratford was requested but not evaluated because no area match or commute route was available to that tool, so it is not ranked there. The commute comparison above, however, is based on real TfL routing for both areas and stands on its own.\n\n**Bottom line:** If minimising commute time and avoiding a change is your priority, Stratford wins clearly — about 2 hours 48 minutes a month of your life back. Bow's trade-off would need to be weighed against its rent, and I don't have Stratford rent data to complete that comparison. If you'd like, I can pull live TfL fare and journey details for either route.\n\nPlease double-check the exact prices against the source listing.\n\nUnverified: any figure above that does not come from this turn's tool results is an unconfirmed estimate — please check it before relying on it.",
+  "message": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a day, a week and a month would the faster one save me?",
+  "raw_draft": "Here's the comparison, using real TfL Journey Planner times from each area's centre to Liverpool Street station.\n\n**Stratford — 20 minutes each way**\nWalk 4 min to Stratford station, Central line 10 min direct to Liverpool Street, 6 min walk at the other end. No changes.\n\n**Bow — 27 minutes each way**\nWalk 13 min to Bow Road, District line 1 min to Mile End, Central line 6 min to Liverpool Street, 6 min walk. One change.\n\n**The saving, at 3 office days a week**\n\n| | Stratford | Bow |\n|---|---|---|\n| Per day (return) | 40 min | 54 min |\n| Per week (3 days) | 2 h 0 min | 2 h 42 min |\n| Per month (approx. 13 days) | 8 h 40 min | 11 h 42 min |\n\nSo Stratford is the faster option: it saves you **7 minutes each way, 14 minutes a day, 42 minutes a week and roughly 3 hours a month** compared with Bow. The gap comes almost entirely from the walk to the station — Bow's 13-minute walk to Bow Road plus the change at Mile End, versus Stratford's 4-minute walk and a single direct Central line train.\n\nTwo caveats worth knowing:\n- These are area-centre to station journeys, not door-to-door times for a specific flat. A home in Bow closer to Mile End or Bromley-by-Bow could cut that walk considerably, and a Stratford flat further from the station would lengthen it.\n- On rent, the cached listings I have show Bow at a median of about £2,350 a month (30 listings, mixed room types, cache around 89 days old — not a live price check). I don't have a comparable rent figure for Stratford, so I can't tell you whether the 3 hours a month is worth the price difference.\n\nWant me to pull actual listings in both areas so you can compare specific flats and their real door-to-door commutes?",
+  "request_id": "8f4f0a00ae634a63bea40cb4baedeb2c",
+  "shipped": "**Commute comparison: Stratford vs Bow to Liverpool Street**\n\nBoth areas have real, measured commute times from the TfL Journey Planner. Here is how they stack up.\n\n**Stratford — 20 minutes each way**\n- Walk to Stratford Underground Station: 4 min\n- Central line to Liverpool Street: 10 min\n- Walk to the office: 6 min\n- No changes required\n\n- District line to Mile End: 1 min\n- Central line to Liverpool Street: 6 min\n- Walk to the office: 6 min\n- One change required\n\n**Time saved by choosing Stratford**\n\nStratford is the faster option by 7 minutes per single journey (27 − 20 = 7).\n\n- Per day (return trip, 3 office days a week): 7 × 2 = 14 minutes saved per office day\n- Per month (using 4 weeks): 42 × 4 = 168 minutes, i.e. 2 hours 48 minutes saved\n\nSo Stratford saves you roughly 14 minutes a day, 42 minutes a week.\n\n**Rent context**\n\nThe data I have covers Bow only: cached listings show a minimum of £1,650, a maximum of £4,050, and a median of £2,350 per month (30 listings, cache about 89 days old, mixed room types, not live-verified). No rent figures for Stratford were returned, so I cannot compare prices between the two — search results don't cover Stratford rents. For that, check rightmove.co.uk or zoopla.co.uk.\n\n**One caveat on ranking**\n\nThe area-ranking tool only evaluated Bow (it scored 100 on its composite measure, weighted heavily toward commute). Stratford was requested but not evaluated because no area match or commute route was available to that tool, so it is not ranked there. The commute comparison above, however, is based on real TfL routing for both areas and stands on its own.\n\n**Bottom line:** If minimising commute time and avoiding a change is your priority, Stratford wins clearly. Bow's trade-off would need to be weighed against its rent, and I don't have Stratford rent data to complete that comparison. If you'd like, I can pull live TfL fare and journey details for either route.\n\nPlease double-check the exact prices against the source listing.\n\nUnverified: any figure above that does not come from this turn's tool results is an unconfirmed estimate — please check it before relying on it.\n\nNote: some commute claims could not be verified and have been removed from this answer.",
+  "state": {
+   "accumulated_search_criteria": {
+    "amenities_of_interest": [],
+    "commute_destination": "Liverpool Street",
+    "constraint_sources": {
+     "commute_destination": {
+      "source": "user_message",
+      "text": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a day, a week and a month would the faster one save me?",
+      "value": "Liverpool Street"
+     },
+     "destination": {
+      "source": "user_message",
+      "text": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a day, a week and a month would the faster one save me?",
+      "value": "Liverpool Street"
+     },
+     "no_commute": {
+      "source": "user_message",
+      "text": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a day, a week and a month would the faster one save me?",
+      "value": false
+     },
+     "office_days_per_week": {
+      "source": "user_message",
+      "text": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a day, a week and a month would the faster one save me?",
+      "value": 3
+     }
+    },
+    "destination": "Liverpool Street",
+    "max_budget": null,
+    "max_travel_time": null,
+    "no_commute": false,
+    "office_days_per_week": 3,
+    "property_features": [],
+    "soft_preferences": []
+   },
+   "candidate_validation": {},
+   "extracted_context": {
+    "current_date": "2026-10-22",
+    "current_message": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a day, a week and a month would the faster one save me?",
+    "history": [],
+    "memory_paused": false,
+    "reply_language": "en"
+   },
+   "final_response": "**Commute comparison: Stratford vs Bow to Liverpool Street**\n\nBoth areas have real, measured commute times from the TfL Journey Planner. Here is how they stack up.\n\n**Stratford — 20 minutes each way**\n- Walk to Stratford Underground Station: 4 min\n- Central line to Liverpool Street: 10 min\n- Walk to the office: 6 min\n- No changes required\n\n- District line to Mile End: 1 min\n- Central line to Liverpool Street: 6 min\n- Walk to the office: 6 min\n- One change required\n\n**Time saved by choosing Stratford**\n\nStratford is the faster option by 7 minutes per single journey (27 − 20 = 7).\n\n- Per day (return trip, 3 office days a week): 7 × 2 = 14 minutes saved per office day\n- Per month (using 4 weeks): 42 × 4 = 168 minutes, i.e. 2 hours 48 minutes saved\n\nSo Stratford saves you roughly 14 minutes a day, 42 minutes a week.\n\n**Rent context**\n\nThe data I have covers Bow only: cached listings show a minimum of £1,650, a maximum of £4,050, and a median of £2,350 per month (30 listings, cache about 89 days old, mixed room types, not live-verified). No rent figures for Stratford were returned, so I cannot compare prices between the two — search results don't cover Stratford rents. For that, check rightmove.co.uk or zoopla.co.uk.\n\n**One caveat on ranking**\n\nThe area-ranking tool only evaluated Bow (it scored 100 on its composite measure, weighted heavily toward commute). Stratford was requested but not evaluated because no area match or commute route was available to that tool, so it is not ranked there. The commute comparison above, however, is based on real TfL routing for both areas and stands on its own.\n\n**Bottom line:** If minimising commute time and avoiding a change is your priority, Stratford wins clearly. Bow's trade-off would need to be weighed against its rent, and I don't have Stratford rent data to complete that comparison. If you'd like, I can pull live TfL fare and journey details for either route.\n\nPlease double-check the exact prices against the source listing.\n\nUnverified: any figure above that does not come from this turn's tool results is an unconfirmed estimate — please check it before relying on it.\n\nNote: some commute claims could not be verified and have been removed from this answer.",
+   "memory_context": "",
+   "observations": [],
+   "tool_artifacts": [
+    {
+     "elapsed_ms": 4768,
+     "error": null,
+     "params_digest": "407a3906f5605df0",
+     "raw_data": {
+      "areas": [
+       {
+        "budget_match_rate": null,
+        "commute_minutes": 28,
+        "name": "Bow",
+        "no_data": false,
+        "rank": 1,
+        "rent": {
+         "freshness_days": 89,
+         "low_sample": false,
+         "max": 4050.0,
+         "median": 2350.0,
+         "min": 1650.0,
+         "sample_size": 30
+        },
+        "score": {
+         "components": {
+          "commute": 100.0,
+          "value": 100.0
+         },
+         "partial": false,
+         "total": 100.0,
+         "weights": {
+          "commute": 0.6667,
+          "value": 0.3333
+         }
+        },
+        "slug": "bow",
+        "sources": [
+         "OnTheMarket listing cache",
+         "commute routing"
+        ]
+       }
+      ],
+      "evidence_scope": {
+       "bedrooms_filtered": false,
+       "budget_match_basis": "rent_only",
+       "commute_scope": "area_reference_point",
+       "freshness_basis": "cache_fetch_time",
+       "live_verified": false,
+       "rent_sample": "mixed_cached_listings",
+       "room_type_filtered": false
+      },
+      "explanation_notes": [
+       "Composite score = weighted sum of 0-100 components (value = lower median rent, adjusted by how many cached listings fall under budget; commute = shorter time). Weights come from the ranking priorities (as passed to the tool) and sum to 1: commute=0.6667, value=0.3333. The best area on a component scores 100; gaps are measured against at least a 30-minute commute spread and a rent spread of 20% of the dearest median, so small differences stay small.",
+       "Rent statistics cover mixed cached listings without room-type or bedroom filtering. Budget match measures rent only. Freshness is the cache age, not verification of current price or availability. Area commute times do not verify individual homes.",
+       "Ranked order (present the areas in this order; #1 is the top recommendation): #1 Bow.",
+       "Requested but NOT evaluated (no commute route or no area match), so not ranked: Stratford. Say so; do not rank or describe them."
+      ],
+      "not_evaluated": [
+       "Stratford"
+      ],
+      "priorities": [
+       "commute"
+      ],
+      "priorities_note": "Do not describe these priorities as the user's own unless the user stated them in this conversation.",
+      "priorities_source": "caller_supplied",
+      "status": "ok",
+      "success": true,
+      "weights": {
+       "commute": 0.6667,
+       "value": 0.3333
+      }
+     },
+     "success": true,
+     "tool": "compare_or_rank_areas",
+     "turn": 1
+    },
+    {
+     "elapsed_ms": 14715,
+     "error": null,
+     "params_digest": "88d502d8f6199cd7",
+     "raw_data": {
+      "basis": "tfl_journey_plan",
+      "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+      "changes_count": 0,
+      "duration_category": "Medium (20-45 min)",
+      "duration_minutes": 20,
+      "from_address": "Stratford, London",
+      "is_acceptable": true,
+      "mode": "transit",
+      "route_legs": [
+       {
+        "duration_minutes": 4,
+        "from": "walk inside building, LONDON",
+        "lines": [],
+        "mode": "walking",
+        "summary": "Walk to Stratford Station",
+        "to": "Stratford Underground Station"
+       },
+       {
+        "duration_minutes": 10,
+        "from": "Stratford Underground Station",
+        "lines": [
+         "Central"
+        ],
+        "mode": "tube",
+        "summary": "Central line to Liverpool Street",
+        "to": "Liverpool Street Underground Station"
+       },
+       {
+        "duration_minutes": 6,
+        "from": "Liverpool Street Underground Station",
+        "lines": [],
+        "mode": "walking",
+        "summary": "Walk to walk inside building, LONDON",
+        "to": "walk inside building, LONDON"
+       }
+      ],
+      "route_source": "TfL Journey Planner",
+      "route_summary": "Walk to Stratford Underground Station (4 min) -> Tube Central to Liverpool Street Underground Station (10 min) -> Walk to walk inside building, LONDON (6 min)",
+      "success": true,
+      "to_address": "Liverpool Street Station, London"
+     },
+     "success": true,
+     "tool": "calculate_commute",
+     "turn": 2
+    },
+    {
+     "elapsed_ms": 3793,
+     "error": null,
+     "params_digest": "a597a4b74908f5a5",
+     "raw_data": {
+      "basis": "tfl_journey_plan",
+      "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+      "changes_count": 1,
+      "duration_category": "Medium (20-45 min)",
+      "duration_minutes": 27,
+      "from_address": "Bow, London",
+      "is_acceptable": true,
+      "mode": "transit",
+      "route_legs": [
+       {
+        "duration_minutes": 13,
+        "from": "106B TREDEGAR ROAD, LONDON",
+        "lines": [],
+        "mode": "walking",
+        "summary": "Walk to Bow Road Station",
+        "to": "Bow Road Underground Station"
+       },
+       {
+        "duration_minutes": 1,
+        "from": "Bow Road Underground Station",
+        "lines": [
+         "District"
+        ],
+        "mode": "tube",
+        "summary": "District line to Mile End",
+        "to": "Mile End Underground Station"
+       },
+       {
+        "duration_minutes": 6,
+        "from": "Mile End Underground Station",
+        "lines": [
+         "Central"
+        ],
+        "mode": "tube",
+        "summary": "Central line to Liverpool Street",
+        "to": "Liverpool Street Underground Station"
+       },
+       {
+        "duration_minutes": 6,
+        "from": "Liverpool Street Underground Station",
+        "lines": [],
+        "mode": "walking",
+        "summary": "Walk to walk inside building, LONDON",
+        "to": "walk inside building, LONDON"
+       }
+      ],
+      "route_source": "TfL Journey Planner",
+      "route_summary": "Walk to Bow Road Underground Station (13 min) -> Tube District to Mile End Underground Station (1 min) -> Tube Central to Liverpool Street Underground Station (6 min) -> Walk to walk inside building, LONDON (6 min)",
+      "success": true,
+      "to_address": "Liverpool Street Station, London"
+     },
+     "success": true,
+     "tool": "calculate_commute",
+     "turn": 2
+    }
+   ],
+   "tool_decision": {},
+   "tool_raw_data": null,
+   "user_preferences": {
+    "excluded_areas": [],
+    "hard_preferences": [],
+    "required_amenities": [],
+    "safety_concerns": [],
+    "soft_preferences": []
+   },
+   "user_query": "I go into the office 3 days a week. Compare Stratford and Bow for a commute to Liverpool Street — how much time a day, a week and a month would the faster one save me?"
+  }
+ }
+}

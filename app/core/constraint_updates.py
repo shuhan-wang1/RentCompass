@@ -65,7 +65,8 @@ def without_third_party_clauses(text: str) -> str:
 _STRETCH_CUE = re.compile(
     r"\b(?:stretch\w*|at\s+a\s+push|for\s+the\s+right\s+(?:place|flat|home|property|one)|"
     r"wiggle\s+room|leeway|willing\s+to\s+go|would\s+consider\s+(?:going|paying)|"
-    r"(?:could|might|can)\s+(?:go|push|pay)\s+(?:up\s+to|as\s+high\s+as)|"
+    # "I can pay up to £2,300" states a ceiling; "could / might go up to" is the stretch.
+    r"(?:could|might)\s+(?:go|push|pay)\s+(?:up\s+to|as\s+high\s+as)|can\s+push\s+(?:up\s+)?to|"
     r"if\s+(?:needed|necessary|need\s+be|i\s+(?:have|had)\s+to|it'?s\s+worth\s+it|pushed))\b|"
     r"上浮|放宽到|实在不行|必要时|合适的话|勉强", re.I)
 _STRETCH_CLAUSE_SPLIT = re.compile(
@@ -188,7 +189,23 @@ def is_criteria_consultation(text: str) -> bool:
     if re.search(r'摘要|需求总结|\b(?:summary|recap)\b', cleaned, re.I) and not re.search(
             r'改为|改回|更新|取消|删除|移除|\b(?:set|change|raise|lower|remove|drop)\b', cleaned, re.I):
         return True
-    return bool(re.search(r'^\s*(?:is|does|has)\b', text, re.I) and not update)
+    return bool(re.search(r'^\s*(?:is|does|has)\b', text, re.I) and not update
+                and not _states_a_ceiling_outside_a_question(text))
+
+
+# "Is £2,100 a month reasonable? I can pay up to £2,300." opens with a question, but its
+# second sentence states the ceiling; the whole message was read-only (r21 variant).
+_CEILING_STATEMENT = re.compile(
+    r"\b(?:i\s+can\s+(?:only\s+)?(?:pay|afford|spend)|(?:my\s+)?budget\s+(?:is|of|=|:)|"
+    r"up\s+to|under|below|no\s+more\s+than|max(?:imum)?|at\s+most)\b[^.!?;\n]{0,25}£\s?\d", re.I)
+
+
+def _states_a_ceiling_outside_a_question(text: str) -> bool:
+    for sentence in re.split(r"(?<=[.!?;\n])\s+", str(text or "")[:4000]):
+        if sentence.strip() and not sentence.strip().endswith(("?", "？")) \
+                and _CEILING_STATEMENT.search(sentence):
+            return True
+    return False
 
 
 _CLAUSE_BOUNDARY = re.compile(r'[。！？!?;；\n，,:：]|(?<!\d)\.(?!\d)')

@@ -248,8 +248,9 @@ def test_rows_annotated_and_demoted_with_criterion(stub_env, monkeypatch):
     recs = res["recommendations"]
     m = _by_addr(recs)
     # (b) available-before -> fit; (c) available-after -> warn; (d) unknown -> blank.
-    assert m["A Before Rd"]["availability_status"] == "✅ 可入住"
-    assert m["B After Rd"]["availability_status"] == "⚠️ 2026-10-01 起租"
+    # No Chinese in the conversation: the labels are English (r6b); the glyph stays.
+    assert m["A Before Rd"]["availability_status"] == "✅ Available by your move-in date"
+    assert m["B After Rd"]["availability_status"] == "⚠️ Available from 2026-10-01"
     assert m["C Unknown Rd"]["availability_status"] == ""
     # Demotion: the late listing is last, but NONE are excluded.
     assert {"A Before Rd", "B After Rd", "C Unknown Rd"} == set(m)
@@ -264,7 +265,7 @@ def test_available_now_counts_as_fit(stub_env, monkeypatch):
                move_in_date="2026-09-01")
     r = res["recommendations"][0]
     assert r["available_from"] == "Available now"
-    assert r["availability_status"] == "✅ 可入住"
+    assert r["availability_status"] == "✅ Available by your move-in date"
 
 
 def test_enrichment_available_from_wins(monkeypatch):
@@ -281,17 +282,21 @@ def test_enrichment_available_from_wins(monkeypatch):
                    move_in_date="2026-09-01")
         r = res["recommendations"][0]
         assert r["available_from"] == "2026-08-05"        # enrichment beat "Contact agent"
-        assert r["availability_status"] == "✅ 可入住"
+        assert r["availability_status"] == "✅ Available by your move-in date"
         assert r["description"] == "full desc"
     finally:
         set_rag_coordinator(None)
 
 
 def test_availability_status_helper_units():
-    assert _availability_status("2026-08-01", "2026-09-01") == "✅ 可入住"
-    assert _availability_status("2026-09-01", "2026-09-01") == "✅ 可入住"     # on the day
-    assert _availability_status("2026-10-01", "2026-09-01") == "⚠️ 2026-10-01 起租"
-    assert _availability_status("Available now", "2026-09-01") == "✅ 可入住"
+    zh = {"is_cjk": True}
+    assert _availability_status("2026-08-01", "2026-09-01", **zh) == "✅ 可入住"
+    assert _availability_status("2026-09-01", "2026-09-01", **zh) == "✅ 可入住"     # on the day
+    assert _availability_status("2026-10-01", "2026-09-01", **zh) == "⚠️ 2026-10-01 起租"
+    assert _availability_status("Available now", "2026-09-01", **zh) == "✅ 可入住"
+    # English unless the conversation is Chinese (r6b).
+    assert _availability_status("2026-08-01", "2026-09-01") == "✅ Available by your move-in date"
+    assert _availability_status("2026-10-01", "2026-09-01") == "⚠️ Available from 2026-10-01"
     assert _availability_status("", "2026-09-01") == ""                       # unknown
     assert _availability_status("2026-10-01", None) == ""                     # no criterion
 
@@ -393,3 +398,16 @@ def test_gate_move_in_supplied_this_turn_not_optionally_listed(stub_env, monkeyp
     # Resolved against the real "today" (no seam through the tool) -> a valid Sept-01 ISO.
     got = res["known_criteria"]["move_in_date"]
     assert got is not None and got.endswith("-09-01")
+
+
+def test_availability_labels_follow_the_reply_language(stub_env, monkeypatch):
+    """The model reads these labels and could echo them into an English answer (r6b)."""
+    _install_listings(monkeypatch, _fixture_rows())
+    for language, before, after in (
+            ("en", "✅ Available by your move-in date", "⚠️ Available from 2026-10-01"),
+            ("zh", "✅ 可入住", "⚠️ 2026-10-01 起租")):
+        res = _run(area="Camden", no_commute=True, confirmed=True, max_budget=3000, bedrooms=1,
+                   move_in_date="2026-09-01", reply_language=language)
+        m = _by_addr(res["recommendations"])
+        assert m["A Before Rd"]["availability_status"] == before, language
+        assert m["B After Rd"]["availability_status"] == after, language

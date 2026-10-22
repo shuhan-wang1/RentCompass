@@ -834,7 +834,7 @@ def _extract_bedrooms(text: str):
 # 约定（数据契约）：
 #   available_from      : ""(未知) | "Available now"(即可入住) | "YYYY-MM-DD"
 #   availability_status : ""(无期望入住或未知) | "✅ 可入住"(≤期望日) | "⚠️ YYYY-MM-DD 起租"(晚于期望日)
-# availability_status 采用与 budget_status 一致的"硬编码中文 emoji"约定。
+# availability_status 与 budget_status 一致：emoji + 按回复语言（is_cjk）的文字。
 
 # 月份词 -> 月序号（英文；中文另表）。最长优先，避免 "sep" 抢在 "september" 前。
 _EN_MONTHS = {
@@ -1048,16 +1048,18 @@ def _resolve_available_from(prop: dict) -> str:
         return ''
 
 
-def _availability_status(available_from: str, move_in_date) -> str:
-    """Fit annotation vs. the desired move-in date (contract-exact, hardcoded-zh like
-    budget_status). '' when no move_in_date criterion or availability unknown;
-    '✅ 可入住' when available on/before the desired date (Available now counts);
-    '⚠️ YYYY-MM-DD 起租' when only available AFTER it."""
+def _availability_status(available_from: str, move_in_date, *, is_cjk: bool = False) -> str:
+    """Fit annotation vs. the desired move-in date, in the reply language like budget_status
+    (the model reads it and can echo it into an English answer). '' when no move_in_date
+    criterion or availability unknown; '✅ Available by your move-in date' / '✅ 可入住' when
+    available on/before the desired date (Available now counts); '⚠️ Available from
+    YYYY-MM-DD' / '⚠️ YYYY-MM-DD 起租' when only available AFTER it. The leading glyph is
+    what the frontend reads."""
     if not move_in_date or not available_from:
         return ''
     if available_from == 'Available now' or available_from <= move_in_date:
-        return '✅ 可入住'
-    return f'⚠️ {available_from} 起租'
+        return '✅ 可入住' if is_cjk else '✅ Available by your move-in date'
+    return f'⚠️ {available_from} 起租' if is_cjk else f'⚠️ Available from {available_from}'
 
 
 def _is_late_availability(available_from: str, move_in_date) -> bool:
@@ -4408,7 +4410,8 @@ async def search_properties_impl(
                             # 仅取 rich-schema 的 'Available From'；未知则留空）。
                             _sim_avail = _resolve_available_from(prop)
                             row['available_from'] = _sim_avail
-                            row['availability_status'] = _availability_status(_sim_avail, move_in_date)
+                            row['availability_status'] = _availability_status(
+                                _sim_avail, move_in_date, is_cjk=is_cjk)
                             _tt = prop.get('travel_time')
                             if commute_annotation_enabled and _tt is not None:
                                 _tsrc = prop.get('travel_time_source')
@@ -4666,7 +4669,8 @@ async def search_properties_impl(
                     # 🆕 可入住日期：""(未知→前端显示"Contact agent") | "Available now" | "YYYY-MM-DD"。
                     'available_from': _avail_from,
                     # 🆕 与期望入住日的匹配标注（无期望日/未知 → ""）。
-                    'availability_status': _availability_status(_avail_from, move_in_date),
+                    'availability_status': _availability_status(_avail_from, move_in_date,
+                                                                is_cjk=is_cjk),
                     # Only exact structured fields enter the hard-constraint contract;
                     # free-text descriptions never prove that a feature is present.
                     'verified_features': _verified_features,

@@ -19,8 +19,8 @@ from typing import Annotated, Any, Dict, List
 
 import pytest
 
-# get_classification_llm() constructs a lazy client; a dummy key keeps it importable offline.
-os.environ.setdefault("DEEPSEEK_API_KEY", "sk-test")
+# get_classification_llm() constructs a lazy client; tests/conftest.py sets the session's
+# placeholder DEEPSEEK_API_KEY that keeps it importable offline.
 os.environ.setdefault("LLM_PROVIDER", "deepseek")
 
 from langgraph.checkpoint.memory import InMemorySaver

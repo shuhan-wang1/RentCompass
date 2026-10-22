@@ -43,6 +43,13 @@ os.environ.setdefault("CANARY_LOG_PATH", "off")
 # setdefault: an ambient developer key must not change test results. A test of the
 # unkeyed path deletes it with monkeypatch.delenv.
 os.environ["CANARY_USER_HASH_KEY"] = "rentcompass-pytest-session-canary-key"
+# A placeholder provider key for the whole session: building a graph constructs lazy
+# ChatOpenAI clients, which refuse an empty key ("Missing credentials"). It used to come
+# from test_langgraph_advanced's import-time setdefault, so a module that builds a graph
+# failed when run on its own. Assigned, not setdefault, so no test ever runs with a real
+# key from the developer's shell; nothing in the suite calls the provider. A test of the
+# keyless path deletes it with monkeypatch.delenv.
+os.environ["DEEPSEEK_API_KEY"] = "sk-test"
 
 # Keep developer/production app/.env tuning out of mechanism tests.  Individual
 # tests can still monkeypatch a value; these are the product-code defaults.

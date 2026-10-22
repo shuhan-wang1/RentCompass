@@ -31,7 +31,6 @@ from core.canary_telemetry import (  # noqa: E402
 )
 import canary_report  # noqa: E402
 
-os.environ.setdefault("CANARY_USER_HASH_KEY", "contract-test-key")
 
 _T0 = datetime(2026, 7, 21, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -267,34 +266,29 @@ def test_5xx_is_observable_and_counted():
     assert rpt["arches"]["fc"]["http_5xx_count"] == 1, rpt["arches"]["fc"]
 
 
-def test_unkeyed_hash_holds_the_gate():
+def _no_stable_secret(monkeypatch):
+    for key in ("CANARY_USER_HASH_KEY", "FLASK_SECRET_KEY"):
+        monkeypatch.delenv(key, raising=False)
+
+
+def test_unkeyed_hash_holds_the_gate(monkeypatch):
     """No stable HMAC secret => user hashes decorrelate across restarts, so every
     per-user statistic in the window is unreliable. That must HOLD, not continue."""
-    saved = {k: os.environ.pop(k, None) for k in ("CANARY_USER_HASH_KEY", "FLASK_SECRET_KEY")}
-    try:
-        r = make(0)
-        assert r["user_id_hash"] is None, "must not emit an unstable digest"
-        assert r["user_id_hash_status"] == HASH_UNKEYED
-        recs = baseline()
-        recs[0] = r
-        vd = verdict_of(recs)
-        assert vd["exit_code"] == 2 and vd["decision"] == "INSTRUMENTATION-HOLD", vd
-    finally:
-        for k, v in saved.items():
-            if v is not None:
-                os.environ[k] = v
+    _no_stable_secret(monkeypatch)
+    r = make(0)
+    assert r["user_id_hash"] is None, "must not emit an unstable digest"
+    assert r["user_id_hash_status"] == HASH_UNKEYED
+    recs = baseline()
+    recs[0] = r
+    vd = verdict_of(recs)
+    assert vd["exit_code"] == 2 and vd["decision"] == "INSTRUMENTATION-HOLD", vd
 
 
-def test_no_stable_secret_never_falls_back_to_a_random_salt():
+def test_no_stable_secret_never_falls_back_to_a_random_salt(monkeypatch):
     """Guard against reintroducing a per-process salt: two builds with no secret
     must both yield None, not two different digests."""
-    saved = {k: os.environ.pop(k, None) for k in ("CANARY_USER_HASH_KEY", "FLASK_SECRET_KEY")}
-    try:
-        assert make(1)["user_id_hash"] is None and make(1)["user_id_hash"] is None
-    finally:
-        for k, v in saved.items():
-            if v is not None:
-                os.environ[k] = v
+    _no_stable_secret(monkeypatch)
+    assert make(1)["user_id_hash"] is None and make(1)["user_id_hash"] is None
 
 
 def test_boundary_5xx_holds_because_state_is_unobservable():
@@ -520,12 +514,20 @@ def test_hash_is_stable_and_distinct():
 # --------------------------------------------------------------------------- #
 
 def _main() -> int:
+    import inspect
+    import pytest
+    # Standalone runs do not load tests/conftest.py, which sets the session key.
+    os.environ.setdefault("CANARY_USER_HASH_KEY", "rentcompass-pytest-session-canary-key")
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]
     failed = 0
     for name, fn in tests:
         try:
-            fn()
+            if "monkeypatch" in inspect.signature(fn).parameters:
+                with pytest.MonkeyPatch.context() as mp:
+                    fn(mp)
+            else:
+                fn()
             print(f"  PASS  {name}")
         except AssertionError as e:
             failed += 1

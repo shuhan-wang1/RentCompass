@@ -17,7 +17,6 @@ from pathlib import Path
 import pytest
 
 _ROOT = Path(__file__).resolve().parents[1]
-os.environ.setdefault("CANARY_USER_HASH_KEY", "f5b-answer-contract-key")
 
 
 def _load(name: str, path: Path):

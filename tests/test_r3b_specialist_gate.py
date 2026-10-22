@@ -41,7 +41,6 @@ for _p in (str(_ROOT / "src"), str(_ROOT / "app")):
         sys.path.remove(_p)
     sys.path.insert(0, _p)
 
-os.environ.setdefault("CANARY_USER_HASH_KEY", "test-key")
 
 from core import canary_telemetry as ct  # noqa: E402
 from core import turn_observations as tobs  # noqa: E402

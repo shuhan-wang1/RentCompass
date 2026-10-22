@@ -39,7 +39,6 @@ os.environ["CONVERSATION_DB_PATH"] = os.path.join(
 os.environ["USE_MCP_TOOLS"] = "0"
 os.environ["PROPERTY_SOURCE"] = "csv"
 os.environ["ALLOW_LEGACY_CLIENT_USER_ID"] = "1"
-os.environ.setdefault("CANARY_USER_HASH_KEY", "test-key")
 
 import app as appmod  # noqa: E402 — heavy one-time import after env setup
 from core import turn_observations as tobs  # noqa: E402

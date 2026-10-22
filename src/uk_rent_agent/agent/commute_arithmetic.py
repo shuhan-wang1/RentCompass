@@ -54,16 +54,25 @@ DAY_PERIOD = re.compile(r"\b(?:a|per|each|every)\s+(?:working\s+|office\s+|commu
                         r"\bthere\s+and\s+back\b|\btwo\s+journeys\b|\b2\s+journeys\b", re.I)
 WEEK_PERIOD = re.compile(r"\b(?:a|per|each|every)\s+week\b|\bweekly\b|\bweek\b", re.I)
 # A product: "12 minutes × 2 journeys × 5 days = **120 minutes (2 hours) a week**".
-_UNITS = r"minutes?|mins?|journeys?|trips?|ways?|days?|times|legs?|weeks?|months?"
+_UNITS = r"minutes?|mins?|journeys?|trips?|ways?|(?:office\s+|working\s+|commuting\s+)?days?|times|legs?|weeks?|months?"
 _OPERAND = r"(\d+(?:\.\d+)?)\s*(" + _UNITS + r")?\b"
 _OPERAND_NC = r"\d+(?:\.\d+)?\s*(?:" + _UNITS + r")?\b"
 # A bare result is minutes when the period follows it: "38 x 3 = 114 a week" (r19 W3b) was
 # no product at all, so a wrong step on a removed figure shipped unjudged. Money is no operand.
+# The operator may be written in words: "54 minutes times 4 = 216 minutes", "18 minutes
+# multiplied by 3 days" (r22 4a7fe20c) — never a bare "by" ("faster by 9 minutes").
+_TIMES = r"(?:[×x*]|\btimes\b|\bmultiplied\s+by\b)"
 PRODUCT = re.compile(
-    r"(?<![\d.,£$€])" + _OPERAND + r"((?:\s*[×x*]\s*" + _OPERAND_NC + r"){1,3})"
+    r"(?<![\d.,£$€])" + _OPERAND + r"((?:\s*" + _TIMES + r"\s*" + _OPERAND_NC + r"){1,3})"
     r"\s*=\s*[*_]*\s*(\d+(?:\.\d+)?)[ \t]{0,3}(?:(minutes?|mins?|hours?|hrs?)"
     r"|(?=(?:a|per|each|every)[ \t]{1,3}(?:day|week|month|year)\b))", re.I)
-_PRODUCT_TERM = re.compile(r"[×x*]\s*" + _OPERAND, re.I)
+# ... or as an aside on the total it explains: "Per week: 54 minutes (18 minutes × 3 days)",
+# "(3 days × 18 minutes)" — the operands are the total's working, not claims of their own.
+PRODUCT_ASIDE = re.compile(
+    r"(?<![\d.,£$€])(\d+(?:\.\d+)?)[ \t]{0,3}(minutes?|mins?|hours?|hrs?)[ \t]{0,3}[*_]{0,3}[ \t]{0,3}\("
+    r"[ \t]{0,3}" + _OPERAND + r"((?:[ \t]{0,3}" + _TIMES + r"[ \t]{0,3}" + _OPERAND_NC + r"){1,3})"
+    r"(?:[ \t]{0,3}(?:a|per|each)[ \t]{1,3}week)?[ \t]{0,3}\)", re.I)
+_PRODUCT_TERM = re.compile(_TIMES + r"\s*" + _OPERAND, re.I)
 _COUNT_UNITS = ("journey", "trip", "way", "time", "leg")
 
 
@@ -125,7 +134,7 @@ def close(value: float, target: float, hedged: bool, rounding: float = 0.5) -> b
 
 # A month is 52/12 weeks however the answer writes the factor; four weeks only when it says so.
 WEEKS_PER_MONTH = (52.0 / 12.0, 4.3, 4.33, 4.345)
-FOUR_WEEK_MONTH = re.compile(r"\b(?:4|four)[\s-]*weeks?\b|[×x*]\s*4(?![\d.])", re.I)
+FOUR_WEEK_MONTH = re.compile(r"\b(?:4|four)[\s-]*weeks?\b|(?:[×x*]|\btimes\b|\bmultiplied\s+by\b)\s*4(?![\d.])", re.I)
 LONG_PERIOD = re.compile(r"\b(?:a|per|each|every|over\s+(?:a|the)(?:\s+typical)?|in\s+a)\s+(?:month|year)\b|"
                          r"\bmonthly\b|\byearly\b|\bannual(?:ly)?\b", re.I)
 # The rent's period is not the commute's: "£2,350 a month", "2,350 pcm".
@@ -188,15 +197,32 @@ def is_derived_total(value: float, measured: Iterable[float], days: Iterable[flo
     return False
 
 
+def _unit_word(unit: str | None) -> str:
+    """An operand's unit, lower-cased, "3 office days" read as "3 days"."""
+    return re.sub(r"^(?:office|working|commuting)\s+", "", (unit or "").lower())
+
+
 def products(text: Any) -> list[dict]:
     """Every explicit product in ``text``: operands with units, stated result in minutes."""
     found = []
-    for match in PRODUCT.finditer(str(text or "")):
-        operands = [(float(match.group(1)), (match.group(2) or "").lower())]
-        operands += [(float(term.group(1)), (term.group(2) or "").lower())
+    text = str(text or "")
+    for match in PRODUCT.finditer(text):
+        operands = [(float(match.group(1)), _unit_word(match.group(2)))]
+        operands += [(float(term.group(1)), _unit_word(term.group(2)))
                      for term in _PRODUCT_TERM.finditer(match.group(3))]
         result = float(match.group(4)) * (60.0 if (match.group(5) or "").lower().startswith("h") else 1.0)
         found.append({"operands": operands, "result": result, "span": match.span()})
+    for match in PRODUCT_ASIDE.finditer(text):
+        if any(f["span"][0] < match.end() and match.start() < f["span"][1] for f in found):
+            continue
+        operands = [(float(match.group(3)), _unit_word(match.group(4)))]
+        operands += [(float(term.group(1)), _unit_word(term.group(2)))
+                     for term in _PRODUCT_TERM.finditer(match.group(5))]
+        if not any(unit.startswith("min") for _value, unit in operands):
+            continue          # "(3 × 2)" with no minutes is no journey working
+        result = float(match.group(1)) * (60.0 if match.group(2).lower().startswith("h") else 1.0)
+        found.append({"operands": operands, "result": result, "span": match.span()})
+    found.sort(key=lambda f: f["span"])
     return found
 
 
@@ -314,7 +340,7 @@ _SENTENCE = re.compile(r"(?:[^.!?\n]|\.(?=\d)|(?<=\b(?:St|Dr|Mr|Ms|vs|No))\.|(?<
 _ARITHMETIC_CUE = re.compile(
     r"\b(?:each|one)\s+way\b|\bper\s+(?:trip|journey)\b|\bsaves?\b|\bsaving\b|\bdifference\b|\bgap\b|"
     r"\b(?:quicker|faster|shorter|longer|slower|less|more|extra)\b|\bversus\b|\bvs\.?|\bover\b|\bthan\b|"
-    r"\bagainst\b|[×*−]|\bx\s*\d|\bminus\b", re.I)
+    r"\bagainst\b|[×*−]|\bx\s*\d|\bminus\b|\btimes\s*\d|\bmultiplied\s+by\b", re.I)
 COMPARISON_CUE = re.compile(
     r"\b(?:versus|vs\.?|over|than|compared|against|saves?|saving|difference|gap|quicker|faster|"
     r"shorter|longer|slower|less|more|extra|instead\s+of|minus)\b|[−]", re.I)
@@ -479,7 +505,9 @@ def _bases_uncached(text: str, measured: list, days: set) -> tuple[set, bool]:
     for product in products(text):
         if any(s0 < product["span"][1] and product["span"][0] < s1 for s0, s1 in conversions):
             continue
-        first = product["operands"][0][0]
+        # the minutes operand, wherever it is written: "(3 days × 18 minutes)" (r22 4a7fe20c)
+        first = next((v for v, unit in product["operands"] if unit.startswith("min")),
+                     next((v for v, unit in product["operands"] if not unit), product["operands"][0][0]))
         if is_difference(first, measured):
             valid.add(first)
         elif not (any(abs(first - m) < 1e-9 for m in measured) or _derived_exactly(first, valid, days)
@@ -760,7 +788,7 @@ _UNIT_PHRASES = (
                         r"\bannual(?:ly)?\b", re.I)),
     ("week", re.compile(r"\b(?:a|per|each|every|the|over\s+(?:a|the)|in\s+a|across\s+the)\s+"
                         r"(?:[\w-]+\s+){0,2}?week\b|\bweekly\b|\bweek\b", re.I)),
-    ("day", re.compile(r"\b(?:a|per|each|every)\s+(?:working\s+|office\s+)?day\b|\bdaily\b", re.I)),
+    ("day", re.compile(r"\b(?:a|per|each|every)\s+(?:working\s+|office\s+|commuting\s+)?day\b|\bdaily\b", re.I)),
 )
 _CLAUSE_BREAK = re.compile(r"[,;:—–()]|\s-\s|(?<=[.!?])\s")
 _ONE_WAY = re.compile(r"\b(?:one[\s-]way|each\s+way|in\s+each\s+direction|per\s+direction)\b", re.I)
@@ -857,10 +885,10 @@ def total_matches(value: float, diffs: Iterable[float], unit: str | None, days: 
 # Every gap is bounded (the B-01 class).
 _GAP = r"[ \t]{0,3}"
 PERIOD_STEP = re.compile(
-    r"(?<![\d.])(\d+(?:\.\d+)?)(?:" + _GAP + r"(?:minutes?|mins?))?" + _GAP + r"[×x*]" + _GAP +
+    r"(?<![\d.])(\d+(?:\.\d+)?)(?:" + _GAP + r"(?:minutes?|mins?))?" + _GAP + _TIMES + _GAP +
     r"(\d+(?:\.\d+)?)(?:" + _GAP + r"(weeks?|months?))?"
     r"(?:" + _GAP + r"(?:÷|/)" + _GAP + r"(\d+(?:\.\d+)?)(?:" + _GAP + r"months?)?)?"
-    r"(?![\d.]|" + _GAP + r"[×x*]" + _GAP + r"\d)"
+    r"(?![\d.]|" + _GAP + _TIMES + _GAP + r"\d)"
     r"(?:" + _GAP + r"=" + _GAP + r"[*_]{0,3}" + _GAP +
     r"((?:about|roughly|around|approximately|approx\.?|nearly|almost|~|≈)" + _GAP + r")?"
     r"(\d[\d,]*(?:\.\d+)?)" + _GAP + r"(minutes?|mins?|hours?|hrs?))?", re.I)
@@ -1491,6 +1519,40 @@ def _period_table_rows(text: str, routes: list, *, user_days: Iterable[float] = 
                     if not factors:
                         continue
                     bases = [route["minutes"]] if kind == "route" else list(diffs)
+                    verdicts.append(all(any(close(value, base * factor, hedged, written_rounding(cell[start:])
+                                                  if not hedged else 0.5)
+                                            for base in bases for factor in factors)
+                                        for start, _end, value in spans))
+                if verdicts:
+                    out[row] = {"table": index, "ok": all(verdicts)}
+                row += 1
+        elif any(_unit_in(without_money(cell)) or _RETURN_ROW.search(cell) for cell in _table_cells(header)[1:]):
+            # The same table turned round: the columns are the periods and each row is a route
+            # or a comparison — "| | Per day (return) | Per week (3 office days) | Per month |" /
+            # "| Stratford vs Bow | 18 min | 54 min | about 3 h 54 min |" (r22 4a7fe20c).
+            heads = _table_cells(header)
+            while row < len(lines) and lines[row].strip().startswith("|"):
+                cells = _table_cells(lines[row])
+                label = cells[0] if cells else ""
+                named = list({id(r): r for r in routes
+                              if any(_mentions(label, name) >= 0 for name in r["labels"] if name)}.values())
+                if len(named) == 1:
+                    bases = [named[0]["minutes"]]
+                elif len(named) == 2:
+                    bases = [round(abs(named[0]["minutes"] - named[1]["minutes"]), 2)]
+                elif _SAVING_COLUMN.search(label):
+                    bases = list(differences(sorted({r["minutes"] for r in routes})))
+                else:
+                    bases = []
+                verdicts = []
+                for position, cell in enumerate(cells[1:], start=1):
+                    spans = figure_spans(cell)
+                    if not bases or not spans or position >= len(heads):
+                        continue
+                    hedged = bool(HEDGE.search(cell))
+                    factors = _row_factors(heads[position], user_days, answer_days, hedged)
+                    if not factors:
+                        continue
                     verdicts.append(all(any(close(value, base * factor, hedged, written_rounding(cell[start:])
                                                   if not hedged else 0.5)
                                             for base in bases for factor in factors)

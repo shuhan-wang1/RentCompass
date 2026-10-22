@@ -3140,7 +3140,13 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                         and not local.get("members")):
                     own = local
             heading_now[0] = heading if m.start() < heading_reach else ""
-            if not _evidenced(m.group(0), own, context=attached,
+            # "Per week: 54 minutes (18 minutes × 3 days)": the aside is the working of the
+            # total before it, judged as one product with it (the critic reads the same
+            # sentence the same way), not as a figure of its own (r22 4a7fe20c).
+            combined = f"{attached}{m.group(0)}"
+            working = any(p["span"][1] == len(combined) and p["span"][0] < len(attached)
+                          for p in _arithmetic.products(combined))
+            if not _evidenced(combined if working else m.group(0), own, context="" if working else attached,
                               sentence_marked=bool(_ESTIMATE_MARKER.search(
                                   _sentence_around(m.start(), m.end())))):
                 removed.append(m.group(0))

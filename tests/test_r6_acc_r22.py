@@ -70,3 +70,59 @@ def test_a_move_in_total_holds_only_for_the_rent_it_names(sentence, ok):
     assert sentence in text
     flagged = _prices(text, evidence, message)
     assert (flagged == []) is ok, flagged
+
+
+# ── r22 4a7fe20c: arithmetic in words, and a table turned round ──────────────
+
+def test_the_regenerations_word_arithmetic_is_kept_and_grounded():
+    case, state, evidence, message = _ctx("r22_4a7fe20c")
+    regen = case["finals"][1]
+    assert "(18 minutes times 3 office days)" in regen and "(54 minutes times 4 = 216 minutes)" in regen
+    assert not unsupported_external_numbers(regen, evidence, message)
+    assert validate_commute_response(regen, state) == regen
+
+
+@pytest.mark.parametrize("working,ok", [
+    ("(18 minutes times 3 office days)", True),
+    ("(18 minutes multiplied by 3 days)", True),
+    ("(18 minutes × 3 days a week)", True),
+    ("(3 days × 18 minutes)", True),
+    ("(18 minutes times 4 office days)", False),
+    ("(20 minutes times 3 office days)", False),
+])
+def test_a_weekly_total_with_its_working(working, ok):
+    case, state, evidence, message = _ctx("r22_4a7fe20c")
+    regen = case["finals"][1]
+    text = regen.replace("(18 minutes times 3 office days)", working)
+    assert unsupported_external_numbers(text, evidence, message) is (not ok)
+    assert (working in validate_commute_response(text, state)) is ok
+
+
+@pytest.mark.parametrize("step,ok", [
+    ("(54 minutes times 4 = 216 minutes)", True),
+    ("(54 minutes multiplied by 4 = 216 minutes)", True),
+    ("(54 minutes times 4 = 240 minutes)", False),
+    ("(60 minutes times 4 = 240 minutes)", False),
+])
+def test_a_monthly_step_in_words(step, ok):
+    case, state, evidence, message = _ctx("r22_4a7fe20c")
+    regen = case["finals"][1]
+    text = regen.replace("(54 minutes times 4 = 216 minutes)", step)
+    assert unsupported_external_numbers(text, evidence, message) is (not ok)
+    assert (step in validate_commute_response(text, state)) is ok
+
+
+ROW = "| Stratford vs Bow | 18 min | 54 min | about 3 h 54 min |"
+
+
+@pytest.mark.parametrize("row,ok", [
+    (ROW, True),
+    ("| Stratford vs Bow | 18 min | 60 min | about 3 h 54 min |", False),
+    ("| Stratford vs Bow | 20 min | 54 min | about 3 h 54 min |", False),
+    ("| Stratford vs Bow | 18 min | 54 min | about 5 h |", False),
+])
+def test_a_period_table_with_periods_as_columns(row, ok):
+    case, state, _evidence, _message = _ctx("r22_4a7fe20c")
+    draft = case["drafts"][1]
+    assert ROW in draft
+    assert (row in validate_commute_response(draft.replace(ROW, row), state)) is ok

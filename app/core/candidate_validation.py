@@ -2806,11 +2806,28 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
     differences = {round(abs(a - b), 2) for i, a in enumerate(measured) for b in measured[i + 1:]}
     lines: list[str] = []
     source_lines = str(text or "").split("\n")
+    # Period tables (rows = periods, columns = routes or the saving) are judged cell by cell by
+    # the shared rule; a row with a wrong cell goes whole, never as a "—" placeholder row, and a
+    # table that loses every row goes with its header (r19 de1fba15).
+    table_rows = _arithmetic.period_table_rows(
+        text, [{"labels": list(c.get("labels") or []), "minutes": c["minutes"],
+                "mode": c.get("mode") or "transit"} for c in pool if c.get("minutes") is not None],
+        user_days=user_days, answer_days=answer_days)
+    tables_kept: dict = {}
     produced_at: list[int] = []        # len(lines) before each source line was processed
     block_binding = None                # the listing a header line names, for its bullets
     block_minutes = False               # an earlier line of this paragraph/list quoted a journey time
     for line in source_lines:
         produced_at.append(len(lines))
+        row_verdict = table_rows.get(len(produced_at) - 1)
+        if row_verdict is not None:
+            tables_kept.setdefault(row_verdict["table"], False)
+            if row_verdict["ok"]:
+                tables_kept[row_verdict["table"]] = True
+                lines.append(line)
+            else:
+                removed.append(line)
+            continue
         in_timed_block = block_minutes
         block_minutes = bool(line.strip()) and (block_minutes or bool(_MINUTE_TOKEN.search(line)))
         removed_before_line = len(removed)
@@ -3358,6 +3375,10 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             rebuilt += "。" if zh else "."
         rebuilt = _recapitalise(rebuilt, original_body)
 
+        if line.lstrip().startswith("|") and rebuilt.strip():
+            cells = [c.strip(" *_") for c in rebuilt.strip().strip("|").split("|")]
+            if len(cells) > 1 and all(c in ("", "—", "–", "-") for c in cells[1:]):
+                rebuilt = ""      # "| Per week | — | — | — |" reads as data; the row goes (r19)
         if not rebuilt.strip():
             # The line was nothing but a commute claim; drop it, prefix included. A blank
             # separator line in the original stays blank so paragraphs do not fuse.
@@ -3370,6 +3391,11 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
         # The emphasis check reads the WHOLE line: "**Heading" matches the bullet prefix "*".
         lines.append(_balance_emphasis(prefix + rebuilt, line))
 
+    emptied = {produced_at[header + offset] for header, kept_any in tables_kept.items() if not kept_any
+               for offset in (0, 1) if header + offset < len(produced_at)}
+    if emptied:
+        lines = [line for index, line in enumerate(lines) if index not in emptied]
+        produced_at = [at - sum(1 for e in emptied if e < at) for at in produced_at]
     lines = _without_orphaned_lead_ins(source_lines, produced_at, lines)
     result = "\n".join(lines)
     result = re.sub(r"\n{3,}", "\n\n", result).strip()

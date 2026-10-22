@@ -1,4 +1,4 @@
-"""acc-r19 (round 6c, output): a step on a withdrawn figure.
+"""acc-r19 (round 6c, output): a period table judged cell by cell; a step on a withdrawn figure.
 
 ``tests/data/r6_r19_corpus.json`` is exported from the frozen r19 inst-D checkpoints:
 
@@ -31,6 +31,56 @@ ROWS = ("| Per one-way trip | 20 min | 28 min | 8 min |",
 def _case(name="r19_de1fba15"):
     case = CORPUS[name]
     return case, case["state"], _collect_grounding_evidence(case["state"], ""), case["message"]
+
+
+def test_the_recorded_saving_table_ships_whole_and_grounded():
+    case, state, evidence, message = _case()
+    text = case["raw_draft"]
+    assert all(row in text for row in ROWS)
+    assert validate_commute_response(text, state) == text
+    assert not unsupported_external_numbers(text, evidence, message)
+    assert evaluate_grounding(text, evidence, retrieval_expected=True, tool_errored=False,
+                              user_text=message).grounded
+
+
+@pytest.mark.parametrize("row,wrong", [
+    (ROWS[2], "| Per week (3 office days) | 2 h 00 min | 2 h 48 min | **60 min** |"),     # saving
+    (ROWS[2], "| Per week (3 office days) | 2 h 10 min | 2 h 48 min | **48 min** |"),     # route cell
+    (ROWS[3], "| Per month (approx. 13 office days) | 8 h 40 min | 12 h 08 min | **about 5 h** |"),
+    (ROWS[0], "| Per one-way trip | 20 min | 28 min | 9 min |"),
+    (ROWS[1], "| Per office day (return) | 40 min | 56 min | 18 min |"),
+])
+def test_a_wrong_cell_takes_its_row_never_a_placeholder(row, wrong):
+    case, state, evidence, message = _case()
+    text = case["raw_draft"].replace(row, wrong)
+    out = validate_commute_response(text, state)
+    assert wrong not in out
+    assert all(other in out for other in ROWS if other != row)       # the true rows stay
+    assert "| — |" not in out and "— |" not in out                    # no placeholder cells
+    assert out.count(NOTE_EN) == 1
+    assert unsupported_external_numbers(text, evidence, message)
+
+
+def test_a_table_that_loses_every_row_goes_with_its_header():
+    case, state, _, _ = _case()
+    text = case["raw_draft"]
+    for row in ROWS:
+        cells = row.strip("|").split("|")
+        text = text.replace(row, "|" + "|".join(cells[:-1]) + "| 99 min |")
+    out = validate_commute_response(text, state)
+    assert "| | Stratford | Bow | Saving |" not in out and "|---|" not in out
+    assert "So Stratford saves you roughly **48 minutes a week**" in out
+
+
+def test_an_entity_row_left_with_no_data_goes():
+    """Outside period tables a withdrawn cell keeps its column ("| Hackney | 5.5 | £2,400 | — |",
+    R2-01 d); a row left with nothing but placeholders is no row."""
+    case = R17["r17_8c35fd5b"]
+    table = "| Area | Commute |\n|---|---|\n| Stratford | 19 min |\n| Bow | 25 min |"
+    text = case["raw_draft"].replace("Two caveats worth knowing:", table + "\n\nTwo caveats worth knowing:")
+    out = validate_commute_response(text, case["state"])
+    assert "| Stratford | 19 min |" in out
+    assert "| Bow |" not in out and "25 min" not in out
 
 
 # ── a step on a withdrawn figure goes with it ─────────────────────────────────────────

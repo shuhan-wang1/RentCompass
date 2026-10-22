@@ -1075,6 +1075,104 @@ def check_figures(text: str, *, sentence: str, line: str = "", label: str = "", 
     return True, seen
 
 
+# A PERIOD TABLE: rows are periods, columns are routes or the saving between them (r19
+# de1fba15):
+#
+#   |                          | Stratford  | Bow         | Saving             |
+#   | Per one-way trip         | 20 min     | 28 min      | 8 min              |
+#   | Per office day (return)  | 40 min     | 56 min      | 16 min             |
+#   | Per week (3 office days) | 2 h 00 min | 2 h 48 min  | **48 min**         |
+#   | Per month (13 days)      | 8 h 40 min | 12 h 08 min | about 3 h 28 min   |
+#
+# A cell is that column's route time (or the pair's difference) x the row's period: x 1 a trip,
+# x 2 a day, x 2 x days a week, x 2 x the stated office days (or x 2 x days x 52/12) a month.
+# Judged cell by cell, never as an unattributed sentence: both the critic and the redactor
+# rejected every true cell of this table.
+_TABLE_RULE_LINE = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$")
+_SAVING_COLUMN = re.compile(r"\b(?:saving|saved|saves?|difference|gap)\b", re.I)
+_ONE_WAY_ROW = re.compile(r"\b(?:one[\s-]way|each\s+way|single|per\s+(?:trip|journey))\b", re.I)
+_RETURN_ROW = re.compile(r"\b(?:return|round[\s-]trip|there\s+and\s+back)\b", re.I)
+_DAYS_IN_PERIOD = re.compile(r"\b(\d{1,2})\s+(?:office\s+|working\s+|commuting\s+)?days\b", re.I)
+
+
+def _table_cells(line: str) -> list:
+    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+
+def _row_factors(label: str, user_days: Iterable[float], answer_days: Iterable[float],
+                 hedged: bool) -> set:
+    """The multipliers a row's period applies to a one-way time."""
+    unit = _unit_in(without_money(label))
+    if unit is None and _RETURN_ROW.search(label):
+        unit = "day"
+    if unit is None:
+        return {1.0} if _ONE_WAY_ROW.search(label) else set()
+    days = figure_days(label, "", user_days, answer_days)
+    factors = set(period_factors(unit, days, four_weeks=hedged or bool(FOUR_WEEK_MONTH.search(label))))
+    if unit == "month":
+        factors |= {2.0 * float(m.group(1)) for m in _DAYS_IN_PERIOD.finditer(label)}
+    return factors
+
+
+def period_table_rows(text: str, routes: list, *, user_days: Iterable[float] = (),
+                      answer_days: Iterable[float] = ()) -> dict:
+    """``{line index: {"table": header index, "ok": bool}}`` for every data row of a period
+    table in ``text`` that carries a judged figure; ``ok`` is every judged cell holding."""
+    routes = [r for r in routes if r.get("minutes") is not None and (r.get("mode") or "transit") == "transit"]
+    lines = str(text or "").split("\n")
+    out: dict = {}
+    index = 0
+    while index + 1 < len(lines):
+        header, rule = lines[index], lines[index + 1]
+        if not (header.strip().startswith("|") and _TABLE_RULE_LINE.match(rule)):
+            index += 1
+            continue
+        columns = []
+        for cell in _table_cells(header):
+            named = [r for r in routes if any(_mentions(cell, label) >= 0 for label in r["labels"] if label)]
+            unique = {id(r): r for r in named}
+            if len(unique) == 1:
+                columns.append(("route", next(iter(unique.values()))))
+            elif _SAVING_COLUMN.search(cell):
+                columns.append(("saving", None))
+            else:
+                columns.append((None, None))
+        route_columns = [r for kind, r in columns if kind == "route"]
+        row = index + 2
+        if route_columns:
+            pair = {round(abs(a["minutes"] - b["minutes"]), 2) for a, b in combinations(route_columns, 2)} - {0.0}
+            diffs = pair or set(differences(sorted({r["minutes"] for r in routes})))
+            while row < len(lines) and lines[row].strip().startswith("|"):
+                cells = _table_cells(lines[row])
+                label = cells[0] if cells else ""
+                verdicts = []
+                for position, cell in enumerate(cells[1:], start=1):
+                    kind, route = columns[position] if position < len(columns) else (None, None)
+                    spans = figure_spans(cell)
+                    if kind is None or not spans:
+                        continue
+                    hedged = bool(HEDGE.search(cell))
+                    factors = _row_factors(label, user_days, answer_days, hedged)
+                    if not factors:
+                        continue
+                    bases = [route["minutes"]] if kind == "route" else list(diffs)
+                    verdicts.append(all(any(close(value, base * factor, hedged, written_rounding(cell[start:])
+                                                  if not hedged else 0.5)
+                                            for base in bases for factor in factors)
+                                        for start, _end, value in spans))
+                if verdicts:
+                    out[row] = {"table": index, "ok": all(verdicts)}
+                row += 1
+        index = max(row, index + 1)
+    return out
+
+
+def without_lines(text: str, indices: Iterable[int]) -> str:
+    """``text`` with the given lines blanked (line count kept)."""
+    drop = set(indices)
+    return "\n".join("" if i in drop else line for i, line in enumerate(str(text or "").split("\n")))
+
+
 def sentences(text: str) -> list:
     return [m.group() for m in _SENTENCE.finditer(str(text or "")) if m.group().strip()]
 

@@ -1658,6 +1658,55 @@ def names_place_as_workplace(text: str, place: str) -> bool:
     return bool(starts) and all(workplace_place_at(source, start) for start in starts)
 
 
+# "Tell me more about Arbutus Street in Haggerston." changed the search area Hackney ->
+# Haggerston (r20 1419b01e): the bare location cue "in <place>" fired inside a question about
+# one listing. A weak cue (in / near / around) that qualifies a street or listing address, or
+# that sits in a question about a specific listing, is a reference, not a criteria change.
+# Explicit search or move wording in the same clause still switches.
+_WEAK_AREA_CUE = re.compile(r"(?:in|near|around)\s")
+_DETAILS_REQUEST = (
+    r"tell\s+me\s+(?:a\s+(?:bit|little)\s+)?(?:more\s+)?about|"
+    r"give\s+me\s+(?:more\s+)?(?:details|info\w*)|(?:more\s+)?(?:details|info\w*)\s+(?:on|about|for|of)|"
+    r"describe|what(?:'s|’s|\s+is|\s+are)\b(?=[^.!?;\n]*\blike\b)|"
+    r"how\s+(?:far|close|near|big|old|much|long)\b")
+_LISTING_DETAILS_REQUEST = re.compile(
+    rf"^\W*(?:(?:can|could|would)\s+you\s+|please\s+)?(?:{_DETAILS_REQUEST})", re.I)
+_LISTING_DETAIL_QUESTION = re.compile(
+    rf"^\W*(?:(?:can|could|would)\s+you\s+|please\s+)?(?:{_DETAILS_REQUEST}|"
+    r"(?:is|are)\s+(?!there\b)|does\s+)")
+_SEARCH_INTENT_IN_CLAUSE = re.compile(
+    r"\b(?:find|search\w*|look(?:ing)?\s+(?:for|in|at|around)|show\s+me|live\s+in|living\s+in|"
+    r"move\s+to|moving\s+to|switch\w*|instead|what\s+about|how\s+about|change\s+to|"
+    # "Tell me about renting in Hackney" is about the area itself, not one listing.
+    r"(?:rent(?:ing|s)?|living|life|prices?|costs?|areas?|neighbou?rhoods?)\s+(?:in|near|around))\b")
+_ADDRESS_END = re.compile(
+    r"(?<![a-z])[a-z][a-z\-]*\s+" + _STREET_WORD
+    + r"(?:\s*,?\s*[a-z]{1,2}\d{1,2}[a-z]?(?:\s*\d[a-z]{2})?)?\s*,?\s*$")
+
+
+def is_listing_details_request(text: str) -> bool:
+    """True for "tell me more about X" / "what's X like" / "details on X": a request about
+    one listing, never a search change or a narrowing of the shown set (r6d)."""
+    for clause in re.split(r"[.!?;\n]+", str(text or "").lower()):
+        if (_LISTING_DETAILS_REQUEST.match(clause)
+                and not _SEARCH_INTENT_IN_CLAUSE.search(clause)):
+            return True
+    return False
+
+
+def _listing_reference_cue(text: str, match) -> bool:
+    """True when a weak location cue in lower-cased ``text`` qualifies a listing reference."""
+    if not _WEAK_AREA_CUE.match(match.group(0)):
+        return False
+    start = max(text.rfind(ch, 0, match.start()) for ch in ".!?;\n") + 1
+    ends = [i for i in (text.find(ch, match.end()) for ch in ".!?;\n") if i != -1]
+    clause = text[start:min(ends) if ends else len(text)]
+    if _SEARCH_INTENT_IN_CLAUSE.search(clause):
+        return False
+    return bool(_ADDRESS_END.search(text[start:match.start()])
+                or _LISTING_DETAIL_QUESTION.match(clause))
+
+
 def _extract_area(text: str) -> str | None:
     """A NEW area/city the user is switching to (canonical ENGLISH name), else None.
 
@@ -1773,6 +1822,8 @@ def _extract_area(text: str) -> str | None:
                 return _KNOWN_AREAS[key]
     # (b) explicit switch / location cue + a VALIDATED known place.
     for m in _AREA_CUE_RE.finditer(t):
+        if _listing_reference_cue(t, m):
+            continue
         canon = _match_known_area(m.group(1))
         if canon:
             return canon

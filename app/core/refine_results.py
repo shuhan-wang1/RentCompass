@@ -420,6 +420,11 @@ def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, A
                  r'actual\s+details|what\s+.*(?:confirm|unknown)|details\s+for)\b|'
                  r'比较|对比|尺寸|书面许可|房源详情|实际确认', text, re.I):
         return None
+    # "Tell me more about Arbutus Street in Haggerston" asks about one listing; filtering
+    # the shown set by its area label would answer a question nobody asked (r6d).
+    from core.tools.search_properties import is_listing_details_request
+    if is_listing_details_request(text):
+        return None
     # Repeating the current area while asking for another tool is not a subset
     # instruction. Let the normal graph execute every independent read.
     for clause in re.split(r'[.!?。！？;；\n]+', text):

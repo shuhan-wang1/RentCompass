@@ -1158,7 +1158,14 @@ _FRAGMENT_SPLIT = re.compile(
     r"((?<!\d),|,(?!\d)|(?<!\d):|:(?!\d)|[，；;、。！？：|]|\.(?=\s|$)|[!?](?=\s|$)"
     r"|(?<!\s)\s+[–—-]\s+)")
 _BRACKET_SPAN = re.compile(r"[（(][^()（）\n]{0,400}[)）]")
-_SCOPE_SENTENCE_SPLIT = re.compile(r"(?<=[.!?。！？])\s+|\n|[；;]")
+# A sentence ends at a stop followed by blank space, and in Chinese at 。！？ (and the
+# half-width ｡) even with no blank after it — with any closing quote or bracket kept on the
+# sentence — so a withdrawn Chinese claim takes only its own sentence, not the whole run.
+_ZH_STOP = r"[。｡！？]"
+_ZH_CLOSE = r"[」』”’）\])]"
+_SCOPE_SENTENCE_SPLIT = re.compile(
+    r"(?<=[.!?。！？])\s+|\n|[；;]|"
+    r"(?:(?<=" + _ZH_STOP + r")|(?<=" + _ZH_STOP + _ZH_CLOSE + r"))(?=[^\s。｡！？!?」』”’）\])])")
 # "vs." too: "studio vs. a room in a shared flat vs. a whole one-bed" is one clause, and
 # splitting it there left "studio vs. a room in a shared flat vs." behind (stress B-02).
 _NAME_ABBREVIATION = r"(?:St|Dr|Mr|Mrs|Ms|Prof|Sr|Jr|vs)"

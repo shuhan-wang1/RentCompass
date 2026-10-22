@@ -60,14 +60,35 @@ def test_a_withdrawn_last_sentence_keeps_its_paragraph_break():
     assert out.startswith(text)
 
 
+# Chinese sentences end at 。！？ with no blank after them: a withdrawn claim takes only its
+# own sentence, its neighbours in the same paragraph stay (r6e).
+_ZH_PARAGRAPHS = {
+    "r07_zh_advice": ("高峰时段公交可能更慢。", "该房源的价格和可入住时间来自缓存记录"),
+    "r07_zh_not_live": ("没有实时核实。", "当前租金和是否仍可租，请先向中介确认。"),
+}
+
+
+@pytest.mark.parametrize("name", sorted(_ZH_PARAGRAPHS))
 @pytest.mark.parametrize("claim", ["该房源目前可租。", "价格已实时核实。", "实时租金为2,225镑。"])
-def test_a_chinese_live_claim_still_goes(claim):
+def test_a_chinese_live_claim_goes_alone(name, claim):
+    case = SCOPE[name]
+    text = case["text"]
+    before, after = _ZH_PARAGRAPHS[name]
+    assert before + after in text or before in text and after in text
+    probe = text.replace(before, before + claim, 1)
+    out = validate_evidence_scope(probe, case["state"])
+    assert claim not in out
+    assert out.startswith(text)                    # its neighbours, and the rest, as written
+
+
+def test_a_chinese_claim_inside_a_sentence_takes_that_sentence():
     case = SCOPE["r07_zh_advice"]
     text = case["text"]
-    # its own paragraph: this pass splits Chinese only at a line break or a semicolon
-    probe = text.replace("\n\n", "\n\n" + claim + "\n\n", 1)
-    out = validate_evidence_scope(probe, case["state"])
-    assert claim not in out and out.startswith(text)
+    sentence = "需要说明的是，这是按规划器默认出发时间得到的结果，高峰时段公交可能更慢。"
+    assert sentence in text
+    out = validate_evidence_scope(text.replace("可能更慢。", "可能更慢，该房源目前可租。", 1), case["state"])
+    assert "目前可租" not in out and "高峰时段公交可能更慢" not in out
+    assert "该房源的价格和可入住时间来自缓存记录" in out and out.startswith(text.split(sentence)[0])
 
 
 @pytest.mark.parametrize("name,claim", [

@@ -1246,8 +1246,9 @@ _MONEY_OR_WEATHER_SPAN = re.compile(
     r"(?:\b(?:under|within|below|over|above|about|around|roughly|up\s+to|at\s+most|less\s+than|"
     r"more\s+than|no\s+more\s+than)\s+)?(?:£|\$|€)\s*\d[\d,.]*\s*k?"
     r"(?:\s*(?:pcm|pw|p/?m|/\s*(?:month|week|mo)\b|per\s+(?:month|week)|a\s+(?:month|week)))?|"
-    r"\b(?:within|under|over|above|below|inside|outside|beyond)\s+(?:your\s+|the\s+|my\s+)?"
-    r"(?:budget|price\s+range|rent\s+(?:limit|cap|ceiling))\b|"
+    # "search actual listings … within a budget" (r18 eb65e918) is money too.
+    r"\b(?:within|under|over|above|below|inside|outside|beyond)\s+(?:your\s+|the\s+|my\s+|a\s+|any\s+)?"
+    r"(?:budget|price\s+range|ceiling|rent\s+(?:limit|cap|ceiling))\b|"
     r"(?:\b(?:about|around|roughly|over|under|above|below)\s+)?(?<![\d.])-?\d+(?:\.\d+)?\s*"
     r"(?:°\s*[CF]?|℃|degrees?(?:\s+[CF]\b)?)|"
     r"\btemperatures?\s+(?:\w+\s+){0,2}(?:above|below|around|about|over|under)\s+\w+|"
@@ -1864,7 +1865,7 @@ def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
             continue
         binding = {"labels": _place_labels(raw.get("from_address") or raw.get("from")),
                    "destinations": _place_labels(raw.get("to_address") or raw.get("to")),
-                   "minutes": value}
+                   "minutes": value, "mode": _arithmetic.route_mode(raw.get("mode"))}
         legs = _route_legs(journey) if value is not None else []
         # The planner's CHEAPER itinerary for the same pair is part of the same result: "A
         # cheaper alternative takes 45 minutes with one change" and "Cheapest route, £29.00:
@@ -1968,6 +1969,19 @@ def _the_listing_referred_to(fragment: str, inherited: dict | None, local: dict 
     return listings[0] if len(listings) == 1 else inherited
 
 
+_SAVING_HEADER = re.compile(
+    r"\b(?:time\s+saved|saved|saves?|saving|faster|quicker|slower|difference|gap|versus|vs\.?|compared)\b", re.I)
+
+
+def _per_period_line(line: str, fragment: str) -> bool:
+    """The line is a per-day/week/month figure ("- Per office day: …", "Per week (3 office
+    days): …") or the clause itself names a period."""
+    label = line.split(":", 1)[0] if ":" in line[:80] else ""
+    scope = f"{label} {fragment}"
+    return bool(_DAY_PERIOD.search(scope) or _WEEK_PERIOD.search(scope)
+                or _arithmetic.LONG_PERIOD.search(_arithmetic.without_money(scope)))
+
+
 def _same_area_route(area: dict, route: dict) -> bool:
     """An area-ranking row and a measured route from that same place, with the same time (or
     a row the ranking could not time): one route. A different time stays a separate, competing
@@ -1989,6 +2003,7 @@ def _line_binding(line: str, bindings: list[dict], default: dict | None = None) 
     best = None
     best_len = (0, 0)
     ambiguous = False
+    tied: list = []                 # the bindings sharing the best score
     named = []
     named_bindings = []
     for binding in bindings:
@@ -2013,9 +2028,10 @@ def _line_binding(line: str, bindings: list[dict], default: dict | None = None) 
         score = (matched, max((len(label) for label in destinations
                                if _label_in(label, line)), default=0))
         if score > best_len:
-            best, best_len, ambiguous = binding, score, False
+            best, best_len, ambiguous, tied = binding, score, False, [binding]
         elif score == best_len and binding is not best and binding != best:
             ambiguous = True
+            tied.append(binding)
     independent = [label for label in named if not any(
         label != other and label in other for other in named)]
     listing_hits = [b for b in named_bindings if b.get("listing")]
@@ -2027,6 +2043,14 @@ def _line_binding(line: str, bindings: list[dict], default: dict | None = None) 
     if len(set(independent)) > 1:
         return {"labels": [], "minutes": None, "destinations": [], "members": named_bindings}
     if ambiguous:
+        # The same place measured by bike and by public transport is two journeys, told apart
+        # by the mode the line names; a line naming none is about the public-transport one (r6b).
+        modes = [b.get("mode") or "transit" for b in tied]
+        if len(set(modes)) == len(modes):
+            wanted = _arithmetic.figure_mode(line) or "transit"
+            chosen = [b for b in tied if (b.get("mode") or "transit") == wanted]
+            if len(chosen) == 1:
+                return chosen[0]
         return {"labels": [], "minutes": None, "destinations": []}
     if best is not None:
         return best
@@ -2478,7 +2502,8 @@ def _arithmetic_evidenced(fragment: str, *, context: str, previous_clause: str, 
     subtraction steps whose operands are evidenced, chained steps included (r13 2264a2d5, r14
     95f29d0b). The redactor adds what only it judges: no other verdict may ride along, and
     "the fastest" must be the fastest."""
-    routes = [{"labels": list(route.get("labels") or []), "minutes": route["minutes"]}
+    routes = [{"labels": list(route.get("labels") or []), "minutes": route["minutes"],
+               "mode": route.get("mode") or "transit"}
               for route in pool if route.get("minutes") is not None and route.get("labels")]
     measured = sorted({route["minutes"] for route in routes})
     if len(measured) < 2:
@@ -2582,7 +2607,7 @@ def _shared_by_every_route(fragment: str, pool: list) -> bool:
 def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
                         context: str = "", heading: str = "",
                         itinerary: frozenset | set = frozenset(),
-                        sentence_marked: bool = False) -> bool:
+                        sentence_marked: bool = False, mode: str | None = None) -> bool:
     """True when this fragment's commute claim — figure AND conclusion — follows the evidence.
 
     Three separate things have to hold, and each one was a way through on its own:
@@ -2620,6 +2645,10 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
                         for member in binding["members"]))
     if binding is None:
         return False
+    if mode is None:
+        mode = _arithmetic.figure_mode(fragment) if _MINUTE_TOKEN.search(fragment) else None
+    if mode is not None and (binding.get("mode") or "transit") != mode:
+        return False      # a bike / car figure is never a transit route's (r6b)
     destinations = binding.get("destinations") or []
     scope = f"{fragment} {context}"
     values = _minute_claim_values(fragment)
@@ -2751,6 +2780,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
     answer_days = _arithmetic.days_stated(text)         # N-day weeks the answer states
     user_days = set(office_days or ())                   # the user's own office days
     itinerary = _itinerary_bindings(text, bindings + ([default_binding] if default_binding else []))
+    itinerary_routes = [b for b in bindings + ([default_binding] if default_binding else []) if id(b) in itinerary]
     removed = removed if removed is not None else []
     # Every route/area/listing of this turn that carries a figure. A clause attributable to
     # none of them may still quote one of them: "About 14 minutes in the tube" after a
@@ -2801,6 +2831,11 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             header = bool(re.match(r"^\s*(?:\*\*|#{1,4}\s)", line) or line.rstrip().endswith((":", "：")))
             block_binding = own_line if own_line is not None and own_line.get("labels") and not own_line.get(
                 "members") and (own_line.get("listing") or header) else None
+            if block_binding is not None and not block_binding.get("listing") and _SAVING_HEADER.search(line):
+                # "**Time saved by the faster one (Stratford):**" heads the SAVINGS, not
+                # Stratford's journey: "- Per day: 19 minutes each way" under it is no
+                # Stratford time, and was kept as one once its wrong total went (r6b).
+                block_binding = None
         preference_line = preference_context or bool(re.search(
             r"preference|default|remember|偏好|默认|保存|记住|"
             r"requirements?\s+(?:stand|remain)|conditions?\s+(?:stand|remain)|"
@@ -2843,6 +2878,28 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             if _quotes_source_text(fragment, source_texts):
                 return True
             effective = _binding if _binding is not None else binding
+            mode = (_arithmetic.figure_mode(f"{previous_clause} {fragment}")
+                    if _MINUTE_TOKEN.search(fragment) else None)
+            if mode is not None:
+                # "8 minutes each way by bike": a different journey from the transit routes
+                # measured (the rule ``_DURATION_BOUND`` already applies to bounds). Only a route
+                # measured in that mode evidences it; with none, nothing does (r6b).
+                same = [c for c in pool if (c.get("mode") or "transit") == mode]
+                quoted = _minute_claim_values(fragment)
+                if not same or not all(any(abs(v - f) < 1e-9 for c in same
+                                           for f in [c.get("minutes")] + list(c.get("estimate") or []))
+                                       for v in quoted):
+                    return False
+                if effective is not None and (effective.get("mode") or "transit") != mode:
+                    # The place the line names, measured in THAT mode, or nothing: "Bow is 22
+                    # minutes by bike" may not borrow Stratford's bike route.
+                    keys = set(map(_norm, effective.get("labels") or []))
+                    effective = next((c for c in same if keys & set(map(_norm, c.get("labels") or []))), None)
+                    if effective is None:
+                        return False
+                    return _claim_is_evidenced(fragment, effective, caps, context=context,
+                                               heading=heading_now[0], itinerary=itinerary,
+                                               sentence_marked=sentence_marked, mode=mode)
             if _arithmetic.journey_counts(fragment) and not _MINUTE_TOKEN.search(fragment):
                 # A journey count alone ("(8 journeys)", "6 journeys"): it must match the week it
                 # is for, whatever the turn measured (r17). Same rule as the critic.
@@ -2907,6 +2964,11 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 return bool(measured_routes) and all(
                     _bound_is_evidenced(fragment, c["minutes"]) is True for c in measured_routes)
             if effective is not None:
+                return False
+            if _per_period_line(line, fragment):
+                # "- Per office day: 18 minutes each way" names no route: under a per-period
+                # label the figure is a saving or a total, never "some route's own time". With
+                # its wrong total withdrawn it used to stay alone on the line (r6b).
                 return False
             values = _minute_claim_values(fragment)
             if not values or not all(any(abs(value - figure) < 1e-9 for figure in pool_figures)
@@ -3040,6 +3102,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
         continuation_broken = False  # a kept clause leans on a withdrawn one ("…, but I have
                                      # not verified that") — no clean cut exists (R3-01)
         address_tail_open = False    # the last clause was withdrawn and ended at a comma
+        withdrawn_this_sentence = False  # a clause of the CURRENT sentence was withdrawn
+        gap_lost = False             # a withdrawn clause took the only blank before the next kept one
 
         line_index = len(produced_at) - 1
         heads_a_list = (not list_item and bool(re.match(r"^\s*(?:\*\*|#{1,4}\s)", line))
@@ -3145,7 +3209,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             # "That is an estimate, not a timetable figure" stands on its own (R2-01 c).
             within = dropped_in_sentence and not crossed_sentence
             if (not drop and dropped_in_sentence and fragment.strip()
-                    and ((_CONTINUATION.match(fragment) and _FIT_WORD.search(fragment)
+                    # a verdict on money ("That is £250 over your ceiling") leans on no journey
+                    and ((_CONTINUATION.match(fragment) and _FIT_WORD.search(_without_money_or_weather(fragment))
                           and not _evidenced(fragment, inherited,
                                              sentence_marked=sentence_marked))
                          or (within and _dependent_commute_aside(fragment)))):
@@ -3155,6 +3220,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 # "Cheapest route: with the same line pattern." / "Cons - the longest of the
                 # three.": what is left of a sentence whose figure went cannot stand (R1-10).
                 drop = True
+            if not drop and withdrawn_this_sentence and _SO_TOTAL_AFTER_DROP.match(fragment):
+                drop = True
             if (not drop and address_tail_open and _ADDRESS_TAIL.fullmatch(fragment)):
                 # "35 min to Canary Wharf, London E14 5AB": the comma split the destination,
                 # and the withdrawn clause left "Commute: London E14 5AB." (r07 97b3d456).
@@ -3162,6 +3229,15 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             address_tail_open = False
             if drop:
                 address_tail_open = separator.strip() in {",", "，"}
+                withdrawn_this_sentence = not _SENTENCE_END.search(separator)
+                # The blank that separated this clause from what follows goes with it; the next
+                # kept clause must still be spaced ("£2,250/month.I'm mentioning…", r18 1787af1e).
+                gap_lost = gap_lost or bool(re.search(r"\s", fragment[:1] + separator))
+                if _MINUTE_TOKEN.search(fragment) and any(_named_legs(fragment, route) for route in itinerary_routes):
+                    # A leg of an enumerated itinerary is wrong: what is left ("a short walk, the
+                    # 476 bus.") is no longer the route the planner returned, so the sentence goes
+                    # whole (r17 4f27cfd2, r6-O4: "remove it when the total or leg figure is wrong").
+                    continuation_broken = True
                 removed.append(fragment)
                 if (len(kept) > sentence_start
                         and re.match(r"^\s*(?:so\s+|and\s+|but\s+)?(?:if|when|unless|once|whenever)\b[^.!?]*[,，]\s*$",
@@ -3200,9 +3276,19 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                     continuation_broken = True
                 # "Features: and the listing says ..." - a coordinator left at the front.
                 fragment = _LEADING_COORDINATOR.sub(r"\1", fragment)
+            if crossed_sentence:
+                # The withdrawn clause ended its sentence and this one starts a new sentence that
+                # nothing was withdrawn from: "That is £250 over your ceiling, so it is not within
+                # budget" is not "dependent" on the withdrawn journey a sentence earlier (r18).
+                dropped_in_sentence = False
             crossed_sentence = False
+            if (gap_lost and kept and kept[-1][-1:] and not kept[-1][-1:].isspace()
+                    and fragment[:1] and not fragment[:1].isspace()):
+                fragment = " " + fragment
+            gap_lost = False
             kept.append(fragment + separator)
             if _SENTENCE_END.search(separator):
+                withdrawn_this_sentence = False
                 dropped_in_sentence = False
                 commute_context = False
                 _close_sentence()
@@ -3441,6 +3527,9 @@ _DANGLING_AFTER_DROP = re.compile(
     r"|(?:the\s+)?(?:longest|shortest|fastest|slowest|quickest|longer|shorter|faster|slower|quicker)\b"
     r"|(?:是|为)?(?:最长|最短|最快|最慢|较长|较短)(?:的)?(?:通勤)?\s*$)", re.I)
 _LEADING_COORDINATOR = re.compile(r"^(\s*)(?:and|but|or|plus|also)\s+(?=\S)", re.I)
+# "<withdrawn base>, so 22 minutes of travel per day" is a total OF the withdrawn figure and
+# cannot stand without it (r18 eb65e918). Only within the withdrawn clause's own sentence.
+_SO_TOTAL_AFTER_DROP = re.compile(r"^\s*so\b(?=[^.!?]{0,120}\d)", re.I)
 
 
 def _quotes_source_text(fragment: str, source_texts: list[str] | None) -> bool:

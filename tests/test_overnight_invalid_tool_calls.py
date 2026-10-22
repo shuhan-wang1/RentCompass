@@ -37,7 +37,9 @@ def test_a_second_malformed_reply_ships_a_non_blank_answer():
     state = asyncio.run(_drive(nodes, _state("Find a 1-bed in Camden under £2000")))
     final = state.get("final_response") or ""
     assert final.strip()
-    assert "malformed" in final
+    # Plain words, not "its request was malformed" (r18 c14fe21d).
+    assert "couldn't run the property search" in final and "try again" in final
+    assert "malformed" not in final
 
 
 def test_a_valid_call_alongside_an_invalid_one_still_runs():

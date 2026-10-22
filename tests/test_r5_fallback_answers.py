@@ -36,7 +36,8 @@ def test_tool_call_error_with_nothing_obtained_has_no_results_preamble():
     out = _artifact_grounded_fallback_answer(case["state"], reason="tool_call_error",
                                              failed_tools=["get_property_details"])
     assert "results already obtained" not in out
-    assert out.startswith("I couldn't run one of the lookups this turn (its request was malformed).")
+    assert out.startswith("I couldn't run one of the lookups this time.")   # plain words (r18)
+    assert "malformed" not in out
     assert "The details lookup for that listing failed this turn" in out
     _no_empty_lead_in(out)
 

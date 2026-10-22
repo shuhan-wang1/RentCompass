@@ -701,6 +701,14 @@ _DEST_TRAILING_TIME = re.compile(
     r")\s*$", re.I)
 
 
+def _destination_clause(text: str) -> str:
+    """The destination's own clause: it ends at a comma that starts a lower-case clause or
+    a figure ("Old Street right now, budget £2000" -> "Old Street right now", r18). A comma
+    before a capitalised word or a postcode continues the place ("Camden Road Station, N7",
+    "Bank, London")."""
+    return re.split(r"\s*,\s*(?=[a-z£$€])", str(text or ""), maxsplit=1)[0]
+
+
 def _strip_destination_time_words(place: str) -> str:
     """``place`` without the temporal/discourse words that close its clause."""
     value = str(place or "")
@@ -913,7 +921,8 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
                          r'|\s*,\s*(?=(?:max(?:imum)?|at\s+most|no\s+more\s+than|up\s+to|under|within|'
                          r'less\s+than|about|around|roughly|ideally|preferably|door)\b|\d)'
                          r'|\s*[(\[]|\s+[-–—]\s+',
-                         labelled_destination.group(1), maxsplit=1, flags=re.I)[0].strip(" ,")
+                         _destination_clause(labelled_destination.group(1)),
+                         maxsplit=1, flags=re.I)[0].strip(" ,")
         named = _strip_destination_time_words(named)
         if named and not re.fullmatch(r'(?:my|the|an?)\s+(?:office|workplace)', named, re.I) \
                 and not re.fullmatch(r'(?:all|home|work|the moment|present|least|most|times?)',
@@ -973,7 +982,11 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         for field in ('name', 'slug', 'city')
     } if message_destination else set()
     destination_context.discard('')
-    contextual_work_area = _place_key(new_area) in destination_context
+    from core.tools.search_properties import names_place_as_workplace
+    contextual_work_area = (_place_key(new_area) in destination_context
+                            # "my partner works in Canary Wharf" names a workplace (r18)
+                            or bool(new_area and not new_areas[1:]
+                                    and names_place_as_workplace(current_message, new_area)))
     if new_area and not contextual_work_area:
         new_areas = new_areas or [new_area]
         if result.get('area') != new_area or result.get('areas') != new_areas:

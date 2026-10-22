@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, List, Tuple
 from core.tool_system import Tool, ToolResult
 import re
+import contextvars
 
 
 def load_property_database() -> pd.DataFrame:
@@ -490,17 +491,46 @@ def _dedupe_listings(confirmed: List[Dict]) -> List[Dict]:
     return out
 
 
-def format_property_details(property_data: Dict, match_note: Optional[str] = None) -> str:
+# The labels of the formatted details, in the reply language: the model reads this text
+# and echoed "可入住日期" into English answers (r6b). English unless the conversation is
+# Chinese; the emoji stay.
+_DETAIL_LABELS = {
+    "en": {"price": "Price", "room_type": "Room type", "available_from": "Available from",
+           "description": "Description", "amenities": "Amenities and features",
+           "guest_policy": "Guest policy", "payment_rules": "Payment rules",
+           "excluded_features": "Not included", "url": "Link"},
+    "zh": {"price": "价格", "room_type": "房型", "available_from": "可入住日期",
+           "description": "描述", "amenities": "设施与配置", "guest_policy": "访客政策",
+           "payment_rules": "付款规则", "excluded_features": "不包含的设施", "url": "链接"},
+}
+_CJK_RE = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]")
+# The turn's reply language, set by the fc_loop tool-dispatch node; None elsewhere.
+REPLY_LANGUAGE: contextvars.ContextVar = contextvars.ContextVar(
+    "rentcompass_details_reply_language", default=None)
+
+
+def _details_language(reply_language=None, *texts) -> str:
+    """'zh' or 'en': the harness's reply language when it supplied one, else the search
+    tool's rule (Chinese characters in the user's own wording)."""
+    if reply_language in ("zh", "en"):
+        return reply_language
+    return "zh" if any(_CJK_RE.search(str(t or "")) for t in texts) else "en"
+
+
+def format_property_details(property_data: Dict, match_note: Optional[str] = None,
+                            language: str = "en") -> str:
     """
     格式化房产详细信息
 
     Args:
         property_data: 房产数据字典
         match_note: 身份核对结论（requested vs resolved），渲染在最前面
+        language: 'en' | 'zh'，标签的语言（English unless the conversation is Chinese）
 
     Returns:
         格式化的房产详情字符串
     """
+    label = _DETAIL_LABELS["zh" if language == "zh" else "en"]
     address = property_data.get('Address', 'Unknown')
     price = property_data.get('Price', 'Unknown')
     room_type = property_data.get('Room_Type_Category', 'Unknown')
@@ -520,26 +550,26 @@ def format_property_details(property_data: Dict, match_note: Optional[str] = Non
     # 构建详细信息
     details = f"""{header}📍 **{address}**
 
-💰 **价格**: {price}
-🏠 **房型**: {room_type}
-📅 **可入住日期**: {available_from}
+💰 **{label['price']}**: {price}
+🏠 **{label['room_type']}**: {room_type}
+📅 **{label['available_from']}**: {available_from}
 
-📝 **描述**:
+📝 **{label['description']}**:
 {description}
 
-✨ **设施与配置**:
+✨ **{label['amenities']}**:
 {amenities}
 
-👥 **访客政策**:
+👥 **{label['guest_policy']}**:
 {guest_policy}
 
-💳 **付款规则**:
+💳 **{label['payment_rules']}**:
 {payment_rules}
 
-⛔ **不包含的设施**:
+⛔ **{label['excluded_features']}**:
 {excluded_features}
 
-🔗 **链接**: {url}
+🔗 **{label['url']}**: {url}
 """
     return details.strip()
 
@@ -614,13 +644,17 @@ def get_property_details_impl(
         f"url_supplied={bool(property_url)} question_chars={len(question or '')}"
     )
 
+    # The turn's reply language when the harness set it, else the wording of the question.
+    zh = _details_language(REPLY_LANGUAGE.get(), question) == "zh"
+
     # 加载数据库
     df = load_property_database()
     if df.empty:
         return {
             "success": False,
-            "error": "无法加载房产数据库",
-            "message": "抱歉，无法访问房产数据库。请稍后重试。"
+            "error": "无法加载房产数据库" if zh else "property database unavailable",
+            "message": ("抱歉，无法访问房产数据库。请稍后重试。" if zh else
+                        "Sorry, the property database could not be read. Please try again later."),
         }
 
     # 构建查询字符串（URL 放最前，触发下方按 URL 精确命中缓存的直查分支）。
@@ -635,8 +669,10 @@ def get_property_details_impl(
     if not search_query:
         return {
             "success": False,
-            "error": "需要提供房产名称、地址或 URL",
-            "message": "请提供您想查询的房产名称、地址或 URL。"
+            "error": ("需要提供房产名称、地址或 URL" if zh else
+                      "a property name, address or URL is required"),
+            "message": ("请提供您想查询的房产名称、地址或 URL。" if zh else
+                        "Please give the name, address or URL of the property you mean."),
         }
 
     # 精确优先：若查询本身就是一条房源 URL（如前端 "Ask AI" 传入的 focus URL），
@@ -690,8 +726,8 @@ def get_property_details_impl(
                     [],
                     "NOT FOUND: that listing URL is not in the local cache. Do NOT "
                     "state a price, room type or any other detail for it, and do NOT "
-                    "substitute a different listing. "
-                    "该 URL 不在缓存中；不要用别的房源代替。",
+                    "substitute a different listing."
+                    + (" 该 URL 不在缓存中；不要用别的房源代替。" if zh else ""),
                     "Re-run the property search for this area so the listing is "
                     "cached, then ask again.")
             # Nothing to resolve on at all. Picking a row would be picking at random.
@@ -702,7 +738,7 @@ def get_property_details_impl(
                 [],
                 "CANNOT RESOLVE: that request does not name a building, street or "
                 "postcode, so no listing can be identified. Ask which listing is "
-                "meant. 无法定位房源：请求里没有楼盘名/街道名/邮编。",
+                "meant." + (" 无法定位房源：请求里没有楼盘名/街道名/邮编。" if zh else ""),
                 "Ask the user for the listing's name, address or URL.")
 
         # 名称/地址匹配 —— 只接受身份核对通过的房源。
@@ -721,8 +757,8 @@ def get_property_details_impl(
                 f"'{requested['raw'] or search_query}'. Do NOT state a price, room "
                 f"type, size or any other detail for this property — the cache holds "
                 f"no record of it. Any nearby listing shown under 'did_you_mean' is a "
-                f"DIFFERENT property; its details do not apply. "
-                f"未找到该房源；不要拿别的房源的价格/房型来回答。",
+                f"DIFFERENT property; its details do not apply."
+                + (" 未找到该房源；不要拿别的房源的价格/房型来回答。" if zh else ""),
                 "Tell the user the listing is not in the current results and ask for "
                 "its URL, or re-run a property search for that area.")
 
@@ -741,7 +777,7 @@ def get_property_details_impl(
                  for m in tied],
                 "AMBIGUOUS: several different cached listings match that description "
                 "equally well. Do NOT pick one and do NOT state a price — ask which "
-                "one is meant. 有多条房源同样匹配；不要替用户挑一条。",
+                "one is meant." + (" 有多条房源同样匹配；不要替用户挑一条。" if zh else ""),
                 "Ask the user which listing they mean (or pass its URL to "
                 "get_property_details).")
 
@@ -773,7 +809,8 @@ def get_property_details_impl(
                       f"(confirmed by: {', '.join(corroborated) or 'name'}). "
                       f"The price below belongs to THIS listing.")
 
-    formatted_details = format_property_details(primary, match_note=match_note)
+    formatted_details = format_property_details(primary, match_note=match_note,
+                                                language="zh" if zh else "en")
     provenance = _listing_provenance(primary)
 
     # 提取关键信息用于回答特定问题
@@ -815,7 +852,9 @@ def get_property_details_impl(
         },
         "formatted_details": formatted_details,
         "total_matches": 1 + len(others),
-        "message": f"找到房产: {primary.get('Address', '')}（已核对与请求一致）",
+        "message": (f"找到房产: {primary.get('Address', '')}（已核对与请求一致）" if zh else
+                    f"Found property: {primary.get('Address', '')} (identity checked against "
+                    f"the request)"),
     }
 
     # 其他同样核对通过的房源：只给地址 + URL。不给价格 —— 其中至多一条是用户

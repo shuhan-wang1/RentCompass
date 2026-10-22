@@ -1621,6 +1621,41 @@ def bare_city_downgrades(city, model_area) -> bool:
     return not re.fullmatch(r'(?:greater\s+|central\s+)?london(?:,?\s*uk)?', area_key)
 
 
+# "I (also) work in Shoreditch", "my office is near Old Street", "I cycle to work in
+# Shoreditch": the place is where someone works or studies. _extract_area still returns it
+# (with no other area the search centres on the workplace), but it is never a stored home
+# area or a filter on the shown listings (r18 5a8ce09f: "I also work in Shoreditch and I
+# cycle to work." refined three Hackney listings down to the one whose address named
+# Shoreditch).
+_WORKPLACE_BEFORE_PLACE = re.compile(
+    r"(?:\b(?:work(?:s|ing|ed)?|stud(?:y|ies|ying)|commut(?:e|es|ing)|cycl(?:e|es|ing))"
+    r"|\b(?:my|our|his|her|their)\s+(?:\w+\s+)?(?:office|workplace|job|employer|school|"
+    r"university|college|campus))"
+    r"(?:\s+(?:is|are|was|will\s+be|also|now|still|currently|mostly|mainly|based|located))*"
+    r"(?:\s+(?:in|at|near|around|by|beside|next\s+to|close\s+to))?\s*$", re.I)
+
+
+def workplace_place_at(text: str, start: int) -> bool:
+    """True when the place at ``start`` is introduced, in its own clause, as where someone
+    works or studies ("I work in X", "my office is near X"). "I work from home in X" names
+    the home, not a workplace."""
+    before = re.split(r"[.;!?,，。；！？\n]|\b(?:and|but|so|or|while)\b",
+                      str(text or "")[max(0, start - 60):start], flags=re.I)[-1]
+    if re.search(r"\bfrom\s+home\b", before, re.I):
+        return False
+    return bool(_WORKPLACE_BEFORE_PLACE.search(before))
+
+
+def names_place_as_workplace(text: str, place: str) -> bool:
+    """True when every mention of ``place`` in ``text`` is introduced as a workplace."""
+    source = re.sub(r"[’']", "", str(text or ""))
+    key = re.sub(r"[’']", "", str(place or "")).strip()
+    if not key:
+        return False
+    starts = [m.start() for m in re.finditer(r"(?<![a-z])" + re.escape(key) + r"(?![a-z])", source, re.I)]
+    return bool(starts) and all(workplace_place_at(source, start) for start in starts)
+
+
 def _extract_area(text: str) -> str | None:
     """A NEW area/city the user is switching to (canonical ENGLISH name), else None.
 
@@ -1973,6 +2008,24 @@ def _states_relative_budget_edit(text) -> bool:
         return True
     except Exception:
         return False
+
+
+def _housing_clauses_only(text: str) -> str:
+    """``text`` with every sensitive clause (R4-08 categories) removed; '' if none is left or
+    the classifier cannot run. For text that leaves the server in a secondary model call."""
+    try:
+        from rag.agent_memory import redact_sensitive
+        redacted, categories = redact_sensitive(text)
+    except Exception:
+        return ""
+    if not categories:
+        return str(text or "")
+    if "unparsed" in categories:
+        return ""
+    kept = re.sub(r"\[(?:personal|contact) detail not stored\]", " ", redacted)
+    kept = re.sub(r"\s*([,;:])(?:\s*[,;:])+", r"\1", " ".join(kept.split()))
+    kept = re.sub(r"[,;:]\s*(?=[.!?]|$)", "", kept).strip(" ,;:")
+    return kept if re.search(r"[0-9A-Za-z\u4e00-\u9fff]", kept) else ""
 
 
 def ground_hard_constraints(params: dict, accumulated: dict = None,
@@ -2642,9 +2695,14 @@ class PropertyFilter:
         location_keywords: str,
         care_about_safety: bool = False,
         commute_filter: bool = True,
+        is_cjk: bool = False,
     ) -> tuple[List[Dict], List[Dict]]:
         """
         应用硬过滤器和软过滤器 —— 但只在对应条件存在时才生效。
+
+        The budget/commute status labels reach the result cards, so they follow the reply
+        language: English unless the conversation is Chinese (r18: an English user's cards
+        read "⚠️ 超预算 £200").
 
         返回: (完全符合, 轻微超预算的)
 
@@ -2695,10 +2753,11 @@ class PropertyFilter:
                     perfect_match.append({
                         **prop,
                         'match_type': 'perfect',
-                        'budget_status': '✅ 在预算内',
+                        'budget_status': '✅ 在预算内' if is_cjk else '✅ Within budget',
                         'price_diff': 0,
                         'price_diff_percentage': 0.0,
-                        'commute_status': '✅ 通勤符合' if commute_filter else '',
+                        'commute_status': (('✅ 通勤符合' if is_cjk else '✅ Commute within limit')
+                                           if commute_filter else ''),
                         'recommendation_score': score,
                     })
                 elif price <= budget * C.BUDGET_SOFT_MULTIPLIER:  # 允许超预算最多15%
@@ -2708,10 +2767,12 @@ class PropertyFilter:
                     soft_violation.append({
                         **prop,
                         'match_type': 'soft_violation',
-                        'budget_status': f'⚠️ 超预算 £{int(price_diff)}',
+                        'budget_status': (f'⚠️ 超预算 £{int(price_diff)}' if is_cjk
+                                          else f'⚠️ Over budget by £{int(price_diff)}'),
                         'price_diff': price_diff,
                         'price_diff_percentage': price_diff_percentage,
-                        'commute_status': '✅ 通勤符合' if commute_filter else '',
+                        'commute_status': (('✅ 通勤符合' if is_cjk else '✅ Commute within limit')
+                                           if commute_filter else ''),
                         'recommendation_score': score,
                     })
                 # else: 超过软过滤阈值，完全排除
@@ -3089,7 +3150,12 @@ async def search_properties_impl(
                 enhanced_query = f"Looking for {', '.join(all_property_features)} property. {enhanced_query}"
             try:
                 from core.llm_interface import clarify_and_extract_criteria
-                criteria_response = clarify_and_extract_criteria(enhanced_query) or {}
+                # This is a second model call outside the conversation: it gets the housing
+                # clauses only, never income, benefits, health, immigration, contact details
+                # or children's details (r18 640bdda0; same classifier as auto-memory).
+                enhanced_query = _housing_clauses_only(enhanced_query)
+                criteria_response = (clarify_and_extract_criteria(enhanced_query) or {}
+                                     if enhanced_query else {})
             except Exception as _e:
                 logger.warning(
                     "property_search.nl_extract_failed",
@@ -4190,6 +4256,7 @@ async def search_properties_impl(
             location_keywords=search_area,
             care_about_safety=care_about_safety,
             commute_filter=commute_filter_enabled,
+            is_cjk=is_cjk,
         )
         print(f"   ✅ 完全符合: {len(perfect_match)} | ⚠️ 超预算可考虑: {len(soft_violation)}")
 
@@ -4298,8 +4365,12 @@ async def search_properties_impl(
                             over_budget = max(0, price - max_budget)
                             over_percentage = (round((over_budget / max_budget) * 100, 1)
                                                if max_budget and over_budget else 0.0)
-                            budget_status = (f"⚠️ Over budget by £{over_budget} ({over_percentage}%)"
-                                             if over_budget else "✅ Within budget")
+                            if is_cjk:
+                                budget_status = (f"⚠️ 超预算 £{over_budget}（{over_percentage}%）"
+                                                 if over_budget else "✅ 在预算内")
+                            else:
+                                budget_status = (f"⚠️ Over budget by £{over_budget} ({over_percentage}%)"
+                                                 if over_budget else "✅ Within budget")
                             images = prop.get('Images', prop.get('images', []))
                             if isinstance(images, str):
                                 images = [images] if images else []

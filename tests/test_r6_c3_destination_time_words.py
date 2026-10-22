@@ -29,6 +29,9 @@ CW = "Canary Wharf, London E14 5AB"
     ("I commute to Liverpool Street these days", "Liverpool Street"),
     ("My commute is to King's Cross now", "King's Cross"),
     ("I work near Old Street now, so under 30 minutes please", "Old Street"),
+    # r18: the clause ends at a comma that starts a new lower-case clause, then the time words go.
+    ("I work at Old Street right now, budget £2000", "Old Street"),
+    ("I work at Bank currently, and my budget is £2,000", "Bank"),
     # The known-destination table still canonicalises a recognised place.
     ("I work at Canary Wharf these days", CW),
 ])

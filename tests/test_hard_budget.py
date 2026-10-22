@@ -131,7 +131,7 @@ def test_hard_budget_never_leaks_over_budget_into_recommendations(stub_env, monk
     for row in recs:
         assert _price_int(row) <= 1500
         assert row.get("match_type") != "soft_violation"
-        assert "在预算内" in row["budget_status"]
+        assert row["budget_status"] == "✅ Within budget"   # reply_language="en" (r18)
 
     # 2) The over-budget listings live ONLY in the alternatives list, clearly labelled.
     assert _prices(alts) == [1582, 1625]
@@ -140,7 +140,7 @@ def test_hard_budget_never_leaks_over_budget_into_recommendations(stub_env, monk
         assert 1500 < _price_int(row) <= int(1500 * 1.15)
         assert row.get("alternative") is True
         assert row.get("match_type") == "soft_violation"
-        assert "超预算" in row["budget_status"]
+        assert row["budget_status"].startswith("⚠️ Over budget by £")
 
     # 3) £3000 (beyond the 15% soft band) is nowhere.
     assert 3000 not in _prices(recs) and 3000 not in _prices(alts)

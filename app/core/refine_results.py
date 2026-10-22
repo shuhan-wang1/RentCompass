@@ -291,6 +291,9 @@ def _parse_area_subset(text: str, previous: List[dict]) -> Tuple[Optional[str], 
     if any(h not in label for h in hits):
         return None, None
     pos = low.find(label)
+    from core.tools.search_properties import workplace_place_at
+    if workplace_place_at(low, pos):
+        return None, None          # "I work in Hackney" names a workplace, not a subset
     prefix = low[max(0, pos - _EXCLUDE_CUE_WINDOW):pos]
     if _EXCLUDE_CUE_RE.search(prefix):
         return None, label
@@ -442,7 +445,11 @@ def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, A
 
     # A named area is a SUBSET filter when the shown set already covers it, and a
     # change-of-area (fresh search) when it does not.
+    from core.tools.search_properties import names_place_as_workplace
     named_area = _extract_area(text)
+    if named_area and names_place_as_workplace(text, named_area):
+        # "I also work in Shoreditch" names a commute destination, not a subset (r18).
+        named_area = None
     if named_area:
         if re.search(r'\b(?:and|or)\b|和|及|、', text, re.I):
             labels = {str(r.get('area')).strip().lower()

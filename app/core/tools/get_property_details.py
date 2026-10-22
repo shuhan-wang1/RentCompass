@@ -887,21 +887,29 @@ This tool VERIFIES listing IDENTITY, not current availability. It reads only loc
     parameters={
         "type": "object",
         "properties": {
+            # Plain-text examples with no quote characters: the old descriptions showed
+            # 'single-quoted' values, the quoting style json.loads rejects, on the tool whose
+            # arguments came back unparsable most often (r6c).
             "property_url": {
                 "type": "string",
-                "description": "房产 URL（首选）。推荐索引/搜索结果里每条都带 URL，直接传它可精确命中缓存里那一条房源。"
+                "description": "Listing URL (preferred). Every row of the recommended-listings "
+                               "index and of the search results carries one; passing it hits "
+                               "exactly that cached listing."
             },
             "property_name": {
                 "type": "string",
-                "description": "房产名称，如 'Scape Bloomsbury', 'iQ Bloomsbury', 'Tufnell House' 等"
+                "description": "Building or listing name, for example Scape Bloomsbury or "
+                               "Tufnell House."
             },
             "property_address": {
                 "type": "string",
-                "description": "房产地址或部分地址，如 '19-29 Woburn Place' 或 'London WC1H'"
+                "description": "Full or partial address, for example 19-29 Woburn Place or "
+                               "London WC1H."
             },
             "question": {
                 "type": "string",
-                "description": "房产相关的具体问题（可选），如 '是不是studio？' 或 '访客政策是什么？'"
+                "description": "What the user asked about this listing (optional), for example "
+                               "is it a studio, or what is the guest policy."
             }
         },
         "required": []  # 至少需要 property_url / property_name / property_address 之一

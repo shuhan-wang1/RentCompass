@@ -131,9 +131,21 @@ def test_a_forward_or_conversation_opt_out_is_conversation_scoped(message):
     "Please do not keep any of that personal info about me. Delete it from your memory and do "
     "not store it.",
     "Don't save anything about my health.", "别记这条", "这句不要保存",
+    "no memory please", "Use no memory for this", "keep no memory of this",
 ])
 def test_a_message_scoped_opt_out_stays_per_message(message):
     assert am_mod.memory_opt_out_scope(message) == am_mod.MEMORY_SCOPE_MESSAGE
+
+
+@pytest.mark.parametrize("message", [
+    # R5's false positive: a user who cannot recall something is not opting out
+    "I have no memory of that street", "no memory of it", "I've got no memory of the address",
+    "I have no memory at all of that flat", "I had no memory of that", "My phone has no memory left",
+    "I don't remember the postcode, somewhere near Angel",
+])
+def test_not_remembering_something_is_not_an_opt_out(message):
+    assert am_mod.memory_opt_out_scope(message) is None
+    assert am_mod.do_not_remember_requested(message) is False
 
 
 @pytest.mark.parametrize("message", [
@@ -535,3 +547,56 @@ def test_scope_parsing_stays_fast_on_long_runs():
         am_mod.memory_opt_out_scope(text)
         am_mod.memory_resume_requested(text)
     assert time.perf_counter() - start < 2.0
+
+
+# ---------------------------------------------------------------- erasure
+def test_forget_deletes_the_users_pause_rows_and_only_theirs(harness):
+    memory, _prompts = harness
+    other = "user-r6-m1-other"
+    am_mod.apply_conversation_memory_turn(USER, "conv-1", PRIV1_OPTOUT)
+    am_mod.apply_conversation_memory_turn(USER, "conv-2", "以后都别记")
+    am_mod.apply_conversation_memory_turn(other, "conv-9", PRIV1_OPTOUT)
+    memory.add("Has a dog", "semantic", USER, USER)
+    before = memory.privacy_inventory(USER)
+    assert before["pause_flags"] == 2
+    assert before["total"] == (before["records"] + before["pending_buffers"]
+                               + before["legacy_records"] + 2)
+    memory.forget(USER)
+    after = memory.privacy_inventory(USER)
+    assert after["pause_flags"] == 0 and after["total"] == 0
+    assert memory_gate.conversation_memory_paused(USER, "conv-1") is False
+    assert memory_gate.conversation_memory_paused(other, "conv-9") is True
+
+
+def test_forget_me_route_erases_the_pause_rows(harness, tmp_path, monkeypatch):
+    import uuid
+    from dataclasses import replace
+    import app as appmod
+    from uk_rent_agent.web.auth_store import AuthStore
+    from uk_rent_agent.web.conversation_store import ConversationStore
+    from uk_rent_agent.web.session_store import SessionStore
+    memory, _prompts = harness
+    store = ConversationStore(tmp_path / "conversations.sqlite3")
+    monkeypatch.setattr(appmod, "conversation_store", store)
+    monkeypatch.setattr(appmod, "_session_store", SessionStore())
+    monkeypatch.setattr(appmod, "auth_store", AuthStore(tmp_path / "auth.sqlite3"))
+    monkeypatch.setattr(appmod, "_runtime_config",
+                        replace(appmod._runtime_config, allow_legacy_client_user_id=True))
+    monkeypatch.setattr(appmod._api_rate_limiter, "allow", lambda *a, **k: (True, 0))
+    monkeypatch.setattr(appmod, "_delete_checkpoint_thread",
+                        lambda uid, cid: {"status": "deleted", "residual": False})
+    monkeypatch.setattr(importlib.import_module("rag.agent_memory"), "get_agent_memory",
+                        lambda: memory)
+    user = "u" + uuid.uuid4().hex[:16]
+    conversation = store.create_conversation(user, "private")["id"]
+    am_mod.apply_conversation_memory_turn(user, conversation, PRIV1_OPTOUT)
+    assert memory_gate.conversation_memory_pause_count(user) == 1
+    appmod.app.config.update(TESTING=True)
+    try:
+        body = appmod.app.test_client().post(
+            "/api/forget_me", json={}, headers={"X-User-Id": user}).get_json()
+    finally:
+        store.close()
+    assert body["status"] == "complete", body
+    assert body["layers"]["memory"]["after"]["pause_flags"] == 0
+    assert memory_gate.conversation_memory_pause_count(user) == 0

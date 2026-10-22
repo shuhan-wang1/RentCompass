@@ -273,3 +273,42 @@ def test_main_parses_the_documented_command_line(tmp_path, capsys):
     assert "DRY RUN" in capsys.readouterr().out
     assert cli.main([db, "--apply", "--backup", str(tmp_path / "b.json")]) == 0
     assert (tmp_path / "b.json").exists()
+
+
+# ------------------------------------------------- explicit hard-constraint escalations (r6-M2)
+@pytest.mark.parametrize("reflection,key,said", [
+    ("A commute of 30 minutes or less to King's Cross is a real constraint, not a nice-to-have.",
+     "real-constraint", "my commute is a real constraint, not a nice-to-have"),
+    ("A balcony seems to be more than a nice-to-have for this user.", "nice-to-have",
+     "a balcony is more than a nice-to-have for me"),
+    ("The user won't consider ground-floor flats.", "wont-consider",
+     "I won't consider ground-floor flats"),
+    ("Pets seem non-negotiable here.", "non-negotiable", "pets are non-negotiable"),
+    ("A garden is probably a dealbreaker.", "deal-breaker", "no garden is a dealbreaker"),
+    ("They absolutely need step-free access.", "absolute", "I absolutely need step-free access"),
+    ("They won't compromise on the area.", "compromise", "I won't compromise on the area"),
+    ("A lift looks like a hard constraint.", "hard", "a lift is a hard constraint"),
+])
+def test_explicit_hard_constraint_escalations_need_the_users_own_words(reflection, key, said):
+    assert am_mod.reflection_rejection(reflection, "User asked: Find a 1-bed in Bow") == \
+        f"escalation:{key}"
+    assert am_mod.reflection_rejection(reflection, f"User asked: {said}") is None
+
+
+def test_a_must_have_needs_the_users_own_must_have():
+    reflection = "A dishwasher looks like a must-have."
+    assert am_mod.reflection_rejection(reflection, "User asked: Find a 1-bed in Bow") == \
+        "escalation:must"
+    # the user's "must" is not their "must-have"
+    assert am_mod.reflection_rejection(reflection, "User asked: pets must be allowed") == \
+        "escalation:must-have"
+    assert am_mod.reflection_rejection(reflection, "User asked: a dishwasher is a must-have") is None
+
+
+@pytest.mark.parametrize("reflection", [
+    "The user is prioritising location (Hackney) over proximity to work.",
+    "User prioritises commute over space", "They seem to prioritize a quiet street.",
+    "A balcony would be a nice-to-have.",
+])
+def test_a_bare_priority_or_a_nice_to_have_is_still_acceptable(reflection):
+    assert am_mod.reflection_rejection(reflection, "") is None

@@ -695,6 +695,17 @@ class _PendingWriteStore:
     def memory_paused(self, user_id: str, conversation_id: str) -> bool:
         return self.memory_paused_at(user_id, conversation_id) is not None
 
+    def forget_memory_pauses(self, user_id: str) -> int:
+        with self._lock, self._connect() as db:
+            return db.execute(
+                "DELETE FROM conversation_memory_pause WHERE user_id=?", (user_id,)).rowcount
+
+    def memory_pause_count(self, user_id: str) -> int:
+        with self._lock, self._connect() as db:
+            return int(db.execute(
+                "SELECT COUNT(*) FROM conversation_memory_pause WHERE user_id=?",
+                (user_id,)).fetchone()[0])
+
     def set_memory_paused(self, user_id: str, conversation_id: str, paused: bool) -> None:
         with self._lock, self._connect() as db:
             if paused:
@@ -945,6 +956,23 @@ def conversation_memory_paused_at(user_id, conversation_id) -> float | None:
     if key is None:
         return None
     return _store().memory_paused_at(*key)
+
+
+def forget_conversation_memory_pauses(user_id) -> int:
+    """Delete every pause row of one user (the /api/forget_me erasure). Raises on a ledger
+    error, so the erasure reports the memory layer as failed instead of claiming success."""
+    uid = user_id.strip() if isinstance(user_id, str) else ""
+    if not uid:
+        return 0
+    return _store().forget_memory_pauses(uid)
+
+
+def conversation_memory_pause_count(user_id) -> int:
+    """How many pause rows one user has: an identifier-only residual for erasure read-back."""
+    uid = user_id.strip() if isinstance(user_id, str) else ""
+    if not uid:
+        return 0
+    return _store().memory_pause_count(uid)
 
 
 def set_conversation_memory_paused(user_id, conversation_id, paused: bool) -> bool:

@@ -138,7 +138,10 @@ _DO_NOT_REMEMBER = re.compile(
     r"(?:^|[.,;:!?—–\n]\s*|\b(?:please|and|but|so|just|also|then)\s+)(?:please\s+)?"
     r"(?:do\s+not|don'?t|dont|never|no\s+need\s+to)\s+(?:(?:ever|even|actually)\s+)?"
     + _STORE_VERB + r"\b|"
-    r"\bno\s+memory\b|\boff\s+the\s+record\b|"
+    # "no memory please", "use/keep no memory of this"; never "I have no memory of that street".
+    r"\b(?:keep|store|save|retain|use|want|leave|hold)\s+no\s+memory\b|"
+    r"(?<!\bhave\s)(?<!\bhad\s)(?<!'ve\s)(?<!\bhas\s)(?<!\bgot\s)\bno\s+memory\b(?!\s+of\b)|"
+    r"\boff\s+the\s+record\b|"
     r"\bnot\s+(?:to\s+)?(?:be\s+)?(?:stored|saved|remembered|recorded)\b(?!\s*\])|"
     r"(?:请不要|不要|别|不用|请勿|不准|不许)(?:帮我|给我)?(?:记住|记下|记录|保存|存储|存下|存档|记)", re.I)
 
@@ -182,7 +185,8 @@ _CONVERSATION_OPT_OUT_EN = re.compile(
     r"(?!\s+(?:the\s+|this\s+|that\s+|these\s+|those\s+|my\s+)?(?:listings?|flats?|propert\w+|"
     r"searches|search|results?|homes?|favou?rites?|places?)\b)|"
     r"\b(?:turn|switch|shut)\s+(?:off\s+(?:the\s+|your\s+)?memory|(?:the\s+|your\s+)?memory\s+off)\b|"
-    r"\b(?:disable|deactivate|pause)\s+(?:the\s+|your\s+)?memory\b|\bno\s+memory\s+at\s+all\b",
+    r"\b(?:disable|deactivate|pause)\s+(?:the\s+|your\s+)?memory\b|"
+    r"(?<!\bhave\s)(?<!\bhad\s)(?<!'ve\s)(?<!\bhas\s)(?<!\bgot\s)\bno\s+memory\s+at\s+all\b(?!\s+of\b)",
     re.I)
 _STOP_STORE_EN = re.compile(
     r"\b(?:stop|quit|cease)\s+(?:remembering|saving|storing|recording|logging|memori[sz]ing)\b", re.I)
@@ -991,6 +995,16 @@ _ESCALATION_TERMS = tuple((key, re.compile(pattern, re.I)) for key, pattern in (
     ("core", r"\b(?:key|core|fixed|stable|fundamental|main|primary|dominant|decisive|central)\s+(?:\w+\s+)?"
              r"(?:requirements?|constraints?|criteria|criterion|anchors?|conditions?|filters?|factors?|"
              r"drivers?)\b"),
+    # Explicit hard-constraint escalations missed in the pre-R4-12 rows (r6-M2 follow-up): "a real
+    # constraint, not a nice-to-have", "a must-have", "won't consider". A bare "prioritises" stays
+    # acceptable: it describes a trade-off, not a requirement.
+    ("real-constraint", r"\b(?:real|genuine|actual|true)\s+(?:hard\s+)?(?:constraints?|requirements?|"
+                        r"limits?|deal[\s-]?breakers?|must[\s-]?haves?)\b"),
+    ("nice-to-have", r"\bnot\s+(?:just\s+|merely\s+|simply\s+|only\s+)?(?:an?\s+)?nice[\s-]to[\s-]haves?\b|"
+                     r"\b(?:more|rather)\s+than\s+(?:just\s+)?an?\s+nice[\s-]to[\s-]haves?\b"),
+    ("must-have", r"\bmust[\s-]haves?\b"),
+    ("wont-consider", r"\b(?:won'?t|will\s+not|wouldn'?t|would\s+not|refuses?\s+to|never)\s+(?:even\s+)?"
+                      r"consider\w*\b"),
     # Softening a stated limit is the same inference in the other direction.
     ("negotiable", r"(?<!non-)(?<!non )(?<!not )\bnegotiable\b"),
     ("flexible", r"\bflex\w*"),
@@ -1982,6 +1996,9 @@ class AgentMemory:
                 self.col.delete(ids=ids)
             for key in [key for key in self._accum if key[0] == user_id]:
                 self._accum.pop(key, None)
+        # The user's per-conversation memory pauses go with the rest of their memory (r6-M1).
+        from core import memory_gate
+        memory_gate.forget_conversation_memory_pauses(user_id)
         return len(ids)
 
     def privacy_inventory(self, user_id: str) -> dict[str, int]:
@@ -1997,11 +2014,14 @@ class AgentMemory:
             # copy. Tombstoning a row in the new store is not a complete GDPR erasure
             # until that duplicate source has been explicitly retired.
             legacy_records = self.col.legacy_residual_count(where={"user_id": user_id})
+        from core import memory_gate
+        pause_flags = memory_gate.conversation_memory_pause_count(user_id)
         return {
             "records": records,
             "pending_buffers": pending_buffers,
             "legacy_records": legacy_records,
-            "total": records + pending_buffers + legacy_records,
+            "pause_flags": pause_flags,
+            "total": records + pending_buffers + legacy_records + pause_flags,
         }
 
 

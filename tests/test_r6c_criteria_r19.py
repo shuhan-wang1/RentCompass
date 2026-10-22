@@ -185,3 +185,33 @@ def test_the_details_schema_shows_no_quoted_examples():
     from core.tools.get_property_details import get_property_details_tool
     for name, prop in get_property_details_tool.parameters["properties"].items():
         assert "'" not in prop["description"] and '"' not in prop["description"], name
+
+
+def test_legacy_executor_keeps_the_established_area():
+    """The legacy executor re-reads the message for an area switch; a workplace is not one."""
+    import core.langgraph_agent as lga
+    from core.tool_system import ToolResult
+    from uk_rent_agent.agent.state import create_initial_state
+
+    class _Recording:
+        calls = []
+
+        def get(self, _name):
+            return type("Spec", (), {"version": "1", "side_effect": "none"})()
+
+        async def execute_tool(self, name, **params):
+            self.calls.append(dict(params))
+            return ToolResult(success=True, tool_name=name, data={
+                "status": "found", "summary": "found 1",
+                "recommendations": [{"name": "Jacob House", "address": "Jacob House, London, E8"}]})
+
+    state = create_initial_state(R19_WORK)
+    state["extracted_context"]["current_message"] = R19_WORK
+    state["accumulated_search_criteria"] = _apply_explicit_criteria_updates(
+        _apply_explicit_criteria_updates({}, R19_FIRST), R19_WORK)
+    state["tool_decision"] = {"tool": "search_properties", "params": {"user_query": R19_WORK}}
+    registry = _Recording()
+    asyncio.run(lga._make_execute_tool_node(registry)(state))
+    (params,) = registry.calls
+    assert params["area"] == "Hackney" and params.get("areas") in (None, ["Hackney"])
+    assert params["commute_destination"] == "Shoreditch"

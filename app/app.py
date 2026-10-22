@@ -67,7 +67,9 @@ from core.context_assembler import (
     snapshot_to_session_patch,
     SnapshotSchemaError,
     update_rolling_summary,
+    render_listing_index,
     render_recommended_index,
+    shown_alternative_rows,
 )
 from core.llm_interface import call_ollama
 
@@ -1260,6 +1262,8 @@ def _get_session(user_id, conversation_id):
                 # 累计推荐注册表随快照存活重启/fork（轻量条目，体积可控）。
                 if patch.get("recommended_registry") and not ec.get("recommended_registry"):
                     ec["recommended_registry"] = patch["recommended_registry"]
+                if patch.get("shown_alternatives") and not ec.get("shown_alternatives"):
+                    ec["shown_alternatives"] = patch["shown_alternatives"]
         except SnapshotSchemaError:
             pass  # unknown schema → fall through to the legacy message-only rehydrate
         except Exception as e:
@@ -3162,7 +3166,8 @@ def _with_all_saved_facts(memory, user_id, mems):
 def _write_back_turn(user_id, conversation_id, user_message, assistant_text,
                      recommendations, *, user_preferences=_UNSET,
                      accumulated_search_criteria=_UNSET, criteria_overwrite=None,
-                     turn_id=None, reply_language="en", search_retrieval=_UNSET):
+                     turn_id=None, reply_language="en", search_retrieval=_UNSET,
+                     shown_alternatives=_UNSET):
     """Atomic phase-3 L2 write-back shared by the ReAct path (handle_with_react_agent)
     and the deterministic /api/search_direct endpoint (pure refactor — the ReAct path's
     behaviour is unchanged from the previously-inlined version).
@@ -3222,6 +3227,13 @@ def _write_back_turn(user_id, conversation_id, user_message, assistant_text,
             # structured_results —— 否则第 7 条以后展示过的房源永远进不了注册表。
             _ec['recommended_registry'] = _merge_recommended_registry(
                 _ec.get('recommended_registry'), recommendations)
+            # The over-budget / similar alternatives this search SHOWED, kept beside (never
+            # among) the matches, so "tell me more about <alternative>" resolves and its
+            # price is grounded (r6d, r20 1419b01e). A new search replaces them; a turn that
+            # only re-narrates the shown set (no search) keeps them.
+            if shown_alternatives is not _UNSET:
+                _ec['shown_alternatives'] = (list(shown_alternatives)
+                                             if isinstance(shown_alternatives, list) else [])
             print(f"[state] 💾 已保存 {len(recommendations)} 个搜索结果到上下文"
                   f"（注册表 {len(_ec['recommended_registry'])} 条）")
     # Rolling-summary fold happens OUTSIDE the lock (spawns its own thread). Gated on a
@@ -3363,10 +3375,10 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
               f"focus_source_present={bool(focus_source)}")
 
     # 累计推荐注册表 → 紧凑编号索引块注入上下文（仅摘要；完整信息由 get_property_details 按 URL 取）。
-    if _accum_registry:
-        _idx_block = render_recommended_index(_accum_registry)
-        if _idx_block:
-            extracted_context['recommended_index'] = _idx_block
+    # ... followed by the alternatives the last search showed (never matches, r6d).
+    _idx_block = render_listing_index(_accum_registry, extracted_context.get('shown_alternatives'))
+    if _idx_block:
+        extracted_context['recommended_index'] = _idx_block
 
     # ── 检测对比查询 ─────────────────────────────────────────────
     viewed_properties_context = _build_viewed_properties_context(
@@ -3763,6 +3775,9 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         reply_language=extracted_context.get('reply_language', 'en'),
         search_retrieval=(retrieval_metadata(tool_data)
                           if isinstance(tool_data, dict) and 'recommendations' in tool_data else _UNSET),
+        shown_alternatives=(shown_alternative_rows(tool_data, recommendations)
+                            if isinstance(tool_data, dict) and 'recommendations' in tool_data
+                            else _UNSET),
     )
 
     # ── 长期记忆：随 turn 原子提交到 durable outbox，响应路径不做 LLM/SQLite 写入 ──
@@ -4169,6 +4184,7 @@ async def api_search_direct():
     )
 
     # --- call the search tool DIRECTLY (no LangGraph / critic / memory) ---------
+    panel_data = {}
     try:
         # Unexposed hard constraints (pets/accessibility/total budget/attendance/changes)
         # belong to this conversation, even when the visible form submits only its slots.
@@ -4321,6 +4337,7 @@ async def api_search_direct():
                 turn_id=turn_id,
                 reply_language=reply_language,
                 search_retrieval=retrieval_metadata(result),
+                shown_alternatives=shown_alternative_rows(panel_data, recommendations),
             )
             _snapshot = _build_turn_snapshot_after_turn(
                 user_id, conversation_id, turn_id

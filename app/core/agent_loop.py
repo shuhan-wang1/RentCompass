@@ -1026,7 +1026,7 @@ def _known_listings(ec: dict) -> list:
     for rec in _focus_records(ec):
         if isinstance(rec, dict):
             out.append(rec)
-    for key in ("last_results_full", "last_results", "recommended_registry"):
+    for key in ("last_results_full", "last_results", "recommended_registry", "shown_alternatives"):
         for rec in (ec.get(key) or []):
             if isinstance(rec, dict):
                 out.append(rec)
@@ -1226,6 +1226,8 @@ def _build_messages(state: AgentState) -> list:
         "recommendations_index": (ec.get("recommendations_index")
                                   or ec.get("recommended_registry") or []),
         "discussed_areas": discussed_areas,
+        # Over-budget / similar listings the last search showed (never matches, r6d).
+        "shown_alternatives": ec.get("shown_alternatives") or [],
     }
     try:
         from core.context_assembler import assemble_messages  # contract C

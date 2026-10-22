@@ -75,7 +75,7 @@ from core.llm_interface import call_ollama
 from core.candidate_validation import (
     render_candidate_status, validate_search_payload_with_provider,
 )
-from uk_rent_agent.web.view_state import view_state
+from uk_rent_agent.web.view_state import browser_response, view_state
 
 
 from uk_rent_agent.agent.execution import (
@@ -2000,7 +2000,7 @@ def _request_replay_response(user_id: str, request_id: str, turn: dict):
         payload = conversation_store.get_turn_response(user_id, turn.get("id"))
         if payload is None:
             raise ApiError(500, "persisted request has no response")
-        response = jsonify(payload)
+        response = jsonify(browser_response(payload))
         response.status_code = 502 if turn.get("status") == "failed" else 200
     response.headers["X-Request-Id"] = request_id
     response.headers["X-Idempotent-Replay"] = "1"
@@ -2355,6 +2355,9 @@ async def api_alex():
     # boundary record that should have reported it. Emitting after serialization
     # means a failure falls through to _handle_uncaught with canary_emitted still
     # False, so exactly one record is written and it says server_error.
+    # The browser gets a criterion's provenance only as a bounded, sensitive-free excerpt
+    # (r6-C1); the full user text stays in the persisted snapshot.
+    payload = browser_response(payload)
     response = jsonify(payload)
     response.status_code = _http_status
     response.headers["X-Request-Id"] = request_id
@@ -4352,6 +4355,7 @@ async def api_search_direct():
     # Serialize BEFORE emitting — same ordering rule as /api/alex: a jsonify() failure
     # must reach the 500 handler with canary_emitted still False so the boundary
     # record is the one and only record, and it reports the 500 the user actually got.
+    payload = browser_response(payload)     # r6-C1, as in /api/alex
     response = jsonify(payload)
     response.status_code = 500 if _serialization_failed else (502 if _terminal_failed else 200)
     response.headers["X-Request-Id"] = request_id

@@ -2783,6 +2783,11 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
     prior_listings = bool(ec.get("recommended_registry") or ec.get("last_results")
                           or ec.get("recommended_index"))
     failed_names = {str(name) for name in (failed_tools or [])}
+    # The model could not produce a usable property-search request (r18 c14fe21d: unparsable
+    # JSON twice). Say so plainly — the search could not run this time, try again or rephrase
+    # — rather than "one of the lookups … (its request was malformed)" (R4-10).
+    search_call_failed = (reason == "tool_call_error" and "search_properties" in failed_names
+                          and not searched)
     details_failed = (not searched and (
         "get_property_details" in failed_names
         or (reason == "tool_call_error" and prior_listings)))
@@ -2817,9 +2822,9 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
                       else '模型服务暂时不可用。')
             closer = '未完成的部分可以稍后重试。'
         elif reason == 'tool_call_error':
-            opener = ('本轮有一项查询未能执行（查询参数无效）。以下仅列出本轮已经取得的结果：'
-                      if has_results else '本轮有一项查询未能执行（查询参数无效）。')
-            closer = '可以让我再试一次。'
+            what = '这次没能运行房源搜索。' if search_call_failed else '这次有一项查询没能运行。'
+            opener = what + ('以下仅列出本轮已经取得的结果：' if has_results else '')
+            closer = '请再试一次，或换个说法告诉我你的要求。'
         elif reason == "no_reliable_numbers":
             # 「未能获取」是诚实的 partial-disclosure 标记（graders._honest_partial_disclosed），
             # 满足 must_mention_source_if_evidence 的无证据分支；不含任何「超时/时间限制」措辞。
@@ -2858,6 +2863,8 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
                          "之前列出的房源仍然有效。")
         elif failed_lines:
             pass          # the failed lookups below say what could not be checked
+        elif search_call_failed:
+            lines.append("所以暂时没有可以展示的房源。")
         elif reason == "tool_call_error" and not searched:
             lines.append("这次的查询未能执行，所以还没能核实你问的内容。")
         elif searched or _asks_for_listings(cm):
@@ -2878,9 +2885,9 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             opener = 'The model service is temporarily unavailable.' + results_lead
             closer = 'You can retry the unfinished parts later.'
         elif reason == 'tool_call_error':
-            opener = ("I couldn't run one of the lookups this turn (its request was malformed)."
-                      + results_lead)
-            closer = 'You can ask me to try again.'
+            opener = (("I couldn't run the property search this time." if search_call_failed
+                       else "I couldn't run one of the lookups this time.") + results_lead)
+            closer = 'Please try again, or rephrase your request.'
         elif reason == "no_reliable_numbers":
             # "couldn't retrieve" is an honest partial-disclosure marker
             # (graders._honest_partial_disclosed), satisfying the no-evidence branch of
@@ -2924,6 +2931,8 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
                          "that yet; the listings shown earlier are still available.")
         elif failed_lines:
             pass          # the failed lookups below say what could not be checked
+        elif search_call_failed:
+            lines.append("So I have no listings to show you for this request yet.")
         elif reason == "tool_call_error" and not searched:
             lines.append("The lookup failed this turn, so I could not check what you asked.")
         elif searched or _asks_for_listings(cm):

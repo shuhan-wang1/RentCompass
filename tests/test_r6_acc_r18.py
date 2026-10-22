@@ -1,5 +1,5 @@
-"""acc-r18 (round 6b, output): an "each way" difference on a "Per office day" line, and the
-closing search offer.
+"""acc-r18 (round 6b, output): an "each way" difference on a "Per office day" line, the closing
+search offer, and the answer when the model never produced a usable search request.
 
 ``tests/data/r6_r18_corpus.json`` is exported from the frozen r18 inst-D checkpoints:
 
@@ -16,6 +16,7 @@ import pathlib
 
 import pytest
 
+from core.agent_loop import _artifact_grounded_fallback_answer
 from core.candidate_validation import _SO_TOTAL_AFTER_DROP, _asserts_commute, validate_commute_response
 from core.langgraph_agent import _collect_grounding_evidence
 from uk_rent_agent.agent.critic import evaluate_grounding, unsupported_external_numbers
@@ -86,3 +87,33 @@ def test_a_search_offer_within_a_budget_is_not_a_commute_verdict():
     assert not _asserts_commute(" I can search actual listings in Stratford or Bow within a budget and "
                                 "check the door-to-door commute for specific flats")
     assert _asserts_commute("Stratford is within your 25-minute limit")
+
+
+# ── the model never produced a usable search request ──────────────────────────────────
+
+def test_an_unparsable_search_request_gets_a_plain_answer():
+    case = CORPUS["r18_c14fe21d"]
+    assert "its request was malformed" in case["shipped"]          # what the user saw
+    out = _artifact_grounded_fallback_answer(case["state"], reason="tool_call_error",
+                                             failed_tools=["search_properties"])
+    assert out.startswith("I couldn't run the property search this time.")
+    assert "Please try again, or rephrase your request." in out
+    assert "malformed" not in out and "lookup" not in out
+
+
+def test_the_chinese_answer_is_plain_too():
+    state = json.loads(json.dumps(CORPUS["r18_c14fe21d"]["state"]))
+    state["extracted_context"]["reply_language"] = "zh"
+    out = _artifact_grounded_fallback_answer(state, reason="tool_call_error",
+                                             failed_tools=["search_properties"])
+    assert out.startswith("这次没能运行房源搜索。") and "查询参数无效" not in out
+    assert "请再试一次" in out
+
+
+def test_another_failed_lookup_keeps_its_own_wording():
+    state = {"user_query": "What's the weather in Leeds?", "tool_artifacts": [],
+             "extracted_context": {"current_message": "What's the weather in Leeds?", "reply_language": "en"}}
+    out = _artifact_grounded_fallback_answer(state, reason="tool_call_error", failed_tools=["get_weather"])
+    assert out.startswith("I couldn't run one of the lookups this time.")
+    assert "The lookup failed this turn, so I could not check what you asked." in out
+    assert "property search" not in out

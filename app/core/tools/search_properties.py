@@ -19,6 +19,7 @@ from core.tools._argtext import clean_arg_text
 from typing import Optional, List, Dict
 import pandas as pd
 import asyncio
+import bisect
 import logging
 import math
 import os
@@ -841,9 +842,16 @@ def _extract_bedrooms(text: str):
         if re.search(r'不要改变|不要修改|不变|don.t change|unchanged', clause, re.I):
             continue
         if not mention_is_requirement(t, m.start(), m.end()):
-            if not re.search(r'不要改变\s*$', t[:m.start()]):
+            # "…不要改变 <mention>": the cue then blanks only, read back from the mention
+            # (the whole prefix per mention was quadratic on a long paste).
+            blank = m.start()
+            while blank > 0 and t[blank - 1].isspace():
+                blank -= 1
+            if t[max(0, blank - 4):blank] != '不要改变':
                 continue
-        before = re.split(r'[。.!?;；\n，,:：]', t[:m.start()])[-1][-55:]
+        # Only the last 55 characters after the last separator are read, and separators are
+        # single characters, so the 55 before the mention are exactly enough.
+        before = re.split(r'[。.!?;；\n，,:：]', t[max(0, m.start() - 55):m.start()])[-1][-55:]
         after = t[m.end():m.end() + 22]
         # Allocation per occupant is not the whole home's bedroom count. Never
         # multiply it by an assumed household size, or let it win over a total.
@@ -1504,6 +1512,29 @@ _AREA_NAMED_ADD = re.compile(
     r"|to\s+(?:the|my)\s+(?:search|areas?|list))\b")
 
 
+_AREA_CLAUSE_SEPARATOR = re.compile(r"[,，、:：]|\band\b|\bbut\b|但")
+# The longest cue the _AREA_*_BEFORE patterns end with ("could you also include in", "no
+# longer search in the") holds ~21 non-blank characters; blanks between its words are
+# unbounded. A cue therefore lies within the last _CUE_REACH non-blank characters.
+_CUE_REACH = 64
+
+
+def _cue_window(clause: str, start: int, end: int) -> tuple[str, int]:
+    """``(text, pos)`` such that ``pattern.search(text, pos)`` finds exactly what searching
+    ``clause[start:end]`` found for an end-anchored cue pattern, in time bounded by the cue's
+    reach, not by the clause: a 28 KB unpunctuated message re-scanned its whole prefix per
+    place (6 s). ``pos`` keeps the real character before the window in view, so ``\b`` reads
+    as it did."""
+    index, seen = end, 0
+    while index > start and seen < _CUE_REACH:
+        index -= 1
+        if not clause[index].isspace():
+            seen += 1
+    if index <= start:
+        return clause[start:end], 0
+    return clause[index - 1:end], 1
+
+
 def area_list_edit(text: str, current: list | None) -> list[str] | None:
     """The area list after an explicit add / remove / "just X" edit, else None.
 
@@ -1527,19 +1558,23 @@ def area_list_edit(text: str, current: list | None) -> list[str] | None:
         if is_hypothetical(clause) or re.search(r"\b(?:don.t|do not|never|shouldn.t)\s+(?:\w+\s+){0,2}"
                                                 r"(?:add|include|remove|drop|exclude)\b", clause, re.I):
             continue
+        # The sub-clause before each place starts after the last separator ahead of it, found
+        # by bisecting the clause's separators instead of re-splitting the prefix per place.
+        separator_ends = [m.end() for m in _AREA_CLAUSE_SEPARATOR.finditer(clause)]
         for found in place.finditer(re.sub(r"[’']", "'", clause)):
             raw = found.group()
             canonical = names.get(raw) or names.get(re.sub(r"[’']", '', raw.lower()))
             if not canonical:
                 continue
-            before = re.split(r"[,，、:：]|\band\b|\bbut\b|但", clause[:found.start()])[-1]
+            at = bisect.bisect_right(separator_ends, found.start()) - 1
+            before, pos = _cue_window(clause, separator_ends[at] if at >= 0 else 0, found.start())
             after = clause[found.end():found.end() + 40]
-            if _AREA_REMOVE_BEFORE.search(before) or _AREA_REMOVE_AFTER.match(after):
+            if _AREA_REMOVE_BEFORE.search(before, pos) or _AREA_REMOVE_AFTER.match(after):
                 removes.append(canonical)
-            elif _AREA_ONLY_BEFORE.search(before) or _AREA_ONLY_AFTER.match(after):
+            elif _AREA_ONLY_BEFORE.search(before, pos) or _AREA_ONLY_AFTER.match(after):
                 only.append(canonical)
-            elif (_AREA_ADD_BEFORE.search(before) or _AREA_ADD_AFTER.match(after)
-                  or (_AREA_INCLUDE_BEFORE.search(before) and _AREA_INCLUDE_AFTER.match(after))):
+            elif (_AREA_ADD_BEFORE.search(before, pos) or _AREA_ADD_AFTER.match(after)
+                  or (_AREA_INCLUDE_BEFORE.search(before, pos) and _AREA_INCLUDE_AFTER.match(after))):
                 adds.append(canonical)
         for named in _AREA_NAMED_ADD.finditer(clause):
             # "Add Angel as a second area": a place outside the curated table, named with

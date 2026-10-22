@@ -139,23 +139,26 @@ def test_the_agent_node_ships_a_bounded_answer_for_the_b01_output():
 # The B-01 message itself (1 500-3 000 digits) and any long paste go through the
 # deterministic criteria parsers before the model is called, also on the event loop.
 # Measured before the fix with a 6 000-character message: 17.9 s (digits), 10.7 s
-# (unpunctuated prose); 28 000 characters of repeated Chinese criteria: 11.4 s.
+# (unpunctuated prose); 28 000 characters of repeated Chinese criteria: 11.4 s, and still 6 s
+# after it (area_list_edit and _extract_bedrooms re-read the whole prefix per mention) — 8.01 s
+# once under full-suite load against an absolute 8 s limit (r6e). Each message is now parsed
+# at half and at full size: the full size must stay far inside the limit, and doubling the
+# message must cost about twice the time, not four times, so a quadratic regression fails
+# here long before it could make CI flaky.
 _LONG_MESSAGES = {
-    "b01-digits": _B01,
-    "unpunctuated-prose": "i want a flat near the park with a garden " * 700,
-    "comma-list": "camden, hackney, islington, " * 1_100,
-    "zh-repeated-criteria": "我想在卡姆登找一个两居室预算每月两千镑以内" * 1_300,
-    "digit-commas": "£" + "1," * 15_000,
+    "b01-digits": lambda k: "How safe is Flat " + "9" * (15_000 * k) + " Mallory Road, London?",
+    "unpunctuated-prose": lambda k: "i want a flat near the park with a garden " * (350 * k),
+    "comma-list": lambda k: "camden, hackney, islington, " * (550 * k),
+    "zh-repeated-criteria": lambda k: "我想在卡姆登找一个两居室预算每月两千镑以内" * (650 * k),
+    "digit-commas": lambda k: "£" + "1," * (7_500 * k),
 }
 
 
-@pytest.mark.parametrize("label", sorted(_LONG_MESSAGES))
-def test_a_long_message_is_parsed_in_linear_time(label):
+def _parse_seconds(text: str) -> float:
     from core.constraint_updates import housing_update_text, scoped_update_text
     from core.langgraph_agent import _apply_explicit_criteria_updates
     from core.search_readiness import detect_relative_budget_delta
 
-    text = _LONG_MESSAGES[label]
     started = time.perf_counter()
     scoped_update_text(text)
     housing_update_text(text)
@@ -163,7 +166,22 @@ def test_a_long_message_is_parsed_in_linear_time(label):
     _apply_explicit_criteria_updates({}, text)
     nodes = agent_loop.build_fc_nodes(Provider([]), agent_llm=Chat(AIMessage(content="ok")))
     asyncio.run(nodes["agent"](_state(text)))
-    assert time.perf_counter() - started < 8.0, label
+    return time.perf_counter() - started
+
+
+def test_the_b01_message_is_the_one_measured():
+    assert _LONG_MESSAGES["b01-digits"](2) == _B01
+
+
+@pytest.mark.parametrize("label", sorted(_LONG_MESSAGES))
+def test_a_long_message_is_parsed_in_linear_time(label):
+    build = _LONG_MESSAGES[label]
+    _parse_seconds(build(1))                     # warm: patterns compiled, imports done
+    # the faster of two runs at each size, so one noisy run cannot decide the ratio
+    half = min(_parse_seconds(build(1)) for _ in range(2))
+    full = min(_parse_seconds(build(2)) for _ in range(2))
+    assert full < 8.0, (label, full)
+    assert full < 2.5 * half + 0.5, (label, half, full)     # linear ~2x; quadratic ~4x
 
 
 def test_the_anchored_input_patterns_keep_their_meaning():

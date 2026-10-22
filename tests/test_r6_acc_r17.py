@@ -1,5 +1,5 @@
-"""acc-r17 (round 6, output): a route ranked AND measured, leg figures of the named route, a
-combined TfL sentence.
+"""acc-r17 (round 6, output): monthly totals of an evidenced weekly total, a route ranked AND
+measured, leg figures of the named route, a combined TfL sentence.
 
 ``tests/data/r6_r17_corpus.json`` is exported from the frozen r17 inst-D checkpoints (the
 model's draft as ``raw_draft``, the final state; ``critic_text`` is the critic's regeneration):
@@ -50,7 +50,8 @@ def _mutate(name, old, new, field="raw_draft"):
 
 # ── the four recorded drafts ──────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("name,field", [("r17_bf086e84", "raw_draft"), ("r17_4f27cfd2", "raw_draft")])
+@pytest.mark.parametrize("name,field", [("r17_8c35fd5b", "raw_draft"), ("r17_8c35fd5b", "critic_text"),
+                                        ("r17_bf086e84", "raw_draft"), ("r17_4f27cfd2", "raw_draft")])
 def test_the_recorded_answer_ships_whole_and_grounded(name, field):
     case, state, evidence, message = _case(name)
     text = case[field]
@@ -71,6 +72,82 @@ def test_the_limit_answer_keeps_the_walk_and_drops_only_the_speculation():
     assert "- 27 minutes total, 2 minutes over your limit" in out
     assert out.count(NOTE_EN) == 1
     assert not unsupported_external_numbers(case["raw_draft"], evidence, message)
+
+
+# ── O1: monthly and yearly totals of the evidenced weekly total ───────────────────────
+
+MONTH_LINE = "- Per month: about 3.5 hours (48 min × 52 weeks ÷ 12)"
+
+
+@pytest.mark.parametrize("line", [
+    MONTH_LINE,
+    "- Per month: about 208 minutes (48 × 4.33), roughly 3 hours 28 minutes",
+    "- Per month: 48 × 4.3 = about 206 minutes",
+    "- Per month: 3 hours 28 minutes",
+    "- Per month: using 4 weeks as a month, 48 min × 4 = 192 minutes, i.e. 3 hours 12 minutes a month",
+    "- Per month: roughly 3.2 hours",                       # x 4, hedged
+    "- Per year: about 41.6 hours (48 min × 52)",
+    "- Per year: 208 × 12 = 2496 minutes, about 41.6 hours",
+])
+def test_a_monthly_or_yearly_total_of_the_weekly_total_is_kept(line):
+    text, out, flagged = _mutate("r17_8c35fd5b", MONTH_LINE, line)
+    assert line in out and NOTE_EN not in out
+    assert not flagged
+
+
+@pytest.mark.parametrize("line", [
+    "- Per month: about 5 hours (48 min × 52 weeks ÷ 12)",   # the step is right, the result is not
+    "- Per month: 3.2 hours",                                # x 4 with no four-week framing, unhedged
+    "- Per month: about 144 minutes (48 × 3)",               # x office days, not x weeks
+    "- Per month: 48 minutes",                                # the weekly figure called monthly
+    "- Per month: 48 × 4.33 = about 250 minutes",
+    "- Per year: about 60 hours (48 min × 52)",
+    "- Per month: about 3.5 hours (40 min × 52 weeks ÷ 12)",  # a weekly operand that does not derive
+])
+def test_a_wrong_monthly_or_yearly_total_is_removed_and_flagged(line):
+    text, out, flagged = _mutate("r17_8c35fd5b", MONTH_LINE, line)
+    assert line not in out
+    assert out.count(NOTE_EN) == 1
+    assert flagged
+
+
+def test_the_weekly_figure_restated_as_monthly_is_not_a_restatement():
+    """r16 b5882620: "= **54 minutes a week** — roughly 54 minutes a month" (the critic used to
+    take the second 54 as a restatement of the step's result, whatever its period)."""
+    r16 = json.loads((DATA / "r5_r16_corpus.json").read_text(encoding="utf-8"))["r16_b5882620"]
+    state = r16["state"]
+    evidence, message = _collect_grounding_evidence(state, ""), state["extracted_context"]["current_message"]
+    text = r16["raw_draft"].replace("roughly 3.9 hours a month, or about 47 hours a year", "roughly 54 minutes a month")
+    out = validate_commute_response(text, state)
+    assert "54 minutes a month" not in out and "54 minutes a week" in out
+    assert unsupported_external_numbers(text, evidence, message)
+
+
+R15_BLOCKER = "that's about 18 minutes a week saved — around 54 minutes over a typical month"
+
+
+@pytest.mark.parametrize("claim,kept", [
+    ("that's about 54 minutes a week saved — around 54 minutes over a typical month", False),
+    ("that's about 54 minutes a week saved — around 3.9 hours over a typical month", True),
+    ("that's about 54 minutes a week saved — around 234 minutes over a typical month", True),
+    ("that's about 54 minutes a week saved — around 162 minutes over a typical month", False),  # 54 x 3
+])
+def test_the_r15_monthly_label_rule_holds_both_ways(claim, kept):
+    """r15 efaa330f (Stratford 19, Bow 28; 3 office days): 9 x 2 x 3 = 54 is the WEEKLY saving,
+    so 54 "over a typical month" is still removed; 54 x 52/12 = 234 (3.9 hours) is kept."""
+    r15 = json.loads((DATA / "r5_r15_corpus.json").read_text(encoding="utf-8"))["r15_efaa330f"]
+    state = r15["state"]
+    evidence, message = _collect_grounding_evidence(state, ""), state["extracted_context"]["current_message"]
+    assert R15_BLOCKER in r15["raw_draft"]
+    mutated = r15["raw_draft"].replace(R15_BLOCKER, claim)
+    monthly = claim.split("— ", 1)[1]
+    assert (monthly in validate_commute_response(mutated, state)) is kept
+    assert bool(unsupported_external_numbers(mutated, evidence, message)) is (not kept)
+
+
+def test_i_e_does_not_end_the_clause():
+    parts = _guard_text_parts("48 min × 4 = 192 minutes, i.e. 3 hours 12 minutes a month.")
+    assert "i.e. 3 hours 12 minutes a month" in "".join(parts[2:3])
 
 
 # ── O2: a route the area ranking ranked and calculate_commute measured is one route ───
@@ -191,3 +268,18 @@ def test_the_flat_estimate_after_the_area_route_is_the_flats_own():
     text, out, flagged = _mutate("r17_4f27cfd2", "the flat's own ~20 minutes", "the flat's own ~25 minutes")
     assert "~25 minutes" not in out and flagged
 
+
+# ── the new period checks stay linear (the B-01 class) ────────────────────────────────
+
+@pytest.mark.parametrize("label,text", [
+    ("blank run after a rent", "£2,350" + " " * 40000 + "a month, 8 minutes a week"),
+    ("blank run after a figure", "8 min" + " " * 40000 + "× 4 = 32 minutes a month"),
+    ("many conversion steps on one line", "48 × 4.33 = 208 minutes a month. " * 300),
+    ("a long digit run", "1" * 5000 + " minutes a month"),
+])
+def test_the_critic_arithmetic_is_fast_on_degenerate_answers(label, text):
+    import time
+    evidence = [{"duration_minutes": 27, "from_address": "Bow"}, {"duration_minutes": 19, "from_address": "Stratford"}]
+    started = time.perf_counter()
+    unsupported_external_numbers(text, evidence, "I go into the office 3 days a week")
+    assert time.perf_counter() - started < 1.5, label

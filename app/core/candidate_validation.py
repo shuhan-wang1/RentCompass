@@ -1193,7 +1193,8 @@ def _guard_text_parts(text: str, *, sentences: bool = False) -> list[str]:
         if any(left <= position < right for left, right in protected):
             continue
         if text[position:position + 1] == '.':
-            abbreviation = re.search(r"\b" + _NAME_ABBREVIATION + r"\.$", text[:position + 1], re.I)
+            # "192 minutes, i.e. 3 hours 12 minutes a month" is one clause (r17 8c35fd5b).
+            abbreviation = re.search(r"\b(?:" + _NAME_ABBREVIATION + r"|i\.e|e\.g)\.$", text[:position + 1], re.I)
             decimal = (position > 0 and position + 1 < len(text)
                        and text[position - 1].isdigit() and text[position + 1].isdigit())
             ellipsis = text[max(0, position - 1):position] == '.' or text[position + 1:position + 2] == '.'
@@ -2490,6 +2491,7 @@ def _arithmetic_evidenced(fragment: str, *, context: str, previous_clause: str, 
     label = line[:80].split(":", 1)[0] if ":" in line[:80] else ""
     scope = f"{label} {previous_clause} {context} {text}"
     if not (_DAY_PERIOD.search(scope) or _WEEK_PERIOD.search(scope) or _COMPARISON_CUE.search(scope)
+            or _arithmetic.LONG_PERIOD.search(_arithmetic.without_money(scope)) or _arithmetic.period_steps(text)
             or _arithmetic.products(text) or _arithmetic.subtractions(text)
             or _arithmetic.JOURNEY_COUNT.search(text)
             or (caps and re.search(r"\b(?:limit|cap|max(?:imum)?|spare|headroom|margin|buffer)\b", scope, re.I))):
@@ -2776,8 +2778,11 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
     source_lines = str(text or "").split("\n")
     produced_at: list[int] = []        # len(lines) before each source line was processed
     block_binding = None                # the listing a header line names, for its bullets
+    block_minutes = False               # an earlier line of this paragraph/list quoted a journey time
     for line in source_lines:
         produced_at.append(len(lines))
+        in_timed_block = block_minutes
+        block_minutes = bool(line.strip()) and (block_minutes or bool(_MINUTE_TOKEN.search(line)))
         removed_before_line = len(removed)
         bullet = _BULLET_PREFIX.match(line)
         prefix = bullet.group(1) if bullet else ""
@@ -3015,7 +3020,10 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
         sentence_dropped = False    # something was withdrawn from the current sentence
         inherited = binding
         commute_context = False
-        figure_context = False      # an earlier clause of this line quoted a journey time
+        # An earlier clause of this line quoted a journey time, or (for a list item) an earlier
+        # line of its list did: "- Per week: 48 minutes" then "- Per month: about 3.5 hours" is a
+        # journey total too, judged like one (r17 8c35fd5b; a wrong "about 5 hours" shipped).
+        figure_context = bool(in_timed_block and list_item)
         last_fragment = ""          # the previous clause of the current sentence
         continuation_broken = False  # a kept clause leans on a withdrawn one ("…, but I have
                                      # not verified that") — no clean cut exists (R3-01)

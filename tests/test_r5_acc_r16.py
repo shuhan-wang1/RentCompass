@@ -35,18 +35,27 @@ def _grounded(text, evidence, message):
 
 
 # ── 1. the weekly total stays when its monthly/yearly neighbour goes ──────────────────
+# Owner decision (r6, acc-r17): a monthly total of the evidenced weekly one (x 52/12) and a
+# yearly one (x 52) are evidenced, so this draft now ships whole: 54 x 52/12 = 234 minutes =
+# 3.9 hours, 54 x 52 = 46.8 hours. A wrong neighbour still goes and the weekly total stays.
 
-def test_only_the_monthly_and_yearly_clauses_go():
+@pytest.mark.parametrize("clause,kept", [
+    ("roughly 3.9 hours a month, or about 47 hours a year", True),
+    ("roughly 2.5 hours a month, or about 47 hours a year", False),
+    ("roughly 3.9 hours a month, or about 30 hours a year", False),
+])
+def test_only_a_wrong_monthly_or_yearly_clause_goes(clause, kept):
     case, state, evidence, message = _case("r16_b5882620")
-    text = case["raw_draft"]
-    assert "9 × 2 × 3 = **54 minutes a week** — roughly 3.9 hours a month, or about 47 hours a year." in text
+    original = "roughly 3.9 hours a month, or about 47 hours a year"
+    assert f"9 × 2 × 3 = **54 minutes a week** — {original}." in case["raw_draft"]
+    text = case["raw_draft"].replace(original, clause)
     out = validate_commute_response(text, state)
-    assert "With three office days that's 9 × 2 × 3 = **54 minutes a week**." in out
-    assert "3.9 hours" not in out and "47 hours" not in out
-    assert out.count(NOTE_EN) == 1
-    # the critic agrees: the out-of-rule monthly/yearly totals are unsupported
-    assert unsupported_external_numbers(text, evidence, message)
-    weekly_only = text.replace(" — roughly 3.9 hours a month, or about 47 hours a year", "")
+    assert "With three office days that's 9 × 2 × 3 = **54 minutes a week**" in out
+    assert (clause in out) is kept
+    assert out.count(NOTE_EN) == (0 if kept else 1)
+    # the critic agrees
+    assert bool(unsupported_external_numbers(text, evidence, message)) is (not kept)
+    weekly_only = text.replace(f" — {clause}", "")
     assert not unsupported_external_numbers(weekly_only, evidence, message)
 
 

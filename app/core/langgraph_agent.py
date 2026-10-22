@@ -684,6 +684,34 @@ def _withdraw_criteria_topics(accumulated: dict, message: str) -> dict:
     return result
 
 
+# "I've changed jobs, I work at Bank now." stored the commute destination "Bank now" (r6-C3):
+# a temporal or discourse phrase that closes the clause is not part of the place. Whole
+# words only, at the very end, so "Nowhere Lane" or "Old Street" are never cut.
+_DEST_DAY_OR_MONTH = (
+    r"(?:mon|tues|wednes|thurs|fri|satur|sun)day|today|tomorrow|tonight|week|month|year|"
+    r"weekend|january|february|march|april|may|june|july|august|september|october|"
+    r"november|december|jan|feb|mar|apr|jun|jul|aug|sept?|oct|nov|dec|"
+    r"\d{1,2}(?:st|nd|rd|th)?|\d{4}")
+_DEST_TRAILING_TIME = re.compile(
+    r"(?:\s*[,;:–—-])?\s+(?:"
+    r"(?:right\s+|for\s+|just\s+|from\s+|as\s+of\s+)?now(?:\s+on)?|actually|nowadays|"
+    r"these\s+days|at\s+the\s+moment|at\s+present|currently|presently|any\s?more|"
+    r"(?:from|starting|as\s+of|since|beginning|effective)\s+(?:(?:next|this|the|last)\s+)?"
+    rf"(?:{_DEST_DAY_OR_MONTH})(?:\s+(?:of\s+)?(?:{_DEST_DAY_OR_MONTH}))?"
+    r")\s*$", re.I)
+
+
+def _strip_destination_time_words(place: str) -> str:
+    """``place`` without the temporal/discourse words that close its clause."""
+    value = str(place or "")
+    for _ in range(4):           # "Bank now actually" -> "Bank now" -> "Bank"
+        stripped = _DEST_TRAILING_TIME.sub("", value).strip(" ,;:–—-")
+        if stripped == value or not stripped:
+            break
+        value = stripped
+    return value
+
+
 def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
                                      apply_relative_budget: bool = True,
                                      _reaffirmed: bool = False) -> dict:
@@ -886,6 +914,7 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
                          r'less\s+than|about|around|roughly|ideally|preferably|door)\b|\d)'
                          r'|\s*[(\[]|\s+[-–—]\s+',
                          labelled_destination.group(1), maxsplit=1, flags=re.I)[0].strip(" ,")
+        named = _strip_destination_time_words(named)
         if named and not re.fullmatch(r'(?:my|the|an?)\s+(?:office|workplace)', named, re.I) \
                 and not re.fullmatch(r'(?:all|home|work|the moment|present|least|most|times?)',
                                      named, re.I):

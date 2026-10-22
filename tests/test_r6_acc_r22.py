@@ -126,3 +126,49 @@ def test_a_period_table_with_periods_as_columns(row, ok):
     draft = case["drafts"][1]
     assert ROW in draft
     assert (row in validate_commute_response(draft.replace(ROW, row), state)) is ok
+
+
+# ── r22 c9faf055: a question the ledger does not answer keeps its answer ────────
+
+class _NoTools:
+    def list_specs(self):
+        return []
+
+
+CACHE_LINE = "房源来自缓存，价格和出租状态可能已变化；请联系中介核实。"
+
+
+def _format(state, answer, message=None, **extra):
+    state = dict(state, final_response=answer, **extra)
+    if message is not None:
+        state["extracted_context"] = dict(state["extracted_context"], current_message=message)
+    return build_fc_nodes(_NoTools())["format_output_fc"](state)["final_response"]
+
+
+def test_the_grounded_answer_leads_and_the_ledger_follows():
+    case, state, _evidence, _message = _ctx("r22_c9faf055")
+    draft = case["drafts"][-1]
+    out = _format(state, draft)
+    assert out.startswith(draft.strip())
+    assert "满足全部已声明条件" in out[len(draft.strip()):]
+    assert out.count(CACHE_LINE) == 1
+
+
+@pytest.mark.parametrize("message", [
+    "Find me a 1-bed in Hackney under £2,000. Are these still available?",
+    "Find me a 1-bed in Hackney under £2,000 and compare them.",
+    "帮我在Hackney找一个一居室，预算每月2000英镑，这几套哪个更好？",
+])
+def test_other_questions_the_ledger_cannot_answer(message):
+    case, state, _evidence, _message = _ctx("r22_c9faf055")
+    draft = case["drafts"][-1]
+    assert _format(state, draft, message).startswith(draft.strip())
+
+
+def test_a_plain_search_or_an_ungrounded_answer_keeps_the_ledger_alone():
+    case, state, _evidence, _message = _ctx("r22_c9faf055")
+    draft = case["drafts"][-1]
+    plain = _format(state, draft, "帮我在Hackney找一个一居室，预算每月2000英镑")
+    assert plain.startswith("满足全部已声明条件") and plain.count(CACHE_LINE) == 1
+    ungrounded = _format(state, draft, verdict={"grounded": False, "issues": ["unsupported_prices"]})
+    assert ungrounded.startswith("满足全部已声明条件") and ungrounded.count(CACHE_LINE) == 1

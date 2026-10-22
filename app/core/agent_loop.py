@@ -5605,6 +5605,18 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
     _COST_QUESTION = re.compile(
         r"\bdeposit\b|\bup-?front\b|\bmove[- ]in\b|\bfirst month(?:['’]s)?\b|\bholding fee\b|押金|首月|入住费用",
         re.I)
+    # Questions the candidate ledger does not answer: whether the listings can still be had,
+    # what moving in costs, how they compare (r22 c9faf055: "这些房源现在还能租吗？" got the
+    # ledger instead of the grounded, honest answer).
+    _LEDGER_UNANSWERED = re.compile(
+        r"\bstill\s+(?:available|free|on\s+the\s+market|to\s+let|for\s+rent|up)\b|"
+        r"\b(?:is|are)\s+(?:it|this|that|they|these|those|any)\s+(?:\w+\s+){0,2}?(?:available|free|let)\b|"
+        r"\bcan\s+(?:i|we)\s+(?:still\s+)?(?:rent|get|book|view|have|move\s+in)\b|\bavailability\b|"
+        r"\bcompare\b|\bcomparison\b|\bversus\b|\bvs\.?(?=\s)|\bdifference\s+between\b|"
+        r"\bwhich\s+(?:one|of\s+(?:them|these|those)|is|would)\b[^.?!]{0,40}\b(?:better|best|cheaper|cheapest|"
+        r"closer|bigger|nicer|quieter|safer)\b|"
+        r"还能租|仍可租|还可以租|能租吗|还在租|还在出租|是否可租|是否还|还有吗|比较|对比|哪个更|哪套更|有什么区别",
+        re.I)
 
     def format_output_fc_node(state: AgentState) -> dict:
         artifacts = list(state.get("tool_artifacts") or [])
@@ -5780,6 +5792,14 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     and search_found.get('status') != 'no_results'
                     and _COST_QUESTION.search(_cm) and _COST_QUESTION.search(str(final_response))):
                 composite_answer = True
+            # ... and so is any other question the ledger cannot answer, when the critic graded
+            # the model's answer grounded this turn: the answer leads, the ledger follows. A
+            # plain search turn keeps the ledger alone.
+            if (not composite_answer and requires_status and str(final_response or '').strip()
+                    and search_found.get('status') != 'no_results'
+                    and (state.get('verdict') or {}).get('grounded') is True
+                    and _LEDGER_UNANSWERED.search(_cm)):
+                composite_answer = True
             if composite_answer:
                 response = f"{str(final_response).strip()}\n\n{response}"
             if search_found.get('source_message') and search_found['source_message'] not in response:
@@ -5787,6 +5807,11 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             if (requires_status or len(artifacts) > 1) and not composite_answer:
                 from core.candidate_validation import render_structured_evidence_fallback
                 evidence = render_structured_evidence_fallback(state, language=language)
+                # A line the ledger already ends with ("房源来自缓存，价格和出租状态可能已变化；
+                # 请联系中介核实。") is not repeated (r22 c9faf055).
+                shown = {line.strip() for line in response.split('\n') if line.strip()}
+                evidence = '\n'.join(line for line in str(evidence or '').split('\n')
+                                      if not line.strip() or line.strip() not in shown).strip()
                 if evidence:
                     response = response + '\n\n' + evidence
             response_type = "search"

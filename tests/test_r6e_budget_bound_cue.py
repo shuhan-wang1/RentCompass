@@ -54,3 +54,26 @@ def test_fc_search_args_carry_the_users_ceiling():
     asyncio.run(build_fc_nodes(provider)["execute_tools"](state))
     (_name, params), = provider.calls
     assert params["max_budget"] == 2000 and params["area"] == "Hackney"
+
+
+PRIOR = "Find me a 1-bed in Hackney under £2,000."
+
+
+@pytest.mark.parametrize("message", [
+    "What's the rent on a £1,950 flat with a 6-week deposit?",
+    "How much is the deposit on a £2,000 flat?",
+    "What would the first month's rent and deposit be on a £1,800/month flat?",
+])
+def test_a_price_quoted_for_arithmetic_neither_sets_nor_changes_the_budget(message):
+    assert _extract_budget(message) == (None, None)
+    assert "max_budget" not in _apply_explicit_criteria_updates({}, message)
+    before = _apply_explicit_criteria_updates({}, PRIOR)
+    assert _apply_explicit_criteria_updates(dict(before), message)["max_budget"] == 2000
+
+
+@pytest.mark.parametrize("message, budget", [
+    ("Find me a £1,800 flat in Camden", 1800),                          # a search's price point
+    ("What's the rent on a £1,950 flat? My budget is £2,100.", 2100),  # an explicit budget cue
+])
+def test_a_quoted_price_with_a_search_or_budget_cue_still_counts(message, budget):
+    assert _apply_explicit_criteria_updates({}, message)["max_budget"] == budget

@@ -588,6 +588,17 @@ _PLACE_PRICE_AFTER = re.compile(
     r'listing|bedsit|maisonette|1-bed|2-bed|one-bed|two-bed)\b')
 
 
+_SEARCH_CUE = re.compile(r'\b(?:find|search\w*|show\s+me|look(?:ing)?\s+for|get\s+me|any)\b')
+
+
+def _in_a_question_without_search_cue(t: str, match) -> bool:
+    """True when the amount sits in a question sentence that asks for no search."""
+    start = max(t.rfind(ch, 0, match.start()) for ch in '.!?;\n') + 1
+    ends = [i for i in (t.find(ch, match.end()) for ch in '.!?;\n') if i != -1]
+    end = min(ends) if ends else len(t)
+    return t[end:end + 1] in ('?', '？') and not _SEARCH_CUE.search(t[start:end])
+
+
 def _prices_a_place(t: str, match) -> bool:
     """True when the amount at ``match`` is the price of a place ("a £1,950/month flat")."""
     return bool(_PLACE_PRICE_BEFORE.search(t[max(0, match.start() - 12):match.start()])
@@ -644,6 +655,10 @@ def _extract_budget(text: str):
         # searched at £1,950 (r21 63fb6f8a): a price the user quotes for an example
         # flat is not their ceiling when the message also states one.
         rent_amounts = [m for m in rent_amounts if not _prices_a_place(t, m)]
+    # "What's the rent on a £1,950 flat with a 6-week deposit?" quotes a price for
+    # arithmetic; only a search cue in the same question makes it the search's price.
+    rent_amounts = [m for m in rent_amounts
+                    if not (_prices_a_place(t, m) and _in_a_question_without_search_cue(t, m))]
     if rent_amounts:
         m = rent_amounts[-1]
         return valid_amount(_money_value(m.group(1)), _budget_period_near(t, m.start(), m.end()))

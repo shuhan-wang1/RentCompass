@@ -78,6 +78,7 @@ _COUNT_UNITS = ("journey", "trip", "way", "time", "leg")
 
 _WORD_HOURS = re.compile(
     r"\b(one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:and\s+an?\s+(half|quarter)\s+)?hours?\b", re.I)
+WORD_HOURS = _WORD_HOURS            # "four hours", "two and a half hours", for the redactor
 _HOUR_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
                "nine": 9, "ten": 10}
 
@@ -773,6 +774,31 @@ def margin_side(text: str, start: int, end: int, sentence: str, caps_known: bool
     return None
 
 
+# A bound right before a figure, hedged or plain: "just under an hour", "nearly 4 hours", "a
+# bit over 50 minutes", "close to four hours", "under an hour", "over 50 minutes".
+_HEDGED_BOUND = re.compile(
+    r"\b(?:(?P<below>just\s+(?:under|below|short\s+of)|(?:a\s+(?:little|bit)|slightly)\s+(?:under|below|less\s+than)|"
+    r"nearly|almost|not\s+quite)|(?P<above>just\s+(?:over|above)|(?:a\s+(?:little|bit)|slightly)\s+(?:over|above|more\s+than))|"
+    r"(?P<near>close\s+to|approaching)|"
+    r"(?P<le>under|below|less\s+than|fewer\s+than|within|no\s+more\s+than|at\s+most|up\s+to)|"
+    r"(?P<ge>over|above|more\s+than|at\s+least|beyond))\s+$", re.I)
+
+
+def _bound_holds(bound, value: float, total: float) -> bool:
+    """The derived ``total`` satisfies the hedged bound on ``value``: just under / nearly — at
+    most ``value`` and within 15% below it; just over — at least it and within 15% above; close
+    to — within 10% either side."""
+    if bound.group("below"):
+        return value * 0.85 - 1e-9 <= total <= value + 1e-9
+    if bound.group("above"):
+        return value - 1e-9 <= total <= value * 1.15 + 1e-9
+    if bound.group("le"):
+        return total <= value + 1e-9
+    if bound.group("ge"):
+        return total >= value - 1e-9
+    return abs(total - value) <= 0.10 * value + 1e-9
+
+
 _BOUND_BEFORE = re.compile(
     r"\b(?:under|below|within|inside|less\s+than|fewer\s+than|over|above|more\s+than|at\s+least|"
     r"at\s+most|up\s+to|no\s+more\s+than|beyond)\s+(?:just\s+|about\s+|roughly\s+|around\s+|a\s+)?$", re.I)
@@ -1382,6 +1408,20 @@ def _check_figures(text: str, *, sentence: str, line: str = "", label: str = "",
             # still holds.
             if figure_unit(rest, start, end, "") is None and _period_owned_elsewhere(sentence or rest, unit, value):
                 unit = None
+        near = _HEDGED_BOUND.search(rest[max(0, start - 30):start])
+        if near and unit in ("day", "week", "month", "year") and diffs and (fixed or len(diffs) == 1):
+            # A hedged bound is a bound on the derived total, not a hedged figure: "just under an
+            # hour a week" for 9 x 2 x 3 = 54 holds (it is not 60 ± 10%), and for 75 it does not
+            # (r22 4a7fe20c).
+            clause = _clause_of(rest, start, end)
+            totals = [d * f for d in diffs
+                      for f in period_factors(unit, figure_days(clause, sentence, user_days, answer_days),
+                                              one_way=bool(_ONE_WAY.search(rest[end:end + 40])),
+                                              four_weeks=True)]
+            if any(_bound_holds(near, value, total) for total in totals):
+                seen = True
+                continue
+            return False, True
         if unit in ("month", "year"):
             # A monthly total is the weekly one x 52/12 (x 4 framed as four weeks); a yearly one
             # x 52 or the month x 12, to the precision written ("about 3.5 hours", r17 8c35fd5b).

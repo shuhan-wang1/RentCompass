@@ -196,3 +196,52 @@ def test_an_enumeration_with_its_own_predicate_stays():
             "Hoxton, Bethnal Green, Whitechapel or Clerkenwell often give more options.")
     text = draft.replace(claim, kept)
     assert validate_commute_response(text, state) == text
+
+
+# ── r22 4a7fe20c first draft: bounds on a period total, and the week it is for ────
+
+SAVING = ("So Stratford saves you roughly 9 minutes each way, 18 minutes on a commuting day, just under an "
+          "hour a week, and close to four hours a month at three office days a week.")
+
+
+def test_the_first_draft_is_grounded_and_kept():
+    case, state, evidence, message = _ctx("r22_4a7fe20c")
+    draft = case["drafts"][1]
+    assert SAVING in draft
+    assert not unsupported_external_numbers(draft, evidence, message)
+    assert validate_commute_response(draft, state) == draft
+
+
+@pytest.mark.parametrize("bound,ok", [
+    ("just under an hour a week", True),        # 9 x 2 x 3 = 54
+    ("nearly an hour a week", True),
+    ("a bit over 50 minutes a week", True),
+    ("under an hour a week", True),
+    ("over 50 minutes a week", True),
+    ("just under half an hour a week", False),
+    ("just over an hour a week", False),
+    ("just under an hour and a quarter a week", False),   # 75: no hedge stretches to it
+    ("under 50 minutes a week", False),
+    ("nearly an hour and a half a week", False),
+])
+def test_a_bound_on_a_period_total_is_checked_against_the_total(bound, ok):
+    case, state, evidence, message = _ctx("r22_4a7fe20c")
+    text = case["drafts"][1].replace("just under an hour a week", bound)
+    assert unsupported_external_numbers(text, evidence, message) is (not ok)
+    assert (bound in validate_commute_response(text, state)) is ok
+
+
+@pytest.mark.parametrize("sentence,ok", [
+    ("and close to four hours a month at three office days a week.", True),
+    ("and close to four hours a month.", True),
+    ("and nearly four hours a month at three office days a week.", True),
+    ("and close to six hours a month at three office days a week.", False),
+    ("and close to six hours a month.", False),
+    ("and nearly three hours a month at three office days a week.", False),
+])
+def test_the_trailing_days_define_the_week(sentence, ok):
+    case, state, evidence, message = _ctx("r22_4a7fe20c")
+    claim = "So Stratford saves you roughly 9 minutes each way, " + sentence
+    text = case["drafts"][1].replace(SAVING, claim)
+    assert unsupported_external_numbers(text, evidence, message) is (not ok)
+    assert (claim in validate_commute_response(text, state)) is ok

@@ -1369,7 +1369,7 @@ def _asserts_commute(fragment: str) -> bool:
 def _period_total(text: str) -> bool:
     """A journey-time total stated in hours or words, or one per day/week."""
     text = str(text or "")
-    return bool(_HOURS_AND_MINUTES.search(text) or (
+    return bool(_HOURS_AND_MINUTES.search(text) or _arithmetic.WORD_HOURS.search(text) or (
         (_DAY_PERIOD.search(text) or _WEEK_PERIOD.search(text)) and _durations_in(text)))
 
 
@@ -2341,11 +2341,20 @@ def _zh_minutes(value: str, unit: str) -> float:
     return number * 60 if "时" in unit else number
 
 
+_PERIOD_AFTER_BOUND = re.compile(
+    r"\s*(?:(?:a|per|each|every|in\s+a|over\s+a)\s+(?:working\s+|office\s+|commuting\s+)?(?:day|week|month|year)\b"
+    r"|(?:daily|weekly|monthly|yearly)\b)", re.I)
+
+
 def _duration_bounds(fragment: str) -> list[tuple[str, float, tuple[int, int]]]:
     """``[(op, minutes, span)]`` for each journey-time bound ``fragment`` asserts."""
     text = str(fragment or "")
     bounds = []
     for match in _DURATION_BOUND.finditer(text):
+        if _PERIOD_AFTER_BOUND.match(text, match.end()):
+            # "just under an hour a week" bounds a weekly TOTAL, not the journey: the shared
+            # rule checks it against the derived total (r22 4a7fe20c), never a one-way time.
+            continue
         op = next(name for name, _words in _BOUND_OPERATORS if match.group(name))
         minutes = _duration_minutes(match.group("duration"))
         if minutes is not None:
@@ -2577,9 +2586,10 @@ def _arithmetic_evidenced(fragment: str, *, context: str, previous_clause: str, 
     if len(measured) < 2:
         return False
     text = str(fragment or "")
-    if not (_arithmetic.MINUTES.search(text) or _HOURS_AND_MINUTES.search(text)
-            or _arithmetic.JOURNEY_COUNT.search(text) or _arithmetic.products(text)
-            or any(phrase in text.lower() for phrase, _v in _arithmetic.DURATION_WORDS)):
+    # Any duration the shared rule reads, "four hours" in words too (r22 4a7fe20c: "and close
+    # to four hours a month at three office days a week" went as no arithmetic at all).
+    if not (_arithmetic.figure_spans(text) or _arithmetic.JOURNEY_COUNT.search(text)
+            or _arithmetic.products(text)):
         return False
     label = line[:80].split(":", 1)[0] if ":" in line[:80] else ""
     scope = f"{label} {previous_clause} {context} {text}"
@@ -2593,7 +2603,16 @@ def _arithmetic_evidenced(fragment: str, *, context: str, previous_clause: str, 
                                 tuple(sorted(set(days) | set(user_days) | {5.0})))
            for variant in _arithmetic.route_variants(routes)):
         return False      # consistency: a wrong base takes the line's totals with it
-    plain = _OVER_A_PERIOD.sub(" ", _ROUTE_COMPARATIVE.sub(" ", _SUPERLATIVE.sub(" ", text)))
+    # A bound on a period total ("just under an hour a week", "over 50 minutes a week") is the
+    # shared rule's: it is checked against the derived total there, as the critic checks it
+    # (r22 4a7fe20c), so its bound word is no fit verdict here.
+    unbounded = text
+    for start, end, _value in _arithmetic.figure_spans(text):
+        bound = _arithmetic._HEDGED_BOUND.search(text[max(0, start - 30):start])
+        if bound and _PERIOD_AFTER_BOUND.match(text, end):
+            at = max(0, start - 30) + bound.start()
+            unbounded = unbounded[:at] + " " * (start - at) + unbounded[start:]
+    plain = _OVER_A_PERIOD.sub(" ", _ROUTE_COMPARATIVE.sub(" ", _SUPERLATIVE.sub(" ", unbounded)))
     plain = re.sub(r"\b(?:over|than|versus|vs\.?|against)\s+(?:[A-Z][\w'’-]*\s*){1,3}", " ", plain)
     if caps:
         # A margin's own direction word is checked by the margin rule: "25 − 19 = 6 minutes

@@ -1863,6 +1863,11 @@ def _extract_area(text: str) -> str | None:
         # A workplace / school named in the same clause is a destination, not a home
         # area: "我在金丝雀码头上班，想在伦敦找房" must not search Canary Wharf.
         suffix = re.split(r'[。！？!?;；\n，,:：]', text[end:])[0][:10]
+        # The city word that opens an institution's name is not a home area: "从第一个到
+        # 伦敦大学学院要多久?" (UCL) switched a King's Cross search to all of London (R1-04).
+        # A verb or 的 before 大学 ("在伦敦读大学", "伦敦的大学") keeps the city.
+        if re.match(r'(?:(?![读上念考去在的找住租和与])[一-鿿]){0,6}?(?:大学|学院|医院)', suffix):
+            return True
         return bool(re.match(r'\s*(?:附近)?(?:找(?=工作|实习))?(?:上班|工作|实习|上学|读书|上课|办公|通勤)', suffix)
                     or re.search(r'(?:通勤|上班|上学)(?:到|去)\s*$', prefix))
 

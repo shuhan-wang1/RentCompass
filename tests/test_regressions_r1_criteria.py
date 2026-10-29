@@ -118,3 +118,31 @@ def test_budget_removal_instruction_clears_the_ceiling(message):
 ])
 def test_questions_about_the_budget_keep_it(message):
     assert _apply_explicit_criteria_updates(dict(WITH_BUDGET), message)["max_budget"] == 2000
+
+
+# R1-04 ── a city word inside an institution's name does not switch the home area ─────
+GATED_KX = {"area": "King's Cross", "areas": ["King's Cross"], "max_budget": 2300, "bedrooms": 1,
+            "constraint_sources": {
+                "area": {"source": "user_message", "value": "King's Cross", "text": "国王十字附近的一居室"},
+                "areas": {"source": "user_message", "value": ["King's Cross"], "text": "国王十字附近的一居室"}}}
+
+
+@pytest.mark.parametrize("message", [
+    "从第一个到伦敦大学学院要多久?",
+    "从第一个到伦敦国王学院要多久？",
+    "去伦敦政治经济学院通勤多久",
+])
+def test_institution_named_after_the_city_keeps_the_gated_area(message):
+    from core.tools.search_properties import _extract_area, _extract_areas, ground_hard_constraints
+    assert _extract_area(message) is None and _extract_areas(message) == []
+    acc = _apply_explicit_criteria_updates(dict(GATED_KX), message)
+    assert acc["area"] == "King's Cross" and acc["areas"] == ["King's Cross"]
+    # A model that read "伦敦" as the area is put back on the stated one.
+    params, _ = ground_hard_constraints({"area": "London", "areas": ["London"]}, acc, message)
+    assert params["area"] == "King's Cross" and params["areas"] == ["King's Cross"]
+
+
+@pytest.mark.parametrize("message", ["我在伦敦读大学，想在伦敦找房", "帮我在伦敦找一居室"])
+def test_a_plain_city_switch_still_applies(message):
+    from core.tools.search_properties import _extract_area
+    assert _extract_area(message) == "London"

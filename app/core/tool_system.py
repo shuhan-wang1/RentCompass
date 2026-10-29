@@ -473,6 +473,8 @@ class Tool:
         terminal: bool = False,
         input_model: Optional[type[BaseModel]] = None,
         output_model: Optional[type[BaseModel]] = None,
+        replay_projection: Optional[Callable[[Any], Any]] = None,
+        replay_rehydrate: Optional[Callable[[Any, dict], Any]] = None,
     ):
         """
         参数说明：
@@ -499,6 +501,10 @@ class Tool:
         self.retry_safe = (side_effect == "none") if retry_safe is None else retry_safe
         self.cacheable = cacheable
         self.terminal = terminal
+        # What the idempotency store keeps of a write result, and how a replay rebuilds the
+        # rest: a remembered text in tool_invocations outlived /api/forget_me (R2-04).
+        self.replay_projection = replay_projection
+        self.replay_rehydrate = replay_rehydrate
         
         # 验证参数格式
         self._validate_parameters()
@@ -594,15 +600,19 @@ class Tool:
                         idempotency_key=idempotency_key,
                         outcome="conflict",
                     )
+                replayed = previous.result
+                if self.replay_rehydrate is not None and previous.status in ("complete", "failed"):
+                    replayed = self.replay_rehydrate(replayed, kwargs)
                 if previous.status == "complete":
                     return ToolResult(
-                        True, data=previous.result, tool_name=self.name,
+                        not (isinstance(replayed, dict) and replayed.get("success") is False),
+                        data=replayed, tool_name=self.name,
                         version=self.version, idempotency_key=idempotency_key,
                         outcome="replayed",
                     )
                 if previous.status == "failed":
                     return ToolResult(
-                        False, data=previous.result,
+                        False, data=replayed,
                         error=previous.error or "logical invocation previously failed",
                         tool_name=self.name, version=self.version,
                         idempotency_key=idempotency_key, outcome="failed",
@@ -706,13 +716,15 @@ class Tool:
                     continue
                 if logical_success and output_model is not None:
                     result = output_model.model_validate(result).model_dump()
+                persisted = (self.replay_projection(result) if self.replay_projection is not None
+                             else result)
                 if logical_success and claimed:
-                    idempotency_store.complete(idempotency_key, result)
+                    idempotency_store.complete(idempotency_key, persisted)
                 elif not logical_success and claimed:
                     idempotency_store.fail(
                         idempotency_key,
                         result.get("error", "write returned an unsuccessful result"),
-                        result,
+                        persisted,
                     )
                 return ToolResult(
                     success=logical_success,

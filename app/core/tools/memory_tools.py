@@ -170,6 +170,36 @@ recall_memory_tool = Tool(
     max_retries=1,
 )
 
+_REPLAY_KEPT_FIELDS = ("success", "id", "mtype", "security_decision", "error")
+
+
+def _remember_replay_projection(result):
+    """What the idempotency store keeps of a remember result: never the saved text, which no
+    user erasure reaches there (R2-04). A replay reads the text back from memory instead."""
+    if not isinstance(result, dict):
+        return result
+    return {key: result[key] for key in _REPLAY_KEPT_FIELDS if key in result}
+
+
+def _remember_replay_rehydrate(result, params):
+    """A replayed save shows the text memory still holds, or that it has since been erased."""
+    if not isinstance(result, dict) or "stored" in result:
+        return result
+    if not result.get("success") or not result.get("id"):
+        return dict(result, stored=None)
+    user_id = (params or {}).get("user_id")
+    docs = []
+    if user_id:
+        try:
+            docs = _mem().col.get(ids=[result["id"]], where={"user_id": user_id}).get("documents") or []
+        except Exception as exc:
+            print(f"[memory] remember replay lookup failed; error_type={type(exc).__name__}")
+    if docs:
+        return dict(result, stored=docs[0])
+    return {"success": False, "id": None, "stored": None, "mtype": None,
+            "error": "That fact was saved earlier but has since been deleted, so nothing is stored."}
+
+
 remember_tool = Tool(
     name="remember",
     description=(
@@ -195,4 +225,6 @@ remember_tool = Tool(
     side_effect="write",
     retry_safe=False,
     cacheable=False,
+    replay_projection=_remember_replay_projection,
+    replay_rehydrate=_remember_replay_rehydrate,
 )

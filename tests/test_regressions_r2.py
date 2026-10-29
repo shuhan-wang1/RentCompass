@@ -146,3 +146,39 @@ def test_r2_03_acknowledgement_is_fixed_and_honest_about_a_partial_erasure():
     assert memory_gate.acknowledge_memory_erasure("OK.", {"fields": (), "complete": True}, "en") == "OK."
     once = memory_gate.acknowledge_memory_erasure("OK.", done, "en")
     assert memory_gate.acknowledge_memory_erasure(once, done, "en") == once
+
+
+# R2-04 ── the idempotency store never keeps a remembered text ───────────────────────
+def test_r2_04_a_remember_result_in_the_idempotency_store_carries_no_saved_text(tmp_path, monkeypatch):
+    import asyncio
+    import importlib
+    import sqlite3
+    from core.tools import memory_tools
+    from uk_rent_agent.tools.idempotency import IdempotencyStore
+    am_mod = importlib.import_module("rag.agent_memory")
+    monkeypatch.setattr(am_mod, "call_ollama", lambda *a, **k: "5")
+    memory = am_mod.AgentMemory(db_path=str(tmp_path / "mem"))
+    monkeypatch.setattr(memory_tools, "_mem", lambda: memory)
+    store = IdempotencyStore(tmp_path / "idempotency.sqlite3")
+    monkeypatch.setattr(memory_tools, "memory_write_rejection", lambda *a, **k: None, raising=False)
+    user = "u-r204-" + _user()
+
+    def run():
+        return asyncio.run(memory_tools.remember_tool.execute(
+            content="I have a cat named Biscuit", user_id=user, idempotency_key="k-r204",
+            _idempotency_store=store))
+
+    first = run()
+    assert first.success and first.data["stored"] == "I have a cat named Biscuit"
+    with sqlite3.connect(tmp_path / "idempotency.sqlite3") as db:
+        rows = db.execute("SELECT result, COALESCE(error, '') FROM tool_invocations").fetchall()
+    assert rows and not any("Biscuit" in result + error for result, error in rows)
+    # A replay reads the text back from memory ...
+    replay = run()
+    assert replay.success and replay.outcome == "replayed"
+    assert replay.data["stored"] == "I have a cat named Biscuit"
+    # ... and after an erasure it says nothing is stored instead of quoting it.
+    memory.col.delete(ids=[first.data["id"]])
+    gone = run()
+    assert gone.success is False and gone.data["stored"] is None
+    assert "deleted" in gone.data["error"]

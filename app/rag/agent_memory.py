@@ -1083,8 +1083,31 @@ def strip_health_reason(text: str) -> str | None:
         return None
 
 
+# "close to 7 Sample Street, Hackney E8 1AA" stayed in the conversation's soft preferences and
+# was sent with every search (R2-16): a preference keeps the area and postcode district, never
+# the house number and street.
+_PREFERENCE_STREET_RE = re.compile(
+    r"(?:(?:flat|apartment|apt|unit|room)\s*\d+[a-z]?\s*,?\s*)?\b\d{1,4}[a-z]?(?:\s*-\s*\d{1,4})?"
+    # "2 bed near Victoria Park" is a size, not a house number.
+    r"(?!\s*(?:-\s*)?(?:bed|beds|bedrooms?|br|minutes?|mins?|miles?|km|people|persons?|days?|"
+    r"weeks?|months?|years?|floors?|storeys?|stops?|zones?)\b)"
+    r"\s*,?\s+(?:[a-z][\w'’-]*\s+){0,3}?" + _STREET_WORD_RE + r"\b\.?\s*,?\s*", re.I)
+
+
+def strip_street_address(text: str) -> str:
+    """``text`` without a house number and street, a full postcode cut to its district."""
+    value = str(text or "")
+    if not _PREFERENCE_STREET_RE.search(value):
+        return value
+    value = _PREFERENCE_STREET_RE.sub("", value)
+    value = _FULL_POSTCODE_RE.sub(lambda m: m.group(1).upper(), value)
+    value = re.sub(r"\s{2,}", " ", re.sub(r"\s+,", ",", value)).strip(" ,")
+    return re.sub(r"\s+(?:at|in|on|near|to|by|from|of)$", "", value, flags=re.I).strip(" ,")
+
+
 def sanitize_soft_preferences(values) -> list:
-    """Each stored soft preference with any health reason removed (order kept, empties gone)."""
+    """Each stored soft preference with any health reason and street address removed (order
+    kept, empties gone)."""
     if isinstance(values, str):
         values = [values]
     out: list = []
@@ -1092,7 +1115,7 @@ def sanitize_soft_preferences(values) -> list:
         if not isinstance(item, str):
             out.append(item)
             continue
-        cleaned = strip_health_reason(item)
+        cleaned = strip_street_address(strip_health_reason(item))
         if cleaned and cleaned not in out:
             out.append(cleaned)
     return out

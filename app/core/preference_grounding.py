@@ -308,8 +308,12 @@ def apply_preference_policy(params: dict) -> tuple[dict, bool]:
     prefs = p.get("accumulated_preferences")
     if not prefs:
         return p, dropped
-    kept, features = split_sensitive_preferences(prefs)
+    # A street address never rides along in a soft preference (R2-16).
+    from rag.agent_memory import strip_street_address
     original = [prefs] if isinstance(prefs, str) else list(prefs)
+    prefs = [strip_street_address(v) if isinstance(v, str) else v for v in original]
+    prefs = [v for v in prefs if not isinstance(v, str) or v.strip()]
+    kept, features = split_sensitive_preferences(prefs)
     changed = kept != original or dropped
     if kept:
         p["accumulated_preferences"] = kept

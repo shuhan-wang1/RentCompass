@@ -463,3 +463,24 @@ def test_r2_13_an_instruction_shaped_fact_is_dropped_and_ordinary_turns_still_lo
     semantic = _layer(memory, user, "semantic")
     assert "Prefers a quiet street" in semantic
     assert not any("verified" in doc for doc in semantic)
+
+
+# R2-16 ── a soft preference keeps the area and district, not the street ─────────────
+@pytest.mark.parametrize("text,expected", [
+    ("close to 7 Sample Street, Hackney E8 1AA", "close to Hackney E8"),
+    ("near Flat 3, 12 Example Road, Islington N1 2AB", "near Islington N1"),
+    ("near my office at 30 Sample Lane", "near my office"),
+    ("2 bed near Victoria Park", "2 bed near Victoria Park"),
+    ("close to Mare Street", "close to Mare Street"),
+])
+def test_r2_16_street_address_is_stripped_from_a_preference(text, expected):
+    from rag.agent_memory import strip_street_address
+    assert strip_street_address(text) == expected
+
+
+def test_r2_16_stored_and_searched_preferences_carry_no_street():
+    from core.preference_grounding import apply_preference_policy, stored_soft_preferences
+    pref = "close to 7 Sample Street, Hackney E8 1AA"
+    assert stored_soft_preferences([pref, "quiet"]) == ["close to Hackney E8", "quiet"]
+    params, changed = apply_preference_policy({"accumulated_preferences": [pref]})
+    assert changed and params["accumulated_preferences"] == ["close to Hackney E8"]

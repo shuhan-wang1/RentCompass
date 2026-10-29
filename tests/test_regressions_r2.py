@@ -220,3 +220,27 @@ def test_r2_06_a_wrong_borough_claim_is_still_corrected():
     from core.tools.search_properties import reconcile_area_label
     assert reconcile_area_label("Rugby House 6 Great Ormond Street, Islington WC1N") == \
         "Rugby House 6 Great Ormond Street, Camden WC1N"
+
+
+# R2-07 ── a widened ceiling runs a new search instead of re-sorting the shown set ───
+_SHOWN = [{"address": "1 Sample Road, Clapham SW4", "area": "Clapham", "price": "£2,400/month"},
+          {"address": "2 Sample Road, Clapham SW4", "area": "Clapham", "price": "£2,100/month"},
+          {"address": "3 Sample Road, Clapham SW4", "area": "Clapham", "price": "£2,450/month"}]
+
+
+@pytest.mark.parametrize("message", [
+    "Go back to the original £3,000 budget and show me again, sorted cheapest first",
+    "Make the budget £3,000 and sort cheapest first",
+    "Up to £3000 please, sorted cheapest first",
+    "预算改回3000镑，按价格从低到高排序",
+])
+def test_r2_07_a_wider_ceiling_is_not_a_refinement(message):
+    from core.refine_results import plan_refinement
+    assert plan_refinement(message, _SHOWN) is None
+
+
+def test_r2_07_a_narrower_ceiling_or_a_plain_sort_still_refines():
+    from core.refine_results import plan_refinement
+    spec, kept = plan_refinement("Only ones under £2,300, cheapest first", _SHOWN)
+    assert [r["price"] for r in kept] == ["£2,100/month"]
+    assert plan_refinement("sort by price", _SHOWN) is not None

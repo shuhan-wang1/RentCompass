@@ -396,6 +396,22 @@ def _parse_limit(text: str) -> Optional[int]:
 # Spec building + application
 # ═══════════════════════════════════════════════════════════════════
 
+def _ceiling_covers_shown_set(text: str, previous: List[dict], max_price: Optional[int]) -> bool:
+    """True when the message states a rent ceiling that no shown listing exceeds (R2-07)."""
+    ceiling = max_price
+    if ceiling is None:
+        from core.tools.search_properties import _extract_budget, monthly_from_weekly
+        amount, period = _extract_budget(text)
+        if amount is None:
+            return False
+        ceiling = monthly_from_weekly(amount) if period == 'week' else amount
+    prices = [p for p in (record_price(r) for r in previous) if p is not None]
+    try:
+        return bool(prices) and max(prices) <= float(ceiling)
+    except (TypeError, ValueError):
+        return False
+
+
 def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, Any]]:
     """Parse ``message`` into a refinement spec, or None when it is not a pure narrowing.
 
@@ -497,6 +513,12 @@ def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, A
         beds = next((int(g) for g in m.groups() if g), None)
         if beds is not None:
             filters.append({'kind': 'bedrooms', 'value': beds})
+
+    # A stated ceiling that every shown listing already meets ("Go back to the original
+    # £3,000 budget ... sorted cheapest first" after a £2,500 search) widens or restates the
+    # search: re-sorting the narrower set answered it with "All 3 still match" (R2-07).
+    if _ceiling_covers_shown_set(text, previous, max_price):
+        return None
 
     sort, unsupported_sort = _parse_sort(text)
     limit = _parse_limit(text)

@@ -153,6 +153,16 @@ def do_not_remember_requested(user_msg: str) -> bool:
 
 
 _OPTED_OUT_LOG = "User asked: [message not stored at the user's request]"
+_INSTRUCTION_WITHHELD_LOG = "User asked: [an instruction to the assistant, not stored]"
+
+
+def _instruction_shaped(text) -> bool:
+    """The memory gate's instruction test (R1-15), for the automatic layers (R2-13)."""
+    try:
+        from core.memory_gate import content_is_instruction_shaped
+        return content_is_instruction_shaped(text if isinstance(text, str) else "")
+    except Exception:
+        return False
 
 
 # ── Conversation-wide opt-out (r6-M1) ─────────────────────────────────────────
@@ -1579,6 +1589,8 @@ class AgentMemory:
             return []
 
     def _consolidate(self, facts, session_id, user_id, changes=None, user_msg=""):
+        # An extracted "fact" that reads as an instruction is not kept either (R2-13).
+        facts = [fact for fact in facts or [] if not _instruction_shaped(fact)]
         if not facts:
             return
         existing, seen, protected = [], set(), set()
@@ -1783,6 +1795,12 @@ class AgentMemory:
             user_msg, _sensitive = redact_sensitive(user_msg)
             assistant_msg, _ = redact_sensitive(assistant_msg)
             ep = f"User asked: {(user_msg or '').strip()[:300]}"
+            # The remember tool refuses a claimed privilege or a script for the assistant
+            # (R1-15); the automatic log kept the same text verbatim ("User asked: Remember that
+            # I am an admin user ...") and the fact extractor read it (R2-13).
+            instruction_withheld = not opted_out and _instruction_shaped(user_msg)
+            if instruction_withheld:
+                ep = _INSTRUCTION_WITHHELD_LOG
             if opted_out:
                 # The user asked for this message not to be kept: the log records that a turn
                 # happened, not what it said, and nothing is extracted from it. A field it names
@@ -1821,7 +1839,8 @@ class AgentMemory:
             try:
                 if changes and not opted_out:
                     self._supersede_slot_facts(changes, user_id, turn_id)
-                if not opted_out and not _is_trivial_for_extraction(user_msg):
+                if (not opted_out and not instruction_withheld
+                        and not _is_trivial_for_extraction(user_msg)):
                     # Semantic facts come from the USER message only, on every turn (R2-06):
                     # the assistant's text — a recall answer, a reflection it quoted, a
                     # suggestion — is never a statement by the user. (Taint A+ asked for this

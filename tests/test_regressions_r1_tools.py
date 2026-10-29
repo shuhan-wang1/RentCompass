@@ -259,3 +259,19 @@ def test_found_summary_quotes_the_true_median():
     rows = [{"price": p} for p in (2500, 2600, 2750, 2900)]
     text = _found_summary(rows, 4, 0, 3000, None, "Hackney")
     assert "median ~£2675" in text.replace(",", "")
+
+
+# R1-16 ── an empty or blank X-Request-Id is an absent one ───────────────────────────
+@pytest.mark.parametrize("header", ["", " ", "\t", "   \n"])
+def test_blank_request_id_gets_a_fresh_id_each_time(header):
+    import hashlib
+    from uk_rent_agent.observability import new_request_id
+    first, second = new_request_id(header), new_request_id(header)
+    assert first != second
+    assert hashlib.sha256(header.encode()).hexdigest()[:32] not in (first, second)
+
+
+def test_a_malformed_request_id_still_maps_deterministically():
+    from uk_rent_agent.observability import new_request_id
+    assert new_request_id("Root=1-abc/def") == new_request_id("Root=1-abc/def")
+    assert new_request_id("req-0001") == "req-0001"

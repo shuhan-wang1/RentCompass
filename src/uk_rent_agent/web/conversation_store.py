@@ -232,6 +232,11 @@ class ConversationNotFound(ForkError):
     """Source conversation does not exist for this user."""
 
 
+# The assistant text a turn cancelled by a client disconnect is finalised with. Such a turn
+# delivered nothing, so a retry with the same X-Request-Id runs it again (R1-11).
+CANCELLED_TURN_TEXTS = ("Request cancelled.", "请求已取消。")
+
+
 class IdempotencyKeyReused(ForkError):
     """The idempotency key already names a branch of a DIFFERENT source or kind.
 
@@ -528,6 +533,17 @@ class ConversationStore:
                     self._conn.rollback()
                 except sqlite3.Error:
                     pass
+
+    def _never_delivered(self, user_id: str, turn) -> bool:
+        """True for a failed turn that produced no answer: interrupted (no assistant message)
+        or cancelled by a client disconnect (R1-11). Caller holds the lock."""
+        if turn["assistant_message_id"] is None:
+            return True
+        row = self._conn.execute(
+            "SELECT content, response_type FROM messages WHERE user_id=? AND id=?",
+            (user_id, turn["assistant_message_id"])).fetchone()
+        return bool(row is not None and row["response_type"] == "error"
+                    and (row["content"] or "").strip() in CANCELLED_TURN_TEXTS)
 
     def _lease_blocks(self, lease, now: str) -> bool:
         """True while ``lease`` belongs to a turn that can still be running somewhere."""
@@ -994,10 +1010,21 @@ class ConversationStore:
                                 "SELECT * FROM turns WHERE user_id=? AND id=?",
                                 (user_id, replay["id"]),
                             ).fetchone()
-                    self._conn.commit()
-                    out = self._turn_dict(replay)
-                    out["replayed"] = True
-                    return out
+                    if replay["status"] == "failed" and self._never_delivered(user_id, replay):
+                        # A cancelled or interrupted turn delivered no answer: replaying it made
+                        # every retry of the same X-Request-Id return 502 "Request cancelled." /
+                        # "...please send it again" forever (R1-11). The id is released and the
+                        # message runs again as a new turn; a completed turn still replays.
+                        self._conn.execute(
+                            "DELETE FROM turn_requests WHERE user_id=? AND request_id=?",
+                            (user_id, request_id))
+                        cid = cid or replay["conversation_id"]
+                        replay = None
+                    else:
+                        self._conn.commit()
+                        out = self._turn_dict(replay)
+                        out["replayed"] = True
+                        return out
 
                 if cid:
                     exists = self._conn.execute(

@@ -35,7 +35,7 @@ from uk_rent_agent.web.background_jobs import OutboxWorker
 from uk_rent_agent.web.conversation_store import (
     ConversationStore, ConversationNotFound, NoCompletedTurn, TurnNotFound,
     TurnNotInConversation, TurnNotCompleted, ConversationBusy,
-    PrivacyErasureInProgress, IdempotencyKeyReused,
+    PrivacyErasureInProgress, IdempotencyKeyReused, CANCELLED_TURN_TEXTS,
 )
 from uk_rent_agent.web.identity import (
     resolve_user_id, normalize_message, valid_user_id, InvalidUserId, InvalidMessage,
@@ -2194,8 +2194,11 @@ async def api_alex():
         try:
             conversation_store.finalize_request_turn(
                 user_id, turn_id, status="failed", response_type="error",
-                assistant_content=("请求已取消。" if _resolve_reply_language(user_message, ui_language) == "zh"
-                                   else "Request cancelled."),
+                # One of CANCELLED_TURN_TEXTS: a retry with the same request id re-runs a
+                # cancelled turn instead of replaying this text (R1-11).
+                assistant_content=(CANCELLED_TURN_TEXTS[1]
+                                   if _resolve_reply_language(user_message, ui_language) == "zh"
+                                   else CANCELLED_TURN_TEXTS[0]),
                 recommendations=[], snapshot=None, background_jobs=[],
             )
         except Exception as exc:

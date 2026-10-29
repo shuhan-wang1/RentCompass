@@ -184,3 +184,59 @@ def test_a_geocoder_answer_outside_london_is_not_accepted(weather_offline, monke
     monkeypatch.setattr(maps, "geocode_address", lambda *a, **k: {"lat": 53.48, "lng": -2.24})
     result = weather.get_weather_impl("Nowhere Street, London")
     assert result["success"] is False and result["error_code"] == "location_unresolved"
+
+
+# R1-11 ── a cancelled or interrupted request id runs again on retry ─────────────────
+def _conv_store(tmp_path, monkeypatch, owner="this-process"):
+    from uk_rent_agent.web import conversation_store as cs
+    monkeypatch.setattr(cs, "_PROCESS_OWNER_ID", owner)
+    return cs.ConversationStore(tmp_path / "c.sqlite3")
+
+
+@pytest.mark.parametrize("cancel_text", ["Request cancelled.", "请求已取消。"])
+def test_a_cancelled_turn_is_rerun_by_a_retry_with_the_same_id(tmp_path, monkeypatch, cancel_text):
+    store = _conv_store(tmp_path, monkeypatch)
+    cid = store.create_conversation("u_sse", "sse")["id"]
+    first = store.start_request_turn("u_sse", cid, "sse-disc-1", "weather in Bow?")
+    store.finalize_request_turn("u_sse", first["id"], status="failed", response_type="error",
+                                assistant_content=cancel_text)
+    retry = store.start_request_turn("u_sse", cid, "sse-disc-1", "weather in Bow?")
+    assert retry["replayed"] is False and retry["status"] == "running"
+    assert retry["id"] != first["id"] and retry["conversation_id"] == cid
+    store.finalize_request_turn("u_sse", retry["id"], status="completed", assistant_content="Mild.",
+                                snapshot={})
+    # Once an answer was delivered, the same id replays it.
+    replay = store.start_request_turn("u_sse", cid, "sse-disc-1", "weather in Bow?")
+    assert replay["replayed"] is True and replay["id"] == retry["id"]
+    assert store.get_turn_response("u_sse", retry["id"])["message"] == "Mild."
+    store.close()
+
+
+def test_a_delivered_error_still_replays(tmp_path, monkeypatch):
+    store = _conv_store(tmp_path, monkeypatch)
+    cid = store.create_conversation("u_err", "err")["id"]
+    first = store.start_request_turn("u_err", cid, "err-1", "find a flat")
+    store.finalize_request_turn("u_err", first["id"], status="failed", response_type="error",
+                                assistant_content="The search service is unavailable right now.")
+    replay = store.start_request_turn("u_err", cid, "err-1", "find a flat")
+    assert replay["replayed"] is True and replay["status"] == "failed"
+    store.close()
+
+
+def test_a_retry_without_a_conversation_id_reruns_in_the_original_conversation(tmp_path, monkeypatch):
+    store = _conv_store(tmp_path, monkeypatch)
+    first = store.start_request_turn("u_new", None, "new-1", "hello", create_title="hello")
+    store.finalize_request_turn("u_new", first["id"], status="failed", response_type="error",
+                                assistant_content="Request cancelled.")
+    retry = store.start_request_turn("u_new", None, "new-1", "hello", create_title="hello")
+    assert retry["replayed"] is False and retry["conversation_id"] == first["conversation_id"]
+    store.close()
+
+
+def test_the_cancel_path_writes_a_text_the_store_recognises():
+    import inspect
+    import app as app_module
+    from uk_rent_agent.web.conversation_store import CANCELLED_TURN_TEXTS
+    source = inspect.getsource(app_module)
+    assert "CANCELLED_TURN_TEXTS[0]" in source and "CANCELLED_TURN_TEXTS[1]" in source
+    assert CANCELLED_TURN_TEXTS == ("Request cancelled.", "请求已取消。")

@@ -1018,6 +1018,34 @@ def _withhold_personal_save_requests(text: str) -> str:
     return _SAVE_REQUEST_CLAUSE.sub(withhold, text)
 
 
+# "Please remember that my name is Priya" became "she prefers ..." and a name read as male
+# became "he ..." in the extracted facts and reflections (R3-20): a first name says nothing
+# about how the user refers to themselves. A gendered pronoun in a fact about the user is
+# replaced by "the user"; a fact about someone else ("my sister ... she") is left alone, as
+# is any pronoun the user used in their own words.
+_GENDERED = re.compile(r"\b(?:she|he|her|him|his|hers|herself|himself)\b", re.I)
+_OTHER_PERSON = re.compile(
+    r"\b(?:partner|wife|husband|spouse|son|daughter|child|kids?|friend|mother|mum|mom|father|"
+    r"dad|parents?|brother|sister|colleague|flatmate|roommate|housemate|girlfriend|boyfriend|"
+    r"landlord|landlady|agent|boss|manager|neighbou?r)\b", re.I)
+_PRONOUN_SWAP = (
+    (re.compile(r"\b(?:herself|himself)\b", re.I), "themselves"),
+    (re.compile(r"\b(?:his|hers)\b", re.I), "the user's"),
+    (re.compile(r"\bher(?=\s+[a-z])", re.I), "the user's"),
+    (re.compile(r"\b(?:she|he|her|him)\b", re.I), "the user"),
+)
+
+
+def neutral_user_pronouns(text: str, user_words: str = "") -> str:
+    value = str(text or "")
+    if not _GENDERED.search(value) or _OTHER_PERSON.search(value) or _GENDERED.search(str(user_words or "")):
+        return value
+    for pattern, replacement in _PRONOUN_SWAP:
+        value = pattern.sub(replacement, value)
+    value = re.sub(r"(^|[.!?]\s+)the user", lambda m: m.group(1) + "The user", value)
+    return value
+
+
 def redact_sensitive(text: str) -> tuple[str, list[str]]:
     """``text`` with income, immigration, health and contact details removed.
 
@@ -1153,9 +1181,20 @@ def sanitize_soft_preferences(values) -> list:
             out.append(item)
             continue
         cleaned = strip_street_address(strip_health_reason(item))
+        if cleaned and _DISMISSED_PREFERENCE.search(cleaned):
+            continue      # "garden not needed" is not a preference (K-06)
         if cleaned and cleaned not in out:
             out.append(cleaned)
     return out
+
+
+# "A garden doesn't matter, but I need a balcony." stored the literal "garden not needed" as
+# a soft preference, in the criteria and the search arguments (K-06). A dismissed item is
+# the absence of a preference.
+_DISMISSED_PREFERENCE = re.compile(
+    # "nice but not essential" / "optional" are still (soft) preferences and stay.
+    r"\b(?:not\s+(?:needed|required|necessary)|(?:doesn.t|does\s+not)\s+matter|"
+    r"(?:don.t|do\s+not)\s+care|no\s+need|unnecessary|irrelevant)\b|不需要|无所谓|不必", re.I)
 
 
 # A reflection is an INFERENCE about the person, not something they said. "Needs a lift ->
@@ -1627,7 +1666,8 @@ class AgentMemory:
             "(budget, destination/university, commute limit, must-have amenities, areas to avoid, "
             "who they live with, etc.), worded as close to the user's words as possible. Never add "
             "a reason, priority or rationale the user did not say (no 'to live close to work', "
-            "no 'dealbreaker', no 'key requirement'). Do NOT include greetings, questions, or "
+            "no 'dealbreaker', no 'key requirement'). Refer to the user as 'the user'; never infer "
+            "gender from a name and never use he/she/his/her for the user. Do NOT include greetings, questions, or "
             'chit-chat. If the user stated nothing durable, return {"facts": []}.\n\n'
             + (_resolved_criteria_block(changes) if changes else "")
             + f"User: {user_msg}\n\nJSON: "
@@ -1641,7 +1681,7 @@ class AgentMemory:
             for fact in facts:
                 if not isinstance(fact, str) or not fact.strip() or contains_sensitive(fact):
                     continue
-                cleaned = strip_unstated_rationale(fact, user_msg)
+                cleaned = neutral_user_pronouns(strip_unstated_rationale(fact, user_msg), user_msg)
                 if cleaned:
                     out.append(cleaned)
             return out[:8]
@@ -2005,7 +2045,8 @@ class AgentMemory:
                 "must, firm, strict, essential, hard constraint or top priority, and never call a "
                 "stated limit flexible, negotiable or stretchable, unless the user used that word "
                 "themselves. Never write that the user said, stated, insisted on or asked for "
-                "something. Keep every number exactly as the user gave it, and never combine an "
+                "something. Refer to the user as 'the user' and never infer gender from a name "
+                "(no he/she/his/her). Keep every number exactly as the user gave it, and never combine an "
                 'older value with a newer one. Return STRICT JSON: {"insights": ["..."]}.\n\n'
                 f"{corpus}\n\nJSON: "
             )
@@ -2017,7 +2058,8 @@ class AgentMemory:
                     if reflection_rejection(ins, user_words):
                         rejected += 1
                         continue
-                    self.add(ins.strip(), "reflection", session_id, user_id, importance=8)
+                    self.add(neutral_user_pronouns(ins.strip(), user_words), "reflection",
+                             session_id, user_id, importance=8)
             if rejected:
                 print(f"[memory] reflect rejected_wording={rejected}")
         except Exception as e:

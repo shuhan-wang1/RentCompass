@@ -309,10 +309,12 @@ def apply_preference_policy(params: dict) -> tuple[dict, bool]:
     if not prefs:
         return p, dropped
     # A street address never rides along in a soft preference (R2-16).
-    from rag.agent_memory import strip_street_address
+    from rag.agent_memory import _DISMISSED_PREFERENCE, strip_street_address
     original = [prefs] if isinstance(prefs, str) else list(prefs)
     prefs = [strip_street_address(v) if isinstance(v, str) else v for v in original]
-    prefs = [v for v in prefs if not isinstance(v, str) or v.strip()]
+    # Nor does a dismissed item ("garden not needed", K-06).
+    prefs = [v for v in prefs if not isinstance(v, str)
+             or (v.strip() and not _DISMISSED_PREFERENCE.search(v))]
     kept, features = split_sensitive_preferences(prefs)
     changed = kept != original or dropped
     if kept:

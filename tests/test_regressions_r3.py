@@ -483,3 +483,34 @@ def test_r3_19_an_unknown_place_is_not_a_source_outage():
     assert "覆盖范围" in zh and "暂时不可用" not in zh
     known = source_failure_summary({"Hackney": failed})
     assert "temporarily unavailable" in known["source_message"]
+
+
+# R3-20 ── memory never infers the user's gender from a name ─────────────────────────
+@pytest.mark.parametrize("text,expected", [
+    ("She prefers quiet streets.", "The user prefers quiet streets."),
+    ("He works at King's Cross and his budget is £1,700.",
+     "The user works at King's Cross and the user's budget is £1,700."),
+    ("Her budget is £1,700 a month.", "The user's budget is £1,700 a month."),
+])
+def test_r3_20_a_gendered_pronoun_for_the_user_is_neutral(text, expected):
+    from rag.agent_memory import neutral_user_pronouns
+    assert neutral_user_pronouns(text, "Please remember that my name is Sam.") == expected
+
+
+def test_r3_20_another_persons_pronoun_and_the_users_own_words_are_kept():
+    from rag.agent_memory import neutral_user_pronouns
+    assert neutral_user_pronouns("The user's sister says she likes Camden.") == \
+        "The user's sister says she likes Camden."
+    assert neutral_user_pronouns("She prefers quiet streets.", "I'm a woman, she/her please.") == \
+        "She prefers quiet streets."
+
+
+# K-06 ── a dismissed item is not stored or searched as a preference ─────────────────
+def test_k_06_a_dismissed_preference_is_dropped():
+    from core.preference_grounding import apply_preference_policy, stored_soft_preferences
+    assert stored_soft_preferences(["garden not needed", "balcony", "花园无所谓", "no ground floor"]) == \
+        ["balcony", "no ground floor"]
+    params, changed = apply_preference_policy({"accumulated_preferences": ["garden not needed", "balcony"]})
+    assert params["accumulated_preferences"] == ["balcony"] and changed
+    params, _ = apply_preference_policy({"accumulated_preferences": ["garden not needed"]})
+    assert "accumulated_preferences" not in params

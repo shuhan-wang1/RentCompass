@@ -2073,6 +2073,20 @@ _BUDGET_CLEAR_PATTERNS = (
     r"\b(?:budget|price|rent)\b[^.!?]*\bno\s+(?:maximum|max|upper\s+limit|ceiling)\b(?!\s+(?:commute|travel))",
 )
 
+# "Forget everything about the budget." kept max_budget 2000 and the next search still
+# filtered on it (R1-03): the phrase list above only knew "forget (about) the budget". A
+# removal verb, an optional "everything/all about", then the budget itself. Read per
+# sentence, and a question about the budget ("Should I drop my budget?", "what if I removed
+# the budget?") is a consultation, not an instruction.
+_BUDGET_REMOVAL_INSTRUCTION = re.compile(
+    r"\b(?:forget|drop|remove|ignore|scrap|ditch|cancel|clear|delete|disregard|lose|"
+    r"get\s+rid\s+of|never\s*mind)\s+(?:about\s+)?"
+    r"(?:(?:everything|all|anything)\s+(?:about|regarding|re|on)\s+)?"
+    r"(?:the\s+|my\s+|any\s+|that\s+|this\s+)?(?:(?:max(?:imum)?|rent|monthly|price)\s+)?"
+    r"(?:budget|price\s+(?:limit|cap|ceiling)|rent\s+(?:limit|cap|ceiling)|spending\s+limit)\b")
+_BUDGET_REMOVAL_QUESTION = re.compile(
+    r"^\s*(?:should|would|what|why|how|is|are|does|do|if|whether|shall)\b|\bwhat\s+if\b|\bif\s+i\b")
+
 
 def _extract_budget_clear(text: str) -> bool:
     """True when the user asks to REMOVE/CLEAR any budget limit ("no budget",
@@ -2084,7 +2098,13 @@ def _extract_budget_clear(text: str) -> bool:
     t = text.lower()
     if any(p in t for p in _BUDGET_CLEAR_PHRASES):
         return True
-    return any(re.search(p, t) for p in _BUDGET_CLEAR_PATTERNS)
+    if any(re.search(p, t) for p in _BUDGET_CLEAR_PATTERNS):
+        return True
+    for sentence in re.split(r"(?<=[.!?;])\s+|\n", t):
+        if _BUDGET_REMOVAL_INSTRUCTION.search(sentence) and not (
+                sentence.rstrip().endswith("?") and _BUDGET_REMOVAL_QUESTION.search(sentence)):
+            return True
+    return False
 
 
 # Hard filters a model is NOT allowed to originate. Each maps to the deterministic

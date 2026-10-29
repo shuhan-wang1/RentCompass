@@ -85,3 +85,36 @@ def test_a_later_search_cannot_echo_a_retracted_feature_back():
     params, _ = ground_hard_constraints({"area": "Bethnal Green", "property_features": ["cats allowed"]},
                                         acc, "Search again with my current requirements.")
     assert not params.get("property_features")
+
+
+# R1-03 ── a budget removal instruction clears max_budget ─────────────────────────────
+WITH_BUDGET = {"area": "Hackney", "max_budget": 2000, "budget_period": "month", "bedrooms": 2}
+
+
+@pytest.mark.parametrize("message", [
+    "Forget everything about the budget.",
+    "Forget all about the budget.",
+    "Get rid of the budget.",
+    "Remove my rent limit.",
+    "Scrap the max budget.",
+    "Can you forget the budget please?",
+    "Clear the budget and search again.",
+])
+def test_budget_removal_instruction_clears_the_ceiling(message):
+    from core.tools.search_properties import ground_hard_constraints
+    acc = _apply_explicit_criteria_updates(dict(WITH_BUDGET), message)
+    assert acc.get("max_budget") is None
+    # The next search cannot be handed the old ceiling by the model either.
+    params, _ = ground_hard_constraints({"area": "Hackney", "max_budget": 2000}, acc, "Search again.")
+    assert "max_budget" not in params
+
+
+@pytest.mark.parametrize("message", [
+    "Should I drop my budget?",
+    "What if I removed the budget?",
+    "What is my budget?",
+    "Is the budget too low?",
+    "Keep the budget at £2,000.",
+])
+def test_questions_about_the_budget_keep_it(message):
+    assert _apply_explicit_criteria_updates(dict(WITH_BUDGET), message)["max_budget"] == 2000

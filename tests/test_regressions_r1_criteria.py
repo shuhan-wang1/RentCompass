@@ -146,3 +146,30 @@ def test_institution_named_after_the_city_keeps_the_gated_area(message):
 def test_a_plain_city_switch_still_applies(message):
     from core.tools.search_properties import _extract_area
     assert _extract_area(message) == "London"
+
+
+# R1-13 ── minutes to an amenity are not a commute limit ──────────────────────────────
+@pytest.mark.parametrize("message", [
+    "Please remember that I need to be within 10 minutes' walk of a supermarket, and that I "
+    "prefer quiet streets.",
+    "I want to be 5 minutes from a park.",
+    "Within a 10-minute walk of the station please.",
+    "10 minutes to Tesco would be great.",
+    "离超市步行10分钟以内。",
+])
+def test_minutes_to_an_amenity_do_not_set_max_travel_time(message):
+    from core.tools.search_properties import _extract_commute_minutes
+    assert _extract_commute_minutes(message) is None
+    assert _apply_explicit_criteria_updates({"area": "Camden"}, message).get("max_travel_time") is None
+
+
+@pytest.mark.parametrize("message, minutes", [
+    ("10 min walk to the tube please, and a commute under 40 minutes to Bank", 40),
+    ("Commute under 30 minutes.", 30),
+    ("I work at Bank, max 45 minutes.", 45),
+    ("通勤35分钟以内。", 35),
+    ("A 15 minute walk to work is ideal.", 15),
+])
+def test_a_commute_limit_beside_an_amenity_still_counts(message, minutes):
+    from core.tools.search_properties import _extract_commute_minutes
+    assert _extract_commute_minutes(message) == minutes

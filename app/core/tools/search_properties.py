@@ -775,6 +775,27 @@ def _budget_period_near(text: str, lo: int, hi: int) -> str:
     return 'week' if _nearest(_WEEKLY_MARKER) < _nearest(_MONTHLY_MARKER) else 'month'
 
 
+_AMENITY_WORDS = (
+    r"supermarkets?|grocer(?:y|ies)|groceries|shops?|shopping|high\s+street|gyms?|parks?|"
+    r"green\s+space|stations?|tube|underground|overground|bus\s+stops?|schools?|nursery|"
+    r"gp|doctors?|surgery|pharmacy|chemist|cafes?|restaurants?|pubs?|library|tesco|"
+    r"sainsbury'?s|waitrose|lidl|aldi|co-?op|m&s|market|playground|pool|leisure\s+centre")
+_AMENITY_AFTER_MINUTES = re.compile(
+    r"^['’]?s?\s*(?:(?:on\s+)?(?:walk(?:ing)?|stroll|drive|driving|cycle|cycling|bike|ride)\s+)?"
+    r"(?:distance\s+)?(?:of|to|from|away\s+from|for)\s+"
+    r"(?:(?:a|an|the|my|some|any|good|big|local|nearest|nearby|decent|large)\s+){0,3}"
+    r"(?:" + _AMENITY_WORDS + r")\b", re.I)
+_AMENITY_BEFORE_MINUTES = re.compile(
+    r"(?:超市|商店|健身房|公园|车站|地铁站?|公交站|学校|医院|药店|菜市场)"
+    r"[^，,。.;；]{0,6}?(?:步行|走路|骑车|开车)?\s*(?:约|大约|不超过|以内)?\s*$")
+
+
+def _minutes_bound_to_amenity(text: str, match) -> bool:
+    """True when the minute figure at ``match`` measures a distance to an amenity (R1-13)."""
+    return bool(_AMENITY_AFTER_MINUTES.match(text[match.end():match.end() + 80])
+                or _AMENITY_BEFORE_MINUTES.search(text[max(0, match.start() - 16):match.start()]))
+
+
 def _extract_commute_minutes(text: str):
     """Pull an explicit commute-time limit (in minutes) out of the current message.
     Returns int minutes or None. Handles '40 min', 'within 30 minutes', '35分钟',
@@ -788,11 +809,13 @@ def _extract_commute_minutes(text: str):
         return 30
     if re.search(r'\b(?:an?|1)\s+hour\b', t):
         return 60
-    m = re.search(
+    # The first minute figure that is not a distance to an AMENITY: "within 10 minutes' walk
+    # of a supermarket" set max_travel_time 10 and the reply reported a 10-minute commute
+    # limit (R1-13). A walk to a shop, gym, park or station is a nearby-amenity wish.
+    m = next((match for match in re.finditer(
         r'(?<![a-z0-9])(\d{1,3})\s*(?:-)?\s*'
         r'(?:(?:min|mins|minute|minutes)(?![a-z])|(?:分钟|分鐘))',
-        t,
-    )
+        t) if not _minutes_bound_to_amenity(t, match)), None)
     if not m:
         m = re.search(
             r'(?<![a-z0-9])(\d{1,3})\s*(?:hours?(?![a-z])|小时|小時)',

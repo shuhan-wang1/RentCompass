@@ -618,6 +618,9 @@ def _extract_budget(text: str):
     from core.constraint_updates import without_conditional_stretch
     t = without_conditional_stretch(scoped_update_text(text)).lower()
     t = re.sub(r'(?<=\d),(?=\d{3}\b)', '', t)
+    # "budget -500" became a £500 ceiling and was quoted back as the user's budget (R3-16):
+    # a negative amount is no budget at all. A range's dash ("£1500-2000") follows a digit.
+    t = re.sub(r'(?<![\w£.])-£?\d[\d.]*|£\s*-\s*\d[\d.]*|\bminus\s+£?\s*\d[\d.]*', ' ', t)
     t = _mask_years(t)
     if (re.search(r'not\s+(?:yet\s+)?(?:chosen|decided)|haven.t (?:yet )?chosen|尚未(?:选择|决定)|还没选|未确定', t, re.I)
             and re.search(r'\bor\b|还是|或者', t, re.I)
@@ -1530,13 +1533,16 @@ def _drop_city_qualifier(areas: list[str], phrase: str) -> list[str]:
 _AREA_ADD_BEFORE = re.compile(
     r"(?:\badd(?:ing)?|\balso\s+(?:include|search|look|check|cover|consider|show)(?:\s+(?:in|at|around))?"
     r"|\b(?:please|can you|could you)\s+(?:also\s+)?include|\bas\s+well\s+as|\bplus"
-    r"|(?:加上|添加|增加|加入|也看看?|也搜(?:索|一下)?|也找(?:找)?|再加(?:上)?))\s*(?:in\s+)?$", re.I)
-_AREA_ADD_AFTER = re.compile(r"\s*(?:(?:as\s+well|too)\b|也?(?:加上|加进来?|加入|添加|算上))", re.I)
+    # 「再看看Islington，Camden也保留」 keeps both (R3-13).
+    r"|(?:加上|添加|增加|加入|也看看?|再看看|也搜(?:索|一下)?|也找(?:找)?|再加(?:上)?))\s*(?:in\s+)?$", re.I)
+_AREA_ADD_AFTER = re.compile(r"\s*(?:(?:as\s+well|too)\b|也?(?:加上|加进来?|加入|添加|算上|保留|留着))", re.I)
 _AREA_INCLUDE_BEFORE = re.compile(r"\binclude\s+$", re.I)
 _AREA_INCLUDE_AFTER = re.compile(r"\s*(?:too|as\s+well|in\s+(?:the|my)\s+search)\b", re.I)
 _AREA_REMOVE_BEFORE = re.compile(
     r"(?:\b(?:remove|drop|exclude|delete|skip|forget(?:\s+about)?|take(?:\s+out)?|cross\s+off|no\s+more"
-    r"|no\s+longer\s+(?:want|consider|search(?:\s+in)?)|without|not)"
+    r"|no\s+longer\s+(?:want|consider|search(?:\s+in)?)|without|not"
+    # "Also check Angel instead of Camden" replaces Camden (R3-13).
+    r"|instead\s+of|rather\s+than)"
     r"|(?:去掉|删除|删掉|移除|排除|不要|不看|不考虑|不再考虑|取消))\s*(?:the\s+)?$", re.I)
 _AREA_REMOVE_AFTER = re.compile(
     r"\s*(?:(?:out|off)\b(?!\s+of\s+(?:the\s+)?(?:question|budget))|from\s+(?:the|my)\s+(?:search|list|areas?)\b"
@@ -1595,7 +1601,7 @@ def area_list_edit(text: str, current: list | None) -> list[str] | None:
         names.setdefault(re.sub(r"[’']", '', area.lower()), area)
     alternatives = '|'.join(re.escape(n) for n in sorted(names, key=len, reverse=True))
     place = re.compile(rf"(?<![a-z])(?:{alternatives})(?![a-z])", re.I)
-    adds, removes, only = [], [], []
+    adds, removes, only, replaced = [], [], [], []
     for clause_match in re.finditer(r"[^.;!?\n。；！？]+", source):
         clause = clause_match.group()
         if is_hypothetical(clause) or re.search(r"\b(?:don.t|do not|never|shouldn.t)\s+(?:\w+\s+){0,2}"
@@ -1614,6 +1620,8 @@ def area_list_edit(text: str, current: list | None) -> list[str] | None:
             after = clause[found.end():found.end() + 40]
             if _AREA_REMOVE_BEFORE.search(before, pos) or _AREA_REMOVE_AFTER.match(after):
                 removes.append(canonical)
+                if re.search(r"(?:instead\s+of|rather\s+than)\s*(?:the\s+)?$", before, re.I):
+                    replaced.append(canonical)
             elif _AREA_ONLY_BEFORE.search(before, pos) or _AREA_ONLY_AFTER.match(after):
                 only.append(canonical)
             elif (_AREA_ADD_BEFORE.search(before, pos) or _AREA_ADD_AFTER.match(after)
@@ -1629,6 +1637,10 @@ def area_list_edit(text: str, current: list | None) -> list[str] | None:
     def _key(value):
         return re.sub(r"[’']", '', value.lower())
 
+    if replaced and not (adds or only):
+        # "Search Angel instead of Camden" is a switch for the caller's own logic, not a
+        # removal that leaves no area.
+        removes = [area for area in removes if area not in replaced]
     # With no standing list, a removal alone edits nothing ("在Camden找，不要伦敦其他地方"
     # negates the wider city on a first turn; it must not read as "no area").
     if not (adds or only or (removes and current)):

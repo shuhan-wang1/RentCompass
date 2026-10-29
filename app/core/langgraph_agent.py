@@ -1203,7 +1203,14 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
             result['no_commute'] = False
             changed = True
     elif _extract_no_commute(current_message):
-        if not result.get('no_commute'):
+        from core.constraint_updates import commute_withdrawal_drops_destination, lifts_only_commute_limit
+        # "Forget the commute limit" / "Remove the commute time limit but keep King's Cross as
+        # destination" lift the LIMIT only: the user still commutes to the stored destination,
+        # which keeps its per-listing travel times (R3-11). With no destination stored the
+        # commute question is settled as before.
+        limit_only = bool(lifts_only_commute_limit(current_message)
+                          and result.get('commute_destination'))
+        if not result.get('no_commute') and not limit_only:
             result['no_commute'] = True
             changed = True
         if result.get('max_travel_time') is not None:
@@ -1211,7 +1218,6 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
             changed = True
         # Nothing is left to commute to: "Never mind about commute." kept King's Cross in
         # view_state for the rest of the conversation (NEW-4). Lifting only the LIMIT keeps it.
-        from core.constraint_updates import commute_withdrawal_drops_destination
         previous_destination = result.get('commute_destination')
         if commute_withdrawal_drops_destination(current_message) and previous_destination:
             result['commute_destination'] = None
@@ -1822,10 +1828,57 @@ def _make_extract_preferences_node():
         new_accumulated = retract_previous_requirement(
             new_accumulated, current_msg, str(last_turn.get("user") or ""))
         new_accumulated = resolve_previous_area(new_accumulated, current_msg, history)
+        new_accumulated = undo_last_change(accumulated, new_accumulated, current_msg)
         if new_accumulated is not accumulated:
             update["accumulated_search_criteria"] = new_accumulated
         return update
     return extract_preferences_node
+
+
+# "No wait, ignore that last change, go back to Hackney and the previous budget" and "Undo
+# that last change" restored the area but kept the new budget (R3-12). The state node keeps
+# the values one change replaced, so an undo restores all of them and "the previous budget"
+# restores the ceiling.
+_LAST_CHANGE_FIELDS = ("area", "areas", "max_budget", "bedrooms", "bedrooms_minimum", "room_type",
+                       "commute_destination", "destination", "max_travel_time", "no_commute")
+_UNDO_LAST_CHANGE = re.compile(
+    r"\b(?:undo|revert|reverse|cancel|ignore|scrap|disregard|forget|drop)\s+(?:that|the|my|this)\s+"
+    r"(?:last|latest|previous|recent|most\s+recent)\s+(?:change|edit|update)s?\b|"
+    r"\bundo\s+(?:that|it|this)\b|撤销(?:上一次|上次|刚才)?的?(?:修改|更改|改动)|"
+    r"(?:取消|不要)(?:上一次|上次|刚才)的?(?:修改|更改|改动)", re.I)
+_PREVIOUS_BUDGET = re.compile(
+    r"\b(?:the|my)\s+(?:previous|earlier|old|prior|last)\s+budget\b|\bbudget\s+i\s+had\s+before\b|"
+    r"(?:之前|原来|上一次|上次)的预算", re.I)
+
+
+def undo_last_change(before: dict, after: dict, message: str) -> dict:
+    """``after`` with this turn's undo applied, and the replaced values recorded."""
+    text = str(message or "")
+    last = (before or {}).get("_last_change")
+    undo = _UNDO_LAST_CHANGE.search(text)
+    previous_budget = _PREVIOUS_BUDGET.search(text)
+    if (undo or previous_budget) and isinstance(last, dict) and isinstance(last.get("before"), dict):
+        saved = last["before"]
+        fields = [f for f in _LAST_CHANGE_FIELDS if f in saved] if undo else ["max_budget"]
+        result = dict(after)
+        sources = dict(result.get("constraint_sources") or {})
+        for field in fields:
+            if field in ("area", "areas") and result.get(field) != (before or {}).get(field):
+                continue      # an area this message names ("go back to Hackney") wins
+            result[field] = saved.get(field)
+            # Its own source label: the restored value is not parsed from this text, so the
+            # load-time source repair must not re-derive it from the words (criteria_recovery).
+            sources[field] = {"source": "user_undo", "value": saved.get(field), "text": text[:800]}
+        result["constraint_sources"] = sources
+        result["_last_change"] = None
+        logger.info("criteria.last_change_undone fields=%s", ",".join(fields))
+        return result
+    changed = [f for f in _LAST_CHANGE_FIELDS if (after or {}).get(f) != (before or {}).get(f)]
+    if not changed or after is before:
+        return after
+    result = dict(after)
+    result["_last_change"] = {"before": {f: (before or {}).get(f) for f in _LAST_CHANGE_FIELDS}}
+    return result
 
 
 _RECALL_KWS = [

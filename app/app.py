@@ -3528,7 +3528,8 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
 
     # 原始当前消息（不含记忆/历史前缀）——供工具做"仅基于本条消息"的解析
     # (预算/通勤正则、postcode/序数解析)，避免误抓注入记忆里的旧值。
-    extracted_context['current_message'] = user_message
+    from core.constraint_updates import fold_fullwidth_ascii
+    extracted_context['current_message'] = fold_fullwidth_ascii(user_message)
     # 会话历史（SessionStore shape: [{"user":.., "assistant":..}, ...]）——无条件写入
     # extracted_context。legacy 字符串装配路径（assemble_context 上面已单独喂过 history）
     # 忽略该键；fc_loop 的 assemble_messages 用它构造 user/assistant 消息对，否则 fc 模型

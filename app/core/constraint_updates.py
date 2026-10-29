@@ -152,6 +152,19 @@ def _replacement_after_withdrawal(match) -> str:
     return ', '.join(kept) + (end or '.') + ' '
 
 
+# Full-width digits, Latin letters and the full-width pound sign ("１-bed", "￡２０００") read as
+# nothing to every parser, so an English message silently lost its bedrooms and budget
+# (R3-17). Only those forms are folded; CJK punctuation stays as the zh patterns expect it.
+_FULLWIDTH_ASCII = {code: code - 0xFEE0 for code in (*range(0xFF10, 0xFF1A), *range(0xFF21, 0xFF3B),
+                                                   *range(0xFF41, 0xFF5B))}
+_FULLWIDTH_ASCII.update({0xFFE1: ord('£'), 0xFF04: ord('$'), 0xFF0D: ord('-'), 0x3000: ord(' ')})
+
+
+def fold_fullwidth_ascii(text) -> str:
+    """``text`` with full-width digits, Latin letters, ￡ and the ideographic space folded."""
+    return str(text or '').translate(_FULLWIDTH_ASCII)
+
+
 def scoped_update_text(text: str) -> str:
     text = str(text or '')
     text = without_third_party_clauses(text)
@@ -834,6 +847,17 @@ def commute_withdrawal_drops_destination(text: str) -> bool:
         r'\bcommut\w*\s+(?:times?|durations?|limits?|filters?|caps?|max(?:imum)?|thresholds?)\b'
         r'|\btime\s+limit\b'
         r'|通勤(?:时间|时长)|时间限制|不限制通勤', str(text or ''), re.I)
+
+
+def lifts_only_commute_limit(text: str) -> bool:
+    """True when the message lifts the commute TIME LIMIT and does not say the user stops
+    commuting: "Forget the commute limit", "取消通勤时间限制" (R3-11)."""
+    value = str(text or '')
+    if re.search(r"\b(?:don.t|do\s+not|won.t|never|no\s+longer)\s+(?:need\s+to\s+)?commute\b|"
+                 r"\bno\s+commut\w*\s+(?:needed|required|at\s+all)\b|\bwork(?:ing)?\s+from\s+home\b|"
+                 r"\bwfh\b|\bremote(?:ly)?\b|不(?:需要|用)?通勤|在家(?:办公|工作)", value, re.I):
+        return False
+    return not commute_withdrawal_drops_destination(value)
 
 
 def withdrawn_by_user(accumulated: dict, field: str) -> bool:

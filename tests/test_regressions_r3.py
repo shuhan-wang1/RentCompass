@@ -331,3 +331,115 @@ def test_r3_09_no_automatic_layer_keeps_the_pending_details(tmp_path, monkeypatc
     assert "quiet streets" in blob
     for leaked in ("Sam Example", "07700", "Sample Road", "N1", "landlord"):
         assert leaked not in blob
+
+
+# R3-11 ── lifting the commute LIMIT keeps the commute and its destination ───────────
+@pytest.mark.parametrize("message", [
+    "Forget the commute limit",
+    "Remove the commute time limit but keep King's Cross as destination",
+    "取消通勤时间限制",
+])
+def test_r3_11_a_limit_only_withdrawal_keeps_the_destination(message):
+    acc = _state_node({"area": "Hackney", "commute_destination": "King's Cross",
+                       "destination": "King's Cross", "max_travel_time": 30}, message)
+    assert acc.get("max_travel_time") is None
+    assert not acc.get("no_commute") and acc["commute_destination"] == "King's Cross"
+
+
+@pytest.mark.parametrize("message", ["Forget the commute", "Never mind about commute."])
+def test_r3_11_withdrawing_the_commute_still_drops_it(message):
+    acc = _state_node({"area": "Hackney", "commute_destination": "King's Cross",
+                       "destination": "King's Cross", "max_travel_time": 30}, message)
+    assert acc["no_commute"] is True and not acc.get("commute_destination")
+
+
+# R3-12 ── "undo that last change" / "the previous budget" restore what it replaced ──
+def _conversation(*messages):
+    acc, history = {}, []
+    for message in messages:
+        acc = _state_node(acc, message, history=list(history))
+        history.append({"user": message, "assistant": "ok"})
+    return acc
+
+
+@pytest.mark.parametrize("undo", [
+    "No wait, ignore that last change, go back to Hackney and the previous budget",
+    "Undo that last change",
+    "撤销刚才的修改",
+])
+def test_r3_12_undo_restores_area_and_budget(undo):
+    acc = _conversation("Find a 1-bed in Hackney under £1,900",
+                        "Set budget to £2,400 and area to Camden", undo)
+    assert acc["area"] == "Hackney" and acc["areas"] == ["Hackney"]
+    assert acc["max_budget"] == 1900
+
+
+def test_r3_12_the_previous_budget_survives_a_turn_without_changes():
+    acc = _conversation("Find a 1-bed in Hackney under £1,900", "Budget £2,400 now",
+                        "What's the weather?", "Go back to the previous budget")
+    assert acc["max_budget"] == 1900 and acc["area"] == "Hackney"
+
+
+def test_r3_12_the_restore_survives_the_load_time_source_repair():
+    import copy
+    from core.criteria_recovery import repair_criteria_sources
+    messages = ["Find a 1-bed in Hackney under £1,900", "Set budget to £2,400 and area to Camden",
+                "No wait, ignore that last change, go back to Hackney and the previous budget"]
+    acc = _conversation(*messages)
+    conversation = [item for m in messages for item in ({"role": "user", "content": m},
+                                                       {"role": "assistant", "content": "ok"})]
+    repaired = repair_criteria_sources(copy.deepcopy(acc), conversation)
+    assert repaired["max_budget"] == 1900 and repaired["area"] == "Hackney"
+
+
+def test_r3_12_the_snapshot_stays_out_of_the_prompt():
+    from core.loop_prompts import render_accumulated_criteria
+    acc = _conversation("Find a 1-bed in Hackney under £1,900", "Budget £2,400 now")
+    assert acc.get("_last_change")
+    assert "_last_change" not in render_accumulated_criteria(acc)
+
+
+# R3-13 ── "Also check X instead of Y" replaces; 「Y也保留」 keeps ───────────────────────
+@pytest.mark.parametrize("message,areas", [
+    ("Also check Angel instead of Camden", ["Angel"]),
+    ("再看看Islington，Camden也保留", ["Camden", "Islington"]),
+    ("Search Angel instead of Camden", ["Angel"]),
+    ("Add Islington as well", ["Camden", "Islington"]),
+])
+def test_r3_13_area_list_edits(message, areas):
+    acc = _state_node({"area": "Camden", "areas": ["Camden"]}, message)
+    assert acc["areas"] == areas and acc["area"] == areas[0]
+
+
+# R3-16 ── a negative amount is no budget ────────────────────────────────────────────
+@pytest.mark.parametrize("message", [
+    "Find a flat in Camden with budget -500 and 99 bedrooms", "budget £-500", "budget minus 500",
+])
+def test_r3_16_a_negative_budget_sets_no_ceiling(message):
+    from core.tools.search_properties import _extract_budget
+    assert _extract_budget(message) == (None, None)
+
+
+@pytest.mark.parametrize("message,amount", [
+    ("£1500-2000 budget", 1500), ("Budget - £1,800", 1800), ("between £1,500 - £2,000", 1500),
+])
+def test_r3_16_ranges_and_dashes_are_unchanged(message, amount):
+    from core.tools.search_properties import _extract_budget
+    assert _extract_budget(message)[0] == amount
+
+
+# R3-17 ── full-width digits and the full-width pound sign are read ──────────────────
+def test_r3_17_fullwidth_forms_are_folded_for_the_parsers():
+    from core.constraint_updates import fold_fullwidth_ascii
+    folded = fold_fullwidth_ascii("Find a １-bed in Hackney under ￡２０００，谢谢？")
+    assert folded == "Find a 1-bed in Hackney under £2000，谢谢？"
+    acc = _state_node({}, folded)
+    assert acc["bedrooms"] == 1 and acc["max_budget"] == 2000
+
+
+def test_r3_17_the_turn_reads_the_folded_message():
+    import inspect
+    import app as appmod
+    source = inspect.getsource(appmod)
+    assert "extracted_context['current_message'] = fold_fullwidth_ascii(user_message)" in source
+

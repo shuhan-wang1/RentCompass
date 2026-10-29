@@ -681,7 +681,7 @@ _PREVIOUS_AREA_REFERENCE = re.compile(
     r"\b(?:(?:go(?:ing)?\s+|switch\s+|change\s+it\s+|move\s+)?back\s+to|return\s+to|revert\s+to|restore|"
     r"use|search)\s+(?:the\s+|my\s+)?"
     r"(?:(?P<which>previous|earlier|original|old|last|first|former|other)\s+)?"
-    r"(?:area|location|place|neighbou?rhood|one)\b"
+    r"(?:area|location|neighbou?rhood)\b"
     r"(?:\s+(?:i|we)\s+(?:had|picked|chose|was\s+(?:searching|looking)(?:\s+in)?|used|started\s+with))?"
     r"(?:\s+(?:before|until)\s+(?P<before>[A-Za-z][A-Za-z'’\- ]{1,40}?))?"
     r"(?:\s+(?:please|then|again|instead|now))*\s*(?:[.!?,;]|$)"

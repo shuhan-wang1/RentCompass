@@ -1838,7 +1838,7 @@ _COMPARISON_QUESTION = re.compile(
     r"\bwhich\s+(?:one\s+|area\s+|place\s+)?(?:is|would\s+be)\s+(?:safer|cheaper|better|closer|quieter|nicer)\b",
     re.I)
 _COMPARISON_SEARCH_CUE = re.compile(
-    r"找|搜|租房|住在|换成|换到|改为|改成|切换|"
+    r"找|搜|租房|住在|换成|换到|改为|改成|切换|房子|房源|一居|两居|单间|公寓|"
     r"\b(?:search|find|show\s+me|switch|move\s+to|instead|look\s+in|listings?|flats?\s+in)\b", re.I)
 
 

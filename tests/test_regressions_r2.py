@@ -545,3 +545,15 @@ def test_r2_18_the_shared_ledger_refunds_one_event(tmp_path):
     assert limiter.allow("k", limit=2, window_seconds=60)[0] is False
     limiter.refund("k")
     assert limiter.allow("k", limit=2, window_seconds=60)[0] is True
+
+
+def test_r2_05_a_relative_comparison_word_in_a_search_still_switches():
+    from core.tools.search_properties import _extract_area
+    # 比较 as "relatively" inside a housing request is not a comparison question.
+    assert _extract_area("和朋友一起住，Hackney比较便宜的两居") == "Hackney"
+
+
+def test_r2_12_a_listing_reference_is_not_an_area_reference():
+    from core.langgraph_agent import resolve_previous_area
+    acc = {"area": "Stratford", "areas": ["Stratford"]}
+    assert resolve_previous_area(acc, "Use the other one for the comparison.", _AREA_HISTORY) is acc

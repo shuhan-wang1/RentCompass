@@ -3078,6 +3078,9 @@ def _apply_background_job(job: dict, worker_id: str) -> None:
             job["user_id"], job["conversation_id"],
             str(result.get("summary") or ""), through,
         ):
+            if conversation_store.get_conversation(job["user_id"], job["conversation_id"]) is None:
+                from uk_rent_agent.web.conversation_store import BackgroundJobGone
+                raise BackgroundJobGone("conversation was deleted before its summary job ran")
             raise RuntimeError("no completed snapshot exists for summary job")
         with _session_store.turn_lock(job["user_id"], job["conversation_id"]):
             sess = _get_session(job["user_id"], job["conversation_id"])
@@ -4610,8 +4613,7 @@ def fork_conversation(cid):
     except Exception:
         idem = None
     if not idem:
-        _body_idem = data.get('idempotency_key')
-        idem = _body_idem if isinstance(_body_idem, str) and _body_idem.strip() else None
+        idem = _body_idempotency_key(data)
 
     try:
         child = conversation_store.fork_conversation(
@@ -4627,6 +4629,18 @@ def fork_conversation(cid):
     # The store also mirrors forked_from_turn_id at the top level of the returned dict; it is
     # already part of the conversation dict shape, so nothing extra to strip.
     return jsonify({"conversation": child, "idempotent": idempotent}), (200 if idempotent else 201)
+
+
+def _body_idempotency_key(data: dict):
+    """The body's idempotency key: a non-blank string, absent when blank. Any other type is
+    a 400 — a number or an object used to be ignored, so a retried fork made a second
+    branch while the client believed it was protected (R3-23)."""
+    value = data.get('idempotency_key')
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ApiError(400, "idempotency_key must be a string")
+    return value.strip() or None
 
 
 @app.route('/api/conversations/<cid>/edit_turn', methods=['POST'])
@@ -4658,8 +4672,7 @@ def edit_turn(cid):
     except Exception:
         idem = None
     if not idem:
-        _body_idem = data.get('idempotency_key')
-        idem = _body_idem if isinstance(_body_idem, str) and _body_idem.strip() else None
+        idem = _body_idempotency_key(data)
 
     try:
         child = conversation_store.branch_for_edit(
@@ -4922,6 +4935,13 @@ def add_favorite():
             or len(url) > 2048):
         # A "javascript:" URL was stored and handed back to the page (R1-17).
         raise ApiError(400, "Property URL must be an http(s) link")
+    # The key is the trimmed URL: " https://…/1 " was stored with its spaces and could not
+    # be removed with the URL the page shows (R3-23).
+    url = url.strip()
+    price = data.get('price')
+    if price is not None and (isinstance(price, bool) or not isinstance(price, (str, int, float))):
+        # An object price was stored and rendered as "[object Object]" (R3-23).
+        raise ApiError(400, "price must be a string or a number")
     title = data.get('title')
     if title is not None and (not isinstance(title, str) or len(title) > 500):
         # An object title was stored and returned verbatim; validated like a conversation
@@ -4931,6 +4951,9 @@ def add_favorite():
     # kept a posted user_id, "verified": true and "availability" verbatim for any URL (R2-17).
     stored = {key: value for key, value in data.items()
               if str(key).lower().replace("-", "_") not in _FAVORITE_SERVER_OWNED_FIELDS}
+    for key in ('url', 'URL'):
+        if isinstance(stored.get(key), str):
+            stored[key] = stored[key].strip()
     conversation_store.add_favorite(user_id, url, stored)
     return jsonify({"success": True, "message": "Added to favorites"})
 
@@ -4948,7 +4971,8 @@ def get_favorites_list():
 def remove_favorite(url):
     """Remove a favorite by (percent-decoded) url. Identity via header + ?user_id=."""
     user_id, _ = _identity_from_request()
-    if conversation_store.remove_favorite(user_id, url):
+    if conversation_store.remove_favorite(user_id, url.strip()) or (
+            url != url.strip() and conversation_store.remove_favorite(user_id, url)):
         return jsonify({"success": True, "message": "Removed from favorites"})
     raise ApiError(404, "Property not found")
 

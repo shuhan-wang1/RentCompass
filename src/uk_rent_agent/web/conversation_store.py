@@ -270,6 +270,10 @@ class ConversationBusy(RuntimeError):
         self.retry_after = max(1, int(retry_after))
 
 
+class BackgroundJobGone(RuntimeError):
+    """The job row was deleted (with its conversation) while a worker held it (R3-24)."""
+
+
 class PrivacyErasureInProgress(RuntimeError):
     """New turns are blocked while the user's cross-store deletion is running."""
 
@@ -1510,6 +1514,13 @@ class ConversationStore:
                 raise
         return self._background_job_dict(claimed)
 
+    def _job_gone(self, job_id: int) -> bool:
+        """True when the job row no longer exists (deleted with its conversation)."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT 1 FROM background_jobs WHERE id=?", (int(job_id),)).fetchone()
+        return row is None
+
     def save_background_job_result(
         self, job_id: int, worker_id: str, result: dict
     ) -> None:
@@ -1522,6 +1533,8 @@ class ConversationStore:
             )
             self._conn.commit()
         if updated.rowcount != 1:
+            if self._job_gone(job_id):
+                raise BackgroundJobGone("background job was removed with its conversation")
             raise RuntimeError("background job lease was lost before saving result")
 
     def complete_background_job(self, job_id: int, worker_id: str) -> None:
@@ -1536,6 +1549,8 @@ class ConversationStore:
             )
             self._conn.commit()
         if updated.rowcount != 1:
+            if self._job_gone(job_id):
+                raise BackgroundJobGone("background job was removed with its conversation")
             raise RuntimeError("background job lease was lost before completion")
 
     def retry_background_job(

@@ -522,6 +522,75 @@ def test_r3_21_other_text_is_untouched(text):
     assert sanitize_user_text(text) == (text, False)
 
 
+# R3-23 ── favourites keep a trimmed URL and a printable price; fork keys are strings ──
+from tests.test_regressions_r1_tools import _post_fav, fav_client  # noqa: E402,F401
+
+
+def test_r3_23_a_padded_url_is_stored_trimmed_and_removable(fav_client):  # noqa: F811
+    client, store = fav_client
+    url = "https://example.test/listing/31"
+    assert _post_fav(client, {"url": f"  {url}  ", "title": "Flat"}).status_code == 200
+    assert [row["url"] for row in store.list_favorites("u_fav")] == [url]
+    removed = client.open(f"/api/favorites/{url}", method="DELETE", headers={"X-User-Id": "u_fav"})
+    assert removed.status_code == 200 and store.list_favorites("u_fav") == []
+
+
+def test_r3_23_an_object_price_is_refused(fav_client):  # noqa: F811
+    client, store = fav_client
+    assert _post_fav(client, {"url": "https://example.test/listing/32",
+                              "price": {"amount": 1}}).status_code == 400
+    assert _post_fav(client, {"url": "https://example.test/listing/33",
+                              "price": "£1,800 pcm"}).status_code == 200
+    assert _post_fav(client, {"url": "https://example.test/listing/34", "price": 1800}).status_code == 200
+
+
+def test_r3_23_a_non_string_fork_idempotency_key_is_a_400():
+    import app as appmod
+    with pytest.raises(appmod.ApiError):
+        appmod._body_idempotency_key({"idempotency_key": 7})
+    assert appmod._body_idempotency_key({"idempotency_key": "  "}) is None
+    assert appmod._body_idempotency_key({"idempotency_key": " k1 "}) == "k1"
+    assert appmod._body_idempotency_key({}) is None
+
+
+# R3-24 ── a job deleted with its conversation is dropped, not failed ─────────────────
+def test_r3_24_a_job_removed_with_its_conversation_is_dropped(tmp_path, caplog):
+    import logging
+    from uk_rent_agent.web.background_jobs import OutboxWorker
+    from uk_rent_agent.web.conversation_store import BackgroundJobGone, ConversationStore
+    store = ConversationStore(tmp_path / "conv.sqlite3")
+    seen = []
+
+    class _Store:
+        def claim_background_job(self, worker_id, lease_seconds):
+            return {"id": 1, "kind": "memory_turn"} if not seen else None
+
+        def complete_background_job(self, job_id, worker_id):
+            raise BackgroundJobGone("gone")
+
+        def retry_background_job(self, *a, **k):
+            raise AssertionError("a dropped job is not retried")
+
+    worker = OutboxWorker(_Store(), lambda job, worker_id: seen.append(job["id"]))
+    with caplog.at_level(logging.INFO):
+        assert worker.run_once() is True
+    assert seen == [1]
+    assert "background_job.failed" not in caplog.text
+    assert "background_job.dropped_with_conversation" in caplog.text
+    assert store._job_gone(12345) is True
+    store.close()
+
+
+def test_r3_24_a_deleted_conversations_job_rows_report_gone(tmp_path):
+    from uk_rent_agent.web.conversation_store import BackgroundJobGone, ConversationStore
+    store = ConversationStore(tmp_path / "gone.sqlite3")
+    with pytest.raises(BackgroundJobGone):
+        store.save_background_job_result(777, "worker-1", {"stored": True})
+    with pytest.raises(BackgroundJobGone):
+        store.complete_background_job(777, "worker-1")
+    store.close()
+
+
 # K-06 ── a dismissed item is not stored or searched as a preference ─────────────────
 def test_k_06_a_dismissed_preference_is_dropped():
     from core.preference_grounding import apply_preference_policy, stored_soft_preferences

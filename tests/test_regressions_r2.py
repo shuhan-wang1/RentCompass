@@ -346,3 +346,36 @@ def test_r2_12_without_an_earlier_area_nothing_changes():
     assert resolve_previous_area(acc, "Go back to the previous area.",
                                  [{"user": "Find flats in Stratford"}]) is acc
     assert resolve_previous_area(acc, "Tell me about the area.", _AREA_HISTORY) is acc
+
+
+# R2-10 ── a London commute destination does not follow a switch to another city ─────
+_LONDON_COMMUTE = {
+    "commute_destination": "Imperial College London, South Kensington, London SW7 2AZ",
+    "destination": "Imperial College London, South Kensington, London SW7 2AZ",
+    "constraint_sources": {"commute_destination": {
+        "source": "user_message", "text": "commute from E1 6AN to Imperial College London",
+        "value": "Imperial College London, South Kensington, London SW7 2AZ"}},
+}
+
+
+def test_r2_10_a_new_city_search_drops_a_london_commute_destination():
+    from core.langgraph_agent import _apply_explicit_criteria_updates
+    from core.tools.search_properties import ground_hard_constraints
+    message = "Find 1 bed in Manchester under £1500"
+    acc = _apply_explicit_criteria_updates(dict(_LONDON_COMMUTE), message)
+    assert acc["area"] == "Manchester" and not acc.get("commute_destination") and not acc.get("destination")
+    params, _ = ground_hard_constraints(
+        {"area": "Manchester", "commute_destination": _LONDON_COMMUTE["commute_destination"]},
+        dict(_LONDON_COMMUTE), message)
+    assert "commute_destination" not in params
+
+
+@pytest.mark.parametrize("message,area", [
+    ("Find 1 bed flats in Hackney under £1500", "Hackney"),
+    ("Find flats in London under £1500", "London"),
+])
+def test_r2_10_a_london_search_keeps_the_destination(message, area):
+    from core.langgraph_agent import _apply_explicit_criteria_updates
+    acc = _apply_explicit_criteria_updates(dict(_LONDON_COMMUTE), message)
+    assert acc["area"] == area
+    assert acc["commute_destination"] == _LONDON_COMMUTE["commute_destination"]

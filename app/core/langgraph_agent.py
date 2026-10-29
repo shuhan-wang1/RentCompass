@@ -745,6 +745,23 @@ def resolve_previous_area(accumulated: dict, message: str, history) -> dict:
     return result
 
 
+_LONDON_POSTCODE = re.compile(r"\b(?:EC|WC|E|N|NW|SE|SW|W)\d{1,2}[A-Z]?\b(?:\s*\d[A-Z]{2})?", re.I)
+
+
+def _destination_left_behind(destination, new_areas) -> bool:
+    """True when a London commute destination stays behind a switch to another UK city."""
+    from core.tools.search_properties import LONDON_AREAS
+    dest = str(destination or "").strip()
+    if not dest or not new_areas:
+        return False
+    keys = [re.sub(r"[’']", "", str(area or "").lower()).strip() for area in new_areas]
+    if any(not key or key == "london" or key in LONDON_AREAS for key in keys):
+        return False
+    if any(key in dest.lower() for key in keys):
+        return False
+    return bool(re.search(r"\blondon\b", dest, re.I) or _LONDON_POSTCODE.search(dest))
+
+
 def _soft_amenity_updates(message: str, soft_preferences: list) -> list | None:
     """The soft-preference list after this message's amenity nice-to-haves, or None.
 
@@ -1126,6 +1143,12 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         if result.get('area') != new_area or result.get('areas') != new_areas:
             result['area'], result['areas'] = new_area, new_areas
             changed = True
+            if not message_destination and _destination_left_behind(
+                    result.get('commute_destination') or result.get('destination'), new_areas):
+                # "Find 1 bed in Manchester" after a London commute question searched
+                # Manchester against a commute to South Kensington (R2-10). A destination in
+                # the city the search left is dropped; a new one can be stated again.
+                result['commute_destination'] = result['destination'] = None
 
     # Room type stated this turn (e.g. answering the soft gate "我要ensuite") folds into
     # the accumulated criteria even without any find/search verb.

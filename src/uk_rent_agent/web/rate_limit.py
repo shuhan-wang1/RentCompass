@@ -60,6 +60,24 @@ class SlidingWindowRateLimiter:
             bucket.append(now)
             return True, 0
 
+    def refund(self, key: str) -> None:
+        """Return the most recent event charged to ``key`` (a request the server refused as
+        invalid input before doing any work, R2-18)."""
+        if self.db_path is None:
+            with self._lock:
+                bucket = self._events.get(key)
+                if bucket:
+                    bucket.pop()
+            return
+        subject_hash = hashlib.sha256(str(key).encode("utf-8")).hexdigest()
+        with self._connect() as db:
+            db.execute(
+                """DELETE FROM rate_limit_events WHERE rowid=(
+                       SELECT rowid FROM rate_limit_events WHERE subject_hash=?
+                       ORDER BY occurred DESC LIMIT 1)""",
+                (subject_hash,),
+            )
+
     def _allow_shared(
         self, key: str, *, limit: int, window_seconds: int
     ) -> tuple[bool, int]:

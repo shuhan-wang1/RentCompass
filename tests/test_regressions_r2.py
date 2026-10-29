@@ -501,3 +501,47 @@ def test_r2_17_server_owned_fields_are_not_stored(fav_client):  # noqa: F811
     # Display fields stay as sent (pricing/address provenance is an owner decision).
     assert saved["address"] == "Sample Road, E2" and saved["price"] == "£1,500/month"
     assert saved["availability_status"] == "Contact agent"
+
+
+# R2-18 ── 405 is not 429, and an invalid-input 400 gives its chat charge back ───────
+@pytest.fixture
+def limited_client(tmp_path, monkeypatch):
+    from dataclasses import replace
+    from uk_rent_agent.web.conversation_store import ConversationStore
+    from uk_rent_agent.web.rate_limit import SlidingWindowRateLimiter
+    from uk_rent_agent.web.session_store import SessionStore
+    store = ConversationStore(tmp_path / "c.sqlite3")
+    limiter = SlidingWindowRateLimiter()
+    monkeypatch.setattr(appmod, "conversation_store", store)
+    monkeypatch.setattr(appmod, "_session_store", SessionStore())
+    monkeypatch.setattr(appmod, "_api_rate_limiter", limiter)
+    monkeypatch.setattr(appmod, "_runtime_config",
+                        replace(appmod._runtime_config, allow_legacy_client_user_id=True))
+    appmod.app.config.update(TESTING=True)
+    yield appmod.app.test_client(), limiter
+    store.close()
+
+
+def test_r2_18_a_wrong_method_is_405_and_spends_nothing(limited_client):
+    client, limiter = limited_client
+    statuses = {client.get("/api/alex", headers={"X-User-Id": "u_r218"}).status_code for _ in range(15)}
+    assert statuses == {405}
+    assert not any(limiter._events.values())
+
+
+def test_r2_18_invalid_chat_input_does_not_use_up_the_bucket(limited_client):
+    client, limiter = limited_client
+    statuses = {client.post("/api/alex", json={"message": "hi", "context": ["not", "an", "object"]},
+                            headers={"X-User-Id": "u_r218b"}).status_code for _ in range(15)}
+    assert statuses == {400}
+    assert not any(limiter._events.values())
+
+
+def test_r2_18_the_shared_ledger_refunds_one_event(tmp_path):
+    from uk_rent_agent.web.rate_limit import SlidingWindowRateLimiter
+    limiter = SlidingWindowRateLimiter(db_path=tmp_path / "rl.sqlite3")
+    for _ in range(2):
+        assert limiter.allow("k", limit=2, window_seconds=60)[0]
+    assert limiter.allow("k", limit=2, window_seconds=60)[0] is False
+    limiter.refund("k")
+    assert limiter.allow("k", limit=2, window_seconds=60)[0] is True

@@ -1900,9 +1900,17 @@ def _rate_limit_subject() -> str:
     return f"ip:{remote}"
 
 
+# Endpoints whose 400 (invalid input, refused before any work) gives its charge back (R2-18).
+_RATE_LIMIT_REFUND_ON_400 = frozenset({'/api/alex', '/api/search_direct'})
+
+
 @app.before_request
 def _limit_expensive_api_requests():
     if request.method == 'OPTIONS' or not request.path.startswith('/api/'):
+        return None
+    if request.routing_exception is not None:
+        # GET /api/alex answered 429 instead of 405: a request no route accepts costs nothing
+        # and Flask answers it (404/405) without spending the caller's bucket (R2-18).
         return None
     limits = {
         '/api/alex': 12,
@@ -1912,17 +1920,33 @@ def _limit_expensive_api_requests():
         '/api/auth/register': 5,
     }
     limit = limits.get(request.path, 120)
+    key = f"{request.path}:{_rate_limit_subject()}"
     allowed, retry_after = _api_rate_limiter.allow(
-        f"{request.path}:{_rate_limit_subject()}",
+        key,
         limit=limit,
         window_seconds=_runtime_config.rate_limit_window_seconds,
     )
     if allowed:
+        if request.path in _RATE_LIMIT_REFUND_ON_400:
+            g.rate_limit_charge = key
         return None
     response = jsonify({'error': 'too many requests; please try again shortly',
                         'error_code': 'rate_limited', 'retry_after': retry_after})
     response.status_code = 429
     response.headers['Retry-After'] = str(retry_after)
+    return response
+
+
+@app.after_request
+def _refund_invalid_input_charge(response):
+    """A chat request refused as invalid input (400) did no work; its charge is returned, so a
+    typo cannot use up the chat bucket (R2-18)."""
+    key = g.pop('rate_limit_charge', None)
+    if key and response.status_code == 400:
+        try:
+            _api_rate_limiter.refund(key)
+        except Exception as exc:
+            logger.warning("rate_limit.refund_failed", extra={"error_type": type(exc).__name__})
     return response
 
 

@@ -846,6 +846,88 @@ _CHILD_NAME_RE = re.compile(
     r"\b((?i:son|daughter|child|kid|stepson|stepdaughter))\b,?\s+(?:(?i:called|named)\s+)?"
     r"[A-Z][a-z]{1,20}\b,?")
 
+# ── Secrets: never kept in ANY memory row, explicit or automatic (R1-05) ─────────────────
+# "Remember my card number <card> expiry <mm/yy> CVV <cvv>", a bank password and a
+# passport + National Insurance number were each stored verbatim as a semantic row AND as the
+# episodic "User asked: ..." row, then echoed back as "Saved text". Unlike a phone number, a
+# credential, a payment card or a government id number is never a fact the product needs, so
+# the value itself is replaced wherever it appears; the words around it stay.
+_SECRET_MARKER = "[security detail not stored]"
+_SECRET_VALUE = r"(?P<v>\"[^\"\n]{1,64}\"|'[^'\n]{1,64}'|[^\s,;]{1,64})"
+_IS = r"(?:\s+(?:is|was)\s*|\s*[:=]\s*|\s+)"
+# Each pattern names the secret itself as group ``v``; the label before it ("my CVV",
+# "password") stays, so the reply and the log can say what was withheld.
+_SECRET_PATTERNS = tuple((name, re.compile(pattern, re.I)) for name, pattern in (
+    # "with password S3cret!pass" has no "is"; a bare word after "password" ("the password
+    # reset page") is only a secret when it carries a digit or a symbol.
+    ("credentials", r"\b(?:password|passcode|passphrase|pwd)\b(?:\s+(?:is|was)\s*|\s*[:=]\s*)" + _SECRET_VALUE),
+    ("credentials", r"\b(?:password|passcode|passphrase|pwd)\s+(?=[^\s,;]*(?:\d|_|[^\s\w]))(?!\[)" + _SECRET_VALUE),
+    ("credentials", r"\b(?:pin|pin\s*code|pin\s*number)\b" + _IS + r"(?P<v>\d{4,8})\b"),
+    ("credentials", r"\b(?:user\s*name|username|login|log-in|user\s*id)(?:\s+(?:is|was)\s*|\s*[:=]\s*)"
+                    r"(?:user\s+)?" + _SECRET_VALUE),
+    ("credentials", r"(?:密码|口令|验证码|PIN码)\s*(?:是|为|:|：)?\s*(?P<v>[^\s，。,;；]{1,64})"),
+    ("payment", r"\b(?:cvv2?|cvc2?|cv2|csc|security\s+code)\b" + _IS + r"(?P<v>\d{3,4})\b"),
+    ("payment", r"\b(?:exp(?:iry|ires|iration)?(?:\s+date)?|valid\s+(?:thru|through|until))\b" + _IS
+                + r"(?P<v>(?:0?[1-9]|1[0-2])\s*[/-]\s*(?:\d{4}|\d{2}))\b"),
+    ("payment", r"\bsort\s*code\b" + _IS + r"(?P<v>\d{2}\s*-?\s*\d{2}\s*-?\s*\d{2})\b"),
+    ("payment", r"\baccount\s*(?:number|no\.?)" + _IS + r"(?P<v>\d{6,10})\b"),
+    ("payment", r"(?:银行卡号|信用卡号|卡号|账号)(?:码)?\s*(?:是|为|:|：)?\s*(?P<v>\d[\d\s-]{6,21}\d)"),
+    ("government_id", r"\bpassport\s*(?:number|no\.?|#)?" + _IS
+                      + r"(?P<v>(?=[A-Z0-9]{0,9}\d)[A-Z0-9]{6,10})\b"),
+    # A National Insurance number, labelled or on its own: two letters, six digits, A-D.
+    ("government_id", r"(?<![A-Z0-9])(?P<v>[A-Z]{2}\s?\d{2}\s?\d{2}\s?\d{2}\s?[A-D])\b"),
+    ("government_id", r"\bdriv(?:ing|er'?s?)\s+licen[cs]e\s*(?:number|no\.?)?" + _IS
+                      + r"(?P<v>(?=[A-Z0-9]{0,17}\d)[A-Z0-9]{5,18})\b"),
+    ("government_id", r"(?:护照|身份证|驾照|驾驶证)(?:号码?|编号)\s*(?:是|为|:|：)?\s*(?P<v>[A-Za-z0-9]{6,20})"),
+))
+# A payment card number written without a label: 13-19 digits (spaces or dashes between
+# groups) that pass the Luhn check, so a price, a phone number or a reference does not.
+_CARD_NUMBER_RE = re.compile(r"(?<![\d£$])\d(?:[ -]?\d){12,18}(?!\d)")
+
+
+def _luhn_valid(digits: str) -> bool:
+    total, parity = 0, len(digits) % 2
+    for index, char in enumerate(digits):
+        value = int(char)
+        if index % 2 == parity:
+            value *= 2
+            if value > 9:
+                value -= 9
+        total += value
+    return total % 10 == 0
+
+
+def redact_secrets(text: str) -> tuple[str, list[str]]:
+    """``text`` with credentials, payment card details and government id numbers replaced
+    by a marker, and the categories found. Applied to every memory row and to the explicit
+    remember path (R1-05). Never raises."""
+    try:
+        value = str(text or "")
+        found: list[str] = []
+
+        def _card(match):
+            digits = re.sub(r"\D", "", match.group())
+            if 13 <= len(digits) <= 19 and _luhn_valid(digits):
+                if "payment" not in found:
+                    found.append("payment")
+                return _SECRET_MARKER
+            return match.group()
+
+        value = _CARD_NUMBER_RE.sub(_card, value)
+        for name, pattern in _SECRET_PATTERNS:
+            def _value(match, name=name):
+                secret = match.group("v")
+                if secret.strip("\"'") and _SECRET_MARKER.startswith(secret.strip("\"'")):
+                    return match.group()      # already replaced by an earlier pattern
+                if name not in found:
+                    found.append(name)
+                start, end = match.span("v")
+                return match.string[match.start():start] + _SECRET_MARKER + match.string[end:match.end()]
+            value = pattern.sub(_value, value)
+        return value, found
+    except Exception:
+        return "", ["unparsed"]
+
 
 def redact_sensitive(text: str) -> tuple[str, list[str]]:
     """``text`` with income, immigration, health and contact details removed.
@@ -857,7 +939,9 @@ def redact_sensitive(text: str) -> tuple[str, list[str]]:
     metadata). Never raises."""
     try:
         value = str(text or "")[:_REDACT_MAX_CHARS]
-        found: list[str] = []
+        # Secrets are replaced in place, like a phone number: the rest of the clause is
+        # still a usable housing statement (R1-05).
+        value, found = redact_secrets(value)
         if _EMAIL_RE.search(value) or _PHONE_RE.search(value):
             found.append("contact")
             value = _PHONE_RE.sub("[contact detail not stored]",
@@ -1317,7 +1401,10 @@ class AgentMemory:
         if user_id is None:
             print("[memory] add rejected: missing/shared user_id (memory must be per-user)")
             return None
-        text = (text or "").strip()
+        # The one sink every layer writes through: whatever path produced the row (explicit
+        # remember, an extracted fact, a consolidation, a reflection), a password, a card
+        # number or an id number never reaches the store (R1-05).
+        text = redact_secrets((text or "").strip())[0].strip()
         if not text:
             return None
         h = hashlib.md5(f"{mtype}|{user_id}|{text}".encode("utf-8")).hexdigest()
@@ -1548,6 +1635,7 @@ class AgentMemory:
                     meta = dict(((current.get("metadatas") or [None])[0]) or {})
                 except Exception:
                     meta = {}
+                text = redact_secrets(text)[0]     # same rule as _add_record (R1-05)
                 meta["updated_at"] = _now_iso()
                 if turn_ref:
                     meta["updated_turn_id"] = str(turn_ref)[:80]

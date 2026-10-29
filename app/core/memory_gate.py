@@ -529,6 +529,10 @@ DECISION_REJECTED_GUARD_FLAGGED = "rejected_guard_flagged"
 
 
 DECISION_REJECTED_QUESTION = "rejected_question_not_fact"
+
+#: ...and for a write that carries a password, a payment card detail or a government id
+#: number. Those are never stored, whoever asked (R1-05).
+DECISION_REJECTED_SECRET = "rejected_secret"
 _QUESTION_FRAGMENT_ZH = re.compile(r"^(?:了|的|过)?(?:我的)?(?:什么|哪些|多少|吗|没有)")
 _QUESTION_HEAD_EN = re.compile(
     r"^\s*(?:do|does|did|can|could|would|will|have|has|what|which|who|where|when|why|how|is|are)\s+"
@@ -559,6 +563,9 @@ def memory_write_rejection(content, *, guard_flagged: bool = False) -> str | Non
     """
     if guard_flagged:
         return DECISION_REJECTED_GUARD_FLAGGED
+    from rag.agent_memory import redact_secrets
+    if redact_secrets(str(content or ""))[1]:
+        return DECISION_REJECTED_SECRET
     if content_is_instruction_shaped(content):
         return DECISION_REJECTED_INSTRUCTION_SHAPED
     if content_is_question_fragment(content):

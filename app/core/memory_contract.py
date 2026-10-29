@@ -50,6 +50,7 @@ def memory_contract_from_artifact(artifact: dict | None) -> dict:
         # instructions"): not a tool failure (R2-30).
         contract["policy_refused"] = True
         contract["policy_reason"] = str(raw.get("error") or "")
+        contract["policy_decision"] = str(raw.get("security_decision") or "")
     if isinstance(stored, str) and stored.strip():
         contract['stored_content'] = stored
     return contract
@@ -127,6 +128,12 @@ def memory_notice(contract: dict | None, language: str = "") -> str:
                          "in a message of its own.")
         return ("本轮没有执行记忆保存，所以没有保存任何内容。" if zh
                 else "I didn't get to save that to memory this turn, so nothing was saved.")
+    if (contract or {}).get("policy_refused") and contract.get("policy_decision") == "rejected_secret":
+        # A credential, card detail or id number: say what was withheld, never the value (R1-05).
+        return ("这次没有保存到记忆：我不会保存密码、PIN、银行卡信息或护照、国民保险号、驾照等证件号码。" if zh
+                else "I didn't save that to memory: I never store passwords, PINs, payment card "
+                     "details or ID numbers such as passport, National Insurance or driving "
+                     "licence numbers.")
     if (contract or {}).get("policy_refused"):
         return ("这次没有保存到记忆：我只保存关于你的长期信息（偏好、预算、限制条件），不保存指令。" if zh
                 else "I didn't save that to memory: I only save durable facts about you "
@@ -151,6 +158,10 @@ def compose_memory_contract_response(response: str, contract: dict | None, *,
     if not preserve_content:
         return notice
     remainder = strip_saved_content_quote(response, contract, language)
+    if (contract or {}).get("policy_decision") == "rejected_secret":
+        # The rest of a multi-intent answer may not repeat the refused value either (R1-05).
+        from rag.agent_memory import redact_secrets
+        remainder = redact_secrets(remainder)[0]
     contents = list((contract or {}).get('stored_contents') or [])
     if isinstance((contract or {}).get('stored_content'), str):
         contents.append(contract['stored_content'])

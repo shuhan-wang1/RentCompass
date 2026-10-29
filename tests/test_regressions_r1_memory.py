@@ -1,0 +1,125 @@
+"""Long-term memory regressions (R1-xx).
+
+Synthetic data only: the card number is the public Luhn-valid test card, the id numbers are
+documented placeholder formats, the addresses are made up.
+"""
+from __future__ import annotations
+
+import importlib
+import json
+import os
+import sys
+
+import pytest
+
+
+def _pin_app():
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    local = os.path.join(repo, "app")
+    if local in sys.path:
+        sys.path.remove(local)
+    sys.path.insert(0, local)
+
+
+_pin_app()
+am_mod = importlib.import_module("rag.agent_memory")
+
+CARD = ("Remember my card number 4111 1111 1111 1111 expiry 12/28 CVV 123 for paying the "
+        "deposit.")
+BANK = "Please remember my bank login is user demo42 with password S3cret!pass so you can use it later."
+IDS = "Remember that my passport number is 123456789 and my national insurance number is QQ 12 34 56 A."
+SECRETS = ("4111", "1111 1111", "12/28", "CVV 123", "demo42", "S3cret!pass", "123456789", "QQ 12 34 56 A")
+
+
+@pytest.fixture
+def memory(tmp_path, monkeypatch):
+    def fake_llm(prompt, *a, **k):
+        if '"facts"' in prompt:
+            # The extractor is a model: it may copy a value it was shown, or one from context.
+            user = prompt.rsplit("User: ", 1)[-1]
+            return json.dumps({"facts": [user.split("\n\nJSON")[0].strip(),
+                                         "Card number is 4111 1111 1111 1111",
+                                         "Wants a 1-bed flat in Hackney"]})
+        if '"ops"' in prompt:
+            facts = json.loads(prompt.split("NEW FACTS:\n", 1)[1].split("\n\nJSON:", 1)[0])
+            return json.dumps({"ops": [{"event": "ADD", "id": None, "text": f} for f in facts]})
+        if '"insights"' in prompt:
+            return json.dumps({"insights": ["User pays by card 4111 1111 1111 1111",
+                                            "User lives at 7 Sample Street",
+                                            "User prioritises Hackney"]})
+        return "5"
+
+    monkeypatch.setattr(am_mod, "call_ollama", fake_llm)
+    return am_mod.AgentMemory(db_path=str(tmp_path / "mem"))
+
+
+def _blob(memory, user):
+    got = memory.col.get(where={"user_id": user})
+    return "\n".join(got.get("documents") or []), list(got.get("metadatas") or [])
+
+
+# R1-05 ── credentials, card details and id numbers are never kept ────────────────────
+@pytest.mark.parametrize("text, categories", [
+    (CARD, ["payment"]),
+    (BANK, ["credentials"]),
+    (IDS, ["government_id"]),
+    ("My bank password is hunter2 and my PIN is 4821", ["credentials"]),
+    ("Sort code 12-34-56, account number 12345678", ["payment"]),
+    ("My driving licence number is MORGA753116SM9IJ", ["government_id"]),
+    ("我的密码是abc123，银行卡号是4111 1111 1111 1111", ["credentials", "payment"]),
+])
+def test_secret_values_are_replaced(text, categories):
+    redacted, found = am_mod.redact_secrets(text)
+    assert sorted(found) == sorted(categories)
+    for leak in SECRETS + ("hunter2", "4821", "12-34-56", "12345678", "MORGA753116SM9IJ", "abc123"):
+        assert leak not in redacted
+    assert "[security detail not stored]" in redacted
+
+
+@pytest.mark.parametrize("text", [
+    "I want 2 beds under £2,000 near E8 1AA",
+    "budget £2,000 a month, 12-month tenancy from 01/12",
+    "Ref 1234 5678 9012 3456",          # not Luhn-valid: a reference, not a card
+    "the password reset page does not load",
+    "Pin the listing please",
+])
+def test_ordinary_text_is_untouched(text):
+    assert am_mod.redact_secrets(text) == (text, [])
+
+
+def test_no_memory_layer_keeps_a_secret(memory):
+    user = "u_r105"
+    for message in (CARD, BANK, IDS):
+        memory.remember_turn(message + " I'm looking for a 1-bed flat in Hackney.", "Noted.",
+                             session_id="s1", user_id=user)
+    memory._accum[(user, "s1")] = am_mod.REFLECT_IMPORTANCE_THRESHOLD
+    memory.maybe_reflect("s1", user)
+    blob, metas = _blob(memory, user)
+    assert "Hackney" in blob
+    for leak in SECRETS:
+        assert leak not in blob, leak
+    assert {m.get("mtype") for m in metas} >= {"episodic", "semantic"}
+
+
+def test_the_store_sink_redacts_whatever_path_writes(memory):
+    mid = memory.add("Card number is 4111 1111 1111 1111", "semantic", user_id="u_sink")
+    assert mid
+    blob, _ = _blob(memory, "u_sink")
+    assert "4111" not in blob
+
+
+def test_explicit_remember_of_a_secret_is_refused_honestly(monkeypatch, memory):
+    from core.tools import memory_tools
+    from core.memory_contract import memory_contract_from_artifact, compose_memory_contract_response
+    monkeypatch.setattr(memory_tools, "_mem", lambda: memory)
+    result = memory_tools.remember_impl(CARD, user_id="u_explicit")
+    assert result["success"] is False and result["security_decision"] == "rejected_secret"
+    assert result["stored"] is None
+    assert not memory.col.get(where={"user_id": "u_explicit"}).get("ids")
+    contract = memory_contract_from_artifact({"success": True, "raw_data": result})
+    reply = compose_memory_contract_response(
+        "Saved! Your card 4111 1111 1111 1111 is noted.", contract, preserve_content=True)
+    assert "4111" not in reply
+    assert "never store passwords" in reply and "Saved text" not in reply
+    zh = compose_memory_contract_response("", contract, language="zh")
+    assert "不会保存密码" in zh

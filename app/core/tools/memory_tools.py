@@ -88,6 +88,8 @@ def _audit_rejected_write(reason: str, content: str) -> None:
             reason=("memory holds facts about the user; this candidate is "
                     "instruction-shaped content"
                     if reason == "rejected_instruction_shaped"
+                    else "the candidate carries a credential, payment or id number"
+                    if reason == "rejected_secret"
                     else "a markup/injection guard fired on this turn"),
         )
     except Exception:
@@ -121,6 +123,11 @@ def remember_impl(content: str, kind: str = "semantic",
             "security_decision": rejection,
             "error": (("That was a question, not a fact to save, so I did not store "
                        "anything.") if rejection == "rejected_question_not_fact" else
+                      # Refused whole rather than saved with a hole in it: the model never
+                      # quotes the secret back as "saved text" (R1-05).
+                      ("I never save passwords, PINs, payment card details or ID numbers "
+                       "(passport, National Insurance, driving licence), so I did not store "
+                       "that.") if rejection == "rejected_secret" else
                       ("I can only save durable facts about you (preferences, budget, "
                        "constraints) — not instructions, so I did not store that.")),
         }

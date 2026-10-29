@@ -244,3 +244,57 @@ def test_r2_07_a_narrower_ceiling_or_a_plain_sort_still_refines():
     spec, kept = plan_refinement("Only ones under £2,300, cheapest first", _SHOWN)
     assert [r["price"] for r in kept] == ["£2,100/month"]
     assert plan_refinement("sort by price", _SHOWN) is not None
+
+
+# R2-08 ── retraction phrasings and "forget that requirement" ────────────────────────
+@pytest.mark.parametrize("message", [
+    "Never mind about the garden.", "Never mind the garden.", "The garden doesn't matter any more.",
+    "Garden doesn't matter.", "Drop the garden.", "Skip the garden.",
+])
+def test_r2_08_a_retracted_echoed_preference_is_removed(message):
+    from core.langgraph_agent import _apply_explicit_criteria_updates
+    start = {"area": "Hackney", "soft_preferences": ["garden", "Would like gym"]}
+    result = _apply_explicit_criteria_updates(dict(start), message)
+    assert result["soft_preferences"] == ["Would like gym"]
+    assert result["constraint_sources"]["soft_preferences"]["value"] == ["Would like gym"]
+
+
+def test_r2_08_a_retracted_preference_cannot_be_echoed_back():
+    from core.langgraph_agent import _apply_explicit_criteria_updates
+    from core.tools.search_properties import ground_hard_constraints
+    acc = _apply_explicit_criteria_updates({"area": "Hackney", "soft_preferences": ["garden"]},
+                                           "Never mind about the garden.")
+    params, _ = ground_hard_constraints({"area": "Hackney", "accumulated_preferences": ["garden"]},
+                                        acc, "Search again.")
+    assert "garden" not in (params.get("accumulated_preferences") or [])
+
+
+@pytest.mark.parametrize("message", [
+    "Forget that requirement.", "forget that requirement", "Never mind that.", "Actually, drop that one.",
+    "That doesn't matter any more.", "算了",
+])
+def test_r2_08_forget_that_requirement_withdraws_what_the_last_message_added(message):
+    from core.langgraph_agent import retract_previous_requirement
+    start = {"area": "Hackney", "soft_preferences": ["Would like balcony", "Would like gym"],
+             "property_features": ["lift"]}
+    result = retract_previous_requirement(dict(start), message, "I'd also like to be near a gym.")
+    assert result["soft_preferences"] == ["Would like balcony"]
+    assert result["property_features"] == ["lift"]
+
+
+def test_r2_08_a_bare_retraction_with_nothing_named_changes_nothing():
+    from core.langgraph_agent import retract_previous_requirement
+    start = {"area": "Hackney", "soft_preferences": ["Would like gym"]}
+    assert retract_previous_requirement(start, "Forget that requirement.", "What is the weather?") is start
+    assert retract_previous_requirement(start, "Forget the weather, find flats", "I want a gym.") is start
+
+
+def test_r2_08_the_state_node_reads_the_previous_message():
+    from core.langgraph_agent import _make_extract_preferences_node
+    node = _make_extract_preferences_node()
+    state = {"user_preferences": {}, "accumulated_search_criteria": {
+                 "area": "Hackney", "soft_preferences": ["garden"]},
+             "extracted_context": {"current_message": "Forget that requirement.",
+                                   "history": [{"user": "I want a garden.", "assistant": "Noted."}]}}
+    update = node(state)
+    assert update["accumulated_search_criteria"]["soft_preferences"] == []

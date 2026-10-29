@@ -325,7 +325,10 @@ _RETRACTION_AFTER_RE = re.compile(
     # "is not required" is NOT here: "a lift is not required but would be nice" is a soft
     # preference, handled by the hard/soft classifier; only "no longer required" retracts.
     r"(?:(?:(?:is|are)\s+(?:not|no longer)|isn.t|aren.t|not|no longer)\s+(?:needed|necessary)"
-    r"|(?:(?:is|are)\s+)?no longer\s+required)\b",
+    r"|(?:(?:is|are)\s+)?no longer\s+required"
+    # "The garden doesn't matter any more." (R2-08)
+    r"|(?:doesn.t|does\s+not|don.t|do\s+not)\s+(?:really\s+)?matter"
+    r"|(?:is|are)\s+(?:not|no longer)\s+important|isn.t\s+important|aren.t\s+important)\b",
     re.I)
 _RETRACTION_TAIL_RE = re.compile(
     r"[^.!?;。！？,，]{0,40}?[,，]\s*(?:(?:it|that)(?:'s|\s+is)\s+)?"
@@ -625,6 +628,53 @@ _AMENITY_NEGATED_BEFORE_RE = re.compile(
     r"\bno|\bwithout)\s+(?:(?:a|an|the|any|my)\s+)?(?:\w+\s+)?$|(?:不需要|不用|不要)\s*$", re.I)
 
 
+def _is_short_preference(value) -> bool:
+    """A one-to-three-word preference label ("garden", "quiet street"), not a sentence."""
+    return bool(re.fullmatch(r"[A-Za-z][A-Za-z'’\-]*(?:\s+[A-Za-z][A-Za-z'’\-]*){0,2}", str(value or "").strip()))
+
+
+# "Forget that requirement." / "Never mind that." right after a requirement was added named
+# nothing, so nothing was withdrawn (R2-08). "That" is what the user's previous message added.
+_BARE_REQUIREMENT_RETRACTION = re.compile(
+    r"^\W*(?:(?:ok(?:ay)?|actually|sorry|oh|hmm|no)\W+)*"
+    r"(?:forget|never\s*mind|drop|scrap|remove|cancel|skip|ignore|disregard|undo)\s+(?:about\s+)?"
+    r"(?:that|this|it)(?:\s+(?:last\s+)?(?:requirement|preference|one|condition|filter|request|bit|thing))?"
+    r"(?:\W+(?:please|then|after\s+all|thanks))*\W*$"
+    r"|^\W*(?:that|this|it)\s+(?:doesn.t|does\s+not)\s+matter(?:\s+any\s?more)?\W*$"
+    r"|^\W*(?:算了|不要那个了|那个不要了|那个算了|刚才那个(?:要求|条件)?(?:不要了|算了|取消))\W*$", re.I)
+
+
+def retract_previous_requirement(accumulated: dict, message: str, previous_message: str) -> dict:
+    """``accumulated`` without the features / preferences ``previous_message`` named, when
+    ``message`` is a bare "forget that requirement" (R2-08). Returns the SAME object when
+    nothing is withdrawn."""
+    if not _BARE_REQUIREMENT_RETRACTION.search(str(message or "")) or not previous_message:
+        return accumulated
+    previous = str(previous_message)
+
+    def _named(value) -> bool:
+        label = str(value or "")
+        label = label[len('Would like '):] if label.startswith('Would like ') else label
+        label = label.strip()
+        return bool(label) and bool(re.search(
+            r"(?<![A-Za-z])" + re.escape(label) + r"(?![A-Za-z])", previous, re.I))
+
+    result = dict(accumulated)
+    sources = dict(accumulated.get('constraint_sources') or {})
+    changed = False
+    for field in ('property_features', 'soft_preferences'):
+        before = list(accumulated.get(field) or [])
+        after = [value for value in before if not _named(value)]
+        if after != before:
+            result[field] = after
+            sources[field] = {'source': 'user_message', 'value': after, 'text': str(message)[:800]}
+            changed = True
+    if not changed:
+        return accumulated
+    result['constraint_sources'] = sources
+    return result
+
+
 def _soft_amenity_updates(message: str, soft_preferences: list) -> list | None:
     """The soft-preference list after this message's amenity nice-to-haves, or None.
 
@@ -638,6 +688,11 @@ def _soft_amenity_updates(message: str, soft_preferences: list) -> list | None:
     stated = extract_preferences_from_message(message or '', {'soft_preferences': []})
     names = {str(v)[len('Would like '):] for v in current + list(stated.get('soft_preferences') or [])
              if str(v).startswith('Would like ')} - set(_ACCESSIBILITY_FEATURES)
+    # A short preference stored as it was echoed ("garden") is withdrawn the same way: "Never
+    # mind about the garden." kept it in every later summary (R2-08).
+    plain = {str(v).strip() for v in current
+             if not str(v).startswith('Would like ') and _is_short_preference(v)}
+    names |= plain
     withdrawn = set()
     for name in names:
         for match in re.finditer(r"(?<![A-Za-z])" + re.escape(name) + r"(?![A-Za-z])", message or '', re.I):
@@ -645,8 +700,9 @@ def _soft_amenity_updates(message: str, soft_preferences: list) -> list | None:
                     or _AMENITY_NEGATED_BEFORE_RE.search(message[max(0, match.start() - 50):match.start()])):
                 withdrawn.add(name)
                 break
-    updated = [v for v in current if str(v)[len('Would like '):] not in withdrawn
-               or not str(v).startswith('Would like ')]
+    updated = [v for v in current if (str(v)[len('Would like '):] not in withdrawn
+                                      or not str(v).startswith('Would like '))
+               and str(v).strip() not in (withdrawn & plain)]
     for value in stated.get('soft_preferences') or []:
         name = value[len('Would like '):] if value.startswith('Would like ') else ''
         if name in names and name not in withdrawn and value not in updated:
@@ -1647,6 +1703,10 @@ def _make_extract_preferences_node():
         # to the next search and to budget_status labelling.
         accumulated = state.get("accumulated_search_criteria") or {}
         new_accumulated = _apply_explicit_criteria_updates(accumulated, current_msg)
+        history = (state.get("extracted_context") or {}).get("history") or []
+        last_turn = history[-1] if history and isinstance(history[-1], dict) else {}
+        new_accumulated = retract_previous_requirement(
+            new_accumulated, current_msg, str(last_turn.get("user") or ""))
         if new_accumulated is not accumulated:
             update["accumulated_search_criteria"] = new_accumulated
         return update

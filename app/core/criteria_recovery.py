@@ -362,3 +362,34 @@ def repair_criteria_sources(accumulated: dict, messages: list[dict]) -> dict:
                 repaired_sources[mirror] = deepcopy(repaired_sources[field])
     result['criteria_repair_provenance'] = provenance[-20:]
     return synchronize_monthly_budget_alias(_synchronise_recovered_area_alias(result))
+
+
+def criteria_with_undelivered_turns(accumulated: dict, messages: list[dict]) -> dict:
+    """``accumulated`` with the criteria of the turns that failed after the last answer.
+
+    A failed turn commits no snapshot, so after "Find me a 1-bed in Camden under £2000"
+    met a model-provider error, "And what about Islington?" searched Islington with no
+    bedrooms and no budget (R3-18, 4/4). The user's own words in each failed, never answered
+    turn since the last delivered answer are folded in, oldest first; a turn the client
+    cancelled is not, and a relative budget edit is not re-applied."""
+    from core.langgraph_agent import _apply_explicit_criteria_updates
+    from uk_rent_agent.web.conversation_store import CANCELLED_TURN_TEXTS
+    items = [m for m in messages or [] if isinstance(m, dict)]
+    start = 0
+    for index, message in enumerate(items):
+        if message.get("role") == "assistant" and message.get("response_type") != "error":
+            start = index + 1
+    result = accumulated if isinstance(accumulated, dict) else {}
+    for index in range(start, len(items) - 1):
+        message, reply = items[index], items[index + 1]
+        if (message.get("role") != "user" or reply.get("role") != "assistant"
+                or reply.get("response_type") != "error"
+                or str(reply.get("content") or "").strip() in CANCELLED_TURN_TEXTS):
+            continue
+        text = message.get("content")
+        if isinstance(text, str) and text.strip():
+            try:
+                result = _apply_explicit_criteria_updates(result, text, apply_relative_budget=False)
+            except Exception:
+                continue
+    return result

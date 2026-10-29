@@ -655,3 +655,34 @@ def test_r3_22_an_orphaned_running_turn_is_closed_at_startup(tmp_path):
     assert messages[-1]["role"] == "assistant" and messages[-1]["content"] == CANCELLED_TURN_TEXTS[0]
     assert store.close_orphaned_turns() == 0
     store.close()
+
+
+# R3-18 ── a turn that failed before answering still states the user's criteria ──────
+def _msg(role, content, response_type=None):
+    out = {"role": role, "content": content}
+    if response_type:
+        out["response_type"] = response_type
+    return out
+
+
+def test_r3_18_a_failed_turns_criteria_carry_into_the_follow_up():
+    from core.criteria_recovery import criteria_with_undelivered_turns
+    messages = [_msg("user", "Find me a 1-bed in Camden under £2000 per month."),
+                _msg("assistant", "The model service is temporarily unavailable.", "error"),
+                _msg("user", "And what about Islington?")]
+    acc = criteria_with_undelivered_turns({}, messages)
+    assert acc["area"] == "Camden" and acc["bedrooms"] == 1 and acc["max_budget"] == 2000
+    follow = _state_node(acc, "And what about Islington?")
+    assert follow["area"] == "Islington" and follow["bedrooms"] == 1 and follow["max_budget"] == 2000
+
+
+def test_r3_18_answered_and_cancelled_turns_are_not_replayed():
+    from core.criteria_recovery import criteria_with_undelivered_turns
+    from uk_rent_agent.web.conversation_store import CANCELLED_TURN_TEXTS
+    answered = [_msg("user", "Find me a 1-bed in Camden under £2000."), _msg("assistant", "Here are 3.", "chat"),
+                _msg("user", "Islington?")]
+    start = {"area": "Hackney", "max_budget": 1500}
+    assert criteria_with_undelivered_turns(start, answered) is start
+    cancelled = [_msg("user", "Find me a studio in Bow under £1200."),
+                 _msg("assistant", CANCELLED_TURN_TEXTS[0], "error"), _msg("user", "hello")]
+    assert criteria_with_undelivered_turns(start, cancelled) is start

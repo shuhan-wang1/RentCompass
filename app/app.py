@@ -3367,6 +3367,10 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     persistent_snapshot['accumulated_search_criteria'] = await asyncio.to_thread(
         repair_criteria_sources, persistent_snapshot.get('accumulated_search_criteria') or {},
         _conversation_messages)
+    # What the user stated in a turn that failed before answering still applies (R3-18).
+    from core.criteria_recovery import criteria_with_undelivered_turns
+    persistent_snapshot['accumulated_search_criteria'] = criteria_with_undelivered_turns(
+        persistent_snapshot['accumulated_search_criteria'], _conversation_messages)
     persistent_snapshot['user_preferences'] = preferences_after_criteria_repair(
         persistent_snapshot.get('user_preferences') or {},
         persistent_snapshot['accumulated_search_criteria'])

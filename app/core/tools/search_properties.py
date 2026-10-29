@@ -1315,6 +1315,13 @@ def borough_for_postcode(text: str) -> str | None:
         return None
 
 
+_STREET_NAME_SUFFIX = (
+    r"(?!\s+(?:road|rd|street|st|lane|ln|avenue|ave|grove|place|pl|way|terrace|close|crescent|"
+    r"gardens|gdns|square|sq|hill|park|row|walk|court|ct|drive|dr|mews|wick|downs|marshes|central|"
+    r"village|town|green|high|wharf|gate|rise|parade|yard|bridge|common|fields|embankment|"
+    r"house|buildings|estate|broadway|passage|circus|quay|reach|heights)\b)")
+
+
 def reconcile_area_label(address: object) -> str:
     """Replace a listing string's BOROUGH word when its own postcode contradicts it.
 
@@ -1352,7 +1359,11 @@ def reconcile_area_label(address: object) -> str:
             for claimed_lower, claimed in _LONDON_BOROUGH_NAMES.items():
                 if claimed == borough:
                     continue
-                pattern = re.compile(r"\b" + re.escape(claimed) + r"\b", re.IGNORECASE)
+                # A borough word that opens a street or place name ("Hackney Road E2") is not
+                # a borough claim: "Tower Hamlets Road E2" named a street that does not exist
+                # (R2-06).
+                pattern = re.compile(r"\b" + re.escape(claimed) + r"\b" + _STREET_NAME_SUFFIX,
+                                     re.IGNORECASE)
                 if pattern.search(part):
                     part = pattern.sub(borough, part)
                     changed = True

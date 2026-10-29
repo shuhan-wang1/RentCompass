@@ -204,3 +204,19 @@ def test_r2_05_a_comparison_keeps_the_search_area(message):
 def test_r2_05_an_explicit_switch_still_switches(message, area):
     from core.tools.search_properties import _extract_area
     assert _extract_area(message) == area
+
+
+# R2-06 ── a borough word inside a street name is never rewritten ────────────────────
+@pytest.mark.parametrize("address", [
+    "Flat 2, 419-437, Hackney Road E2", "Unit 5, Islington Park Street N1",
+    "Camden High Street, NW1 7JE",
+])
+def test_r2_06_a_street_named_after_a_borough_keeps_its_name(address):
+    from core.tools.search_properties import reconcile_area_label
+    assert reconcile_area_label(address) == address
+
+
+def test_r2_06_a_wrong_borough_claim_is_still_corrected():
+    from core.tools.search_properties import reconcile_area_label
+    assert reconcile_area_label("Rugby House 6 Great Ormond Street, Islington WC1N") == \
+        "Rugby House 6 Great Ormond Street, Camden WC1N"

@@ -275,3 +275,47 @@ def test_a_malformed_request_id_still_maps_deterministically():
     from uk_rent_agent.observability import new_request_id
     assert new_request_id("Root=1-abc/def") == new_request_id("Root=1-abc/def")
     assert new_request_id("req-0001") == "req-0001"
+
+
+# R1-17 ── favourites take an http(s) URL and a string title ─────────────────────────
+@pytest.fixture
+def fav_client(tmp_path, monkeypatch):
+    from dataclasses import replace
+    import app as appmod
+    from uk_rent_agent.web.conversation_store import ConversationStore
+    from uk_rent_agent.web.session_store import SessionStore
+    store = ConversationStore(tmp_path / "fav.sqlite3")
+    monkeypatch.setattr(appmod, "conversation_store", store)
+    monkeypatch.setattr(appmod, "_session_store", SessionStore())
+    monkeypatch.setattr(appmod, "_runtime_config", replace(
+        appmod._runtime_config, allow_legacy_client_user_id=True, max_request_bytes=262144))
+    monkeypatch.setattr(appmod._api_rate_limiter, "allow", lambda *a, **k: (True, 0))
+    appmod.app.config.update(TESTING=True, MAX_CONTENT_LENGTH=262144)
+    yield appmod.app.test_client(), store
+    store.close()
+
+
+def _post_fav(client, body):
+    return client.open("/api/favorites", method="POST", data=json.dumps(body),
+                       content_type="application/json", headers={"X-User-Id": "u_fav"})
+
+
+@pytest.mark.parametrize("body", [
+    {"url": "javascript:alert(1)", "title": "t"},
+    {"url": "JavaScript:alert(1)"},
+    {"url": "data:text/html,hi"},
+    {"url": "//example.test/x"},
+    {"url": "https://example.test/1", "title": {"html": "<b>x</b>"}},
+    {"url": "https://example.test/1", "title": ["a"]},
+    {"url": "https://example.test/1", "title": "x" * 501},
+])
+def test_invalid_favorites_are_refused(fav_client, body):
+    client, store = fav_client
+    assert _post_fav(client, body).status_code == 400
+    assert store.list_favorites("u_fav") == []
+
+
+def test_a_valid_favorite_is_saved(fav_client):
+    client, store = fav_client
+    r = _post_fav(client, {"url": "https://example.test/listing/1", "title": "1 bed, Hackney"})
+    assert r.status_code == 200 and len(store.list_favorites("u_fav")) == 1

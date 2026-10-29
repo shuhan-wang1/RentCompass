@@ -4859,6 +4859,20 @@ def add_favorite():
     if not isinstance(url, str):
         # str() of a list/dict used to be stored as the favourite's key (C-16).
         raise ApiError(400, "Property URL must be a string")
+    from urllib.parse import urlsplit
+    try:
+        parts = urlsplit(url.strip())
+    except ValueError:
+        parts = None
+    if (parts is None or parts.scheme.lower() not in ("http", "https") or not parts.netloc
+            or len(url) > 2048):
+        # A "javascript:" URL was stored and handed back to the page (R1-17).
+        raise ApiError(400, "Property URL must be an http(s) link")
+    title = data.get('title')
+    if title is not None and (not isinstance(title, str) or len(title) > 500):
+        # An object title was stored and returned verbatim; validated like a conversation
+        # title (C-09, R1-17).
+        raise ApiError(400, "title must be a string of at most 500 characters")
     conversation_store.add_favorite(user_id, url, data)
     return jsonify({"success": True, "message": "Added to favorites"})
 

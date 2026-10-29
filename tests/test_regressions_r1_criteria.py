@@ -173,3 +173,17 @@ def test_minutes_to_an_amenity_do_not_set_max_travel_time(message):
 def test_a_commute_limit_beside_an_amenity_still_counts(message, minutes):
     from core.tools.search_properties import _extract_commute_minutes
     assert _extract_commute_minutes(message) == minutes
+
+
+# R1-18 ── "2 bedrooms again minimum" is a minimum ───────────────────────────────────
+@pytest.mark.parametrize("message, expected", [
+    ("I want 2 bedrooms again minimum.", (2, 6)),
+    ("2 bedrooms at minimum.", (2, 6)),
+    ("I want 2 bedrooms minimum.", (2, 6)),
+    ("I want 2 bedrooms again.", (2, 2)),
+])
+def test_bedroom_minimum_with_a_filler_word(message, expected):
+    from core.tools.search_properties import _extract_bedrooms
+    assert _extract_bedrooms(message) == expected
+    acc = _apply_explicit_criteria_updates({"area": "Hackney", "bedrooms": 1}, message)
+    assert acc["bedrooms"] == 2 and acc["bedrooms_minimum"] is (expected[1] != expected[0])

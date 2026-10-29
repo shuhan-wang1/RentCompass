@@ -884,7 +884,11 @@ def _extract_bedrooms(text: str):
             continue
         n = int(m.group(1)) if m.group(1).isdigit() else nums[m.group(1)]
         minimum = bool(re.search(r'(?:至少|最少|at least|minimum|min\.?)[^，。;；]{0,10}$', before))
-        minimum = minimum or bool(re.match(r'\s*(?:minimum|or more|以上)', after, re.I))
+        # A filler word may sit between the count and its qualifier: "I want 2 bedrooms
+        # again minimum." read as exactly 2 (R1-18).
+        minimum = minimum or bool(re.match(
+            r'\s*(?:(?:again|too|then|now|please|at|as\s+a)\s+){0,2}(?:minimum|min\b|or more|at least|以上)',
+            after, re.I))
         total = bool(re.search(r'正好|恰好|总共|总计|合计|整套|整租|\b(?:exactly|total(?: of)?|whole (?:home|property|flat))\b', before, re.I))
         candidates.append((int(total), m.start(), (n, 6 if minimum else n)))
     if candidates:

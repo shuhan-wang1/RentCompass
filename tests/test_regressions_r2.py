@@ -389,3 +389,26 @@ def test_r2_14_the_destination_name_drops_the_trailing_full_stop():
     place = extract_destination_from_text(message)
     assert place["name"] == "St Thomas' Hospital" and not place["address"].endswith(".")
     assert _apply_explicit_criteria_updates({}, message)["commute_destination"] == "St Thomas' Hospital"
+
+
+# R2-15 ── the weather recommendation is English, with the Chinese beside it ─────────
+def test_r2_15_weather_recommendation_is_not_chinese_only(monkeypatch):
+    import re
+    from core.tools import get_weather as weather
+    from tests.test_qa_r01_weather_uk import _GEO, _Response
+
+    def fake_get(url, params=None, timeout=None):
+        if "geocoding-api" in url:
+            return _Response({"results": [r for r in _GEO["Reading"]]})
+        return _Response({"current": {"temperature_2m": 12.0, "relative_humidity_2m": 70,
+                                      "apparent_temperature": 11.0, "precipitation": 0.0,
+                                      "weather_code": 3, "wind_speed_10m": 9.0,
+                                      "time": "2026-10-19T19:00"},
+                          "hourly": {"time": ["2026-10-19T19:00"], "uv_index": [0.0]}})
+
+    monkeypatch.setattr(weather.requests, "get", fake_get)
+    result = weather.get_weather_impl("Reading, UK")
+    assert result["success"] is True
+    assert not re.search(r"[一-鿿]", result["recommendation"])
+    assert result["recommendation"].startswith("No precipitation reported")
+    assert result["recommendation_zh"] == "未报告降水，外出前可再次核对天气"

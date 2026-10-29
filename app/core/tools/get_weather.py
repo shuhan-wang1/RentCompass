@@ -290,9 +290,14 @@ def get_weather_impl(
             "uv_index": uv_index,
             "feels_like": c.get("apparent_temperature"),
             "rainfall_chance": c.get('precipitation_probability'),
-            "recommendation": ('可能有降水，看房记得带伞' if wet else
-                               '未报告降水，外出前可再次核对天气' if precip == 0 else
-                               '未返回降水数据'),
+            # English for the model, with the Chinese wording beside it: a Chinese-only field
+            # surfaced in English answers (R2-15).
+            "recommendation": ('Rain is possible; take an umbrella to viewings.' if wet else
+                               'No precipitation reported; re-check before going out.' if precip == 0 else
+                               'No precipitation data was returned.'),
+            "recommendation_zh": ('可能有降水，看房记得带伞' if wet else
+                                  '未报告降水，外出前可再次核对天气' if precip == 0 else
+                                  '未返回降水数据'),
         }
         if forecast:
             result.update(forecast_temp=c.get('temperature_2m'),

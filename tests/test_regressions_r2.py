@@ -353,7 +353,7 @@ _LONDON_COMMUTE = {
     "commute_destination": "Imperial College London, South Kensington, London SW7 2AZ",
     "destination": "Imperial College London, South Kensington, London SW7 2AZ",
     "constraint_sources": {"commute_destination": {
-        "source": "user_message", "text": "commute from E1 6AN to Imperial College London",
+        "source": "user_message", "text": "commute from my flat to Imperial College London",
         "value": "Imperial College London, South Kensington, London SW7 2AZ"}},
 }
 

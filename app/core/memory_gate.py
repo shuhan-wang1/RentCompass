@@ -982,6 +982,67 @@ def acknowledge_memory_pause(text: str, event, reply_language: str = "en") -> st
     return f"{body.rstrip()}\n\n{note}" if body.strip() else note
 
 
+# "Forget my budget." was honoured by the post-turn memory job 30-60 s AFTER the reply said
+# "I can't delete saved memories ... your budget is still stored", and a new conversation in
+# between still recalled it (R2-03). The erasure now runs before the turn reads memory; the
+# model reads MEMORY_ERASURE_NOTE and the reply carries the fixed acknowledgement below.
+MEMORY_ERASURE_NOTE = (
+    "MEMORY ERASURE THIS TURN: at the user's request the server has ALREADY deleted every saved "
+    "{fields} figure from long-term memory, in every layer. It is no longer stored and will not "
+    "be recalled in any conversation. Do not say it is still stored or that you cannot delete it.")
+MEMORY_ERASED_ACK_EN = (
+    "Done: I've deleted the {fields} you saved from my memory, so it won't come back in this or "
+    "any later conversation. Tell me a new {fields} whenever you want one applied.")
+MEMORY_ERASED_ACK_ZH = "已从我的记忆中删除你保存的{fields}，本次和以后的对话都不会再使用它。需要时告诉我新的{fields}即可。"
+MEMORY_ERASURE_INCOMPLETE_EN = (
+    "I tried to delete the {fields} you saved, but I could not confirm that every saved copy is "
+    "gone. Please ask again, or use \"forget me\" to erase all of your saved data.")
+MEMORY_ERASURE_INCOMPLETE_ZH = "我尝试删除你保存的{fields}，但无法确认所有副本都已删除。请再试一次，或使用“删除我的所有数据”。"
+_ERASURE_FIELD_NAMES = {"budget": ("budget", "预算")}
+_ERASURE_DENIAL = re.compile(
+    r"\b(?:can.?t|cannot|can\s+not|unable\s+to|no\s+way\s+to|not\s+able\s+to|don.?t\s+have\s+(?:a\s+)?way\s+to)"
+    r"\s+(?:\w+\s+){0,3}?(?:delete|remove|erase|forget|wipe)|"
+    r"\bstill\s+(?:be\s+)?(?:stored|saved|kept|on\s+file|in\s+(?:my\s+)?memory)|"
+    r"无法删除|不能删除|没(?:有)?办法删除|仍(?:然)?(?:保存|存储)|还(?:保存|存储)着", re.I)
+
+
+def memory_erasure_texts(report, reply_language: str = "en") -> tuple[str, str]:
+    """(model note, user acknowledgement) for this turn's erasure ``report`` (R2-03)."""
+    fields = [f for f in (report or {}).get("fields") or () if f in _ERASURE_FIELD_NAMES]
+    if not fields:
+        return "", ""
+    zh = str(reply_language or "").lower().startswith("zh")
+    label = ("和" if zh else " and ").join(_ERASURE_FIELD_NAMES[f][1 if zh else 0] for f in fields)
+    note = MEMORY_ERASURE_NOTE.format(fields=" and ".join(_ERASURE_FIELD_NAMES[f][0] for f in fields))
+    if not report.get("complete"):
+        ack = (MEMORY_ERASURE_INCOMPLETE_ZH if zh else MEMORY_ERASURE_INCOMPLETE_EN).format(fields=label)
+        note = note.replace("has ALREADY deleted", "tried to delete").replace(
+            "It is no longer stored and will not be recalled in any conversation. ",
+            "Some saved copies may remain. ")
+    else:
+        ack = (MEMORY_ERASED_ACK_ZH if zh else MEMORY_ERASED_ACK_EN).format(fields=label)
+    return note, ack
+
+
+def acknowledge_memory_erasure(text: str, report, reply_language: str = "en") -> str:
+    """``text`` stating the erasure this turn performed: sentences that deny it ("I can't
+    delete saved memories", "your budget is still stored") are dropped and the fixed
+    acknowledgement leads the reply (R2-03)."""
+    body = str(text or "")
+    _note, ack = memory_erasure_texts(report, reply_language)
+    if not ack or ack in body:
+        return body
+    if report.get("complete"):
+        kept = []
+        for line in body.split("\n"):
+            pieces = re.split(r"(?<=[.!?。！？])\s+", line)
+            survivors = [piece for piece in pieces if not _ERASURE_DENIAL.search(piece)]
+            if survivors or not line.strip():
+                kept.append(" ".join(survivors))
+        body = re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
+    return f"{ack}\n\n{body}" if body.strip() else ack
+
+
 def conversation_memory_paused_at(user_id, conversation_id) -> float | None:
     """When (epoch seconds) memory was paused for this conversation, or None when it is not."""
     key = _pause_key(user_id, conversation_id)

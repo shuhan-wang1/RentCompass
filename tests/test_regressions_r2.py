@@ -94,3 +94,55 @@ def test_r2_02_the_search_runs_in_the_new_area():
         dict(_CITY_ACC), _COMPOSITE)
     assert params["area"] == "Islington" and params["areas"] == ["Islington"]
     assert "area" not in dropped and "areas" not in dropped
+
+
+# R2-03 ── "forget my budget" is erased before the reply, and the reply says so ──────
+class _CapturingGraph:
+    def __init__(self, reply):
+        self.reply, self.inputs = reply, []
+
+    async def ainvoke(self, graph_input, config=None):
+        self.inputs.append(graph_input)
+        return {"final_response": self.reply, "response_type": "answer", "tool_data": {}}
+
+
+def test_r2_03_forget_my_budget_is_erased_before_the_reply(tmp_path, monkeypatch):
+    import asyncio
+    import importlib
+    am_mod = importlib.import_module("rag.agent_memory")
+    monkeypatch.setattr(am_mod, "call_ollama", lambda *a, **k: "5")
+    memory = am_mod.AgentMemory(db_path=str(tmp_path / "mem"))
+    user = "u-r203-" + _user()
+    memory.add("The user's budget is £1,450 a month", "semantic", user_id=user, importance=5)
+    memory.add("Prefers a quiet street", "semantic", user_id=user, importance=5)
+    monkeypatch.setattr(am_mod, "get_agent_memory", lambda *a, **k: memory)
+    graph = _CapturingGraph("I can't delete saved memories. I can only add to them or read them "
+                            "back, so your £1,450 budget is still stored. Give me a new budget "
+                            "any time.")
+    setattr(graph, appmod._GRAPH_RUNNER_ATTR, appmod._graph_loop_runner)
+    monkeypatch.setattr(appmod, "agent_graph", graph)
+    payload = asyncio.run(appmod.handle_with_react_agent(
+        "Forget my budget.", {}, False, user_id=user, conversation_id="c-r203",
+        request_id="req-r203", ui_language="en"))
+    docs = memory.col.get(where={"user_id": user})["documents"]
+    # Erased while the turn ran, so a new conversation cannot recall it.
+    assert not any("1,450" in doc for doc in docs) and any("quiet" in doc for doc in docs)
+    message = payload["message"]
+    assert "can't delete" not in message and "still stored" not in message
+    assert message.startswith("Done: I've deleted the budget you saved")
+    assert "Give me a new budget any time." in message
+    # The model read the erasure as runtime data, not a stale [FACT] line.
+    seen = graph.inputs[0].get("memory_context") or graph.inputs[0].get("user_query") or ""
+    assert "MEMORY ERASURE THIS TURN" in seen and "1,450" not in seen
+
+
+def test_r2_03_acknowledgement_is_fixed_and_honest_about_a_partial_erasure():
+    from core import memory_gate
+    done = {"fields": ("budget",), "complete": True}
+    zh = memory_gate.acknowledge_memory_erasure("我无法删除已保存的记忆。好的。", done, "zh")
+    assert zh.startswith("已从我的记忆中删除你保存的预算") and "无法删除" not in zh
+    partial = memory_gate.acknowledge_memory_erasure("OK.", {"fields": ("budget",), "complete": False}, "en")
+    assert partial.startswith("I tried to delete the budget you saved")
+    assert memory_gate.acknowledge_memory_erasure("OK.", {"fields": (), "complete": True}, "en") == "OK."
+    once = memory_gate.acknowledge_memory_erasure("OK.", done, "en")
+    assert memory_gate.acknowledge_memory_erasure(once, done, "en") == once

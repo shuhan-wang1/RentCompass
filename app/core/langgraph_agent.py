@@ -675,6 +675,76 @@ def retract_previous_requirement(accumulated: dict, message: str, previous_messa
     return result
 
 
+# "Actually back to the area I had before Stratford." kept Stratford: no extractor resolves a
+# reference to an EARLIER area (R2-12). It is resolved from the conversation's own messages.
+_PREVIOUS_AREA_REFERENCE = re.compile(
+    r"\b(?:(?:go(?:ing)?\s+|switch\s+|change\s+it\s+|move\s+)?back\s+to|return\s+to|revert\s+to|restore|"
+    r"use|search)\s+(?:the\s+|my\s+)?"
+    r"(?:(?P<which>previous|earlier|original|old|last|first|former|other)\s+)?"
+    r"(?:area|location|place|neighbou?rhood|one)\b"
+    r"(?:\s+(?:i|we)\s+(?:had|picked|chose|was\s+(?:searching|looking)(?:\s+in)?|used|started\s+with))?"
+    r"(?:\s+(?:before|until)\s+(?P<before>[A-Za-z][A-Za-z'’\- ]{1,40}?))?"
+    r"(?:\s+(?:please|then|again|instead|now))*\s*(?:[.!?,;]|$)"
+    r"|(?:回到|切回|换回|改回|恢复)(?:到)?\s*(?:(?P<before_zh>[^，。！？,.!?]{1,20}?)之前的|(?P<which_zh>之前|原来|上一个|先前|最初|最开始|以前)的?)"
+    r"(?:那个)?(?:区域|地区|地方|位置)", re.I)
+
+
+def _area_history(history) -> list:
+    """The areas the user's earlier messages switched to, oldest first, without repeats."""
+    from core.tools.search_properties import _extract_area, _extract_areas
+    sequence = []
+    for turn in history or []:
+        message = str((turn or {}).get("user") or "") if isinstance(turn, dict) else ""
+        if not message:
+            continue
+        area = _extract_area(message)
+        if not area:
+            areas = _extract_areas(message)
+            area = areas[0] if len(areas) == 1 else None
+        if area and (not sequence or sequence[-1].lower() != area.lower()):
+            sequence.append(area)
+    return sequence
+
+
+def resolve_previous_area(accumulated: dict, message: str, history) -> dict:
+    """``accumulated`` switched back to the earlier area ``message`` refers to ("the area I
+    had before Stratford", "the previous area", "回到之前的区域"), resolved from ``history``
+    (R2-12). Returns the SAME object when nothing resolves."""
+    match = _PREVIOUS_AREA_REFERENCE.search(str(message or ""))
+    if not match:
+        return accumulated
+    which = (match.group("which") or match.group("which_zh") or "").lower()
+    before = (match.group("before") or match.group("before_zh") or "").strip()
+    if not which and not before:
+        return accumulated
+    sequence = _area_history(history)
+    current = str(accumulated.get("area") or "")
+    target = None
+    if before:
+        from core.tools.search_properties import _match_known_area
+        left = _match_known_area(before.lower()) or before
+        hits = [i for i, area in enumerate(sequence) if area.lower() == str(left).lower()]
+        if hits and hits[-1] > 0:
+            target = sequence[hits[-1] - 1]
+    elif which in ("original", "first", "最初", "最开始"):
+        target = sequence[0] if sequence else None
+    else:
+        hits = [i for i, area in enumerate(sequence) if area.lower() == current.lower()]
+        if hits and hits[-1] > 0:
+            target = sequence[hits[-1] - 1]
+        elif sequence and sequence[-1].lower() != current.lower():
+            target = sequence[-1]
+    if not target or target.lower() == current.lower():
+        return accumulated
+    result = dict(accumulated, area=target, areas=[target])
+    sources = dict(accumulated.get("constraint_sources") or {})
+    for key in ("area", "areas"):
+        sources[key] = {"source": "user_message", "value": result[key], "text": str(message)[:800]}
+    result["constraint_sources"] = sources
+    logger.info("criteria.previous_area_restored")
+    return result
+
+
 def _soft_amenity_updates(message: str, soft_preferences: list) -> list | None:
     """The soft-preference list after this message's amenity nice-to-haves, or None.
 
@@ -1707,6 +1777,7 @@ def _make_extract_preferences_node():
         last_turn = history[-1] if history and isinstance(history[-1], dict) else {}
         new_accumulated = retract_previous_requirement(
             new_accumulated, current_msg, str(last_turn.get("user") or ""))
+        new_accumulated = resolve_previous_area(new_accumulated, current_msg, history)
         if new_accumulated is not accumulated:
             update["accumulated_search_criteria"] = new_accumulated
         return update

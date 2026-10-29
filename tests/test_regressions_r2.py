@@ -316,3 +316,33 @@ def test_r2_11_an_explicit_new_city_wins():
     acc = _apply_explicit_criteria_updates({"area": "Hackney", "areas": ["Hackney"]},
                                            "我想在加的夫找房子，预算每月1000镑")
     assert acc["area"] == "Cardiff" and acc["max_budget"] == 1000
+
+
+# R2-12 ── "back to the area I had before X" resolves from the conversation ──────────
+_AREA_HISTORY = [{"user": "Find a 1-bedroom in Hackney under £2,000 a month", "assistant": "..."},
+                 {"user": "I want a garden.", "assistant": "..."},
+                 {"user": "How about Stratford instead?", "assistant": "..."}]
+
+
+@pytest.mark.parametrize("message", [
+    "Actually back to the area I had before Stratford.", "Go back to the previous area.",
+    "Back to the earlier area please.", "Switch back to the original area.", "回到之前的区域",
+    "回到Stratford之前的区域",
+])
+def test_r2_12_back_to_the_previous_area(message):
+    from core.langgraph_agent import _make_extract_preferences_node
+    node = _make_extract_preferences_node()
+    state = {"user_preferences": {},
+             "accumulated_search_criteria": {"area": "Stratford", "areas": ["Stratford"], "max_budget": 2000},
+             "extracted_context": {"current_message": message, "history": list(_AREA_HISTORY)}}
+    acc = node(state)["accumulated_search_criteria"]
+    assert acc["area"] == "Hackney" and acc["areas"] == ["Hackney"] and acc["max_budget"] == 2000
+    assert acc["constraint_sources"]["area"]["value"] == "Hackney"
+
+
+def test_r2_12_without_an_earlier_area_nothing_changes():
+    from core.langgraph_agent import resolve_previous_area
+    acc = {"area": "Stratford", "areas": ["Stratford"]}
+    assert resolve_previous_area(acc, "Go back to the previous area.",
+                                 [{"user": "Find flats in Stratford"}]) is acc
+    assert resolve_previous_area(acc, "Tell me about the area.", _AREA_HISTORY) is acc

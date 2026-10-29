@@ -756,8 +756,13 @@ def _states_field_value(text: str, field: str, mtype: str = "") -> bool:
         return False
     if mtype in ("semantic", "reflection"):
         return True
-    return bool(_FIRST_PERSON.search(text or "")
+    # "... the user's budget is £99/month ..." in the episodic log is this user's value too:
+    # "forget my budget" left it there and the reply said every layer was cleared (R3-15).
+    return bool(_FIRST_PERSON.search(text or "") or _USER_POSSESSIVE.search(text or "")
                 or any(ch in (text or "") for ch in _FIRST_PERSON_ZH))
+
+
+_USER_POSSESSIVE = re.compile(r"\b(?:the\s+)?user['’]s\b|用户的", re.I)
 
 
 def erasure_request_fields(text: str) -> tuple:

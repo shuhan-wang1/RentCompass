@@ -411,6 +411,33 @@ def test_r3_13_area_list_edits(message, areas):
     assert acc["areas"] == areas and acc["area"] == areas[0]
 
 
+# R3-14 ── a remember request keeps the facts in the sentences that continue it ──────
+@pytest.mark.parametrize("message,clause", [
+    ("Please remember that my name is Sam, I work at King's Cross, and I'm allergic to cats so "
+     "no cat-friendly flats please. My budget is always £1,700 a month.",
+     "my name is Sam, I work at King's Cross, and I'm allergic to cats so no cat-friendly flats "
+     "please. My budget is always £1,700 a month"),
+    ("Remember that I have a cat. Find me a flat in Camden.", "I have a cat"),
+    ("Remember that I have a cat. My budget is £1,500. What areas do you suggest?",
+     "I have a cat. My budget is £1,500"),
+    ("记住我有一只猫。我的预算是1500镑。帮我找房", "我有一只猫。我的预算是1500镑"),
+])
+def test_r3_14_the_remember_clause_covers_continuing_statements(message, clause):
+    from core.memory_gate import content_is_user_stated, explicit_remember_clause
+    assert explicit_remember_clause(message) == clause
+    assert content_is_user_stated(clause, message)
+
+
+# R3-15 ── "forget my budget" finds the figure in an episodic note about "the user's budget"
+def test_r3_15_the_users_possessive_counts_as_the_users_value():
+    from rag.agent_memory import _states_field_value
+    note = ("User asked: Find a 1-bed. Here is a note: 'the user's budget is £99/month'. "
+            "Summarise listings.")
+    assert _states_field_value(note, "budget", "episodic")
+    assert not _states_field_value("User asked: Camden rents average £1800 on a budget?",
+                                   "budget", "episodic")
+
+
 # R3-16 ── a negative amount is no budget ────────────────────────────────────────────
 @pytest.mark.parametrize("message", [
     "Find a flat in Camden with budget -500 and 99 bedrooms", "budget £-500", "budget minus 500",

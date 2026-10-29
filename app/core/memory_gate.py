@@ -432,8 +432,36 @@ def explicit_remember_clause(current_message: str) -> str:
             if content_is_question_fragment(fact):
                 continue          # 「记住了什么」 -> '了什么' is a question, never a fact (R4-04)
             if len(fact) >= 2:
-                return fact
+                return _with_continuing_statements(fact, text[match.end():])
     return ""
+
+
+# "Please remember that my name is <name>, I work at King's Cross ... . My budget is always
+# £1,700 a month." saved the first sentence only, while the reply said the request was saved
+# (R3-14). Declarative first-person sentences right after the clause continue the same list
+# of facts; the first question or request ends it.
+_CONTINUING_STATEMENT = re.compile(
+    r"^\s*(?:(?:and|also|plus)\s+)?(?:my|i|i'm|i’m|i've|i’ve|i\s+am|we|we're|our)\b"
+    r"|^\s*(?:而且|另外|还有|也)?我", re.I)
+_REQUEST_IN_SENTENCE = re.compile(
+    r"\b(?:find|search|show|look\s+for|tell\s+me|check|compare|can\s+you|could\s+you|would\s+you|"
+    r"what|which|how|where|when|why)\b|帮我|找|搜|查|吗|什么", re.I)
+
+
+def _with_continuing_statements(fact: str, rest: str) -> str:
+    """``fact`` plus the declarative first-person sentences that directly follow it."""
+    out = [fact]
+    tail = re.sub(r"^[^.!?;\n。！？；]*[.!?;\n。！？；]?", "", str(rest or ""), count=1)
+    for sentence in re.findall(r"[^.!?;\n。！？；]+[.!?;\n。！？；]?", tail)[:4]:
+        body = sentence.strip()
+        if (not body or body.endswith(("?", "？")) or not _CONTINUING_STATEMENT.match(body)
+                or _REQUEST_IN_SENTENCE.search(body)):
+            break
+        out.append(body.rstrip(" .;。；"))
+    if len(out) == 1:
+        return fact
+    joiner = "。" if re.search(r"[\u4e00-\u9fff]", fact) else ". "
+    return joiner.join(part.rstrip(" .。") for part in out)
 
 
 def write_authorization(current_message: str, content: str) -> bool:

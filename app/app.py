@@ -3118,6 +3118,36 @@ def _apply_background_job(job: dict, worker_id: str) -> None:
     raise ValueError(f"unsupported background job kind: {kind!r}")
 
 
+_orphan_sweep_done = False
+_orphan_sweep_lock = threading.Lock()
+
+
+@app.before_request
+def _close_orphaned_turns_once():
+    """On this process's first request, close the turns a previous process left running.
+
+    A restart during an in-flight turn left that turn 'running' and its message unanswered
+    until the next chat on the same conversation reconciled it (R3-22). Under pytest it runs
+    only when ORPHAN_SWEEP_ENABLED is set, like the outbox worker, so a test's own leases are
+    never swept by whichever test happens to run first."""
+    global _orphan_sweep_done
+    if _orphan_sweep_done:
+        return None
+    if "PYTEST_CURRENT_TEST" in os.environ and not os.getenv("ORPHAN_SWEEP_ENABLED"):
+        return None
+    with _orphan_sweep_lock:
+        if _orphan_sweep_done:
+            return None
+        _orphan_sweep_done = True
+        try:
+            closed = conversation_store.close_orphaned_turns()
+            if closed:
+                logger.info("turns.orphaned_closed", extra={"count": closed})
+        except Exception as exc:
+            logger.error("turns.orphan_sweep_failed", extra={"error_type": type(exc).__name__})
+    return None
+
+
 def _ensure_outbox_worker():
     """Start/restart the durable consumer and wake it after a commit."""
     global _outbox_worker

@@ -1674,6 +1674,43 @@ class ConversationStore:
             self._conn.commit()
         return self.get_turn(user_id, turn_id)
 
+    def close_orphaned_turns(self) -> int:
+        """Close every running turn whose lease no longer blocks (its process is gone).
+
+        A restart during an in-flight turn left the turn 'running' until the next chat on
+        that conversation reconciled it, and the user's message showed no reply at all
+        (R3-22). Such a turn is finalised like a client disconnect: failed, with the
+        cancelled text as its answer, so a retry with the same request id runs it again.
+        A turn another live process still owns is left alone. Returns how many were closed."""
+        now = _now_iso()
+        with self._lock:
+            leases = self._conn.execute(
+                """SELECT l.user_id, l.conversation_id, l.turn_id, l.expires_at, l.owner_id, t.status
+                   FROM conversation_turn_leases l
+                   JOIN turns t ON t.id=l.turn_id AND t.user_id=l.user_id
+                   WHERE t.status='running'""").fetchall()
+            orphaned = [(lease["user_id"], lease["conversation_id"], lease["turn_id"])
+                        for lease in leases if not self._lease_blocks(lease, now)]
+        closed = 0
+        for user_id, conversation_id, turn_id in orphaned:
+            try:
+                zh = self._conversation_is_zh(user_id, conversation_id)
+                self.finalize_request_turn(
+                    user_id, turn_id, status="failed", response_type="error",
+                    assistant_content=CANCELLED_TURN_TEXTS[1] if zh else CANCELLED_TURN_TEXTS[0],
+                    recommendations=[], snapshot=None, background_jobs=[])
+                closed += 1
+            except Exception:
+                continue          # finalised meanwhile, or the conversation is gone
+        return closed
+
+    def _conversation_is_zh(self, user_id: str, conversation_id: str) -> bool:
+        with self._lock:
+            row = self._conn.execute(
+                """SELECT content FROM messages WHERE user_id=? AND conversation_id=? AND role='user'
+                   ORDER BY id DESC LIMIT 1""", (user_id, conversation_id)).fetchone()
+        return bool(row and re.search(r"[\u4e00-\u9fff]", row["content"] or ""))
+
     def fail_turn(self, user_id: str, turn_id: str) -> None:
         """Mark a turn 'failed' (sets completed_at)."""
         now = _now_iso()

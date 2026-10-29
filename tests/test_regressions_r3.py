@@ -636,3 +636,22 @@ def test_r3_04_a_reply_claiming_an_unapplied_budget_gets_a_note():
     assert disclose_unapplied_budget_claim("I found 6 flats in Hackney.", True) == "I found 6 flats in Hackney."
     zh = disclose_unapplied_budget_claim("找到6套，都在预算3500镑以内。", True, "zh")
     assert "没有使用预算筛选" in zh
+
+
+# R3-22 ── a turn a dead process left running is closed with an answer ───────────────
+def test_r3_22_an_orphaned_running_turn_is_closed_at_startup(tmp_path):
+    from uk_rent_agent.web.conversation_store import CANCELLED_TURN_TEXTS, ConversationStore
+    store = ConversationStore(tmp_path / "orphan.sqlite3")
+    orphan = store.start_request_turn("u_r322", None, "rid-orphan", "find a flat in Bow")
+    live = store.start_request_turn("u_r322b", None, "rid-live", "find a flat in Camden")
+    with store._lock:      # the first turn's process is gone; the second is this process's
+        store._conn.execute("UPDATE conversation_turn_leases SET owner_id='gone-process' "
+                            "WHERE turn_id=?", (orphan["id"],))
+        store._conn.commit()
+    assert store.close_orphaned_turns() == 1
+    assert store.get_turn("u_r322", orphan["id"])["status"] == "failed"
+    assert store.get_turn("u_r322b", live["id"])["status"] == "running"
+    messages = store.get_messages("u_r322", orphan["conversation_id"])
+    assert messages[-1]["role"] == "assistant" and messages[-1]["content"] == CANCELLED_TURN_TEXTS[0]
+    assert store.close_orphaned_turns() == 0
+    store.close()

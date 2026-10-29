@@ -90,3 +90,97 @@ def test_fallback_evidence_lists_the_cheapest_itinerary_fare():
              "extracted_context": {"reply_language": "en"}}
     out = cv.render_structured_evidence_fallback(state)
     assert "£29.10" in out and "£15.50" in out
+
+
+# R1-09 ── weather resolves London districts, streets and postcodes ───────────────────
+class _Resp:
+    status_code = 200
+
+    def __init__(self, data):
+        self.data = data
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return self.data
+
+
+_CURRENT = {"current": {"time": "2026-10-29T12:00", "temperature_2m": 11, "weather_code": 3,
+                        "wind_speed_10m": 14.5}}
+
+
+@pytest.fixture
+def weather_offline(monkeypatch):
+    import requests
+    from core import maps_service as maps
+    from core.tools import get_weather as weather
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("no real HTTP in weather regressions")
+
+    monkeypatch.setattr(requests.sessions.Session, "request", forbidden)
+    monkeypatch.setattr(maps, "geocode_address", lambda *a, **k: None)
+    return weather, maps
+
+
+def _weather_get(candidates, fetched):
+    def get(url, params, **kwargs):
+        fetched.append((url, dict(params)))
+        if "geocoding-api" in url:
+            return _Resp({"results": candidates})
+        return _Resp(_CURRENT)
+    return get
+
+
+@pytest.mark.parametrize("location, queried", [
+    ("Angel, London", "Angel"),
+    ("Stratford E15, London", "Stratford"),
+    ("Stratford, London", "Stratford"),
+    ("Newham, London", "Newham"),
+])
+def test_a_london_district_without_london_in_its_admin_fields_resolves(
+        weather_offline, monkeypatch, location, queried):
+    weather, _ = weather_offline
+    fetched = []
+    candidates = [
+        {"name": "Stratford", "latitude": 52.19, "longitude": -1.71, "country_code": "GB",
+         "admin1": "England", "admin2": "Warwickshire"},          # Stratford-upon-Avon area
+        {"name": queried, "latitude": 51.54, "longitude": -0.01, "country_code": "GB",
+         "admin1": "England", "admin2": "Newham"},
+    ]
+    monkeypatch.setattr(weather.requests, "get", _weather_get(candidates, fetched))
+    result = weather.get_weather_impl(location)
+    assert result["success"], result
+    assert (result["latitude"], result["longitude"]) == (51.54, -0.01)
+    assert fetched[0][1]["name"] == queried
+    assert result["wind_speed"] == 14.5 and result["wind_speed_unit"] == "km/h"
+
+
+def test_a_london_street_falls_back_to_the_address_geocoder(weather_offline, monkeypatch):
+    weather, maps = weather_offline
+    asked = []
+    monkeypatch.setattr(weather.requests, "get", _weather_get([], []))
+    monkeypatch.setattr(maps, "geocode_address",
+                        lambda query, **k: asked.append(query) or {"lat": 51.565, "lng": -0.147})
+    result = weather.get_weather_impl("Highgate West Hill, London N6")
+    assert result["success"] and asked == ["Highgate West Hill, London N6"]
+    assert (result["latitude"], result["longitude"]) == (51.565, -0.147)
+
+
+def test_a_postcode_qualified_street_strips_the_postcode(weather_offline, monkeypatch):
+    weather, _ = weather_offline
+    fetched = []
+    candidates = [{"name": "City Road", "latitude": 51.53, "longitude": -0.09, "country_code": "GB",
+                   "admin1": "England", "admin2": "Islington"}]
+    monkeypatch.setattr(weather.requests, "get", _weather_get(candidates, fetched))
+    result = weather.get_weather_impl("City Road, London EC1V")
+    assert result["success"] and fetched[0][1]["name"] == "City Road"
+
+
+def test_a_geocoder_answer_outside_london_is_not_accepted(weather_offline, monkeypatch):
+    weather, maps = weather_offline
+    monkeypatch.setattr(weather.requests, "get", _weather_get([], []))
+    monkeypatch.setattr(maps, "geocode_address", lambda *a, **k: {"lat": 53.48, "lng": -2.24})
+    result = weather.get_weather_impl("Nowhere Street, London")
+    assert result["success"] is False and result["error_code"] == "location_unresolved"

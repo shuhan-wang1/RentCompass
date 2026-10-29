@@ -28,13 +28,50 @@ _FOREIGN_COUNTRIES = {"usa", "us", "united states", "america", "canada", "austra
                       "new zealand", "south africa", "jamaica", "netherlands", "portugal"}
 
 
+# Greater London, as the bare-Stratford branch below already uses it.
+_LONDON_BBOX = (51.25, 51.72, -0.56, 0.34)
+# A postcode token ("E15", "EC1V", "N6", "NW1 8NH") is not part of a place NAME: the geocoder
+# matches names, so "Stratford E15" and "City Road, London EC1V" never resolved (R1-09). The
+# inner-London postal areas also say the place is in London.
+_POSTCODE_TOKEN = re.compile(r"(?<![A-Za-z])([A-Za-z]{1,2})\d[A-Za-z\d]?(?:\s*\d[A-Za-z]{2})?(?![A-Za-z\d])")
+_LONDON_POSTAL_AREAS = {"e", "ec", "n", "nw", "se", "sw", "w", "wc"}
+
+
+def _in_london(candidate) -> bool:
+    try:
+        lat, lng = float(candidate.get("latitude")), float(candidate.get("longitude"))
+    except (TypeError, ValueError, AttributeError):
+        return False
+    south, north, west, east = _LONDON_BBOX
+    return south <= lat <= north and west <= lng <= east
+
+
+def _without_postcodes(text: str) -> tuple[str, bool]:
+    """``text`` without postcode tokens, and whether one was an inner-London district."""
+    london = False
+
+    def _drop(match):
+        nonlocal london
+        london = london or match.group(1).lower() in _LONDON_POSTAL_AREAS
+        return " "
+    return " ".join(_POSTCODE_TOKEN.sub(_drop, str(text or "")).split()), london
+
+
 def _split_place_query(location: str) -> tuple[str, list[str], bool]:
     """("Boston, Lincolnshire, UK") -> ("Boston", ["lincolnshire"], False).
 
     Returns the bare name the geocoder matches, the remaining qualifiers (county, city,
     "London") used to choose among candidates, and whether the user named a non-UK country
     explicitly ("Richmond, Virginia, USA"), which is the only case searched worldwide."""
-    parts = [p.strip() for p in str(location or "").split(",") if p.strip()]
+    parts = []
+    london_postcode = False
+    for part in str(location or "").split(","):
+        cleaned, london = _without_postcodes(part)
+        london_postcode = london_postcode or london
+        if cleaned.strip():
+            parts.append(cleaned.strip())
+    if london_postcode and not any(p.lower() == "london" for p in parts):
+        parts.append("London")
     if not parts:
         return str(location or "").strip(), [], False
     name, rest = parts[0], [p.lower() for p in parts[1:]]
@@ -63,7 +100,10 @@ def _choose_place(results: list, hints: list[str], *, uk_only: bool):
         fields = " | ".join(str(candidate.get(k) or "") for k in
                             ("name", "admin1", "admin2", "admin3", "admin4")).lower()
         if hint == "london":
-            return "london" in fields
+            # GB candidates for London districts ("Angel", "Stratford") carry the borough,
+            # not "London", in their admin fields: inside Greater London counts (R1-09).
+            return "london" in fields or (
+                str(candidate.get("country_code") or "").upper() == "GB" and _in_london(candidate))
         return hint in fields
     for candidate in pool:
         if all(_matches(candidate, hint) for hint in hints):
@@ -158,6 +198,16 @@ def get_weather_impl(
                 chosen = _choose_place(results or [], hints, uk_only=uk_only)
                 if chosen is not None:
                     break
+            if chosen is None and "london" in hints:
+                # A London street or district the name search does not know ("Highgate West
+                # Hill, London N6", "Newham, London") goes to the address geocoder, as the
+                # bare-Stratford branch does; the answer must still fall inside London (R1-09).
+                from core.maps_service import geocode_address
+                geocode_deadline = time.monotonic() + (deadline - time.monotonic()) / 2
+                geo = geocode_address(location, deadline=geocode_deadline)
+                if geo and _in_london({"latitude": geo.get("lat"), "longitude": geo.get("lng")}):
+                    chosen = {"latitude": geo["lat"], "longitude": geo["lng"],
+                              "name": name, "admin2": "London", "country_code": "GB"}
             if chosen is None:
                 return {"success": False, "requested_location": location,
                         "error": f"Could not resolve {location} to a UK place for weather.",
@@ -235,6 +285,8 @@ def get_weather_impl(
             "condition": _WEATHER_CODE.get(c.get("weather_code"), "Unknown"),
             "humidity": c.get("relative_humidity_2m"),
             "wind_speed": c.get("wind_speed_10m"),
+            # Requested as km/h above; stated so the answer never guesses mph (R1-09, B-F7).
+            "wind_speed_unit": "km/h",
             "uv_index": uv_index,
             "feels_like": c.get("apparent_temperature"),
             "rainfall_chance": c.get('precipitation_probability'),

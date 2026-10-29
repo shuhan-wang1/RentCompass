@@ -577,7 +577,30 @@ def validate_candidates(candidates: list[dict], criteria: dict | None,
         "eligible": [s for s in statuses if s["status"] == "eligible"],
         "excluded": [s for s in statuses if s["status"] == "excluded"],
         "unknown": [s for s in statuses if s["status"] == "unknown"],
+        "unchecked": unchecked_requirements(criteria),
     }
+
+
+_SOFT_LEAD = re.compile(r"^(?:would\s+like|prefers?|ideally|preferably)\s+", re.I)
+
+
+def unchecked_requirements(criteria: dict | None) -> list[str]:
+    """What the user asked for that no validation step checks: the stored soft
+    preferences and exclusions ("garden", "no basement or ground-floor flats", "不要一楼").
+
+    "Pet-friendly furnished 1 bed with a garden" and "no basement or ground-floor flats" were
+    headed "Meets all declared conditions (verified)" while nothing had checked the garden or
+    the floor (R3-07, K-01). A budget stretch note is about the ceiling, which is checked."""
+    seen, out = set(), []
+    for value in ((criteria or {}).get("soft_preferences") or []):
+        text = _SOFT_LEAD.sub("", " ".join(str(value or "").split())).strip(" .;,")
+        if not text or re.search(r"£\s?\d|\d{3,}|stretch", text, re.I):
+            continue
+        key = text.lower()
+        if key not in seen:
+            seen.add(key)
+            out.append(text)
+    return out[:8]
 
 
 def _address(status: dict) -> str:
@@ -721,15 +744,19 @@ def render_candidate_status(validation: dict, *, language: str = "en") -> str:
     eligible = validation.get("eligible") or []
     excluded = validation.get("excluded") or []
     unknown = validation.get("unknown") or []
+    unchecked = [str(item) for item in (validation.get("unchecked") or []) if str(item).strip()]
     if zh:
         if eligible:
-            lines.append("满足全部已声明条件（已核实）：")
+            # The header never covers a requirement nobody checked (R3-07).
+            lines.append("满足已核实的条件：" if unchecked else "满足全部已声明条件（已核实）：")
         lines.extend(f"- {_address(s)}（{_price_text(s)}" +
                      (f"，通勤已核实 {s['candidate']['verified_commute_minutes']:g} 分钟" if
                       s.get("candidate", {}).get("verified_commute_minutes") is not None else "") + ")"
                      for s in eligible)
         if not eligible:
             lines.append("- 没有同时满足且已核实的房源。")
+        if unchecked:
+            lines.append("以下要求未逐条核实，请向中介确认：" + "、".join(unchecked))
         if excluded:
             lines.append("已排除/不符合：")
             lines.extend(f"- {_address(s)}：{'；'.join(_candidate_reason_zh(reason) for reason in s.get('reasons') or ['不满足硬约束'])}" for s in excluded)
@@ -742,13 +769,16 @@ def render_candidate_status(validation: dict, *, language: str = "en") -> str:
         return "\n".join(lines)
 
     if eligible:
-        lines.append("Meets all declared conditions (verified):")
+        lines.append("Meets the checked conditions (verified):" if unchecked
+                     else "Meets all declared conditions (verified):")
     lines.extend(f"- {_address(s)} ({_price_text(s)}" +
                  (f", commute verified at {s['candidate']['verified_commute_minutes']:g} min" if
                   s.get("candidate", {}).get("verified_commute_minutes") is not None else "") + ")"
                  for s in eligible)
     if not eligible:
         lines.append("- No listing is both fully eligible and verified.")
+    if unchecked:
+        lines.append("Not checked for any listing (confirm with the agent): " + "; ".join(unchecked))
     if excluded:
         lines.append("Excluded / does not meet:")
         lines.extend(f"- {_address(s)}: {('; '.join(s.get('reasons') or ['hard constraint failed']))}"

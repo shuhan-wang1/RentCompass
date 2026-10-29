@@ -543,6 +543,20 @@ _PET_WITHDRAWAL = re.compile(
     r'|不要求(?:允许)?(?:养)?(?:猫|狗|宠物)', re.I)
 
 
+# An attribute written directly before the home being asked for ("pet-friendly furnished 1
+# bed", "a furnished studio") is part of the request, as its "must" form is (R3-07). Up to
+# three other attributes may sit between it and the home word.
+_ATTRIBUTE_OF_HOME = (
+    r"(?<![a-z-]){word}\s+(?:(?:pet[- ]friendly|(?:fully\s+)?furnished|modern|spacious|quiet|bright|"
+    r"large|small|cosy|cozy|new|self[- ]contained|ground[- ]floor|top[- ]floor|"
+    r"(?:\d|one|two|three|four)\s*-?\s*bed(?:room)?(?:ed)?)\s+){{0,3}}"
+    r"(?:flats?|apartments?|studios?|houses?|homes?|places?|maisonettes?|(?:\d|one|two|three|four)\s*-?\s*bed"
+    r"(?:room)?s?\b)")
+_SOFT_WORDING = re.compile(
+    r"\b(?:ideally|preferably|if\s+possible|would\s+(?:like|prefer|be\s+nice)|nice\s+to\s+have|"
+    r"bonus|not\s+essential|don.t\s+mind|either\s+way|prefer)\b|最好|如果可以|优先", re.I)
+
+
 def furnished_requirement_update(text: str) -> bool | None:
     """An explicit FURNISHED requirement (True), its withdrawal (False), else None (R2-16).
 
@@ -566,6 +580,11 @@ def furnished_requirement_update(text: str) -> bool | None:
                                       r'\bunfurnished\s+only\b', clause, re.I)
         if wants_unfurnished:
             continue
+        if re.search(_ATTRIBUTE_OF_HOME.format(word=r"(?:fully\s+)?furnished"), clause, re.I) \
+                and not _SOFT_WORDING.search(clause):
+            # "Furnished pet-friendly 1 bed with a garden in Camden" names the attribute of
+            # the home it asks for, like "it must be furnished" (R3-07).
+            return True
         if re.search(r"\bfurnished\s+only\b|\bonly\s+(?:fully\s+)?furnished\b|"
                      r"\b(?:must|has\s+to|have\s+to|needs?\s+to|should)\s+be\s+(?:fully\s+)?furnished\b|"
                      r"\b(?:don.t|do\s+not)\s+want\s+(?:anything\s+|an?\s+)?unfurnished\b|"
@@ -606,6 +625,9 @@ def pet_requirement_update(text: str) -> bool | None:
                        and re.search(r'\b(?:find|search|show|look(?:ing)?\s+for|want|need)\b|找|搜|要', clause, re.I))
         if hard or restrictive:
             return True
+        if re.search(_ATTRIBUTE_OF_HOME.format(word=r"pet[- ]friendly"), clause, re.I) \
+                and not _SOFT_WORDING.search(clause):
+            return True     # "Pet-friendly furnished 1 bed in Hackney" (R3-07)
     return None
 
 

@@ -203,3 +203,49 @@ def test_r3_10_a_zh_distance_question_names_no_area():
     assert _extract_area("第一套离国王十字远吗？") is None
     assert _extract_area("我想在国王十字找房") == "King's Cross"
 
+
+# R3-07 / K-01 ── the verified header never covers a requirement nobody checked ──────
+@pytest.mark.parametrize("message", [
+    "Pet-friendly furnished 1 bed with a garden in Hackney under £2500",
+    "Furnished pet-friendly 2 bed with a garden in Islington under £3300",
+])
+def test_r3_07_adjective_requirements_are_required_features(message):
+    acc = _state_node({}, message)
+    assert set(acc["property_features"]) == {"pets allowed", "furnished"}
+
+
+@pytest.mark.parametrize("message", [
+    "Ideally a furnished flat in Camden", "An unfurnished 1 bed in Camden", "Is the first one furnished?",
+])
+def test_r3_07_soft_or_question_wording_adds_no_requirement(message):
+    assert not _state_node({}, message).get("property_features")
+
+
+_ROW = {"address": "1 Sample Road, Hackney E8", "area": "Hackney", "price": 2000, "bedrooms": 1,
+        "room_type": "flat"}
+
+
+@pytest.mark.parametrize("language,header,note", [
+    ("en", "Meets the checked conditions (verified):", "Not checked for any listing"),
+    ("zh", "满足已核实的条件：", "以下要求未逐条核实"),
+])
+def test_r3_07_unchecked_requirements_are_listed_under_a_narrower_header(language, header, note):
+    from core.candidate_validation import render_candidate_status, validate_candidates
+    criteria = {"max_budget": 2500, "areas": ["Hackney"],
+                "soft_preferences": ["garden", "no basement or ground-floor flats", "不要一楼",
+                                     "Would like gym", "my budget could stretch to £2,600"]}
+    text = render_candidate_status(validate_candidates([dict(_ROW)], criteria), language=language)
+    assert header in text and note in text
+    assert "Meets all declared conditions" not in text and "满足全部已声明条件" not in text
+    for item in ("garden", "no basement or ground-floor flats", "不要一楼", "gym"):
+        assert item in text
+    assert "stretch" not in text
+
+
+def test_r3_07_the_header_is_unchanged_when_everything_was_checked():
+    from core.candidate_validation import render_candidate_status, validate_candidates
+    text = render_candidate_status(validate_candidates([dict(_ROW)], {"max_budget": 2500,
+                                                                      "areas": ["Hackney"]}))
+    assert text.startswith("Meets all declared conditions (verified):")
+    assert "Not checked" not in text
+

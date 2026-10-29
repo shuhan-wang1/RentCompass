@@ -624,3 +624,15 @@ def test_k_06_a_dismissed_preference_is_dropped():
     assert params["accumulated_preferences"] == ["balcony"] and changed
     params, _ = apply_preference_policy({"accumulated_preferences": ["garden not needed"]})
     assert "accumulated_preferences" not in params
+
+
+# R3-04 ── a reply naming a budget the search did not apply gets a note ────────────
+def test_r3_04_a_reply_claiming_an_unapplied_budget_gets_a_note():
+    from core.agent_loop import disclose_unapplied_budget_claim
+    claim = "I found 6 flats in Hackney, all within your £3,500 limit."
+    noted = disclose_unapplied_budget_claim(claim, True)
+    assert noted.startswith(claim) and "ran without a budget filter" in noted
+    assert disclose_unapplied_budget_claim(claim, False) == claim
+    assert disclose_unapplied_budget_claim("I found 6 flats in Hackney.", True) == "I found 6 flats in Hackney."
+    zh = disclose_unapplied_budget_claim("找到6套，都在预算3500镑以内。", True, "zh")
+    assert "没有使用预算筛选" in zh

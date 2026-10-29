@@ -369,6 +369,27 @@ def searched_without_budget(artifacts) -> bool:
     return False
 
 
+# "I found 6 ... flats in Hackney, all within your £3,500 limit" over a search that ran with
+# no budget at all (R3-04): the reply named a ceiling nothing applied.
+_APPLIED_BUDGET_CLAIM = re.compile(
+    r"\b(?:within|under|below|inside|in)\s+(?:your|the)\s+£\s?\d[\d,]*(?:\s*(?:/|per|a)\s*(?:month|pcm|mo))?"
+    r"\s+(?:monthly\s+)?(?:limit|budget|ceiling|max(?:imum)?|cap)\b|"
+    r"(?:预算|上限)\s*£?\s?\d[\d,]*\s*(?:镑)?(?:以内|之内|范围内)", re.I)
+
+
+def disclose_unapplied_budget_claim(text: str, searched_without_budget: bool,
+                                    reply_language: str = "en") -> str:
+    """``text`` with a note when it claims results fit a budget the search did not apply."""
+    body = str(text or "")
+    if not searched_without_budget or not _APPLIED_BUDGET_CLAIM.search(body):
+        return body
+    zh = str(reply_language or "").lower().startswith("zh")
+    note = ("补充：本次搜索没有使用预算筛选，所以上面的结果并未按这个预算过滤。" if zh else
+            "Note: this search ran without a budget filter, so these results were not limited "
+            "to that budget.")
+    return body if note in body else f"{body.rstrip()}\n\n{note}"
+
+
 def _without_no_budget_claim(text: str) -> str:
     """``text`` without the sentences that claim no budget was given (R4-11)."""
     kept = []
@@ -3830,6 +3851,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             text, state.get("memory_context") or "",
             (state.get("accumulated_search_criteria") or {}).get("max_budget"), reply_language,
             searched_without_budget=searched_without_budget(state.get("tool_artifacts")))
+        text = disclose_unapplied_budget_claim(
+            text, searched_without_budget(state.get("tool_artifacts")), reply_language)
         memory_contract = state.get("memory_write_contract") or {}
         if memory_contract.get("requested"):
             lang = _reply_language_from_ctx(

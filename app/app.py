@@ -2082,7 +2082,10 @@ async def api_alex():
     if existing_turn is not None:
         if conversation_store.request_message_differs(user_id, existing_turn, user_message):
             return _request_id_reused_response(request_id)
-        return _request_replay_response(user_id, request_id, existing_turn)
+        if conversation_store.request_turn_replays(user_id, existing_turn):
+            return _request_replay_response(user_id, request_id, existing_turn)
+        # (R2-01) A cancelled, interrupted or ownerless turn goes on to start_request_turn,
+        # which re-runs it (or replays a turn that is still running) in one transaction.
 
     # --- resolve / implicitly create the conversation --------------------------
     # New conversations are stamped with THIS process's architecture provenance at creation;
@@ -4121,7 +4124,9 @@ async def api_search_direct():
     if existing_turn is not None:
         if conversation_store.request_message_differs(user_id, existing_turn, readable):
             return _request_id_reused_response(request_id)
-        return _request_replay_response(user_id, request_id, existing_turn)
+        if conversation_store.request_turn_replays(user_id, existing_turn):
+            return _request_replay_response(user_id, request_id, existing_turn)
+        # (R2-01) Not replayed here: start_request_turn re-runs a turn that delivered nothing.
 
     # --- resolve / implicitly create the conversation (mirrors /api/alex) -------
     conversation_id = data.get('conversation_id')

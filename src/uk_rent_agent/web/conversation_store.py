@@ -1233,6 +1233,24 @@ class ConversationStore:
             ).fetchone()
         return self._turn_dict(row) if row else None
 
+    def request_turn_replays(self, user_id: str, turn: dict) -> bool:
+        """True when a retry of ``turn``'s request id replays the stored answer as is.
+
+        False for a turn ``start_request_turn`` may run again: a cancelled or interrupted turn
+        that delivered no answer, or a 'running' one whose owner may be gone. The chat routes
+        replayed every such turn before reaching the store, so a retry after a disconnect got
+        502 "Request cancelled." for good (R2-01)."""
+        status = (turn or {}).get("status")
+        if status == "completed":
+            return True
+        if status != "failed":
+            return False
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT assistant_message_id FROM turns WHERE user_id=? AND id=?",
+                (user_id, turn.get("id"))).fetchone()
+            return row is not None and not self._never_delivered(user_id, row)
+
     def request_message_differs(self, user_id: str, turn: dict, user_content: str) -> bool:
         """True when a replayed request id carries a DIFFERENT user message (R1-15)."""
         message_id = (turn or {}).get("user_message_id")

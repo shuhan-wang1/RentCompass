@@ -108,6 +108,29 @@ def contains_markup(text: object) -> bool:
     return any(p.search(probe) for p in _MARKERS)
 
 
+# A model that answers in its own wire format: '{"content": "<the answer>", "tool_calls": []}'
+# was shown to the user verbatim (R3-21, 1 in ~30). Only an object made of envelope keys
+# counts, so a reply that merely contains JSON is untouched.
+_ENVELOPE_KEYS = frozenset({"content", "tool_calls", "role", "reasoning_content", "refusal"})
+
+
+def _unwrap_envelope(text: str):
+    """``(content, is_envelope)``: the answer inside a bare model message envelope."""
+    stripped = text.strip()
+    if not (stripped.startswith("{") and stripped.endswith("}") and '"content"' in stripped):
+        return text, False
+    try:
+        decoded = _json.loads(stripped)
+    except Exception:
+        return text, False
+    if not isinstance(decoded, dict) or not decoded or not set(decoded) <= _ENVELOPE_KEYS:
+        return text, False
+    content = decoded.get("content")
+    if decoded.get("tool_calls") or not isinstance(content, str) or not content.strip():
+        return "", True
+    return content, True
+
+
 def sanitize_user_text(text: object, *, reply_language: Optional[str] = None) -> Tuple[str, bool]:
     """``(safe_text, blocked)`` for one user-visible string.
 
@@ -117,6 +140,13 @@ def sanitize_user_text(text: object, *, reply_language: Optional[str] = None) ->
     fragment that reads as an answer while carrying whatever prose the injection
     wrapped around it.
     """
+    if isinstance(text, str):
+        unwrapped, envelope = _unwrap_envelope(text)
+        if envelope:
+            # A tool-call envelope, or one with no answer in it, is not a reply.
+            if not unwrapped or contains_markup(unwrapped):
+                return fallback_text(reply_language), True
+            return unwrapped, False
     if not isinstance(text, str) or not contains_markup(text):
         return (text if isinstance(text, str) else ""), False
     return fallback_text(reply_language), True

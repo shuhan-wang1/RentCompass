@@ -505,6 +505,23 @@ def test_r3_20_another_persons_pronoun_and_the_users_own_words_are_kept():
         "She prefers quiet streets."
 
 
+# R3-21 ── a raw model message envelope is unwrapped, a tool-call one refused ─────────
+def test_r3_21_a_json_envelope_is_unwrapped():
+    from core.dsml_guard import sanitize_user_text
+    text, blocked = sanitize_user_text('{"content": "Your budget is £2,400.", "tool_calls": []}')
+    assert (text, blocked) == ("Your budget is £2,400.", False)
+    text, blocked = sanitize_user_text('{"content": "", "tool_calls": [{"name": "search_properties"}]}')
+    assert blocked is True and "search_properties" not in text
+
+
+@pytest.mark.parametrize("text", [
+    'The listing JSON is {"price": 2000}.', '{"price": 2000, "content": "x"}', "plain answer",
+])
+def test_r3_21_other_text_is_untouched(text):
+    from core.dsml_guard import sanitize_user_text
+    assert sanitize_user_text(text) == (text, False)
+
+
 # K-06 ── a dismissed item is not stored or searched as a preference ─────────────────
 def test_k_06_a_dismissed_preference_is_dropped():
     from core.preference_grounding import apply_preference_policy, stored_soft_preferences

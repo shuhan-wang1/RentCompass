@@ -2353,7 +2353,13 @@ def _price_stats(results):
                     if isinstance(p, dict) and p.get('price'))
     if not prices:
         return None
-    return prices[0], prices[len(prices) // 2], prices[-1]
+    # A true median: for an even count, the mean of the two middle prices. prices[n // 2] was
+    # the UPPER median, so four listings at 2,500/2,600/2,750/2,900 read "median ~£2,750"
+    # (R1-12). Whole pounds, half up, as the headline formats it.
+    middle = len(prices) // 2
+    median = (prices[middle] if len(prices) % 2
+              else int((prices[middle - 1] + prices[middle]) / 2 + 0.5))
+    return prices[0], median, prices[-1]
 
 
 def _found_summary(results, n_perfect: int, n_soft: int, max_budget, max_commute_time,

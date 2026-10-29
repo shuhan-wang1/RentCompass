@@ -240,3 +240,22 @@ def test_the_cancel_path_writes_a_text_the_store_recognises():
     source = inspect.getsource(app_module)
     assert "CANCELLED_TURN_TEXTS[0]" in source and "CANCELLED_TURN_TEXTS[1]" in source
     assert CANCELLED_TURN_TEXTS == ("Request cancelled.", "请求已取消。")
+
+
+# R1-12 ── the price headline reports a true median ──────────────────────────────────
+@pytest.mark.parametrize("prices, expected", [
+    ([2500, 2600, 2750, 2900], (2500, 2675, 2900)),
+    ([2000, 2001], (2000, 2001, 2001)),       # 2000.5 rounds half up
+    ([1800, 1900, 2400], (1800, 1900, 2400)),
+    ([1500], (1500, 1500, 1500)),
+])
+def test_price_stats_median(prices, expected):
+    from core.tools.search_properties import _price_stats
+    assert _price_stats([{"price": p} for p in reversed(prices)]) == expected
+
+
+def test_found_summary_quotes_the_true_median():
+    from core.tools.search_properties import _found_summary
+    rows = [{"price": p} for p in (2500, 2600, 2750, 2900)]
+    text = _found_summary(rows, 4, 0, 3000, None, "Hackney")
+    assert "median ~£2675" in text.replace(",", "")

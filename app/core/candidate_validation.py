@@ -3890,6 +3890,16 @@ def render_structured_evidence_fallback(state: dict, *, language: str | None = N
                 route = f" ({origin[0]} → {target[0]})" if origin and target else ""
                 add(f"Returned one-way fare{route}: £{fare:.2f}; this is not a return fare or a monthly total.",
                     f"返回的单程票价{route}：£{fare:.2f}，并非往返或每月总额。")
+            # The planner's cheapest itinerary carries its own fare (R1-08).
+            cheapest = raw.get("cheapest_journey")
+            if (isinstance(cheapest, dict) and cheapest.get("fare_available")
+                    and isinstance(cheapest.get("fare_gbp"), (int, float))
+                    and cheapest.get("itinerary_id") != raw.get("selected_itinerary_id")):
+                minutes = cheapest.get("duration_minutes")
+                took = (f", {minutes:g} minutes" if isinstance(minutes, (int, float)) else "")
+                took_zh = (f"，{minutes:g} 分钟" if isinstance(minutes, (int, float)) else "")
+                add(f"Returned cheapest itinerary{took}: one-way fare £{cheapest['fare_gbp']:.2f}.",
+                    f"返回的最便宜行程{took_zh}：单程票价 £{cheapest['fare_gbp']:.2f}。")
             for line in raw.get("lines") or []:
                 if isinstance(line, dict) and line.get("name") and line.get("status"):
                     add(f"Returned line status: {plain(line['name'])}: {plain(line['status'])}.",

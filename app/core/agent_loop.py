@@ -642,6 +642,47 @@ def _project_validation(validation: dict) -> dict:
     return out
 
 
+# A journey/fare lookup carries the fastest itinerary three times (top level, fastest_journey,
+# its legs) and the cheapest one after them; at 4.7k chars the 4k cap cut the cheapest
+# itinerary's own fare, and the answer said the cheapest route's fare "didn't come back"
+# (R1-08). The model view leads with the answer fields and drops the duplicate legs; the raw
+# artifact keeps everything.
+_TRANSPORT_LEAD_KEYS = ("success", "query_type", "coverage", "from", "to", "duration_minutes",
+                        "changes_count", "fare_available", "fare_display", "fare_gbp",
+                        "fare_pence", "fare_basis", "fare_itinerary_id",
+                        "fare_matches_itinerary", "fare_note", "selected_itinerary_id")
+_JOURNEY_LEAD_KEYS = ("itinerary_id", "duration_minutes", "changes_count", "fare_available",
+                      "fare_display", "fare_gbp", "fare_pence", "fare_basis",
+                      "fare_itinerary_id")
+
+
+def project_transport_payload(raw: dict) -> dict:
+    """The model-facing view of a get_transport_info payload: answer fields first."""
+    if not isinstance(raw, dict):
+        return raw
+
+    def _journey(value):
+        if not isinstance(value, dict):
+            return value
+        lead = {k: value[k] for k in _JOURNEY_LEAD_KEYS if k in value}
+        return {**lead, **{k: v for k, v in value.items() if k not in lead}}
+
+    projected = {k: raw[k] for k in _TRANSPORT_LEAD_KEYS if k in raw}
+    for key in ("fastest_journey", "cheapest_journey"):
+        if key in raw:
+            projected[key] = _journey(raw[key])
+    fastest = raw.get("fastest_journey") if isinstance(raw.get("fastest_journey"), dict) else {}
+    for key, value in raw.items():
+        if key in projected:
+            continue
+        if key in ("route_legs", "route_summary") and value and fastest.get(key) == value:
+            # The selected itinerary IS the fastest one: its legs are listed there once.
+            projected[key] = "same as fastest_journey." + key
+            continue
+        projected[key] = value
+    return projected
+
+
 def project_search_payload(raw: dict, cap: int) -> dict:
     """The compact model-facing view of a search_properties payload, within ``cap`` chars."""
     lead = {k: raw[k] for k in _SEARCH_LEAD_KEYS if k in raw}
@@ -4021,6 +4062,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 budget -= (len(content) - cap) + 150
             logger.info("fc_loop.toolmsg_truncated tool=%s len=%d cap=%d", tool, len(content), cap)
             return content[:cap] + "\n...[truncated]", tainted
+        if tool == "get_transport_info" and isinstance(raw, dict):
+            raw = project_transport_payload(raw)      # (R1-08)
         content, tainted = _render_toolmsg(tool, raw, result)
         if len(content) > cap:
             logger.info("fc_loop.toolmsg_truncated tool=%s len=%d cap=%d", tool, len(content), cap)

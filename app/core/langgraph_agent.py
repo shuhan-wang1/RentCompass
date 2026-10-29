@@ -920,7 +920,12 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
                          # limit is not part of the place (R1-04, variant of A-03).
                          r'|\s*,\s*(?=(?:max(?:imum)?|at\s+most|no\s+more\s+than|up\s+to|under|within|'
                          r'less\s+than|about|around|roughly|ideally|preferably|door)\b|\d)'
-                         r'|\s*[(\[]|\s+[-–—]\s+',
+                         r'|\s*[(\[]|\s+[-–—]\s+'
+                         # "I work in King's Cross not Canary Wharf": the rejected place
+                         # after "not / rather than / instead of" is not part of the new
+                         # one. Kept whole, the known-landmark lookup resolved it to the
+                         # OLD workplace and the correction changed nothing (R1-01).
+                         r'|\s*,?\s+(?:not|rather\s+than|instead\s+of)\s+',
                          _destination_clause(labelled_destination.group(1)),
                          maxsplit=1, flags=re.I)[0].strip(" ,")
         named = _strip_destination_time_words(named)

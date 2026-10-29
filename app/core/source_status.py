@@ -37,6 +37,19 @@ def source_failure_summary(results_by_area: dict, *, language: str = 'en') -> di
                    f'or its source was unavailable); the results below cover {served_names}.')
         return {'source_status': 'partial', 'source_errors': failures, 'source_message': message,
                 'retrieval_complete': False}
+    unsupported = [area for area in failures if not _known_area(area)]
+    if unsupported and len(unsupported) == len(failures):
+        # "near postcode E1 6AN" / "玛丽皇后大学附近" / an airport failed as unknown places, and
+        # the answer said the listing source was down (R3-19). A place outside the area
+        # tables is reported as possibly not covered, not as an outage.
+        names = ', '.join(str(area) for area in unsupported)
+        message = (f'未能获取 {names} 的房源：该地点不在本搜索已知的区域列表中，可能不在覆盖范围内。'
+                   '您的找房条件已保留；可以换成附近的区或街区名称再试。' if language == 'zh' else
+                   f'Listings for {names} could not be retrieved: that place is not one of the areas '
+                   'this search knows, so it may not be covered. Your criteria are kept; try the '
+                   'name of a nearby area or borough instead.')
+        return {'source_status': 'unavailable', 'source_errors': failures, 'source_message': message,
+                'retrieval_complete': False, 'area_not_covered': unsupported}
     statuses = {item['status'] for item in failures.values()}
     status = ('blocked' if statuses & {'blocked', 'robots_disallowed', 'cooldown'} else
               'rate_limited' if 'rate_limited' in statuses else
@@ -58,6 +71,15 @@ def source_failure_summary(results_by_area: dict, *, language: str = 'en') -> di
                    'not show that your budget or area has no properties.')
     return {'source_status': status, 'source_errors': failures, 'source_message': message,
             'retrieval_complete': False}
+
+
+def _known_area(area) -> bool:
+    """True when ``area`` (a name or a scraper slug) is one of the curated search areas."""
+    try:
+        from core.tools.search_properties import _match_known_area
+        return bool(_match_known_area(str(area or '').replace('-', ' ')))
+    except Exception:
+        return True       # unknown is not evidence either way: keep the outage wording
 
 
 RETRIEVAL_FIELDS = (

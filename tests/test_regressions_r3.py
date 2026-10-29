@@ -470,3 +470,16 @@ def test_r3_17_the_turn_reads_the_folded_message():
     source = inspect.getsource(appmod)
     assert "extracted_context['current_message'] = fold_fullwidth_ascii(user_message)" in source
 
+
+# R3-19 ── an unknown place is reported as possibly not covered, not as an outage ────
+def test_r3_19_an_unknown_place_is_not_a_source_outage():
+    from core.source_status import source_failure_summary
+    failed = {"meta": {"source_status": "unavailable"}}
+    summary = source_failure_summary({"E1 6AN": failed})
+    assert "temporarily unavailable" not in summary["source_message"]
+    assert "may not be covered" in summary["source_message"]
+    assert summary["area_not_covered"] == ["E1 6AN"] and summary["retrieval_complete"] is False
+    zh = source_failure_summary({"E1 6AN": failed}, language="zh")["source_message"]
+    assert "覆盖范围" in zh and "暂时不可用" not in zh
+    known = source_failure_summary({"Hackney": failed})
+    assert "temporarily unavailable" in known["source_message"]

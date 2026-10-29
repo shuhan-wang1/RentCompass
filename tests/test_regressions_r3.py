@@ -591,6 +591,30 @@ def test_r3_24_a_deleted_conversations_job_rows_report_gone(tmp_path):
     store.close()
 
 
+# K-04 ── one listing in two area caches: the newest copy's price is the shown one ───
+def test_k_04_a_search_row_takes_the_newest_cached_price(tmp_path, monkeypatch):
+    import sqlite3
+    from core.scraping import on_demand
+    cache = on_demand.ListingCache(tmp_path / "listings.sqlite3")
+    url = "https://example.test/details/4401/"
+    cache.set("otm|area-a|canonical2", [{"URL": url, "Price": "£2,400 pcm", "Address": "Sample St"}])
+    cache.set("otm|area-b|canonical2", [{"URL": url, "Price": "£2,350 pcm", "Address": "Sample St",
+                                         "Available From": "Now"}])
+    with sqlite3.connect(cache.path) as db:      # area-a is the older snapshot
+        db.execute("UPDATE listings SET fetched = fetched - 86400 WHERE key = 'otm|area-a|canonical2'")
+    monkeypatch.setattr(on_demand, "_cache", lambda: cache)
+    old_row = {"URL": url, "Price": "£2,400 pcm", "Address": "Sample St"}
+    result = on_demand._with_freshest_prices({"rows": [old_row, {"URL": "https://example.test/x"}],
+                                              "meta": {"slug": "area-a"}})
+    assert result["rows"][0]["Price"] == "£2,350 pcm"
+    assert result["rows"][0]["Available From"] == "Now"
+    assert result["rows"][1] == {"URL": "https://example.test/x"}
+    assert old_row["Price"] == "£2,400 pcm"          # the input row is not mutated
+    assert on_demand.find_cached_listing_by_url(url)["Price"] == "£2,350 pcm"
+    same = {"rows": [dict(old_row, Price="£2,350 pcm")], "meta": {}}
+    assert on_demand._with_freshest_prices(same) is same
+
+
 # K-06 ── a dismissed item is not stored or searched as a preference ─────────────────
 def test_k_06_a_dismissed_preference_is_dropped():
     from core.preference_grounding import apply_preference_policy, stored_soft_preferences

@@ -1710,8 +1710,8 @@ def get_listings(
     kwargs = dict(force_refresh=force_refresh, budget_s=budget_s, cache_only=cache_only,
                   _cache_instance=cache)
     if cache_only or not slug:
-        return _get_listings_unlocked(location, min_bedrooms, max_bedrooms, min_price,
-                                      max_price, limit, **kwargs)
+        return _with_freshest_prices(_get_listings_unlocked(
+            location, min_bedrooms, max_bedrooms, min_price, max_price, limit, **kwargs))
     start = time.monotonic()
     total_budget = max(0, float(SCRAPE_BUDGET_S if budget_s is None else budget_s))
     digest = hashlib.sha256(str(slug).encode()).hexdigest()[:24]
@@ -1734,10 +1734,69 @@ def get_listings(
                 time.sleep(min(0.05, total_budget))
         try:
             kwargs["budget_s"] = max(0, total_budget - (time.monotonic() - start))
-            return _get_listings_unlocked(location, min_bedrooms, max_bedrooms, min_price,
-                                          max_price, limit, **kwargs)
+            return _with_freshest_prices(_get_listings_unlocked(
+                location, min_bedrooms, max_bedrooms, min_price, max_price, limit, **kwargs))
         finally:
             fcntl.flock(lock_file, fcntl.LOCK_UN)
+
+
+# One listing URL can sit in two area caches fetched at different times ("Holborn" older at
+# £2,400, "Bloomsbury" newer at £2,350): the search showed one price and the details lookup,
+# which reads the newest copy, the other (K-04). A search row takes the newest copy's price
+# and availability. The index is rebuilt only when the cache changes.
+_FRESHEST_INDEX: dict = {"stamp": None, "rows": {}}
+_FRESHEST_LOCK = threading.Lock()
+
+
+def _freshest_copy_index() -> dict:
+    """URL (no trailing slash) -> the newest cached copy of that listing row."""
+    try:
+        cache = _cache()
+        with cache._lock, cache._connect() as db:
+            stamp = (str(cache.path),) + tuple(db.execute(
+                "SELECT COUNT(*), MAX(fetched) FROM listings").fetchone())
+            if stamp == _FRESHEST_INDEX["stamp"]:
+                return _FRESHEST_INDEX["rows"]
+            raw = db.execute("SELECT rows, fetched FROM listings").fetchall()
+    except (OSError, sqlite3.Error, TypeError):
+        return {}
+    index: dict = {}
+    for rows_json, fetched in raw:
+        try:
+            rows = json.loads(rows_json)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        when = float(fetched or 0)
+        for row in rows or []:
+            url = (row.get("URL") or "").strip().rstrip("/") if isinstance(row, dict) else ""
+            if url and (url not in index or when > index[url][0]):
+                index[url] = (when, row)
+    rows_by_url = {url: row for url, (_when, row) in index.items()}
+    with _FRESHEST_LOCK:
+        _FRESHEST_INDEX.update(stamp=stamp, rows=rows_by_url)
+    return rows_by_url
+
+
+def _with_freshest_prices(result: dict) -> dict:
+    """``result`` with each row's price/availability taken from the newest cached copy."""
+    rows = (result or {}).get("rows") if isinstance(result, dict) else None
+    if not rows:
+        return result
+    try:
+        index = _freshest_copy_index()
+    except Exception:
+        return result
+    out, changed = [], False
+    for row in rows:
+        url = (row.get("URL") or "").strip().rstrip("/") if isinstance(row, dict) else ""
+        newest = index.get(url) if url else None
+        if isinstance(newest, dict) and newest.get("Price") and newest.get("Price") != row.get("Price"):
+            row = dict(row, Price=newest["Price"])
+            if newest.get("Available From"):
+                row["Available From"] = newest["Available From"]
+            changed = True
+        out.append(row)
+    return dict(result, rows=out) if changed else result
 
 
 def _demo_rows(requested_city: str | None) -> list[dict]:

@@ -836,7 +836,13 @@ _SENSITIVE_CLAUSE_PATTERNS = (
     ("identity", re.compile(
         r"\b(?:my|user'?s?|the user'?s|his|her|their)\s+(?:full\s+|first\s+|last\s+|sur|given\s+|family\s+)?"
         r"name\b|\b(?:i\s+am|i'm|user\s+is|they\s+are|he\s+is|she\s+is)\s+(?:called|named)\b|"
-        r"\bcall\s+me\s+(?-i:[A-Z])|我叫|我的名字|名字(?:是|叫)|我姓|用户(?:名叫|叫|的名字)", re.I)),
+        r"\bcall\s+me\s+(?-i:[A-Z])|我叫|我的名字|名字(?:是|叫)|我姓|用户(?:名叫|叫|的名字)|"
+        # Another person's name is not a fact about the user either: "my landlord's name is
+        # <name>" became a semantic fact while the reply asked the user to confirm first (R3-09).
+        r"\b(?:my|our)\s+(?:\w+\s+)?(?:landlord|landlady|agent|neighbou?r|boss|manager|employer|"
+        r"colleague|flatmate|housemate|roommate|partner|wife|husband|friend|mother|mum|mom|father|"
+        r"dad|brother|sister|son|daughter|guarantor)(?:['’]s\s+(?:full\s+|first\s+|last\s+)?name\b|"
+        r"\s+is\s+(?:called|named)\b)|房东(?:叫|名叫|的名字)", re.I)),
 )
 # Anchored and bounded: unanchored, a long word or digit run was re-scanned from every
 # position looking for an "@" (O(n²) in one C call, holding the GIL — 10 s for 60k chars).
@@ -987,6 +993,26 @@ def redact_home_address(text: str) -> tuple[str, bool]:
         return "", True
 
 
+# An explicit save request that carries contact details or a home address is the remember
+# tool's to store, after the user confirms it; the automatic layers kept "home address is in
+# N1" from "Also remember that ... my home address is <street>, N1." while the reply asked the
+# user to confirm first, and still after the user said no (R3-09).
+_SAVE_REQUEST_CLAUSE = re.compile(
+    r"(?:\b(?:please\s+|also\s+|and\s+)*(?:remember|note|keep\s+in\s+mind|don'?t\s+forget|save)\b"
+    r"|(?:请|帮我|也)?(?:记住|记一下|记下|别忘了|保存))[^.!?;\n。！？；]*", re.I)
+_WITHHELD_SAVE_REQUEST = "[personal details in a save request: kept only if the user confirms]"
+
+
+def _withhold_personal_save_requests(text: str) -> str:
+    def withhold(match):
+        clause = match.group(0)
+        if (_ADDRESS_MARKER in clause or "[contact detail not stored]" in clause
+                or dict(_SENSITIVE_CLAUSE_PATTERNS)["identity"].search(clause)):
+            return _WITHHELD_SAVE_REQUEST
+        return clause
+    return _SAVE_REQUEST_CLAUSE.sub(withhold, text)
+
+
 def redact_sensitive(text: str) -> tuple[str, list[str]]:
     """``text`` with income, immigration, health and contact details removed.
 
@@ -1007,6 +1033,12 @@ def redact_sensitive(text: str) -> tuple[str, list[str]]:
             found.append("contact")
             value = _PHONE_RE.sub("[contact detail not stored]",
                                   _EMAIL_RE.sub("[contact detail not stored]", value))
+        if found or dict(_SENSITIVE_CLAUSE_PATTERNS)["identity"].search(value):
+            withheld = _withhold_personal_save_requests(value)
+            if withheld != value:
+                value = withheld
+                if "identity" not in found:
+                    found.append("identity")
         if _CHILD_NAME_RE.search(value):
             # "Has a son, Tom, who …": the name sits in its own comma clause (R4-08).
             found.append("children")

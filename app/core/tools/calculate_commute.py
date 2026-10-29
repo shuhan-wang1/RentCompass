@@ -34,6 +34,14 @@ def calculate_commute_impl(
             f"mode_supported={mode in {'transit', 'driving', 'walking', 'bicycling'}}"
         )
 
+        # "Liverpool Street 5 days a week" is a place plus how often the user goes there; the
+        # frequency failed geocoding for the rest of the conversation (K-03).
+        try:
+            from core.langgraph_agent import _strip_destination_time_words
+            to_address = _strip_destination_time_words(to_address) or to_address
+        except Exception:
+            pass
+
         # 调用地图服务计算通勤时间 + 真实路线（TfL 线路明细）
         details = calculate_travel_details(from_address, to_address, mode)
 

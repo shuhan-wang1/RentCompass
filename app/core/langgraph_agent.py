@@ -843,7 +843,13 @@ _DEST_TRAILING_TIME = re.compile(
     r"(?:right\s+|for\s+|just\s+|from\s+|as\s+of\s+)?now(?:\s+on)?|actually|nowadays|"
     r"these\s+days|at\s+the\s+moment|at\s+present|currently|presently|any\s?more|"
     r"(?:from|starting|as\s+of|since|beginning|effective)\s+(?:(?:next|this|the|last)\s+)?"
-    rf"(?:{_DEST_DAY_OR_MONTH})(?:\s+(?:of\s+)?(?:{_DEST_DAY_OR_MONTH}))?"
+    rf"(?:{_DEST_DAY_OR_MONTH})(?:\s+(?:of\s+)?(?:{_DEST_DAY_OR_MONTH}))?|"
+    # "Waterloo next month" (R3-03); "Liverpool Street 5 days a week" / "Bank every day"
+    # made every later commute lookup fail to geocode (K-03).
+    rf"(?:next|this|later\s+this)\s+(?:{_DEST_DAY_OR_MONTH})|"
+    r"(?:\d|one|two|three|four|five|six|seven)\s*(?:days?|times?)\s*(?:a|per|each|every)\s+week|"
+    r"(?:every|each)\s+(?:single\s+)?(?:day|weekday|morning)|daily|on\s+weekdays|"
+    r"(?:monday|mon)\s*(?:to|-|–)\s*(?:friday|fri)"
     r")\s*$", re.I)
 
 
@@ -1027,7 +1033,11 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         r'(?!(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Weekdays?|Weekends?|'
         r'January|February|March|April|May|June|July|August|September|October|November|'
         r'December|Hybrid|Remote|Closed|Open)\b)|'
-        r'(?i:(?:my (?:office|workplace)|i work|commute|(?:a\s+)?(?:public[- ]transport\s+)?journey)'
+        # "I actually work in Shoreditch now, not UCL" / "My office moved to Waterloo" kept
+        # the old destination while the commute tool used the new one (R3-03).
+        r'(?i:(?:my (?:office|workplace)(?:\s+(?:has\s+)?(?:moved|relocated)|\s+is\s+(?:now|moving))?'
+        r'|i\s+(?:(?:actually|now|currently|also|still|really)\s+)?work(?:\s+(?:now|actually|currently))?'
+        r'|commute|(?:a\s+)?(?:public[- ]transport\s+)?journey)'
         r'\s+(?:is\s+)?(?:next to|near|at|to|in)\s+))([^.!?;\n]{2,90})',
         _dest_source)
     if labelled_destination and re.search(
@@ -1081,6 +1091,11 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
             message_destination = {'address': named, 'name': named}
     known_destination = (None if forget_destination else
                          _known_destination_address(named if labelled_destination else current_message))
+    from core.constraint_updates import one_off_distance_question
+    distance_question = not labelled_destination and one_off_distance_question(current_message)
+    if distance_question:
+        # "how far is the first one from UCL?" asks about one journey (R3-10).
+        known_destination = message_destination = None
     if message_destination or known_destination:
         destination = (
             (known_destination if (labelled_destination or (known_destination and re.search(
@@ -1156,6 +1171,12 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     if room_type and result.get('room_type') != room_type:
         result['room_type'] = room_type
         changed = True
+    elif not room_type and result.get('room_type'):
+        from core.constraint_updates import withdraws_room_type
+        if withdraws_room_type(current_message, result.get('room_type')):
+            # "never mind the studio" with nothing else named lifts the room type (R3-05).
+            result['room_type'] = None
+            changed = True
 
     from core.tools.search_properties import _extract_bedrooms, _accessibility_feature_mentions
     beds = _extract_bedrooms(current_message)
@@ -1174,7 +1195,7 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     # I just live there / WFH" sets the flag AND drops any stale travel-time limit so
     # the next search never re-applies a filter the user has disowned.
     ml = current_message.lower()
-    names_destination = _known_destination_address(ml) is not None
+    names_destination = _known_destination_address(ml) is not None and not distance_question
     commute_intent = (bool(minutes) or names_destination or bool(message_destination)
                       or bool(days) or bool(re.search(r'\bi do commute\b|我(?:确实|需要)?通勤', current_message, re.I)))
     if commute_intent:

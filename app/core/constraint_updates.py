@@ -126,6 +126,32 @@ def replaces_destination(text: str, name: str) -> bool:
     return bool(_SEARCH_REQUEST.search(value) and not _NO_SEARCH.search(value))
 
 
+_WITHDRAW_VERB = re.compile(r'\b(?:discard|disregard|ignore|withdraw)\b|作废|撤销|丢弃', re.I)
+# A comma between thousands ("£3,500") does not end a part.
+_PART_BOUNDARY = re.compile(r',(?!\d{3}(?!\d))|，|\s+[-–—]\s+|\s+but\s+', re.I)
+
+
+def _replacement_after_withdrawal(match) -> str:
+    """What a withdrawn clause still states after the withdrawal: a new money figure.
+
+    "Actually ignore my saved rent maximum, I can pay up to £3,500 this time" and "Ignore the
+    budget I mentioned before, now it's £3,500 max" dropped the whole sentence, so the search
+    ran with no ceiling at all while the reply said "within your £3,500 limit" (R3-04). A
+    retraction followed by a new value in the same sentence is a replacement; the withdrawn
+    part itself, and anything else after it, stays a reference."""
+    clause = match.group(0)
+    parts = _PART_BOUNDARY.split(clause)
+    first = next((i for i, part in enumerate(parts) if _WITHDRAW_VERB.search(part)), None)
+    if first is None:
+        return ''
+    kept = [part.strip() for part in parts[first + 1:]
+            if _MONEY_FIGURE.search(part) and not _WITHDRAW_VERB.search(part)]
+    if not kept:
+        return ''
+    end = clause.rstrip()[-1:] if clause.rstrip()[-1:] in '。.!?;；' else ''
+    return ', '.join(kept) + (end or '.') + ' '
+
+
 def scoped_update_text(text: str) -> str:
     text = str(text or '')
     text = without_third_party_clauses(text)
@@ -135,7 +161,7 @@ def scoped_update_text(text: str) -> str:
     # attempt re-scanning to its end: O(n²) on a long paste with no full stop, run several
     # times per turn on the event loop (2026-10-19, B-01 class). Leftmost-match semantics
     # already started every real match at a clause start, so the result is unchanged.
-    text = _WITHDRAWN_CLAUSE.sub('', text)
+    text = _WITHDRAWN_CLAUSE.sub(_replacement_after_withdrawal, text)
     text = _KEPT_OUT_CLAUSE.sub('', text)
     # A comparison can quote another plan without changing it. Keep the explicit
     # modification, excluding the clause marked as unchanged.
@@ -228,6 +254,29 @@ def clause_at(text: str, start: int, end: int) -> str:
     return text[left:right]
 
 
+_WITHDRAWN_BEFORE_MENTION = re.compile(
+    r"(?<!n't )(?<!n’t )(?<!\bnot )(?<!\bnever )"
+    r"\b(?:never\s*mind|forget(?:\s+about)?|scrap|ditch|drop|skip|no\s+longer\s+(?:want|need))"
+    r"(?:\s+(?:the|a|an|my|that|this))?\s+$", re.I)
+
+
+def withdraws_room_type(text: str, room_type) -> bool:
+    """True when ``text`` withdraws the standing ``room_type`` ("never mind studio",
+    "forget the studio", "no longer need a studio", "不要studio了")."""
+    from core.tools.search_properties import _ROOM_TYPE_SYNONYMS
+    needles = dict(_ROOM_TYPE_SYNONYMS).get(str(room_type or ''), ())
+    value = str(text or '')
+    for needle in needles:
+        for found in re.finditer(r'(?<![a-z])' + re.escape(needle) + r'(?![a-z])', value, re.I):
+            before = _CLAUSE_BOUNDARY.split(value[max(0, found.start() - 60):found.start()])[-1][-45:]
+            after = value[found.end():found.end() + 12]
+            if (_WITHDRAWN_BEFORE_MENTION.search(before)
+                    or re.search(r'(?:不要|不用|不需要|不考虑)\s*$', before)
+                    and re.match(r'\s*(?:了|也行|吧)', after)):
+                return True
+    return False
+
+
 def mention_is_requirement(text: str, start: int, end: int) -> bool:
     clause = clause_at(text, start, end)
     # Negation belongs to this clause. In particular, "not all London: a whole
@@ -249,6 +298,10 @@ def mention_is_requirement(text: str, start: int, end: int) -> bool:
     if re.search(r'(?:not(?: a| an)?|no|without|remove|exclude|avoid|delete|don.t want'
                  r'|(?:don.t|do not|doesn.t|does not) need|no need for)\s+(?:\w+\s+){0,3}$'
                  r'|(?:不(?:要|是|需要|想|考虑)|取消|删除|移除|去掉|排除)[^，。；;!?]{0,14}$', before, re.I):
+        return False
+    # "Never mind studio, 2 beds" kept the studio, so every later search asked for a studio
+    # with two bedrooms (R3-05). "Don't forget the studio" is still a requirement.
+    if _WITHDRAWN_BEFORE_MENTION.search(before):
         return False
     if re.search(r'是否|有没有|能否|\b(?:does it|is there|are there|do they|can you explain)\b', clause, re.I):
         return False
@@ -791,6 +844,41 @@ def drop_withdrawn_places(params: dict, accumulated: dict, message: str) -> tupl
             p.pop(field, None)
             dropped.append(field)
     return p, dropped
+
+
+# A question about how far a SHOWN listing is from a place (R3-10): "Out of curiosity how
+# far is the first one from UCL?" set UCL as the commute destination for every later
+# search, over an explicit "no commute needed", and "第一套离国王十字远吗？" moved the search
+# area to King's Cross. The place is the end of one journey, not a criterion.
+_LISTING_DEICTIC = re.compile(
+    r"\b(?:the\s+)?(?:first|second|third|fourth|fifth|last|cheapest|top|other)\s+"
+    r"(?:one|flat|listing|place|property|home|option|studio)\b"
+    r"|\b(?:this|that|these|those)\s+(?:one|ones|flats?|listings?|places?|propert(?:y|ies)|homes?|apartments?)\b"
+    r"|\b(?:number|no\.|#)\s*\d\b|\bis\s+it\b|\bare\s+they\b|\bit\s+(?:to|from)\b"
+    r"|第[一二三四五六七八九十\d]+(?:套|个|间|处)|[这那](?:套|个|间|处|几套)", re.I)
+_DISTANCE_QUESTION = re.compile(
+    r"\bhow\s+(?:far|long|close|near)\b|\b(?:distance|far|close|near)\s+(?:away\s+)?(?:from|to)\b"
+    r"|\b(?:commute|journey|trip)\s+(?:time\s+)?(?:from|to)\b"
+    r"|离[^，。？?！!]{1,20}(?:远|近|多远|多久|多长时间)|到[^，。？?！!]{1,20}(?:要)?(?:多久|多长时间|多远|远吗|近吗)", re.I)
+_OWN_COMMUTE_STATEMENT = re.compile(
+    r"\b(?:i|we)\s+(?:\w+\s+)?(?:work|study|studies|commute|go\s+to\s+work)\b"
+    r"|\bmy\s+(?:office|workplace|work|job|school|university|college|campus|commute)\b"
+    r"|我[^，。？?！!]{0,8}(?:上班|上学|工作|通勤|读书|实习)", re.I)
+
+
+def one_off_distance_question(text: str) -> bool:
+    """True when the message asks how far a shown listing is from a place and states no
+    commute of the user's own."""
+    value = str(text or '')[:2000]
+    if _OWN_COMMUTE_STATEMENT.search(value):
+        return False
+    for sentence in re.split(r'(?<=[!?？。！])\s*|(?<=\.)\s+', value):
+        question = (sentence.rstrip().endswith(('?', '？'))
+                    or re.match(r'\s*(?:out\s+of\s+curiosity,?\s+)?(?:how|is|are|what|which)\b', sentence, re.I)
+                    or re.search(r'[吗呢]\s*$|多远|多久', sentence))
+        if question and _DISTANCE_QUESTION.search(sentence) and _LISTING_DEICTIC.search(sentence):
+            return True
+    return False
 
 
 def independent_memory_task(message: str) -> bool:

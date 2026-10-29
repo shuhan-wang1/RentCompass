@@ -697,6 +697,11 @@ def _extract_budget(text: str):
         m = max(explicit, key=lambda item: item.start())
         val = _money_value(m.group(1))
         return valid_amount(val, _budget_period_near(t, m.start(1), m.end(1)))
+    # A question in a sentence of its own that names no figure does not make the stated
+    # amount a question: "Make it £2,800. Also what do you remember about me?" kept the old
+    # ceiling (R3-06).
+    t = ' '.join(sentence for sentence in re.split(r'(?<=[!?？。])\s*|(?<=\.)\s+', t)
+                 if not (sentence.rstrip().endswith(('?', '？')) and not re.search(r'\d', sentence)))
     if is_hypothetical(t) or re.search(r'比较|房源|\bcompare\b|budget unchanged|listing|property\s*(?:id|#)|\bat £|\bpriced?\b|[?？]', t):
         return None, None
     amount = None
@@ -1937,6 +1942,11 @@ def _extract_area(text: str) -> str | None:
         # 线路" stored the area Oxford and a later Cardiff search ran in Oxford (R2-11).
         if re.match(r'(?:大街|街|路|道|巷|广场|马戏团)', suffix):
             return True
+        # "第一套离国王十字远吗？" asks how far a listing is from the place; it moved the search
+        # area to King's Cross (R3-10).
+        if re.search(r'(?:离|距离|到)\s*$', prefix) and re.match(
+                r'\s*(?:有|大概|大约)?(?:多远|多近|远|近|要多久|多久|多长时间|几分钟|步行|走路)', suffix):
+            return True
         # The city word that opens an institution's name is not a home area: "从第一个到
         # 伦敦大学学院要多久?" (UCL) switched a King's Cross search to all of London (R1-04).
         # A verb or 的 before 大学 ("在伦敦读大学", "伦敦的大学") keeps the city.
@@ -2005,9 +2015,17 @@ _CUE_ONLY_AREAS = {
 # An explicit switch / short follow-up: "switch to X", "make that X", "how about X?", "what
 # about X?", "go back to X", "and X?", "X instead". Clause-local, read on lower-cased text.
 _FOLLOW_UP_CUE_BEFORE = re.compile(
-    r"(?:\b(?:switch(?:ing)?\s+(?:the\s+search\s+|it\s+|over\s+)?to|change\s+(?:it\s+|the\s+(?:area|search)\s+)?to"
+    r"(?:\b(?:switch(?:ing)?\s+(?:the\s+search\s+|it\s+|over\s+)?to"
+    r"|change\s+(?:it\s+|(?:the\s+|my\s+)?(?:area|search)\s+)?to"
     r"|move\s+(?:it\s+|the\s+search\s+)?to|make\s+(?:it|that)|how\s+about|what\s+about"
-    r"|go(?:ing)?\s+back\s+to|back\s+to|let'?s\s+(?:try|do)|try|search\s+in|look\s+in)\s+$)")
+    r"|go(?:ing)?\s+back\s+to|back\s+to|let'?s\s+(?:try|do)|try|search\s+in|look\s+in"
+    # "ok show Hackney" / "show listings in Camden" (R3-02).
+    r"|show(?:\s+me)?(?:\s+(?:flats?|places?|listings?|homes?|properties|options|results)\s+(?:in|for|around))?"
+    # "Change area to Clapham and budget to £3,200", "Set budget to £2,400 and area to
+    # Camden", "Budget £2,600 and area Camden": the area slot named in a combined change
+    # kept the old area while the budget moved (R3-01). "from this area to X" is a route.
+    r"|(?:^|\b(?:and|also|plus|then|set|update|put|make))\s*(?:the\s+|my\s+)?(?:search\s+)?area"
+    r"(?:\s+(?:to|as))?|^\s*area\s*[:=])\s+$)")
 # A bare follow-up ("and Chelsea?", "Bow?") is the WHOLE clause: "Angel investors are nice"
 # names no area.
 _FOLLOW_UP_BARE_BEFORE = re.compile(r"^\s*(?:and|or|ok(?:ay)?|actually|then)?\s*$")
@@ -2075,7 +2093,41 @@ def _follow_up_switch_area(text: str) -> str | None:
             rank = (found.start(), len(key))
             if best is None or rank > best[0]:
                 best = (rank, canon)
-    return best[1] if best else None
+    return best[1] if best else _misspelled_follow_up_area(t)
+
+
+# The words a follow-up switch names, up to the end of its clause: "make that Eustan, and
+# budget 1400" -> "eustan", "How about Camdn instead?" -> "camdn".
+_FOLLOW_UP_PLACE_WORDS = re.compile(
+    r"([a-z][a-z\-]{2,}(?:\s+(?!(?:instead|please|then|too)\b)[a-z][a-z\-]{2,})?)"
+    r"\s*(?:instead|please|then|too)?\s*[?.!]*\s*(?:$|[,;\n]|\band\b)")
+
+
+def _misspelled_follow_up_area(text: str) -> str | None:
+    """The known area a close misspelling after an explicit switch cue names, else None.
+
+    "actually make that Eustan, and budget 1400" and "make that Bethnal Grean" searched the
+    OLD area again under a verified header (R3-02, 13/13). Only the words right after a
+    switch cue are read, the whole clause must be the place, and the match must be close
+    (same first letter, similarity >= 0.8) so ordinary words ("make it cheaper", "what
+    about parking") never become a place. ``text`` is lower-cased without apostrophes."""
+    import difflib
+    names = {**_KNOWN_AREAS, **_CUE_ONLY_AREAS}
+    for clause in re.split(r"[.;!?\n]", text):
+        for cue in re.finditer(r"\b(?:switch(?:ing)?\s+to|change\s+(?:it\s+|(?:the\s+)?area\s+)?to|"
+                               r"move\s+(?:it\s+)?to|make\s+(?:it|that)|how\s+about|what\s+about|"
+                               r"(?:the\s+)?area\s+to|search\s+in|look\s+in|show(?:\s+me)?)\s+", clause):
+            found = _FOLLOW_UP_PLACE_WORDS.match(clause, cue.end())
+            if not found:
+                continue
+            word = found.group(1)
+            if word in names or len(word) < 4:
+                continue
+            close = [name for name in difflib.get_close_matches(word, list(names), n=3, cutoff=0.8)
+                     if name[0] == word[0] and abs(len(name) - len(word)) <= 2]
+            if close:
+                return names[close[0]]
+    return None
 
 
 def canonical_requested_area(value) -> str | None:

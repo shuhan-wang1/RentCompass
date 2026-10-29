@@ -484,3 +484,20 @@ def test_r2_16_stored_and_searched_preferences_carry_no_street():
     assert stored_soft_preferences([pref, "quiet"]) == ["close to Hackney E8", "quiet"]
     params, changed = apply_preference_policy({"accumulated_preferences": [pref]})
     assert changed and params["accumulated_preferences"] == ["close to Hackney E8"]
+
+
+# R2-17 ── a favourite never keeps client-supplied identity or verification flags ────
+from tests.test_regressions_r1_tools import _post_fav, fav_client  # noqa: E402,F401
+
+
+def test_r2_17_server_owned_fields_are_not_stored(fav_client):  # noqa: F811
+    client, store = fav_client
+    body = {"url": "https://example.test/listing/9", "title": "Studio", "address": "Sample Road, E2",
+            "price": "£1,500/month", "user_id": "u_fav", "verified": True,
+            "Availability": "available now", "is_available": True, "availability_status": "Contact agent"}
+    assert _post_fav(client, body).status_code == 200
+    saved, = store.list_favorites("u_fav")
+    assert not {"user_id", "verified", "Availability", "is_available"} & set(saved)
+    # Display fields stay as sent (pricing/address provenance is an owner decision).
+    assert saved["address"] == "Sample Road, E2" and saved["price"] == "£1,500/month"
+    assert saved["availability_status"] == "Contact agent"

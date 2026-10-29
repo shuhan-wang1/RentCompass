@@ -4868,10 +4868,17 @@ def forget_me():
 # Favorites — per-USER, persisted to sqlite (survives restart), keyed on lowercase url
 # ============================================================================
 
+_FAVORITE_SERVER_OWNED_FIELDS = frozenset({
+    "user_id", "userid", "owner", "owner_id", "verified", "is_verified", "verification",
+    "availability", "available", "is_available",
+})
+
+
 @app.route('/api/favorites', methods=['POST'])
 def add_favorite():
     """Add/replace a favorite. Body is the full property dict (lowercase canonical keys)
-    plus user_id. Stored VERBATIM (incl. geo_location) — no fields stripped."""
+    plus user_id. Stored as sent (incl. geo_location) except the server-owned identity and
+    verification fields (R2-17)."""
     data = get_json_or_400()
     user_id, _ = resolve_identity(data)
     # New frontend sends lowercase `url`; keep `URL` as a legacy fallback.
@@ -4895,7 +4902,11 @@ def add_favorite():
         # An object title was stored and returned verbatim; validated like a conversation
         # title (C-09, R1-17).
         raise ApiError(400, "title must be a string of at most 500 characters")
-    conversation_store.add_favorite(user_id, url, data)
+    # Identity and verification are the server's to state, never the client's: a favourite
+    # kept a posted user_id, "verified": true and "availability" verbatim for any URL (R2-17).
+    stored = {key: value for key, value in data.items()
+              if str(key).lower().replace("-", "_") not in _FAVORITE_SERVER_OWNED_FIELDS}
+    conversation_store.add_favorite(user_id, url, stored)
     return jsonify({"success": True, "message": "Added to favorites"})
 
 

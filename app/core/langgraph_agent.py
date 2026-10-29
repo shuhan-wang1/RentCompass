@@ -331,8 +331,11 @@ _RETRACTION_TAIL_RE = re.compile(
     r"[^.!?;。！？,，]{0,40}?[,，]\s*(?:(?:it|that)(?:'s|\s+is)\s+)?"
     r"(?:(?:not|no longer)\s+(?:needed|necessary)|no longer\s+required)"
     r"(?:\s+any\s?more)?\s*(?:[.!?;。！？]|$)", re.I)
+# "Never mind the gym, forget that requirement." kept the gym (R1-02): "never mind",
+# "ignore", "skip" and "cancel" retract the mention they precede just like "forget".
 _RETRACTION_BEFORE_RE = re.compile(
-    r"\b(?:forget|scrap|drop|remove|ditch)\s+(?:about\s+)?(?:the|that|my)\s+(?:\w+\s+){0,1}$",
+    r"\b(?:forget|scrap|drop|remove|ditch|never\s*mind|ignore|disregard|skip|cancel)\s+"
+    r"(?:about\s+)?(?:the|that|my)\s+(?:\w+\s+){0,1}$",
     re.I)
 
 

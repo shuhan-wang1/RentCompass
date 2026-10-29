@@ -478,7 +478,16 @@ _PET_WITHDRAWAL = re.compile(
     r'|\bno\s+(?:need\s+for\s+)?pets?\s+(?:needed|required|requirement)\b'
     r'|不再养|不养(?:猫|狗|宠物)了|没有(?:猫|狗|宠物)了'
     r'|(?:猫|狗|宠物)(?:的事|的要求|的条件|这个条件)?(?:不用|不需要|算了|不重要了|取消)'
-    r'|(?:取消|去掉|删除|忽略)[^。；]{0,10}(?:猫|狗|宠物)', re.I)
+    r'|(?:取消|去掉|删除|忽略)[^。；]{0,10}(?:猫|狗|宠物)'
+    # A correction in a message of its own: "Sorry, no cat, I was thinking of someone else.",
+    # "No cat after all.", "抱歉，我没有狗，不需要宠物条件。" kept the pet filter (R1-02). A bare
+    # "no pets in the building" is still a building rule, not a withdrawal.
+    r'|\b(?:sorry|actually|oops|my\s+mistake|scratch\s+that|correction|wait)\b[\s,]+(?:i\s+)?'
+    r'(?:no|don.t\s+have\s+an?|do\s+not\s+have\s+an?|haven.t\s+got\s+an?)\s+(?:cats?|pets?|dogs?|kittens?)\b'
+    r'|\b(?:no|(?:don.t|do\s+not)\s+have\s+(?:an?|any))\s+(?:cats?|pets?|dogs?|kittens?)\s+after\s+all\b'
+    r'|(?:抱歉|不好意思|其实|说错了|搞错了)[^。；]{0,6}没(?:有)?(?:养)?(?:猫|狗|宠物)'
+    r'|(?:不用|不需要|不要求|不必|无需)(?:允许)?(?:养)?(?:猫|狗|宠物)(?:的)?(?:条件|要求|许可)'
+    r'|不要求(?:允许)?(?:养)?(?:猫|狗|宠物)', re.I)
 
 
 def furnished_requirement_update(text: str) -> bool | None:

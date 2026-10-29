@@ -1156,7 +1156,7 @@ _ZH_AREA_MAP = {
     "\u5927\u8c61\u57ce\u5821": "Elephant and Castle",
     "曼彻斯特": "Manchester", "曼城": "Manchester", "伦敦": "London",
     "利兹": "Leeds", "爱丁堡": "Edinburgh", "布里斯托尔": "Bristol",
-    "布里斯托": "Bristol", "格拉斯哥": "Glasgow", "卡迪夫": "Cardiff",
+    "布里斯托": "Bristol", "格拉斯哥": "Glasgow", "卡迪夫": "Cardiff", "加的夫": "Cardiff",
     "伯明翰": "Birmingham", "利物浦": "Liverpool", "谢菲尔德": "Sheffield",
     "纽卡斯尔": "Newcastle", "诺丁汉": "Nottingham", "莱斯特": "Leicester",
     "考文垂": "Coventry", "牛津": "Oxford", "剑桥": "Cambridge",
@@ -1933,6 +1933,10 @@ def _extract_area(text: str) -> str | None:
         # A workplace / school named in the same clause is a destination, not a home
         # area: "我在金丝雀码头上班，想在伦敦找房" must not search Canary Wharf.
         suffix = re.split(r'[。！？!?;；\n，,:：]', text[end:])[0][:10]
+        # A street, square or station named after a city is not that city: "牛津街附近的地铁
+        # 线路" stored the area Oxford and a later Cardiff search ran in Oxford (R2-11).
+        if re.match(r'(?:大街|街|路|道|巷|广场|马戏团)', suffix):
+            return True
         # The city word that opens an institution's name is not a home area: "从第一个到
         # 伦敦大学学院要多久?" (UCL) switched a King's Cross search to all of London (R1-04).
         # A verb or 的 before 大学 ("在伦敦读大学", "伦敦的大学") keeps the city.

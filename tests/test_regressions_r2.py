@@ -298,3 +298,21 @@ def test_r2_08_the_state_node_reads_the_previous_message():
                                    "history": [{"user": "I want a garden.", "assistant": "Noted."}]}}
     update = node(state)
     assert update["accumulated_search_criteria"]["soft_preferences"] == []
+
+
+# R2-11 ── a zh street named after a city is not that city ───────────────────────────
+@pytest.mark.parametrize("message", ["牛津街附近的地铁线路有哪些？", "牛津街附近有什么超市", "剑桥路附近的公寓"])
+def test_r2_11_a_street_named_after_a_city_keeps_the_search_area(message):
+    from core.langgraph_agent import _apply_explicit_criteria_updates
+    from core.tools.search_properties import _extract_area
+    assert _extract_area(message) is None
+    assert _apply_explicit_criteria_updates({"area": "Hackney", "areas": ["Hackney"]}, message)["area"] == "Hackney"
+
+
+def test_r2_11_an_explicit_new_city_wins():
+    from core.langgraph_agent import _apply_explicit_criteria_updates
+    from core.tools.search_properties import _extract_area
+    assert _extract_area("我想在牛津找房") == "Oxford"
+    acc = _apply_explicit_criteria_updates({"area": "Hackney", "areas": ["Hackney"]},
+                                           "我想在加的夫找房子，预算每月1000镑")
+    assert acc["area"] == "Cardiff" and acc["max_budget"] == 1000

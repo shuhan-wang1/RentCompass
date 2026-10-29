@@ -1071,6 +1071,9 @@ def extract_destination_from_text(text: str) -> dict | None:
                 forms.append(run)
             for cand in forms:
                 cand = " ".join(cand.split())
+                # The sentence's own full stop is not part of the name: "a nurse at St Thomas'
+                # Hospital." stored the destination "St Thomas' Hospital." (R2-14).
+                cand = re.sub(r"(?<!\bSt)(?<!\bDr)(?<!\bMt)[.!?,;:]+$", "", cand).strip()
                 key = cand.lower()
                 if key in seen:
                     continue

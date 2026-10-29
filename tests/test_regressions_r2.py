@@ -379,3 +379,13 @@ def test_r2_10_a_london_search_keeps_the_destination(message, area):
     acc = _apply_explicit_criteria_updates(dict(_LONDON_COMMUTE), message)
     assert acc["area"] == area
     assert acc["commute_destination"] == _LONDON_COMMUTE["commute_destination"]
+
+
+# R2-14 ── a destination name never keeps the sentence's full stop ───────────────────
+def test_r2_14_the_destination_name_drops_the_trailing_full_stop():
+    from core.langgraph_agent import _apply_explicit_criteria_updates
+    from core.scraping.on_demand import extract_destination_from_text
+    message = "Remember that I work as a nurse at St Thomas' Hospital."
+    place = extract_destination_from_text(message)
+    assert place["name"] == "St Thomas' Hospital" and not place["address"].endswith(".")
+    assert _apply_explicit_criteria_updates({}, message)["commute_destination"] == "St Thomas' Hospital"

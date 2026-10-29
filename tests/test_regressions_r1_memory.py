@@ -157,3 +157,40 @@ def test_no_automatic_layer_keeps_the_home_address(memory):
     blob, _ = _blob(memory, user)
     assert "Sample Street" not in blob and "E8 1AA" not in blob
     assert "Hackney" in blob
+
+
+# R1-10 ── a proposed memory note survives the commute redactor whole ────────────────
+_FORGET_STATE = {"extracted_context": {"current_message": "Forget that I work at UCL.",
+                                       "reply_language": "en"},
+                 "tool_artifacts": [],
+                 "accumulated_search_criteria": {"commute_destination": "University College London",
+                                                 "max_travel_time": 30}}
+
+
+@pytest.mark.parametrize("proposal", [
+    "“User no longer works at UCL and does not want UCL used as their workplace or commute "
+    "destination for searches.”",
+    "> The user no longer works at UCL; ignore the earlier 30-minute commute to UCL.",
+    "User no longer works at UCL and does not want UCL used as their commute destination.",
+])
+def test_the_quoted_note_to_save_is_not_withdrawn(proposal):
+    from core.candidate_validation import validate_commute_response
+    text = ("I can store a note saying you no longer want UCL treated as your workplace. "
+            "This is the exact text I would save:\n\n" + proposal +
+            "\n\nDo you want me to save that?")
+    assert validate_commute_response(text, _FORGET_STATE) == text
+
+
+def test_a_commute_claim_beside_the_proposal_is_still_checked():
+    from core.candidate_validation import validate_commute_response
+    text = ("Flat A is a 12-minute commute to UCL.\n\nThis is the exact text I would save:\n\n"
+            "“Works at UCL.”\n\nShall I save it?")
+    out = validate_commute_response(text, _FORGET_STATE)
+    assert "12-minute" not in out
+    assert "“Works at UCL.”" in out and "Note: some commute claims" in out
+
+
+def test_zh_save_proposal_is_protected_too():
+    from core.candidate_validation import proposed_memory_quotes
+    text = "我会保存这段原文：\n\n「我不再在UCL上班，不要把UCL当作通勤目的地。」\n\n要保存吗？"
+    assert proposed_memory_quotes(text) == ["「我不再在UCL上班，不要把UCL当作通勤目的地。」"]

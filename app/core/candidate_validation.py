@@ -4262,15 +4262,41 @@ def _visible_content(text: str) -> str:
     return "".join(_CONTENT_CHARS.findall(str(text or "")))
 
 
+# A memory note the reply proposes to save, quoted after its lead-in ("This is the exact text
+# I would save:", "我会保存这段原文："). It is the note's wording, not a journey claim: "User
+# no longer works at UCL and does not want UCL used as their ... commute destination" was
+# withdrawn whole and the user was asked to confirm a blank (R1-10).
+_SAVE_PROPOSAL_LEAD = re.compile(
+    r"(?:\b(?:save|store|remember|saving|storing)\b|保存|记住|存下)[^\n:：]{0,60}[:：]\s*\n+", re.I)
+_SAVE_PROPOSAL_BODY = re.compile(r"(?:[ \t]*(?:>|[\"“「'‘])[^\n]{1,400}(?:\n|$))+|[^\n]{1,300}(?=\n\s*\n|$)")
+
+
+def proposed_memory_quotes(text: str) -> list[str]:
+    """The quoted note(s) a reply proposes to save, verbatim, in order (R1-10)."""
+    quotes: list[str] = []
+    for lead in _SAVE_PROPOSAL_LEAD.finditer(str(text or "")):
+        # The lead-in must be a statement ABOUT the save, in its own sentence.
+        sentence = re.split(r"[.!?。！？]\s", text[:lead.start()])[-1] + lead.group()
+        if not re.search(r"\b(?:text|note|wording|this|following|memory)\b|原文|内容|这段|这条|如下",
+                         sentence, re.I):
+            continue
+        body = _SAVE_PROPOSAL_BODY.match(text, lead.end())
+        if body and body.group().strip():
+            quotes.append(body.group().rstrip("\n"))
+    return quotes
+
+
 def validate_commute_response(response: str, state: dict) -> str:
     """Remove only unsupported commute assertions; never touch fixed system text.
 
     System-composed passages (``register_protected_system_text``) and this validator's own
     note are masked before redaction and restored after it, in place. The note is appended
-    only when this pass removed visible text, and never twice (R3-01)."""
+    only when this pass removed visible text, and never twice (R3-01). A memory note the reply
+    proposes to save is masked the same way (R1-10)."""
     text = str(response or "")
     notes = (_commute_unverified_note(False), _commute_unverified_note(True))
-    protected = [t for t in list(_PROTECTED_SYSTEM_TEXTS) + list(notes) if t in text]
+    protected = [t for t in list(_PROTECTED_SYSTEM_TEXTS) + list(notes) + proposed_memory_quotes(text)
+                 if t in text]
     if not protected:
         return _validate_commute_response(text, state)
     masked = text

@@ -123,3 +123,37 @@ def test_explicit_remember_of_a_secret_is_refused_honestly(monkeypatch, memory):
     assert "never store passwords" in reply and "Saved text" not in reply
     zh = compose_memory_contract_response("", contract, language="zh")
     assert "不会保存密码" in zh
+
+
+# R1-06 ── a stated home street address is kept out of automatic memory ───────────────
+@pytest.mark.parametrize("text, expected", [
+    ("I currently live at 7 Sample Street, Hackney E8 1AA and want to stay close.",
+     "I currently live at [home address not stored], Hackney E8 and want to stay close."),
+    ("I live at 3 Example Road N1.", "I live at [home address not stored] N1."),
+    ("My address is Flat 3, 7 Sample Street, London E8 1AA.",
+     "My address is [home address not stored], London E8."),
+    ("我住在幸福路22号，想找附近的房子", "我住在[home address not stored]，想找附近的房子"),
+])
+def test_home_street_address_is_replaced_area_kept(text, expected):
+    redacted, found = am_mod.redact_sensitive(text)
+    assert redacted == expected and "address" in found
+
+
+@pytest.mark.parametrize("text", [
+    "Tell me about 12 Sample Grove N7",            # a listing the user asks about
+    "I live in Hackney and want a 1-bed",
+    "Find a flat near NW1 8NH for £2000",
+])
+def test_a_listing_address_or_an_area_is_not_a_home_address(text):
+    assert "address" not in am_mod.redact_sensitive(text)[1]
+
+
+def test_no_automatic_layer_keeps_the_home_address(memory):
+    user = "u_r106"
+    memory.remember_turn("I currently live at 7 Sample Street, Hackney E8 1AA. I want a "
+                         "1-bed flat in Hackney.", "Noted.", session_id="s1", user_id=user)
+    memory._accum[(user, "s1")] = am_mod.REFLECT_IMPORTANCE_THRESHOLD
+    memory.maybe_reflect("s1", user)
+    blob, _ = _blob(memory, user)
+    assert "Sample Street" not in blob and "E8 1AA" not in blob
+    assert "Hackney" in blob

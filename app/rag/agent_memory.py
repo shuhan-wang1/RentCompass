@@ -929,6 +929,54 @@ def redact_secrets(text: str) -> tuple[str, list[str]]:
         return "", ["unparsed"]
 
 
+# ── A street-level HOME address in automatic memory (R1-06) ──────────────────────────────
+# "I currently live at <number> <street>, Hackney <postcode>" was kept by the episodic log, the
+# extracted facts and a reflection, while the assistant told the user it had not saved their
+# address. Like a phone number, the street address is replaced; the area and the postcode
+# district stay (they are what the search uses). Bound to a residence cue, so a listing
+# address the user asks about ("tell me about 12 Sample Grove") is not touched.
+_ADDRESS_MARKER = "[home address not stored]"
+_STREET_WORD_RE = (
+    r"(?:road|rd|street|st|avenue|ave|lane|ln|close|drive|dr|way|place|pl|gardens|gdns|grove|"
+    r"terrace|crescent|court|ct|square|sq|mews|row|hill|park|walk|rise|parade|green|vale|view|"
+    r"yard|gate|wharf|parkway|boulevard|embankment|estate|house|mansions|buildings)")
+_HOME_ADDRESS_RE = re.compile(
+    r"(?P<cue>\b(?:live|living|lives|lived|stay|staying|based|reside|residing)\s+(?:at|in)\s+"
+    r"|\b(?:home\s+|current\s+|my\s+)?address\s*(?:is|:|=)?\s*"
+    r"|\bmy\s+(?:home|flat|house|place)\s+is\s+(?:at|on)\s+)"
+    r"(?P<addr>(?:(?:flat|apartment|apt|unit|room)\s*\d+[a-z]?\s*,?\s*)?\d{1,4}[a-z]?"
+    r"(?:\s*-\s*\d{1,4})?\s*,?\s+(?:[a-z][\w'’-]*\s+){0,3}?" + _STREET_WORD_RE + r"\b\.?)", re.I)
+_ZH_HOME_ADDRESS_RE = re.compile(
+    r"(?P<cue>(?:我)?(?:现在|目前)?(?:住在|家在|地址(?:是|为|：|:)))"
+    r"(?P<addr>[^，。,;；!?！？]{0,30}?\d+\s*(?:号|弄|栋|室))")
+_FULL_POSTCODE_RE = re.compile(r"\b([A-Z]{1,2}\d[A-Z\d]?)\s*\d[A-Z]{2}\b", re.I)
+
+
+def redact_home_address(text: str) -> tuple[str, bool]:
+    """``text`` with a stated home street address replaced (postcode reduced to its
+    district), and whether one was found. Never raises."""
+    try:
+        value = str(text or "")
+        hit = False
+        for pattern in (_HOME_ADDRESS_RE, _ZH_HOME_ADDRESS_RE):
+            out, position = [], 0
+            for match in pattern.finditer(value):
+                hit = True
+                out.append(value[position:match.start("addr")] + _ADDRESS_MARKER)
+                position = match.end("addr")
+                # The full postcode that follows within the address keeps its district only.
+                tail = value[position:position + 60]
+                postcode = _FULL_POSTCODE_RE.search(tail)
+                if postcode and not re.search(r"[.;!?。；！？]", tail[:postcode.start()]):
+                    out.append(tail[:postcode.start()] + postcode.group(1).upper())
+                    position += postcode.end()
+            out.append(value[position:])
+            value = "".join(out)
+        return value, hit
+    except Exception:
+        return "", True
+
+
 def redact_sensitive(text: str) -> tuple[str, list[str]]:
     """``text`` with income, immigration, health and contact details removed.
 
@@ -939,9 +987,12 @@ def redact_sensitive(text: str) -> tuple[str, list[str]]:
     metadata). Never raises."""
     try:
         value = str(text or "")[:_REDACT_MAX_CHARS]
-        # Secrets are replaced in place, like a phone number: the rest of the clause is
-        # still a usable housing statement (R1-05).
+        # Secrets (R1-05) and a stated home street address (R1-06) are replaced in place,
+        # like a phone number: the rest of the clause is still a usable housing statement.
         value, found = redact_secrets(value)
+        value, home_address = redact_home_address(value)
+        if home_address:
+            found.append("address")
         if _EMAIL_RE.search(value) or _PHONE_RE.search(value):
             found.append("contact")
             value = _PHONE_RE.sub("[contact detail not stored]",

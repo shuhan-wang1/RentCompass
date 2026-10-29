@@ -1748,6 +1748,19 @@ def workplace_place_at(text: str, start: int) -> bool:
     return bool(_WORKPLACE_BEFORE_PLACE.search(before))
 
 
+_TRAVEL_BEFORE_PLACE = re.compile(
+    r"\b(?:commut\w*|travel\w*|journey|journeys|trip|route|routes|directions?|get(?:ting)?|fares?)\b"
+    r"(?:\s+[\w'’]+){0,3}?\s+(?:to|from|into)\s+(?:the\s+)?$", re.I)
+
+
+def travel_target_at(text: str, start: int) -> bool:
+    """True when the place at ``start`` is the end of a journey ("the commute to X",
+    "travel time from X"), not a place to live (R2-02)."""
+    before = re.split(r"[.;!?,，。；！？\n]|\b(?:and|but|so|or|while)\b",
+                      str(text or "")[max(0, start - 60):start], flags=re.I)[-1]
+    return bool(_TRAVEL_BEFORE_PLACE.search(before))
+
+
 def names_place_as_workplace(text: str, place: str) -> bool:
     """True when every mention of ``place`` in ``text`` is introduced as a workplace."""
     source = re.sub(r"[’']", "", str(text or ""))
@@ -1828,7 +1841,11 @@ def _extract_area(text: str) -> str | None:
     # Coordinated residential alternatives belong to the list extractor.
     for clause in re.split(r'[。.!?;；\n]', text):
         if re.search(r'\b(?:search|find|keep|live|flats?)\b|找|住|搜', clause, re.I):
-            found = [name for name in _KNOWN_AREAS if re.search(r'(?<![a-z])' + re.escape(name) + r'(?![a-z])', clause, re.I)]
+            # A commute target or workplace is no alternative: "a studio in Hackney ... and the
+            # commute to Canary Wharf" kept the previous city for the whole turn (R2-02).
+            found = [name for name in _KNOWN_AREAS
+                     if any(not travel_target_at(clause, m.start()) and not workplace_place_at(clause, m.start())
+                            for m in re.finditer(r'(?<![a-z])' + re.escape(name) + r'(?![a-z])', clause, re.I))]
             if len(found) > 1 and re.search(r'\band\b|\bor\b|或|和|、', clause, re.I):
                 return None
     # Chinese places can govern a trailing residential predicate: "在Camden找个

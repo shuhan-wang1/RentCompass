@@ -60,3 +60,37 @@ def test_r2_01_a_delivered_error_still_replays_over_http(isolated_app, monkeypat
                          headers=_headers(user, "rid-err-1"))
     assert replay.status_code == 502 and replay.headers["X-Idempotent-Replay"] == "1"
     assert calls == []
+
+
+# R2-02 ── a new area in a composite message replaces the previous city ─────────────
+_CITY_ACC = {
+    "area": "Leeds", "areas": ["Leeds"], "bedrooms": 2, "max_budget": 1400, "budget_period": "month",
+    "constraint_sources": {
+        "area": {"source": "user_message", "text": "Find 2 bed flats in Leeds under £1400", "value": "Leeds"},
+        "areas": {"source": "user_message", "text": "Find 2 bed flats in Leeds under £1400",
+                  "value": ["Leeds"]},
+    },
+}
+_COMPOSITE = ("Find a studio in Islington under £1400 and tell me the nearest supermarkets "
+              "and the commute to Canary Wharf")
+
+
+def test_r2_02_a_commute_target_is_not_a_coordinated_area():
+    from core.tools.search_properties import _extract_area, _extract_areas
+    assert _extract_area(_COMPOSITE) == "Islington"
+    assert _extract_area("Find a flat in Camden and the journey to Bank") == "Camden"
+    # Real alternatives still belong to the list extractor.
+    assert _extract_area("Find flats in Hackney or Islington") is None
+    assert _extract_areas("Find flats in Hackney or Islington") == ["Hackney", "Islington"]
+
+
+def test_r2_02_the_search_runs_in_the_new_area():
+    from core.langgraph_agent import _apply_explicit_criteria_updates
+    from core.tools.search_properties import ground_hard_constraints
+    acc = _apply_explicit_criteria_updates(dict(_CITY_ACC), _COMPOSITE, apply_relative_budget=False)
+    assert acc["area"] == "Islington" and acc["areas"] == ["Islington"]
+    params, dropped = ground_hard_constraints(
+        {"area": "Islington", "areas": ["Islington"], "room_type": "studio", "max_budget": 1400},
+        dict(_CITY_ACC), _COMPOSITE)
+    assert params["area"] == "Islington" and params["areas"] == ["Islington"]
+    assert "area" not in dropped and "areas" not in dropped

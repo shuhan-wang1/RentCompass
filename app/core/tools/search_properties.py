@@ -1820,6 +1820,17 @@ def _listing_reference_cue(text: str, match) -> bool:
                 or _LISTING_DETAIL_QUESTION.match(clause))
 
 
+_COMPARISON_QUESTION = re.compile(
+    r"(?:和|跟|与|同)[^，。？！?!；;]{1,40}?(?:比|相比|对比|比较)|"
+    r"(?:比起来|相比(?:之下)?|对比)[^。！!]{0,20}(?:哪|谁|更|还是)|哪(?:个|里|儿|边)(?:更|比较)|"
+    r"\b(?:compared?\s+(?:to|with)|versus|vs\.?)\s|"
+    r"\bwhich\s+(?:one\s+|area\s+|place\s+)?(?:is|would\s+be)\s+(?:safer|cheaper|better|closer|quieter|nicer)\b",
+    re.I)
+_COMPARISON_SEARCH_CUE = re.compile(
+    r"找|搜|租房|住在|换成|换到|改为|改成|切换|"
+    r"\b(?:search|find|show\s+me|switch|move\s+to|instead|look\s+in|listings?|flats?\s+in)\b", re.I)
+
+
 def _extract_area(text: str) -> str | None:
     """A NEW area/city the user is switching to (canonical ENGLISH name), else None.
 
@@ -1834,6 +1845,10 @@ def _extract_area(text: str) -> str | None:
     from core.constraint_updates import housing_update_text
     text = housing_update_text(text)
     if not text or not text.strip():
+        return None
+    if _COMPARISON_QUESTION.search(text) and not _COMPARISON_SEARCH_CUE.search(text):
+        # "和Stratford比起来哪个更安全？" weighs the search area against another place; it
+        # names no new home area (R2-05).
         return None
     switched = _area_switch_target(text)
     if switched:

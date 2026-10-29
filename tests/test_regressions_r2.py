@@ -182,3 +182,25 @@ def test_r2_04_a_remember_result_in_the_idempotency_store_carries_no_saved_text(
     gone = run()
     assert gone.success is False and gone.data["stored"] is None
     assert "deleted" in gone.data["error"]
+
+
+# R2-05 ── a comparison with another place is not an area change ─────────────────────
+@pytest.mark.parametrize("message", [
+    "和Stratford比起来哪个更安全？", "跟Stratford比哪个更安全", "和斯特拉特福相比呢？",
+    "Stratford和这里哪个更便宜？", "Which is safer, this or Stratford?",
+])
+def test_r2_05_a_comparison_keeps_the_search_area(message):
+    from core.langgraph_agent import _apply_explicit_criteria_updates
+    from core.tools.search_properties import _extract_area, _extract_areas
+    assert _extract_area(message) is None and _extract_areas(message) == []
+    acc = _apply_explicit_criteria_updates({"area": "Islington", "areas": ["Islington"]}, message)
+    assert acc["area"] == "Islington" and acc["areas"] == ["Islington"]
+
+
+@pytest.mark.parametrize("message,area", [
+    ("Stratford instead", "Stratford"),
+    ("在Stratford找房", "Stratford"),
+])
+def test_r2_05_an_explicit_switch_still_switches(message, area):
+    from core.tools.search_properties import _extract_area
+    assert _extract_area(message) == area

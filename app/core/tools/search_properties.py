@@ -501,10 +501,17 @@ def _amount_role(text: str, lo: int, hi: int) -> str:
     return role(before) or role(after, trailing=True) or 'budget'
 
 
+def _plain_figures(text: str) -> str:
+    """``text`` with £ in its one spelling and no thousands separators. No \\b after the digits:
+    a CJK letter counts as a word character, so 「£2,500以内」 kept its comma and the amount
+    patterns read 500 (V-04)."""
+    return re.sub(r'(?<=\d),(?=\d{3}(?!\d))', '', str(text or '').replace('￡', '£'))
+
+
 def _extract_total_budget(text: str):
     if not text or is_criteria_consultation(text):
         return None
-    t = re.sub(r'(?<=\d),(?=\d{3}\b)', '', scoped_update_text(text).lower())
+    t = _plain_figures(scoped_update_text(text).lower())
     matches = [m for m in re.finditer(r'£\s*(\d{3,5}(?:\.\d{1,2})?)(?![\d.])', t)
                if _amount_role(t, m.start(), m.end()) == 'total'
                and not is_hypothetical(clause_at(t, m.start(), m.end()))]
@@ -560,9 +567,9 @@ _YEAR_MONEY_BEFORE = re.compile(
     # 「预算改成2000」 masked 2000 as a calendar year (R4-05): a budget verb between the
     # budget noun and the figure keeps it money.
     r'(?:预算|月租|租金|房租|上限)(?:改成|改为|调到|调整为|调整到|提高到|提到|降到|降低到|是|为|设为|设成)?|'
-    r'最多|最高|不超过)\s*$', re.I)
+    r'最多|最高|不超过|不高于|不多于|低于|小于|至多|顶多)\s*$', re.I)
 _YEAR_MONEY_AFTER = re.compile(
-    r'\s*(?:pcm|pm|pw|p/?m|per\b|a\s+(?:month|week)|/|镑|英镑|块|元|以内|以下|左右|'
+    r'\s*(?:pcm|pm|pw|p/?m|per\b|a\s+(?:month|week)|/|镑|英镑|块|元|以内|以下|之内|封顶|左右|'
     r'max(?:imum)?\b|budget\b|ceiling\b|pounds?\b|gbp\b|or\s+(?:less|under|below)\b)', re.I)
 
 
@@ -628,12 +635,12 @@ def _asks_if_amount_suffices(t: str, start: int, end: int) -> bool:
 
 # A figure measured in metres, kilometres, minutes or square feet is not money.
 _MEASURE_AFTER_FIGURE = re.compile(
-    r'\s*(?:米|公里|千米|分钟|小时|平方|平米|尺|metres?|meters?|m\b|km\b|kilomet\w*|miles?\b|'
+    r'\s*(?:米|公里|千米|分钟|小时|平|尺|metres?|meters?|m\b|km\b|kilomet\w*|miles?\b|'
     r'mins?\b|minutes?\b|hours?\b|sq\b|square\b|ft\b|feet\b)', re.I)
 
 
 # "1.5k budget", "£2k max": thousands written with a k (S-01).
-_THOUSANDS_K = re.compile(r'(?<![\w.])(£\s*)?(\d{1,2}(?:\.\d{1,3})?)\s*k\b(?!m)', re.I)
+_THOUSANDS_K = re.compile(r'(?<![a-z0-9_.])(£\s*)?(\d{1,2}(?:\.\d{1,3})?)\s*k\b(?!m)', re.I)
 
 
 def _expand_thousands(t: str) -> str:
@@ -656,8 +663,7 @@ def _extract_budget(text: str):
     # A conditional stretch ("could stretch to £2,100 for the right place") is not a ceiling
     # (stress A-08); the state node keeps it as a soft note instead.
     from core.constraint_updates import without_conditional_stretch
-    t = without_conditional_stretch(scoped_update_text(text)).lower()
-    t = re.sub(r'(?<=\d),(?=\d{3}\b)', '', t)
+    t = _plain_figures(without_conditional_stretch(scoped_update_text(text)).lower())
     t = _expand_thousands(t)
     # "budget -500" became a £500 ceiling and was quoted back as the user's budget (R3-16):
     # a negative amount is no budget at all. A range's dash ("£1500-2000") follows a digit.
@@ -723,14 +729,15 @@ def _extract_budget(text: str):
     # examples and property details are not changes to the household's budget.
     explicit = []
     for pattern in (
-        r'(?:budget\b|ceiling\b|最多|预算|上限)[^£\d。;；]{0,30}£?\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)',
+        r'(?:budget\b|ceiling\b|最多|预算|上限|不超过|不高于|不多于|小于|低于|少于|至多|顶多)'
+        r'[^£\d。;；]{0,30}£?\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)',
         r'(?:under|below|up\s+to|no\s+more\s+than|max(?:imum)?)\s*£?\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)',
         # "What about Camden at £900?" / "3 bedrooms in Edinburgh at £900" names the price
         # point of the search (R4-05) — only with an area/search/bedroom word before it,
         # so a listing's "at £2,000" in a question about that listing is not a budget.
         r'(?:(?:what|how)\s+about|search(?:ing)?|find|show(?:\s+me)?|look(?:ing)?\s+for)\b'
         r'[^£。;；?？]{0,40}?\bat\s+£\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)',
-        r'£?\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)[^。;；]{0,12}(?:ceiling|budget|以内|以下)',
+        r'£?\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)[^。;；]{0,12}(?:ceiling|budget|以内|以下|之内|封顶)',
         # The figure before the budget noun: 「改成1500预算」「1500的预算」「换成1500镑的预算」 kept
         # the old ceiling (S-01, 4/4). Only a unit word and 的 may sit between them.
         r'(?<![\d.])(\d{3,5}(?:\.\d{1,2})?)(?!\d)\s*(?:£|镑|英镑|块|元)?\s*(?:每月|一个月|每个月)?\s*'
@@ -745,6 +752,8 @@ def _extract_budget(text: str):
                 continue
             if _MEASURE_AFTER_FIGURE.match(t, candidate.end(1)):
                 continue  # 「离车站1500米以内」 is a distance, not a rent ceiling.
+            if re.search(r'押金|保证金', t[max(0, candidate.start() - 8):candidate.end(1)]):
+                continue
             if (_amount_role(t, candidate.start(1), candidate.end(1)) not in ('per_person', 'total')
                     and not is_hypothetical(clause) and not re.search(r'是否|会怎样|what if|would .*budget', clause)):
                 explicit.append(candidate)
@@ -761,19 +770,19 @@ def _extract_budget(text: str):
         return None, None
     amount = None
     # 1) currency-tagged amount: "£1800", "£ 1800"
-    m = re.search(r'£\s?(\d{3,5}(?:\.\d{1,2})?)\b', t)
+    m = re.search(r'£\s?(\d{3,5}(?:\.\d{1,2})?)(?!\d|\.\d)', t)
     # 2) amount followed by a budget unit: "1800 pcm", "1800 per month", "1800 a week"
     if not m:
-        m = re.search(r'\b(\d{3,5}(?:\.\d{1,2})?)\s*(?:pcm|pm|pw|/\s*(?:month|week|wk)|per\s+(?:month|week)|a\s+(?:month|week)|pounds?)\b', t)
+        m = re.search(r'(?<![a-z\d.])(\d{3,5}(?:\.\d{1,2})?)\s*(?:pcm|pm|pw|/\s*(?:month|week|wk)|per\s+(?:month|week)|a\s+(?:month|week)|pounds?)\b', t)
     # 3) budget keyword + amount: "budget is now 1800", "budget of 1800", "max budget 1800"
     if not m:
-        m = re.search(r'budget\b[^£\d]{0,20}£?\s?(\d{3,5}(?:\.\d{1,2})?)\b', t)
+        m = re.search(r'budget\b[^£\d]{0,20}£?\s?(\d{3,5}(?:\.\d{1,2})?)(?!\d|\.\d)', t)
     # 4) budget-INTENT phrasing (esp. clarification answers): "under 1000", "up to 1200",
     #    "max 900", "around 1500", and Chinese "1000以内/以下/左右", "预算1000", "月租1000".
     if not m:
-        m = re.search(r'\b(?:under|below|max(?:imum)?|up\s+to|around|about|no\s+more\s+than|less\s+than)\s*£?\s?(\d{3,5}(?:\.\d{1,2})?)\b', t)
+        m = re.search(r'\b(?:under|below|max(?:imum)?|up\s+to|around|about|no\s+more\s+than|less\s+than)\s*£?\s?(\d{3,5}(?:\.\d{1,2})?)(?!\d|\.\d)', t)
     if not m:
-        m = re.search(r'(\d{3,5}(?:\.\d{1,2})?)\s*(?:以内|以下|左右|块|镑|元|英镑)', t)
+        m = re.search(r'(\d{3,5}(?:\.\d{1,2})?)\s*(?:以内|以下|之内|封顶|左右|块|镑|元|英镑)', t)
     if not m:
         m = re.search(r'(?:预算|月租|租金|房租)\s*[^\d]{0,6}(\d{3,5}(?:\.\d{1,2})?)', t)
     if m:

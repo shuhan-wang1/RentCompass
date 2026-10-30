@@ -765,6 +765,49 @@ def _states_field_value(text: str, field: str, mtype: str = "") -> bool:
 _USER_POSSESSIVE = re.compile(r"\b(?:the\s+)?user['’]s\b|用户的", re.I)
 
 
+# One saved note often states several facts ("User is allergic to cats, needs step-free
+# access, and has a maximum budget of £1,800 per month."). "Forget my budget only" deleted
+# that whole row and the cat allergy with it (R4-01): the field's clauses are cut out and
+# the rest of the note is kept. A comma between digits ("£1,800") is not a clause break.
+_SENTENCE_SPLIT = re.compile(r"(?<=[!?;。！？；])\s*|(?<=\.)(?!\d)\s*")
+_CLAUSE_SPLIT = re.compile(
+    r"\s*(?:(?<!\d)[,，](?!\d)|、)\s*(?:(?:and|but|also|plus)\s+)?"
+    r"|\s+(?:and|but|plus|while|whereas)\s+|以及|并且|而且|另外")
+# What is left of a note once a clause is removed must still say something: a lead-in
+# ("User asked: Please remember:") or a conjunction alone is no fact.
+_NOTE_BOILERPLATE = re.compile(
+    r"\b(?:user|the|asked|please|remember|that|my|i|i'?m|is|are|has|have|and|also|"
+    r"note|saved|fact)\b|用户|请记住|记住|我的|我|是|和|也", re.I)
+
+
+def _without_field_clauses(text: str, field: str) -> str:
+    """``text`` with every clause that names ``field`` or carries a money figure removed.
+
+    Returns "" when nothing but lead-in words would be left, so the caller deletes the row
+    instead of keeping an empty shell. The value cannot survive: every clause with a
+    money-sized number goes, whether or not it repeats the field's name.
+    """
+    out = []
+    cjk = bool(re.search(r"[\u4e00-\u9fff]", text or ""))
+    for sentence in _SENTENCE_SPLIT.split(str(text or "")):
+        if not sentence.strip():
+            continue
+        if not (_mentions_field(sentence, field) or _MONEY_RE.search(sentence)):
+            out.append(sentence.strip())
+            continue
+        stripped = sentence.strip()
+        end = stripped[-1] if stripped[-1] in ".!?;。！？；" else ""
+        body = stripped[:-1] if end else stripped
+        kept = [c.strip() for c in _CLAUSE_SPLIT.split(body)
+                if c and c.strip() and not (_mentions_field(c, field) or _MONEY_RE.search(c))]
+        if kept:
+            out.append(("，" if cjk else ", ").join(kept) + (end or ("。" if cjk else ".")))
+    rest = ("" if cjk else " ").join(out).strip()
+    if not re.search(r"\w{2,}", _NOTE_BOILERPLATE.sub(" ", re.sub(r"[^\w\s]", " ", rest))):
+        return ""
+    return rest
+
+
 def erasure_request_fields(text: str) -> tuple:
     """Fields the user is explicitly asking us to DELETE, from their own message.
 
@@ -1417,6 +1460,29 @@ class AgentMemory:
         # Report of the most recent targeted erasure — a value that is COMPUTED and
         # ASSERTED ON (tests pin it), not merely logged.
         self.last_erasure_report = None
+        # user_id -> {field: epoch seconds of the last erasure of that field} (R4-01).
+        self._erasures = {}
+        self._erasure_lock = threading.Lock()
+
+    def erased_fields_since(self, user_id, started_at) -> tuple:
+        """Fields erased for ``user_id`` at or after ``started_at`` (ISO or epoch seconds)."""
+        uid = _valid_user_id(user_id)
+        if uid is None or started_at in (None, ""):
+            return ()
+        try:
+            if isinstance(started_at, (int, float)):
+                start = float(started_at)
+            else:
+                import datetime as _dt
+                parsed = _dt.datetime.fromisoformat(str(started_at).replace("Z", "+00:00"))
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=_dt.timezone.utc)
+                start = parsed.timestamp()
+        except (TypeError, ValueError):
+            return ()
+        with self._erasure_lock:
+            erased = dict(self._erasures.get(uid) or {})
+        return tuple(f for f, at in erased.items() if at >= start)
 
     # ------------------------------------------------------------------ writing
     def add(self, text, mtype, session_id="default", user_id=None,
@@ -1478,7 +1544,8 @@ class AgentMemory:
         honest partial-deletion signal for the caller to surface.
         """
         empty = {"user_id": None, "fields": (), "deleted": 0, "deleted_ids": (),
-                 "by_layer": {}, "retained_mentions": 0, "residual_ids": (),
+                 "by_layer": {}, "rewritten": 0, "rewritten_ids": (),
+                 "retained_mentions": 0, "residual_ids": (),
                  "legacy_residual_ids": (), "complete": True}
         uid = _valid_user_id(user_id)
         if uid is None:
@@ -1492,7 +1559,7 @@ class AgentMemory:
             self.last_erasure_report = out
             return out
 
-        def _scan():
+        def _scan(rewrites=None):
             got = self.col.get(where={"user_id": uid})
             ids = list(got.get("ids") or [])
             docs = list(got.get("documents") or [])
@@ -1500,21 +1567,43 @@ class AgentMemory:
             doomed, by_layer, retained = [], {}, 0
             for i, rid in enumerate(ids):
                 doc = docs[i] if i < len(docs) else ""
-                mtype = ((metas[i] if i < len(metas) else None) or {}).get("mtype", "")
+                meta = (metas[i] if i < len(metas) else None) or {}
+                mtype = meta.get("mtype", "")
                 if any(_states_field_value(doc, f, mtype) for f in wanted):
-                    doomed.append(rid)
+                    rest = doc
+                    for f in wanted:
+                        rest = _without_field_clauses(rest, f) if rest else ""
+                    if rewrites is not None and rest and meta.get("user_id"):
+                        # The row says other things too: keep them, minus the field (R4-01).
+                        rewrites.append((rid, rest, dict(meta)))
+                    else:
+                        doomed.append(rid)
                     by_layer[mtype or "unknown"] = by_layer.get(mtype or "unknown", 0) + 1
                 elif any(_mentions_field(doc, f) for f in wanted):
                     retained += 1
             return doomed, by_layer, retained
 
         deleted_ids, by_layer, retained, residual = [], {}, 0, []
-        legacy_residual = []
+        legacy_residual, rewritten = [], []
         with self._lock:
             try:
-                deleted_ids, by_layer, retained = _scan()
+                deleted_ids, by_layer, retained = _scan(rewritten)
                 if deleted_ids:
                     self.col.delete(ids=deleted_ids)
+                for rid, rest, meta in rewritten:
+                    meta["updated_at"] = _now_iso()
+                    if meta.get("hash") is not None:
+                        meta["hash"] = hashlib.md5(
+                            f"{meta.get('mtype') or 'semantic'}|{meta['user_id']}|{rest}"
+                            .encode("utf-8")).hexdigest()
+                    self.col.update(ids=[rid], documents=[rest], metadatas=[meta])
+                # A job of a turn that started before this erasure must not write the value
+                # back (R4-01: the remember turn's own memory job landed after the forget).
+                stamp = time.time()
+                with self._erasure_lock:
+                    erased = self._erasures.setdefault(uid, {})
+                    for f in wanted:
+                        erased[f] = stamp
                 # Verification pass: assert the scrub actually happened.
                 residual, _, retained = _scan()
                 duplicate = self.col.legacy_residual_records(
@@ -1538,6 +1627,8 @@ class AgentMemory:
         report = {
             "user_id": uid, "fields": wanted, "deleted": len(deleted_ids),
             "deleted_ids": tuple(deleted_ids), "by_layer": by_layer,
+            "rewritten": len(rewritten),
+            "rewritten_ids": tuple(rid for rid, _rest, _meta in rewritten),
             "retained_mentions": retained,
             "residual_ids": tuple(residual),
             "legacy_residual_ids": tuple(legacy_residual),
@@ -1894,6 +1985,13 @@ class AgentMemory:
             # them all see the redacted text only.
             user_msg, _sensitive = redact_sensitive(user_msg)
             assistant_msg, _ = redact_sensitive(assistant_msg)
+            # This turn started before the user asked to forget a field (its job runs late):
+            # nothing this job writes may carry that field's value (R4-01).
+            for field in self.erased_fields_since(user_id, turn_started_at):
+                if _states_field_value(user_msg, field):
+                    user_msg = _without_field_clauses(user_msg, field)
+                if _states_field_value(assistant_msg, field, "semantic"):
+                    assistant_msg = _without_field_clauses(assistant_msg, field)
             ep = f"User asked: {(user_msg or '').strip()[:300]}"
             # The remember tool refuses a claimed privilege or a script for the assistant
             # (R1-15); the automatic log kept the same text verbatim ("User asked: Remember that

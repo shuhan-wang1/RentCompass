@@ -1060,6 +1060,11 @@ MEMORY_ERASURE_INCOMPLETE_EN = (
     "I tried to delete the {fields} you saved, but I could not confirm that every saved copy is "
     "gone. Please ask again, or use \"forget me\" to erase all of your saved data.")
 MEMORY_ERASURE_INCOMPLETE_ZH = "我尝试删除你保存的{fields}，但无法确认所有副本都已删除。请再试一次，或使用“删除我的所有数据”。"
+MEMORY_ERASURE_KEPT_NOTE = (
+    " Saved notes that also stated other facts were KEPT with only the {fields} removed; "
+    "those other facts are still stored.")
+MEMORY_ERASURE_KEPT_EN = " The other details you saved with it are still stored."
+MEMORY_ERASURE_KEPT_ZH = "和它一起保存的其他信息仍然保留。"
 _ERASURE_FIELD_NAMES = {"budget": ("budget", "预算")}
 _ERASURE_DENIAL = re.compile(
     r"\b(?:can.?t|cannot|can\s+not|unable\s+to|no\s+way\s+to|not\s+able\s+to|don.?t\s+have\s+(?:a\s+)?way\s+to)"
@@ -1083,6 +1088,11 @@ def memory_erasure_texts(report, reply_language: str = "en") -> tuple[str, str]:
             "Some saved copies may remain. ")
     else:
         ack = (MEMORY_ERASED_ACK_ZH if zh else MEMORY_ERASED_ACK_EN).format(fields=label)
+        if report.get("rewritten"):
+            # A note that also stated other facts lost only the field (R4-01).
+            note += MEMORY_ERASURE_KEPT_NOTE.format(fields=" and ".join(
+                _ERASURE_FIELD_NAMES[f][0] for f in fields))
+            ack += MEMORY_ERASURE_KEPT_ZH if zh else MEMORY_ERASURE_KEPT_EN
     return note, ack
 
 

@@ -83,3 +83,74 @@ def test_s_01_room_numbers_and_per_person_rooms_are_not_bedroom_counts(message):
 
 def test_s_01_minutes_before_the_commute_word_still_set_the_limit():
     assert _state_node(_BOW_1BED, "改成30分钟通勤")["max_travel_time"] == 30
+
+
+# R4-01 ── "forget my budget only" keeps the other facts of the same note ────────────
+_COMBINED = ("User is allergic to cats, needs step-free access, and has a maximum budget of "
+             "£1,800 per month.")
+
+
+@pytest.fixture()
+def r4_memory(tmp_path, monkeypatch):
+    import rag.agent_memory as am
+    monkeypatch.setattr(am, "call_ollama", lambda *a, **k: "5")
+    return am, am.AgentMemory(db_path=str(tmp_path / "mem"))
+
+
+def _docs(store, user):
+    return list(store.col.get(where={"user_id": user}).get("documents") or [])
+
+
+def test_r4_01_forgetting_the_budget_keeps_the_rest_of_a_combined_note(r4_memory):
+    am, store = r4_memory
+    user = "u_r401"
+    store.add(_COMBINED, "semantic", "s1", user)
+    store.add("User asked: Remember: I'm allergic to cats, I need step-free access, and my "
+              "budget is max £1,800 a month.", "episodic", "s1", user)
+    store.add("User's budget is £1,800 per month.", "semantic", "s1", user)
+    report = store.forget_fact(user, ("budget",))
+    docs = _docs(store, user)
+    assert report["complete"] and report["rewritten"] == 2 and report["deleted"] == 1
+    assert "User is allergic to cats, needs step-free access." in docs
+    assert any("allergic to cats, I need step-free access." in d for d in docs)
+    blob = "\n".join(docs)
+    assert "1,800" not in blob and "budget" not in blob.lower()
+
+
+def test_r4_01_a_zh_combined_note_loses_only_the_budget_clause():
+    from rag.agent_memory import _without_field_clauses
+    assert _without_field_clauses("用户对猫过敏，需要无障碍通道，每月预算最多1800英镑。", "budget") \
+        == "用户对猫过敏，需要无障碍通道。"
+    assert _without_field_clauses("User asked: Please remember my budget is £1400 a month.",
+                                  "budget") == ""
+    assert _without_field_clauses("The user's budget is £2,000. The user works at King's Cross.",
+                                  "budget") == "The user works at King's Cross."
+
+
+def test_r4_01_the_acknowledgement_says_the_other_details_were_kept():
+    from core.memory_gate import memory_erasure_texts
+    note, ack = memory_erasure_texts({"fields": ("budget",), "complete": True, "rewritten": 1})
+    assert "still stored" in ack and "KEPT" in note
+    _note, plain = memory_erasure_texts({"fields": ("budget",), "complete": True, "rewritten": 0})
+    assert "still stored" not in plain
+
+
+def test_r4_01_a_late_job_of_an_earlier_turn_does_not_write_the_value_back(r4_memory):
+    import datetime
+    am, store = r4_memory
+    user = "u_r401b"
+    started = (datetime.datetime.now(datetime.timezone.utc)
+               - datetime.timedelta(seconds=5)).isoformat()
+    store.add(_COMBINED, "semantic", "s1", user)
+    store.forget_fact(user, ("budget",))
+    # The remember turn's own memory job runs after the forget.
+    assert store.remember_turn("Remember: I'm allergic to cats, I need step-free access, and my "
+                               "budget is max £1,800 a month.", "Saved.", session_id="s1",
+                               user_id=user, turn_started_at=started)
+    blob = "\n".join(_docs(store, user))
+    assert "1,800" not in blob and "step-free" in blob
+    # A turn that starts after the erasure may state a new budget.
+    later = (datetime.datetime.now(datetime.timezone.utc)
+             + datetime.timedelta(seconds=1)).isoformat()
+    assert store.erased_fields_since(user, later) == ()
+    assert store.erased_fields_since(user, started) == ("budget",)

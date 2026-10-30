@@ -142,22 +142,45 @@ def memory_notice(contract: dict | None, language: str = "") -> str:
             else "I could not save that to memory because the memory tool failed.")
 
 
+# The composer runs at up to three sites of one turn. A notice from an earlier pass is not a
+# model claim, so the patterns above did not remove it and each pass put another copy on top
+# (U-05). Every fixed text, in both languages, is taken out first.
+_FIXED_NOTICES = tuple(sorted({
+    memory_notice(contract, language) for language in ("en", "zh") for contract in (
+        {"requested": True, "success": True},
+        {"requested": True, "success": True, "failed_count": 1},
+        {"requested": True, "attempted": False, "error": "confirmation"},
+        {"requested": True, "attempted": False},
+        {"requested": True, "attempted": True, "policy_refused": True,
+         "policy_decision": "rejected_secret"},
+        {"requested": True, "attempted": True, "policy_refused": True},
+        {"requested": True, "attempted": True},
+    )}, key=len, reverse=True))
+_WITHHELD_NOTE = re.compile(
+    r"I did not save [^\n]*? from your message; personal details like these are only kept if you "
+    r"confirm them in a message of their own\.|补充：我没有保存[^\n]*?这类个人信息只有在你单独发消息确认后才会保存。")
+
+
 def compose_memory_contract_response(response: str, contract: dict | None, *,
                                      language: str = "", preserve_content: bool = False) -> str:
     """Compose an authoritative write notice with any independent turn result.
 
     Model-generated save/failure claims are removed first so a failed write can never be
     followed by contradictory prose.  A memory-only turn returns only the deterministic
-    notice; a multi-intent turn keeps its non-memory content.
+    notice; a multi-intent turn keeps its non-memory content. Composing twice changes nothing.
     """
     notice = memory_notice(contract, language)
     if not notice:
         return str(response or "")
     quote = saved_content_quote(contract, language)
     notice = notice + ('\n\n' + quote if quote else '')
+    # The withheld-details note is the same kind of fixed text, and stands in every case.
+    withheld = "\n\n".join(dict.fromkeys(_WITHHELD_NOTE.findall(str(response or ""))))
     if not preserve_content:
-        return notice
-    remainder = strip_saved_content_quote(response, contract, language)
+        return f"{notice}\n\n{withheld}" if withheld else notice
+    remainder = _WITHHELD_NOTE.sub("", strip_saved_content_quote(response, contract, language))
+    for fixed in _FIXED_NOTICES:
+        remainder = remainder.replace(fixed, "")
     if (contract or {}).get("policy_decision") == "rejected_secret":
         # The rest of a multi-intent answer may not repeat the refused value either (R1-05).
         from rag.agent_memory import redact_secrets
@@ -171,8 +194,9 @@ def compose_memory_contract_response(response: str, contract: dict | None, *,
     for pattern in _MEMORY_CLAIM_PATTERNS:
         remainder = pattern.sub("", remainder)
     remainder = re.sub(r"[ \t]+", " ", remainder)
-    remainder = re.sub(r" *\n *", "\n", remainder).strip(" \n.;，。")
-    return f"{notice}\n\n{remainder}" if remainder else notice
+    remainder = re.sub(r"\n{3,}", "\n\n", re.sub(r" *\n *", "\n", remainder)).strip(" \n.;，。")
+    composed = f"{notice}\n\n{remainder}" if remainder else notice
+    return f"{composed}\n\n{withheld}" if withheld else composed
 
 
 # "Please remember that I prefer quiet streets. Also remember that my landlord's name is ...
@@ -196,8 +220,10 @@ def with_withheld_details_note(response: str, contract: dict | None, user_messag
         from rag.agent_memory import _SAVE_REQUEST_CLAUSE, _SENSITIVE_CLAUSE_PATTERNS, redact_sensitive
     except Exception:
         return body
-    clauses = " ".join(m.group(0) for m in _SAVE_REQUEST_CLAUSE.finditer(str(user_message)[:4000]))
-    if not clauses:
+    from core.memory_gate import remember_reference_text
+    clauses = " ".join([m.group(0) for m in _SAVE_REQUEST_CLAUSE.finditer(str(user_message)[:4000])]
+                       + [remember_reference_text(str(user_message)[:4000])])
+    if not clauses.strip():
         return body
     identity = dict(_SENSITIVE_CLAUSE_PATTERNS)["identity"]
 

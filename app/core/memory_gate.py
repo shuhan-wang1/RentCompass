@@ -413,6 +413,64 @@ _REMEMBER_CLAUSE_ZH = re.compile(
     r"(?:请|帮我)?(?:记住|记一下|记下|别忘了|不要忘记)[：:，,\s]*(?P<fact>[^。！？!?；;\n]{2,200})")
 
 
+# "I have a dog and I work at Canary Wharf. My budget is £2,200 a month. Please remember that."
+# points back at the message. The clause read as the word "that", so nothing replaced the
+# model's paraphrase, which carried a geocoded postcode the user never typed; the gate refused
+# it and the reply asked the user to repeat themselves (U-05). The save is of the statements
+# before the cue, in the user's words; a request in the message is not one of them.
+_REMEMBER_REFERENCE = re.compile(
+    r"\b(?:please\s+)?(?:remember|note|keep\s+in\s+mind|don'?t\s+forget)\s+"
+    r"(?:that|this|it|these|those|all\s+(?:of\s+)?(?:that|this|these|those))"
+    r"(?:\s+(?:for\s+(?:me|next\s+time|later)|please|too))?\s*(?=[.!?;\n]|$)"
+    r"|(?:请|帮我)?(?:记住|记一下|记下|别忘了|不要忘记)"
+    r"(?:这些|这个|这点|这一点|以上(?:内容)?|上面的(?:内容)?|上述(?:内容)?)?(?:吧|哦|啊|好吗)?\s*"
+    r"(?=[。！？!?；;\n]|$)", re.I)
+_GREETING = re.compile(r"^\s*(?:hi|hello|hey|hiya|good\s+(?:morning|afternoon|evening)|你好|您好|嗨)"
+                       r"(?:\s+there)?[,，!！.。\s]+", re.I)
+_REFERENCE_WORDS = re.compile(r"(?:that|this|it|these|those|all(?:\s+of)?\s+(?:that|this|these|those)|"
+                              r"这些|这个|这点|这一点|以上(?:内容)?|上面的(?:内容)?|上述(?:内容)?)$", re.I)
+
+
+def _referenced_statements(text: str) -> list:
+    """The user's statements before a "remember that." cue in ``text``, each a sentence."""
+    match = _REMEMBER_REFERENCE.search(text)
+    if match is None:
+        return []
+    out = []
+    for sentence in re.split(r"(?<=[!?;\n。！？；])|(?<=\.)(?!\d)", text[:match.start()]):
+        body = _GREETING.sub("", sentence).strip().rstrip(" .,;。，；")
+        if body and not body.endswith(("?", "？")) and _CONTINUING_STATEMENT.match(body) \
+                and not _REQUEST_IN_SENTENCE.search(body):
+            out.append(body)
+    return out
+
+
+def remember_reference_text(current_message: str) -> str:
+    """Everything a "remember that." cue points back at, personal details included: what the
+    user asked to save, as opposed to what may be saved. '' without such a cue."""
+    return " ".join(_referenced_statements(user_request_text(current_message).strip()))
+
+
+def remember_points_back(current_message: str) -> bool:
+    """True when the save request names no fact of its own and points at the message."""
+    text = user_request_text(current_message).strip()
+    return bool(text and user_authorizes_memory(text) and not _named_remember_clause(text)
+                and _referenced_statements(text))
+
+
+def _statements_to_save(text: str) -> str:
+    from rag.agent_memory import redact_secrets, redact_sensitive
+    statements = _referenced_statements(text)
+    # A secret is refused whole by the write path, and the reply says why. A personal detail
+    # waits for a confirmation of its own (the withheld-details note): the rest is saved.
+    if any(redact_secrets(s)[1] for s in statements):
+        return ""
+    kept = [s for s in statements
+            if not {"identity", "contact", "address"} & set(redact_sensitive(s)[1])]
+    joiner = "。" if kept and re.search(r"[\u4e00-\u9fff]", kept[0]) else ". "
+    return joiner.join(kept)
+
+
 def explicit_remember_clause(current_message: str) -> str:
     """The fact the user explicitly asked to be remembered, in their own words, else ''.
 
@@ -423,6 +481,10 @@ def explicit_remember_clause(current_message: str) -> str:
     text = user_request_text(current_message).strip()
     if not text or not user_authorizes_memory(text):
         return ""
+    return _named_remember_clause(text) or _statements_to_save(text)
+
+
+def _named_remember_clause(text: str) -> str:
     for pattern in (_REMEMBER_CLAUSE_EN, _REMEMBER_CLAUSE_ZH):
         for match in pattern.finditer(text):
             fact = match.group("fact")
@@ -435,6 +497,8 @@ def explicit_remember_clause(current_message: str) -> str:
             fact = fact.strip(" ,，:：\"'“”")
             # "remember to ..." asks the agent to do something; "remember what/when" recalls.
             if re.match(r"(?:to|what|when|who|where|why|how|if)\b", fact, re.IGNORECASE):
+                continue
+            if _REFERENCE_WORDS.match(fact):
                 continue
             if content_is_question_fragment(fact):
                 continue          # 「记住了什么」 -> '了什么' is a question, never a fact (R4-04)

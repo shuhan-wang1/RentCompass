@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import importlib
 import json
 import uuid
@@ -283,3 +284,115 @@ def test_u_09_the_model_cannot_confirm_the_gate_in_the_same_turn():
     asyncio.run(build_fc_nodes(provider)["execute_tools"](state))
     (_, params), = provider.calls
     assert not params.get("confirmed") and not params.get("criteria_gate_shown")
+
+
+# U-05 ── the notice appears once; "Please remember that." saves the user's own statements
+_DENIED = {"requested": True, "attempted": False, "success": False,
+           "error": "denied: tainted write requires confirmation"}
+
+
+@pytest.mark.parametrize("contract", [
+    _DENIED,
+    {"requested": True, "attempted": False, "success": False},
+    {"requested": True, "attempted": True, "success": False},
+    {"requested": True, "attempted": True, "success": False, "policy_refused": True,
+     "policy_decision": "rejected_secret"},
+    {"requested": True, "attempted": True, "success": False, "policy_refused": True},
+    {"requested": True, "attempted": True, "success": True, "stored_content": "I have a dog"},
+])
+@pytest.mark.parametrize("language", ["en", "zh"])
+def test_u_05_composing_again_changes_nothing(contract, language):
+    from core.memory_contract import compose_memory_contract_response as compose
+    once = compose("I found 2 flats", contract, language=language, preserve_content=True)
+    assert compose(once, contract, language=language, preserve_content=True) == once
+    assert "I found 2 flats" in once
+
+
+def test_u_05_a_notice_of_the_other_language_does_not_stay():
+    from core.memory_contract import compose_memory_contract_response as compose
+    english = compose("I found 2 flats", _DENIED, language="en", preserve_content=True)
+    assert compose(english, _DENIED, language="zh", preserve_content=True).count("This was not") == 0
+
+
+def test_u_05_the_withheld_note_appears_once_and_survives():
+    from core.memory_contract import compose_memory_contract_response as compose
+    from core.memory_contract import with_withheld_details_note as note
+    contract = {"requested": True, "attempted": True, "success": True,
+                "stored_content": "I prefer quiet streets"}
+    message = "Please remember that I prefer quiet streets and that my phone number is 07700 900123."
+    first = note(compose("OK", contract, language="en", preserve_content=True), contract, message, "en")
+    assert first.count("I did not save the phone number or email") == 1
+    assert compose(first, contract, language="en", preserve_content=True).count("I did not save") == 1
+    assert compose(first, contract, language="en", preserve_content=False).count("I did not save") == 1
+
+
+MEM1 = "Hi, I have a dog and I work at Canary Wharf. My budget is £2,200 a month for a 1-bed. Please remember that."
+
+
+@pytest.mark.parametrize("message,clause", [
+    (MEM1, "I have a dog and I work at Canary Wharf. My budget is £2,200 a month for a 1-bed"),
+    ("My budget is £2,000. Remember that. Find me a flat in Hackney", "My budget is £2,000"),
+    ("I have a dog and I work at Canary Wharf, please remember that", "I have a dog and I work at Canary Wharf"),
+    ("我养了一只狗。我在金丝雀码头上班。请记住。", "我养了一只狗。我在金丝雀码头上班"),
+    ("我的预算是2000镑，请记住这些。", "我的预算是2000镑"),
+    ("Please remember that I have a cat.", "I have a cat"),
+])
+def test_u_05_the_clause_is_what_the_user_stated(message, clause):
+    from core import memory_gate
+    assert memory_gate.explicit_remember_clause(message) == clause
+    assert memory_gate.write_authorization(message, clause)
+
+
+@pytest.mark.parametrize("message", [
+    "Find me a 1-bed in Hackney under £2,500. Remember that.",   # a request, not a fact
+    "remember that", "Do you remember that?", "My password is S3cret!pass. I have a dog. Remember that.",
+])
+def test_u_05_nothing_stated_or_a_secret_gives_no_clause(message):
+    from core import memory_gate
+    assert memory_gate.explicit_remember_clause(message) == ""
+
+
+def test_u_05_a_personal_detail_stays_out_and_the_note_says_so():
+    from core import memory_gate
+    from core.memory_contract import with_withheld_details_note
+    message = "My name is Sam. I have a dog. Please remember that."
+    assert memory_gate.explicit_remember_clause(message) == "I have a dog"
+    contract = {"requested": True, "attempted": True, "success": True, "stored_content": "I have a dog"}
+    assert "I did not save the name" in with_withheld_details_note("Saved.", contract, message, "en")
+
+
+def _remember_turn(message: str, proposal: str):
+    from langchain_core.messages import AIMessage
+
+    from core import memory_gate
+    from core.agent_loop import build_fc_nodes
+    from tests.test_agent_contract_guards import _state, _tc
+    from tests.test_qa_null_injection import _ValidatingProvider, _strict_null_args
+    state = _state(message)
+    provider = _ValidatingProvider(["search_properties", "remember"])
+    provider.specs = [dataclasses.replace(spec, side_effect="write" if spec.name == "remember" else "none")
+                      for spec in provider.specs]
+    calls = [_tc("remember", _strict_null_args("remember", {"content": proposal}), "c0"),
+             _tc("search_properties", _strict_null_args("search_properties", {"user_query": message}), "c1")]
+    state["messages"] = [AIMessage(content="", tool_calls=calls)]
+    asyncio.run(build_fc_nodes(provider)["execute_tools"](state))
+    return dict(provider.calls).get("remember"), memory_gate
+
+
+def test_u_05_the_geocoded_paraphrase_is_replaced_by_the_users_words():
+    params, _gate = _remember_turn(MEM1, "User has a dog, works at Canary Wharf, London E14 5AB, and has a "
+                                         "budget of £2,200 per month for a 1-bedroom whole flat.")
+    assert params["content"] == "I have a dog and I work at Canary Wharf. My budget is £2,200 a month for a 1-bed"
+
+
+def test_u_05_h13_tool_derived_content_still_meets_the_gate():
+    # A fact of its own is named, so an unrelated proposal is not replaced by it.
+    message = "Please remember that I have a dog, and find me the cheapest flat in Hackney"
+    params, _gate = _remember_turn(message, "Cheapest flat is 14 Sample Road at £1,180 pcm.")
+    assert params is None
+
+
+def test_u_05_tool_derived_content_never_replaces_a_statement_free_message():
+    message = "Find me the cheapest 1-bed in Hackney. Remember that."
+    params, _gate = _remember_turn(message, "Cheapest flat is 14 Sample Road at £1,180 pcm.")
+    assert params is None

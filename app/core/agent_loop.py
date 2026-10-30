@@ -4336,8 +4336,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 stated_fn = getattr(mem_gate, "content_is_user_stated", None) if mem_gate else None
                 clause = clause_fn(cur_msg) if (name == "remember" and clause_fn) else ""
                 proposed = str(args.get("content") or args.get("fact") or "")
+                points_back = bool(clause) and bool(getattr(
+                    mem_gate, "remember_points_back", lambda _m: False)(cur_msg))
                 if (clause and stated_fn is not None and not stated_fn(proposed, clause)
-                        and stated_fn(clause, proposed)):
+                        and (points_back or stated_fn(clause, proposed))):
                     # "… Please remember that I have a cat." with a search in the same batch:
                     # the model's paraphrase ("pet owner, needs a pet-friendly property") or
                     # the whole request is not the user's own statement, so the tainted-turn
@@ -4345,7 +4347,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     # proposal RESTATES the user's clause (plus additions), save the fact
                     # exactly as the user worded it instead. Unrelated content (H13: a
                     # tool-derived "flat viewing at 1400 Camden Road") is not substituted and
-                    # meets the gate as before.
+                    # meets the gate as before. "… Please remember that." names no fact: what it
+                    # points at is the user's own statements, whatever the model proposed (U-05).
                     logger.info("fc_loop.remember_content_from_user_clause")
                     args["content"] = clause
                     args.pop("fact", None)

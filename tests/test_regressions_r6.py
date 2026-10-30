@@ -226,3 +226,60 @@ def test_u_10a_a_licensed_claim_stands_beside_the_field_erasure():
     out = memory_gate.settle_memory_deletion_claims(
         "I've deleted your budget from memory.", "forget my budget", report, "en")
     assert out == "I've deleted your budget from memory."
+
+
+# U-09 ── a zh home search near an institution moves the search; a distance question does not
+@pytest.mark.parametrize("message,area", [
+    ("牛津大学附近有房吗", "Oxford"), ("剑桥大学附近有房吗", "Cambridge"), ("曼彻斯特大学附近的房子", "Manchester"),
+    ("爱丁堡大学附近有房吗", "Edinburgh"), ("利兹大学附近有房吗", "Leeds"), ("兰卡斯特大学附近有房吗", "Lancaster"),
+    ("伦敦大学学院附近有房吗", "Bloomsbury"), ("伦敦大学学院附近", "Bloomsbury"),
+    ("帝国理工附近有房吗", "South Kensington"), ("帮我在帝国理工学院附近找个一居室", "South Kensington"),
+    ("国王学院附近租房", "Holborn"), ("伦敦国王学院附近的房子", "Holborn"), ("伦敦政经附近有房吗", "Holborn"),
+    ("伦敦政治经济学院附近", "Holborn"), ("那牛津大学附近呢", "Oxford"), ("想住在剑桥大学附近", "Cambridge"),
+])
+def test_u_09_a_home_search_near_an_institution_moves_the_area(message, area):
+    acc = _state_node({"area": "Bristol", "areas": ["Bristol"], "bedrooms": 1, "max_budget": 1200}, message)
+    assert acc["area"] == area and acc["areas"] == [area]
+
+
+@pytest.mark.parametrize("message", [
+    "从第一个到伦敦大学学院要多久?", "去伦敦政治经济学院通勤多久", "到牛津大学多远", "我在牛津大学读书",
+    "我在伦敦大学学院上学", "我在伦敦大学学院附近上班", "不要牛津大学附近的房子", "如果在牛津大学附近找房会更便宜吗",
+    "帝国理工附近的房租贵吗", "帝国理工附近有地铁吗", "地铁站附近的房子", "公园附近有房吗", "我家附近有房吗",
+    "这套附近有超市吗",
+])
+def test_u_09_anything_else_keeps_the_area(message):
+    acc = _state_node({"area": "Bristol", "areas": ["Bristol"], "bedrooms": 1, "max_budget": 1200}, message)
+    assert acc["area"] == "Bristol" and acc["areas"] == ["Bristol"]
+
+
+@pytest.mark.parametrize("message", ["温莎附近有房吗", "牛津街附近有房吗", "UCL附近有房吗"])
+def test_u_09_a_place_nothing_here_resolves_does_not_reuse_the_old_area(message):
+    acc = _state_node({"area": "Bristol", "areas": ["Bristol"], "bedrooms": 1, "max_budget": 1200}, message)
+    assert acc["area"] is None and acc["areas"] == []
+
+
+def test_u_09_the_institution_stays_the_destination_of_a_london_search():
+    acc = _state_node({"area": "Bristol", "areas": ["Bristol"], "commute_destination": "University of Bristol"},
+                      "伦敦大学学院附近有房吗")
+    assert acc["area"] == "Bloomsbury" and "University College London" in acc["commute_destination"]
+
+
+def test_u_09_the_model_cannot_confirm_the_gate_in_the_same_turn():
+    from langchain_core.messages import AIMessage
+
+    from core.agent_loop import build_fc_nodes
+    from tests.test_agent_contract_guards import _state, _tc
+    from tests.test_qa_null_injection import _ValidatingProvider, _strict_null_args
+    message = "Find me a flat in Edinburgh"
+    state = _state(message)
+    state["accumulated_search_criteria"] = {"area": "Edinburgh", "areas": ["Edinburgh"],
+                                            "criteria_gate_shown": True}
+    state["tool_artifacts"] = [{"tool": "search_properties", "success": True, "raw_data": {
+        "status": "need_clarification", "clarification_kind": "soft_criteria"}}]
+    provider = _ValidatingProvider(["search_properties"])
+    args = _strict_null_args("search_properties", {"user_query": message, "confirmed": True})
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("search_properties", args, "c0")])]
+    asyncio.run(build_fc_nodes(provider)["execute_tools"](state))
+    (_, params), = provider.calls
+    assert not params.get("confirmed") and not params.get("criteria_gate_shown")

@@ -1260,6 +1260,13 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         # names as where to look is the new search location.
         new_area = _postcode_search_location(current_message)
         new_areas = [new_area] if new_area else new_areas
+    if not new_area and edited_areas is None and result.get('area'):
+        # 「温莎附近有房吗」 named a place this parser does not know and the old city was searched
+        # (U-09): the search asks where, or starts from a destination the message named.
+        from core.tools.search_properties import unresolved_zh_search_place
+        if unresolved_zh_search_place(current_message):
+            result['area'], result['areas'] = None, []
+            changed = True
     if new_area and not contextual_work_area:
         new_areas = new_areas or [new_area]
         if result.get('area') != new_area or result.get('areas') != new_areas:
@@ -3642,6 +3649,11 @@ _KNOWN_DESTINATIONS = {
     'imperial': 'Imperial College London, South Kensington, London SW7 2AZ',
     '帝国理工学院': 'Imperial College London, South Kensington, London SW7 2AZ',
     '帝国理工': 'Imperial College London, South Kensington, London SW7 2AZ',
+    '伦敦大学学院': 'University College London, Gower Street, London WC1E 6BT',
+    '伦敦政治经济学院': 'London School of Economics, Houghton Street, London WC2A 2AE',
+    '伦敦政经': 'London School of Economics, Houghton Street, London WC2A 2AE',
+    '伦敦国王学院': "King's College London, Strand, London WC2R 2LS",
+    '国王学院': "King's College London, Strand, London WC2R 2LS",
     "king's college": "King's College London, Strand, London WC2R 2LS",
     'kings college': "King's College London, Strand, London WC2R 2LS",
     'kcl': "King's College London, Strand, London WC2R 2LS",

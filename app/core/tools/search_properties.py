@@ -1976,6 +1976,82 @@ _COMPARISON_SEARCH_CUE = re.compile(
     r"\b(?:search|find|show\s+me|switch|move\s+to|instead|look\s+in|listings?|flats?\s+in)\b", re.I)
 
 
+# 「牛津大学附近有房吗」 asks for homes near the university, unlike 「到牛津大学要多久」: the R1-04
+# rule below kept the old area for both (U-09). The phrase after 附近 tells them apart.
+_ZH_CLAUSE_END = r"(?=[，。！？!?;；,\n]|$)"
+_ZH_NEAR_HOME = re.compile(
+    r"(?P<place>[^，。！？!?;；,:：\n]{2,24}?)\s*(?:附近|周边|一带|旁边|边上)\s*(?:"
+    r"(?:有没有|有|的|找|租|住|看看?|搜)\s*(?:个|一[个套间]|套|间)?\s*"
+    r"(?:房(?![租价东])|公寓|住处|住宅|单间|studio|flat|[一二两三四五1-5]\s*(?:居|室|卧|bed))"
+    r"|(?:租|住)\s*(?:吧|呢|吗|啊)?\s*" + _ZH_CLAUSE_END +
+    r"|(?P<bare>(?:吧|呢|吗|啊)?\s*" + _ZH_CLAUSE_END + r"))", re.I)
+_ZH_PRICE_QUESTION = re.compile(r"价格|租金|房价|多少钱|贵吗|贵不贵")
+_ZH_PLACE_FILLER = re.compile(
+    r"^(?:那么?|请|麻烦|帮我|帮忙|我想|我要|想要?|要|搜索?|找一?下?|看一?看|看|换到|改到|换成|改成|在|住在|还有|另外|也)+")
+# Not a place: a listing, the user's own home or a kind of place inside the current area.
+_ZH_NOT_A_PLACE = re.compile(
+    r"[我你他她这那哪第套个某些的]|^(?:地铁站?|车站|火车站?|公交站?|公交车站|学校|大学|学院|公司|单位|医院|公园|"
+    r"超市|商场|市中心|市区|市内|城区|郊区|区域|地区|地方|当地|河边|海边|办公室|图书馆|健身房|教堂)$")
+
+
+def _zh_place_negated(text: str, start: int, end: int) -> bool:
+    from core.constraint_updates import clause_at, is_hypothetical
+    prefix = re.split(r'[。！？!?;；\n，,:：]', text[:start])[-1][-45:]
+    return bool(is_hypothetical(clause_at(text, start, end)) or re.search(
+        r'(?:不(?:要|是|需要|想|考虑)|取消|删除|移除|去掉|排除)[^，。；;!?]{0,14}$', prefix))
+
+
+def _zh_near_home_place(text: str):
+    """(place text, bare) of the first zh home search near a named place, else None.
+    "Bare" is 「<place>附近」 with nothing after it, which only counts as the whole request."""
+    for match in _ZH_NEAR_HOME.finditer(text or ""):
+        rest = re.split(r'[。！？!?;；\n，,:：]', text[match.end():])[0]
+        if _ZH_PRICE_QUESTION.search(rest) or _zh_place_negated(text, match.end("place"), match.end("place")):
+            continue
+        place = match.group("place").strip()
+        bare = match.group("bare") is not None
+        if bare and _ZH_NOT_A_PLACE.search(_ZH_PLACE_FILLER.sub("", place)):
+            continue
+        return place, bare
+    return None
+
+
+def _zh_institution_area(place: str, bare: bool) -> str | None:
+    """The searchable area around a zh institution name ending ``place``, else None. Only names
+    in the curated alias table reach classify_place, so this never touches the network."""
+    from core.scraping.on_demand import _ZH_ALIAS_KEYS, classify_place, is_destination
+    for key in _ZH_ALIAS_KEYS:
+        at = place.rfind(key)
+        if at < 0:
+            continue
+        tail = place[at + len(key):]
+        if not re.fullmatch(r"(?:大学|学院|校区)?", tail):
+            continue
+        if bare and _ZH_PLACE_FILLER.sub("", place[:at]):
+            return None
+        info = classify_place(place[at:])
+        words = str(info.get("slug") or "").replace("-", " ")
+        if not words or not (tail or is_destination(info)):
+            return None
+        return (LONDON_AREAS.get(words) or _KNOWN_AREAS.get(words)
+                or _CUE_ONLY_AREAS.get(words) or words.title())
+    return None
+
+
+def unresolved_zh_search_place(text: str) -> str | None:
+    """The place a zh home search names when no area could be read from it: the standing area
+    must not be searched in its place (U-09). None for a kind of place ("地铁站附近的房子")."""
+    from core.constraint_updates import housing_update_text
+    source = housing_update_text(text or '')
+    if not source or (_COMPARISON_QUESTION.search(source) and not _COMPARISON_SEARCH_CUE.search(source)):
+        return None
+    found = _zh_near_home_place(source)
+    if not found:
+        return None
+    place = _ZH_PLACE_FILLER.sub("", found[0])
+    return place if len(place) >= 2 and not _ZH_NOT_A_PLACE.search(place) else None
+
+
 def _extract_area(text: str) -> str | None:
     """A NEW area/city the user is switching to (canonical ENGLISH name), else None.
 
@@ -2058,11 +2134,15 @@ def _extract_area(text: str) -> str | None:
     # actually asked for — a Camden request then searched all of London. A London
     # area/borough beats a bare city; within a level the longest key wins.
     _zh_london = _zh_city = None
+    near_home = _zh_near_home_place(text)
+    if near_home:
+        institution_area = _zh_institution_area(*near_home)
+        if institution_area:
+            return institution_area
 
     def _zh_place_skipped(start: int, end: int) -> bool:
         prefix = re.split(r'[。！？!?;；\n，,:：]', text[:start])[-1][-45:]
-        if is_hypothetical(clause_at(text, start, end)) or re.search(
-                r'(?:不(?:要|是|需要|想|考虑)|取消|删除|移除|去掉|排除)[^，。；;!?]{0,14}$', prefix):
+        if _zh_place_negated(text, start, end):
             return True
         # A workplace / school named in the same clause is a destination, not a home
         # area: "我在金丝雀码头上班，想在伦敦找房" must not search Canary Wharf.

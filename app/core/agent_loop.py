@@ -4087,6 +4087,13 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             p["move_in_date"] = acc["move_in_date"]
         if acc.get("criteria_gate_shown"):
             p["criteria_gate_shown"] = True
+        if any(a.get("tool") == "search_properties"
+               and (a.get("raw_data") or {}).get("clarification_kind") == "soft_criteria"
+               for a in state.get("tool_artifacts") or []):
+            # The gate asked the user this turn, so this message left it open. The model
+            # confirming it for them in a re-call ran the search unasked (U-09).
+            p["confirmed"] = False
+            p.pop("criteria_gate_shown", None)
         if not p.get("area") and not p.get("commute_destination") and acc.get("destination"):
             p["location"] = acc["destination"]
         if acc.get("property_features"):

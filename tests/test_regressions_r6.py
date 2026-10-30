@@ -184,6 +184,11 @@ def test_u_10a_a_search_retraction_is_no_memory_delete(message):
     assert not erasure_request_names_other_memory(message)
 
 
+def test_u_10a_asking_not_to_keep_something_is_no_delete():
+    from rag.agent_memory import erasure_request_names_other_memory
+    assert not erasure_request_names_other_memory("不要记我的名字")
+
+
 def test_u_10a_a_delete_we_cannot_do_gets_the_fixed_line():
     from core import memory_gate
     reply = memory_gate.settle_memory_deletion_claims(
@@ -199,7 +204,7 @@ def test_u_10a_a_delete_we_cannot_do_gets_the_fixed_line():
 ])
 def test_u_10a_a_deletion_claim_without_an_erasure_does_not_stand(reply):
     from core import memory_gate
-    out = memory_gate.settle_memory_deletion_claims(reply + " Anything else?", "ok thanks", None, "en")
+    out = memory_gate.settle_memory_deletion_claims(reply + " Anything else?", "forget it, thanks", None, "en")
     assert reply not in out and "Anything else?" in out and memory_gate.MEMORY_SINGLE_ERASE_EN in out
 
 
@@ -215,6 +220,8 @@ def test_u_10a_a_zh_deletion_claim_does_not_stand(reply):
     ("I've cleared your search criteria.", "Reset my criteria"),
     ("已移除花园要求。", "不要花园了"),
     ("Yes, your budget was deleted from memory earlier.", "Did you delete my budget?"),
+    ("You had your budget deleted from memory, so I have none.", "What's my budget?"),
+    ("I've deleted it from memory, as you asked.", "What do you remember about me?"),
 ])
 def test_u_10a_a_true_statement_stays(reply, message):
     from core import memory_gate

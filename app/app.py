@@ -3510,14 +3510,16 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     _semantic_defaults = []
     _saved_total = None
     _memory_erasure = None
+    _single_memory_erase = False
     try:
         from rag.agent_memory import get_agent_memory
         _am = get_agent_memory()
         # (R2-03) An explicit "forget my budget" is honoured BEFORE memory is read, not only
         # by the post-turn job: the reply then tells the truth and a new conversation started
         # seconds later cannot recall the value.
-        from rag.agent_memory import erasure_request_fields
+        from rag.agent_memory import erasure_request_fields, erasure_request_names_other_memory
         _erase_fields = erasure_request_fields(user_message)
+        _single_memory_erase = erasure_request_names_other_memory(user_message)
         if _erase_fields:
             _memory_erasure = _am.forget_fact(user_id, _erase_fields)
         _lineage = conversation_store.get_branch_lineage(user_id, conversation_id)
@@ -3563,8 +3565,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             _memory_erasure, _resolve_reply_language(user_message, ui_language))[0]
         if _erasure_note:
             _mem_block = _erasure_note + ("\n" + _mem_block if _mem_block else "")
-    from rag.agent_memory import erasure_request_names_other_memory
-    if erasure_request_names_other_memory(user_message):
+    if _single_memory_erase:
         from core.memory_gate import MEMORY_SINGLE_ERASE_NOTE
         _mem_block = MEMORY_SINGLE_ERASE_NOTE + ("\n" + _mem_block if _mem_block else "")
     if _memory_turn.get('paused'):

@@ -854,9 +854,12 @@ _ZH_OWN_FIELD_TERMS = ("预算",)
 _YOUR_MEMORY = re.compile(r"\byour\s+(?:long[- ]term\s+)?(?:memory|memories|notes|records)\b", re.I)
 
 
-def _zh_erase_cues(clause: str):
-    """(text before, text after) each delete cue that is not negated in this clause."""
+def _zh_erase_cues(clause: str, *, delete_only: bool = False):
+    """(text before, text after) each delete cue that is not negated in this clause.
+    ``delete_only`` leaves out the cues that only ask not to keep something (不要记)."""
     for cue in _ERASE_ZH:
+        if delete_only and cue in _ERASE_ZH_NEGATIVE:
+            continue
         for match in re.finditer(re.escape(cue), clause):
             before = clause[:match.start()]
             if cue not in _ERASE_ZH_NEGATIVE and _ZH_ERASE_CANCELLED.search(before):
@@ -948,7 +951,8 @@ def erasure_request_names_other_memory(text: str) -> bool:
             continue
         if any(term in clause for term in all_terms):
             continue
-        if _OTHER_MEMORY_ZH_OBJECT.search(clause) and any(True for _pair in _zh_erase_cues(clause)):
+        if (_OTHER_MEMORY_ZH_OBJECT.search(clause)
+                and any(True for _pair in _zh_erase_cues(clause, delete_only=True))):
             return True
     return False
 

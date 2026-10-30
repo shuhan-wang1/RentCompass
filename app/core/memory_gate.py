@@ -1247,6 +1247,9 @@ _SEARCH_CHANGE_WORDS = re.compile(
 _DELETION_STATUS_QUESTION = re.compile(
     r"^\s*(?:did|have|has|was|were|is|are)\b[^\n]*\?\s*$|"
     r"(?:删除|删掉|忘记|忘掉|清除)了?(?:吗|没有|没)[?？]?\s*$", re.I)
+# Only a message that asks for a deletion can have one claimed about it. A later "what's my
+# budget?" may truthfully be answered with "you had it deleted".
+_DELETION_CUE = re.compile(r"\b(?:forget|delete|remove|erase|wipe|scrub|clear|drop)\b|删|忘|清除|清掉|移除", re.I)
 
 
 def _is_deletion_claim(sentence: str) -> bool:
@@ -1260,9 +1263,12 @@ def settle_memory_deletion_claims(text: str, user_message: str, report,
     stands; asking whether an earlier deletion happened ("did you delete it?") is left alone."""
     body = str(text or "")
     message = str(user_message or "")
-    from rag.agent_memory import _mentions_field, erasure_request_names_other_memory
+    try:
+        from rag.agent_memory import _mentions_field, erasure_request_names_other_memory
+    except Exception:
+        return body
     requested = erasure_request_names_other_memory(message)
-    if not requested and _DELETION_STATUS_QUESTION.search(message):
+    if not requested and (not _DELETION_CUE.search(message) or _DELETION_STATUS_QUESTION.search(message)):
         return body
     removed = () if memory_erasure_removed_nothing(report) else tuple((report or {}).get("fields") or ())
 

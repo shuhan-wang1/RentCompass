@@ -87,6 +87,7 @@ from core.memory_contract import (
     compose_memory_contract_response,
     memory_contract_from_artifact,
     memory_contract_from_artifacts,
+    with_withheld_details_note,
 )
 from core.prompt_spec import (
     PromptAssemblyError,
@@ -5824,9 +5825,12 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             (state.get('extracted_context') or {}).get('current_message') or state.get('user_query') or '')
 
         def _apply_memory_contract(response: str) -> str:
-            return compose_memory_contract_response(
+            composed = compose_memory_contract_response(
                 response, memory_contract, language=lang,
                 preserve_content=has_other_result)
+            return with_withheld_details_note(
+                composed, memory_contract,
+                (state.get("extracted_context") or {}).get("current_message") or "", lang)
 
         def _last(tool_name):
             for a in reversed(artifacts):

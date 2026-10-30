@@ -724,3 +724,48 @@ def test_s_07_a_garden_wish_is_listed_as_not_checked():
 def test_s_07_place_names_and_dismissals_add_no_garden(message):
     acc = _state_node({"area": "Hackney", "areas": ["Hackney"]}, message)
     assert "Would like garden" not in (acc.get("soft_preferences") or [])
+
+
+# S-06 ── a save that left out personal details says which ones ────────────────────
+_S06_MESSAGE = ("Please remember that I prefer quiet streets. Also remember that my landlord's name is "
+                "Sam Example and my phone number is 07700 900123 and my home address is 12 Sample "
+                "Road, Hackney.")
+
+
+def test_s_06_withheld_details_are_named_never_quoted():
+    from core.memory_contract import compose_memory_contract_response, with_withheld_details_note
+    contract = {"requested": True, "attempted": True, "success": True,
+                "stored_content": "I prefer quiet streets"}
+    reply = compose_memory_contract_response("I've saved that to memory.", contract, language="en")
+    out = with_withheld_details_note(reply, contract, _S06_MESSAGE, "en")
+    assert "I did not save the name, the phone number or email, or your home address" in out
+    for value in ("Sam Example", "07700", "Sample Road"):
+        assert value not in out
+
+
+def test_s_06_a_save_with_nothing_withheld_is_unchanged():
+    from core.memory_contract import with_withheld_details_note
+    contract = {"success": True, "stored_content": "I prefer quiet streets"}
+    assert with_withheld_details_note("Saved.", contract, "Please remember that I prefer quiet streets.",
+                                      "en") == "Saved."
+    assert with_withheld_details_note("Saved.", {"success": False}, _S06_MESSAGE, "en") == "Saved."
+
+
+def test_s_06_zh_names_only_the_category_that_was_left_out():
+    from core.memory_contract import with_withheld_details_note
+    out = with_withheld_details_note("我已经记住了。", {"success": True, "stored_content": "我喜欢安静"},
+                                     "请记住我喜欢安静，我的电话是 07700 900123", "zh")
+    assert "电话号码或邮箱" in out and "姓名" not in out
+
+
+def test_s_06_the_fc_save_reply_names_the_withheld_details():
+    from core.agent_loop import build_fc_nodes
+    state = {"tool_artifacts": [{"tool": "remember", "success": True, "turn": 1,
+                                 "raw_data": {"success": True, "id": "m1", "mtype": "semantic",
+                                              "stored": "I prefer quiet streets"}}],
+             "user_preferences": {}, "accumulated_search_criteria": {},
+             "final_response": "I've saved that to memory.", "response_type": "answer",
+             "extracted_context": {"current_message": _S06_MESSAGE}}
+    out = build_fc_nodes(_NoTools())["format_output_fc"](state)
+    assert "I did not save the name" in out["final_response"]
+    assert "Sam Example" not in out["final_response"]

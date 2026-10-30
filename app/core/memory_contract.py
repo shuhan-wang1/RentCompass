@@ -173,3 +173,50 @@ def compose_memory_contract_response(response: str, contract: dict | None, *,
     remainder = re.sub(r"[ \t]+", " ", remainder)
     remainder = re.sub(r" *\n *", "\n", remainder).strip(" \n.;，。")
     return f"{notice}\n\n{remainder}" if remainder else notice
+
+
+# "Please remember that I prefer quiet streets. Also remember that my landlord's name is ...
+# and my phone number is ... and my home address is ..." saved only the quiet streets and
+# replied "I've saved that to memory." (S-06): the parts that were deliberately not saved are
+# named, never their values.
+_WITHHELD_LABELS = {
+    "identity": ("the name", "姓名"), "contact": ("the phone number or email", "电话号码或邮箱"),
+    "address": ("your home address", "家庭住址"),
+}
+
+
+def with_withheld_details_note(response: str, contract: dict | None, user_message: str,
+                               language: str = "") -> str:
+    """``response`` plus a note naming the personal details of a save request that were not
+    saved, when the write succeeded without them."""
+    body = str(response or "")
+    if not (contract or {}).get("success") or not str(user_message or "").strip():
+        return body
+    try:
+        from rag.agent_memory import _SAVE_REQUEST_CLAUSE, _SENSITIVE_CLAUSE_PATTERNS, redact_sensitive
+    except Exception:
+        return body
+    clauses = " ".join(m.group(0) for m in _SAVE_REQUEST_CLAUSE.finditer(str(user_message)[:4000]))
+    if not clauses:
+        return body
+    identity = dict(_SENSITIVE_CLAUSE_PATTERNS)["identity"]
+
+    def categories(text):
+        found = set(redact_sensitive(text)[1]) & {"contact", "address"}
+        return found | ({"identity"} if identity.search(text) else set())
+    stored = " ".join(str(c) for c in ((contract or {}).get("stored_contents")
+                                       or [(contract or {}).get("stored_content") or ""]))
+    # A detail the write did store (the user confirmed it) is not "not saved".
+    missing = categories(clauses) - categories(stored)
+    kept_out = [key for key in ("identity", "contact", "address") if key in missing]
+    if not kept_out:
+        return body
+    zh = str(language or "").lower().startswith("zh")
+    names = [(_WITHHELD_LABELS[key][1] if zh else _WITHHELD_LABELS[key][0]) for key in kept_out]
+    listed = (", ".join(names[:-1]) + (", or " if len(names) > 2 else " or ") + names[-1]
+              if len(names) > 1 else names[0])
+    note = (f"补充：我没有保存{'、'.join(names)}。这类个人信息只有在你单独发消息确认后才会保存。" if zh
+            else f"I did not save {listed} from your message; personal details like these are "
+                 "only kept if you confirm them in a message of their own.")
+    return body if note in body else f"{body.rstrip()}\n\n{note}"
+

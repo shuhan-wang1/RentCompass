@@ -778,7 +778,7 @@ def render_candidate_status(validation: dict, *, language: str = "en") -> str:
             lines.append("以下要求未逐条核实，请向中介确认：" + "、".join(unchecked))
         if excluded:
             lines.append("已排除/不符合：")
-            lines.extend(f"- {_address(s)}：{'；'.join(_candidate_reason_zh(reason) for reason in s.get('reasons') or ['不满足硬约束'])}" for s in excluded)
+            lines.extend(dict.fromkeys(f"- {_address(s)}：{'；'.join(_candidate_reason_zh(reason) for reason in s.get('reasons') or ['不满足硬约束'])}" for s in excluded))
         if unknown:
             lines.append("尚未核实：")
             lines.extend(f"- {_address(s)}：{_unknown_reason_text(s, zh=True)}" for s in unknown)
@@ -800,8 +800,9 @@ def render_candidate_status(validation: dict, *, language: str = "en") -> str:
         lines.append("Not checked for any listing (confirm with the agent): " + "; ".join(unchecked))
     if excluded:
         lines.append("Excluded / does not meet:")
-        lines.extend(f"- {_address(s)}: {('; '.join(s.get('reasons') or ['hard constraint failed']))}"
-                     for s in excluded)
+        # Two rows can read the same and be different listings: only the identical line goes (X-01).
+        lines.extend(dict.fromkeys(f"- {_address(s)}: {('; '.join(s.get('reasons') or ['hard constraint failed']))}"
+                                   for s in excluded))
     if unknown:
         lines.append("Not verified:")
         lines.extend(f"- {_address(s)}: {_unknown_reason_text(s)}" for s in unknown)

@@ -940,8 +940,12 @@ class ConversationStore:
             if msg["role"] == "user":
                 pending_user = msg["content"]
             elif msg["role"] == "assistant":
-                history.append({"user": pending_user or "",
-                                "assistant": history_reply(msg["content"])})
+                # A turn the client cancelled was never answered: "Request cancelled." is no
+                # reply for the model to build on, as the hot history already holds (C-F4).
+                if (msg.get("response_type") != "error"
+                        or (msg.get("content") or "").strip() not in CANCELLED_TURN_TEXTS):
+                    history.append({"user": pending_user or "",
+                                    "assistant": history_reply(msg["content"])})
                 pending_user = None
         if max_len and len(history) > max_len:
             history = history[-max_len:]

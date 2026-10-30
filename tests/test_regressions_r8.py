@@ -871,3 +871,68 @@ def test_d_12_a_contact_detail_stays_out(reply):
 def test_d_12_the_answer_itself_is_kept(reply):
     from uk_rent_agent.web.conversation_store import history_reply
     assert history_reply(reply) == reply
+
+
+# A-F8, C-F3, C-F4, X-01
+@pytest.mark.parametrize("text,label", [
+    ("我不喜欢一楼", "已保存的原文："), ("我喜欢Camden的安静街道", "已保存的原文："), ("Camden 一居室", "已保存的原文："),
+    ("The user does not like ground-floor (first-floor in UK usage, 一楼) flats.", "已保存的内容："),
+    ("The user prefers quiet streets", "已保存的内容："),
+])
+def test_a_f8_the_label_says_whose_wording_it_is(text, label):
+    from core.memory_contract import saved_content_quote
+    assert saved_content_quote({"success": True, "stored_content": text}, "zh").startswith(label)
+
+
+@pytest.mark.parametrize("status,data,service,retryable", [
+    (200, None, "invalid_response", True), (200, [], "invalid_response", True), (200, {"other": 1}, "invalid_response", True),
+    (200, {"journeys": []}, "no_route", False), (503, None, "unavailable", True),
+])
+def test_c_f3_an_unreadable_response_is_a_provider_fault(monkeypatch, status, data, service, retryable):
+    from core.tools import get_transport_info as gti
+    monkeypatch.setattr(gti, "_resolve_station", lambda name: {"token": name, "name": name, "in_london": True})
+    monkeypatch.setattr(gti, "_cache_get", lambda *a, **k: None)
+    monkeypatch.setattr(gti, "_tfl_get", lambda *a, **k: (status, data))
+    out = gti._do_journey("Camden Town", "King's Cross", False)
+    assert out["success"] is False and out["service_status"] == service and out["retryable"] is retryable
+
+
+def test_c_f4_a_cancelled_turn_is_no_reply_for_the_model(tmp_path):
+    from uk_rent_agent.web.conversation_store import CANCELLED_TURN_TEXTS, ConversationStore
+    store = ConversationStore(tmp_path / "cancel.sqlite3")
+    first = store.start_request_turn("u_cf4", None, "rid-1", "find a flat in Bow")
+    cid = first["conversation_id"]
+    store.finalize_request_turn("u_cf4", first["id"], status="completed", response_type="chat",
+                                assistant_content="Here are 3.", recommendations=[], snapshot={}, background_jobs=[])
+    second = store.start_request_turn("u_cf4", cid, "rid-2", "and in Camden?")
+    store.finalize_request_turn("u_cf4", second["id"], status="failed", response_type="error",
+                                assistant_content=CANCELLED_TURN_TEXTS[0], recommendations=[], snapshot=None,
+                                background_jobs=[])
+    third = store.start_request_turn("u_cf4", cid, "rid-3", "thanks")
+    store.finalize_request_turn("u_cf4", third["id"], status="completed", response_type="chat",
+                                assistant_content="You're welcome.", recommendations=[], snapshot={}, background_jobs=[])
+    history = store.rehydrate_history("u_cf4", cid)
+    assert [turn["assistant"] for turn in history] == ["Here are 3.", "You're welcome."]
+    assert [turn["user"] for turn in history] == ["find a flat in Bow", "thanks"]
+    assert store.get_messages("u_cf4", cid)[3]["content"] == CANCELLED_TURN_TEXTS[0]      # the page keeps it
+    store.close()
+
+
+def test_c_f4_an_ordinary_answer_with_that_wording_stays(tmp_path):
+    from uk_rent_agent.web.conversation_store import CANCELLED_TURN_TEXTS, ConversationStore
+    store = ConversationStore(tmp_path / "chat.sqlite3")
+    turn = store.start_request_turn("u_cf4b", None, "rid-1", "repeat that")
+    store.finalize_request_turn("u_cf4b", turn["id"], status="completed", response_type="chat",
+                                assistant_content=CANCELLED_TURN_TEXTS[0], recommendations=[], snapshot={},
+                                background_jobs=[])
+    assert len(store.rehydrate_history("u_cf4b", turn["conversation_id"])) == 1
+    store.close()
+
+
+def test_x_01_an_identical_excluded_line_is_shown_once():
+    from core.candidate_validation import render_candidate_status
+    row = {"candidate": {"address": "Ostro Tower, Canary Wharf, E14"}, "reasons": ["monthly price 3440 exceeds budget 3000"]}
+    other = {"candidate": {"address": "Ostro Tower, Canary Wharf, E14"}, "reasons": ["monthly price 3600 exceeds budget 3000"]}
+    text = render_candidate_status({"excluded": [row, dict(row), other]})
+    assert text.count("3440") == 1 and text.count("3600") == 1
+    assert render_candidate_status({"excluded": [row, dict(row)]}, language="zh").count("Ostro Tower") == 1

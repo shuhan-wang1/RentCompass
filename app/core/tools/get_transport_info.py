@@ -705,6 +705,13 @@ def _do_journey(from_location: str, to_location: str, want_fare: bool,
         if status == 200 and isinstance(data, dict) and data.get('journeys'):
             resp = data
             _cache_set(cache_key, resp)
+        elif status == 200 and (not isinstance(data, dict) or 'journeys' not in data):
+            # A 200 with no journey data at all is a provider fault, not a finding: the reply
+            # said "it isn't a temporary error I can retry" (C-F3). An empty list is a finding.
+            return {'success': False, 'coverage': 'london', 'service_status': 'invalid_response',
+                    'error': 'TfL returned an unreadable response, so this journey could not be checked.',
+                    'retryable': True, 'journey_time': time_evidence,
+                    'source': 'TfL Unified API Journey Planner'}
         else:
             return {'success': False, 'coverage': 'london',
                     'error': 'TfL could not verify this journey for the requested time.',

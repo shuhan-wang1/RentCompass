@@ -87,6 +87,13 @@ def memory_contract_from_artifacts(artifacts: list | None) -> dict:
     return combined
 
 
+def _mostly_cjk(text: str) -> bool:
+    """True for Chinese text, a Latin place name beside it included. One Chinese word quoted in
+    an English sentence does not make it the user's original wording (A-F8)."""
+    cjk = len(re.findall(r'[\u4e00-\u9fff]', text))
+    return cjk > 0 and 2 * cjk >= len(re.findall(r'[A-Za-z]', text))
+
+
 def saved_content_quote(contract: dict | None, language: str = '') -> str:
     """Only text acknowledged by the write result may be presented as saved.
 
@@ -102,8 +109,7 @@ def saved_content_quote(contract: dict | None, language: str = '') -> str:
     if str(language).lower().startswith('zh'):
         # 原文 only when every saved text is itself Chinese; an English paraphrase of a
         # Chinese sentence is "saved content", not the original wording (R2-31).
-        label = ('已保存的原文：' if all(re.search(r'[\u4e00-\u9fff]', c) for c in contents)
-                 else '已保存的内容：')
+        label = '已保存的原文：' if all(_mostly_cjk(c) for c in contents) else '已保存的内容：'
         return label + '\n' + '\n'.join('「' + c + '」' for c in contents)
     return 'Saved text:\n' + '\n'.join('“' + c + '”' for c in contents)
 

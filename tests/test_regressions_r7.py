@@ -728,6 +728,12 @@ def test_v_22_the_used_list_drops_what_the_search_lacked():
     assert "£2,500" not in out and "两居室" not in out and "- 区域：Hackney" in out and "符合的只有两套" in out
 
 
+def test_v_22_a_sentence_claiming_the_saved_budget_goes():
+    from core.agent_loop import without_unapplied_used_claims
+    text = "I used your saved budget of £2,500. Two homes fit."
+    assert without_unapplied_used_claims(text, _search_with(area="Hackney")) == "Two homes fit."
+
+
 def test_v_22_what_the_search_used_stays():
     from core.agent_loop import without_unapplied_used_claims
     assert without_unapplied_used_claims(

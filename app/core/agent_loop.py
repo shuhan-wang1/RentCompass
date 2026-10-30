@@ -489,6 +489,12 @@ def without_unapplied_used_claims(text: str, artifacts) -> str:
     for line in str(text or "").split("\n"):
         if _USED_LEAD.search(line):
             listing = True
+            # "I used your saved budget of £2,500." states it in the sentence itself.
+            line = " ".join(sentence for sentence in re.split(r"(?<=[.!?。！？])\s+", line)
+                            if not (_USED_LEAD.search(sentence) and not sentence.rstrip().endswith((":", "："))
+                                    and any(pattern.search(sentence) for pattern in unused)))
+            if not line.strip():
+                continue
         elif listing and _LIST_LINE.match(line):
             if any(pattern.search(line) for pattern in unused):
                 continue

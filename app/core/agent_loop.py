@@ -355,6 +355,44 @@ _SAVED_BUDGET = re.compile(
     re.I | re.M)
 
 
+# A named place with a distance: "Sainsbury's Local — 220 m", "PureGym (0.4 km)".
+_PLACE_DISTANCE = re.compile(
+    r"(?<![\d.£])(\d{2,4}(?:\.\d)?)\s?(?:m|metres?|meters?|km|kilomet(?:re|er)s?|米|公里)(?![a-z\d])", re.I)
+_AMENITY_WORDS = re.compile(
+    r"\b(?:supermarkets?|gyms?|parks?|shops?|caf(?:e|é)s?|restaurants?|pubs?|schools?|pharmac(?:y|ies)|"
+    r"gps?|doctors?|stations?|tesco|sainsbury|waitrose|lidl|aldi|co-?op|m&s|marks\s*&\s*spencer|"
+    r"puregym|gym\s+group|openstreetmap)\b|超市|健身房|公园|商店|餐厅|药店|学校|车站", re.I)
+_POI_TOOLS = ("search_nearby_pois",)
+UNCHECKED_PLACES_NOTE_EN = (
+    "Note: I did not look these places up in this turn, so the names and distances above are "
+    "not checked. Ask me to search nearby places for this listing and I will check them.")
+UNCHECKED_PLACES_NOTE_ZH = "补充：本轮没有查询周边地点，以上地点名称和距离未经核实。需要的话，我可以为这套房源查询周边设施。"
+
+
+def disclose_unchecked_places(text: str, artifacts, history, reply_language: str = "en") -> str:
+    """``text`` with a note when it names nearby places with distances that no nearby-places
+    lookup produced: "What supermarkets and gyms are nearby the first listing?" was answered
+    with seven named places and distances "from the listing's coordinates" and no tool call
+    (S-02). Figures an earlier answer of this conversation already gave are not new claims."""
+    body = str(text or "")
+    # Only a turn that looked nothing up: a commute or details result carries its own
+    # walking distances and station names.
+    if any(isinstance(a, dict) and a.get("tool") for a in (artifacts or [])):
+        return body
+    lines = [line for line in body.split("\n")
+             if _PLACE_DISTANCE.search(line) and not re.search(r"\b(?:commute|journey)\b|通勤", line, re.I)]
+    if len(lines) < 2 or not _AMENITY_WORDS.search(body):
+        return body
+    earlier = " ".join(str((turn or {}).get("assistant") or "") for turn in (history or [])
+                       if isinstance(turn, dict))
+    figures = {m.group(0).replace(" ", "") for line in lines for m in _PLACE_DISTANCE.finditer(line)}
+    if earlier and all(figure in earlier.replace(" ", "") for figure in figures):
+        return body
+    zh = str(reply_language or "").lower().startswith("zh")
+    note = UNCHECKED_PLACES_NOTE_ZH if zh else UNCHECKED_PLACES_NOTE_EN
+    return body if note in body else f"{body.rstrip()}\n\n{note}"
+
+
 def searched_without_budget(artifacts) -> bool:
     """True when this turn ran a listing search whose criteria carried no budget."""
     for artifact in artifacts or []:
@@ -5959,6 +5997,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         response = acknowledge_remembered_budget(
             response, state.get("memory_context") or "", acc.get("max_budget"), lang,
             searched_without_budget=searched_without_budget(artifacts))
+        response = disclose_unchecked_places(
+            response, artifacts, (state.get("extracted_context") or {}).get("history") or [], lang)
         return {"final_response": _apply_memory_contract(response),
                 "response_type": response_type, "tool_data": tool_data}
 

@@ -585,3 +585,38 @@ def test_r4_12_other_places_are_unchanged():
     assert transport_hub_address("Heathrow Airport, London") .startswith("Heathrow Terminals")
     assert transport_hub_address("Hatton Garden") == "Hatton Garden"
     assert transport_hub_address("Bank") == "Bank"
+
+
+# S-02 ── named nearby places with distances and no nearby-places lookup get a note ──
+_S02_REPLY = ("**Near Gloucester Avenue, London, NW1** (measured from the listing's own coordinates, "
+              "within 800 m — OpenStreetMap)\n\n**Supermarkets (4 found)**\n- Sainsbury's Local — 220 m\n"
+              "- Tesco Express — 340 m\n\n**Gyms (3 found)**\n- The Gym Group Camden — 410 m\n"
+              "- PureGym Camden — 630 m")
+
+
+def test_s_02_places_and_distances_without_a_lookup_get_the_note():
+    from core.agent_loop import UNCHECKED_PLACES_NOTE_EN, disclose_unchecked_places
+    out = disclose_unchecked_places(_S02_REPLY, [], [], "en")
+    assert out.endswith(UNCHECKED_PLACES_NOTE_EN)
+
+
+def test_s_02_a_lookup_this_turn_or_an_earlier_answer_needs_no_note():
+    from core.agent_loop import disclose_unchecked_places
+    assert disclose_unchecked_places(_S02_REPLY, [{"tool": "search_nearby_pois"}], [], "en") == _S02_REPLY
+    history = [{"user": "What is nearby?", "assistant": _S02_REPLY}]
+    assert disclose_unchecked_places(_S02_REPLY, [], history, "en") == _S02_REPLY
+
+
+def test_s_02_other_answers_are_untouched():
+    from core.agent_loop import disclose_unchecked_places
+    text = "The flat is 52 m2 and the commute is 25 min. Rent is £1,900."
+    assert disclose_unchecked_places(text, [], [], "en") == text
+
+
+def test_s_02_the_fc_plain_answer_carries_the_note():
+    from core.agent_loop import UNCHECKED_PLACES_NOTE_EN, build_fc_nodes
+    state = {"tool_artifacts": [], "user_preferences": {}, "accumulated_search_criteria": {},
+             "final_response": _S02_REPLY, "response_type": "answer",
+             "extracted_context": {"current_message": "What supermarkets and gyms are nearby the first listing?"}}
+    out = build_fc_nodes(_NoTools())["format_output_fc"](state)
+    assert UNCHECKED_PLACES_NOTE_EN in out["final_response"]

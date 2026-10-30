@@ -1270,14 +1270,19 @@ def settle_memory_deletion_claims(text: str, user_message: str, report,
     requested = erasure_request_names_other_memory(message)
     if not requested and (not _DELETION_CUE.search(message) or _DELETION_STATUS_QUESTION.search(message)):
         return body
-    removed = () if memory_erasure_removed_nothing(report) else tuple((report or {}).get("fields") or ())
+    erased = tuple((report or {}).get("fields") or ())
+    empty = memory_erasure_removed_nothing(report)
+    if erased and not empty and not requested:
+        return body         # the acknowledgement states this deletion; "it's gone" is true too
+    removed = () if empty else erased
 
     def unlicensed(sentence):
         return _is_deletion_claim(sentence) and not any(_mentions_field(sentence, f) for f in removed)
     claimed = any(unlicensed(piece) for line in body.split("\n") for piece in _sentences(line))
     if claimed:
         body = _without_sentences(body, unlicensed)
-    if not (claimed or requested):
+    # An erasure that found nothing has its own acknowledgement.
+    if not requested and (erased or not claimed):
         return body
     zh = str(reply_language or "").lower().startswith("zh")
     line = MEMORY_SINGLE_ERASE_ZH if zh else MEMORY_SINGLE_ERASE_EN

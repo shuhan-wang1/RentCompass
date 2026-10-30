@@ -1019,7 +1019,9 @@ def _cleared_criteria(accumulated: dict) -> dict:
     """The criteria after "start from scratch": every slot empty, the sources of the old values
     gone and the soft gate available again. ``_last_change`` stays, so an undo can restore them
     (U-06)."""
-    result = dict(_RESET_CRITERIA, constraint_sources={})
+    result = {key: (list(value) if isinstance(value, list) else value)
+              for key, value in _RESET_CRITERIA.items()}
+    result['constraint_sources'] = {}
     for key, value in (accumulated or {}).items():
         if key == '_last_change':
             result[key] = value

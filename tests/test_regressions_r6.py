@@ -238,6 +238,22 @@ def test_u_10a_a_true_statement_stays(reply, message):
     assert memory_gate.settle_memory_deletion_claims(reply, message, None, "en") == reply
 
 
+def test_u_10a_a_real_erasure_is_never_called_undone():
+    from core import memory_gate
+    report = {"fields": ("budget",), "complete": True, "deleted": 1, "rewritten": 0}
+    reply = "Done. It's no longer stored."
+    assert memory_gate.settle_memory_deletion_claims(reply, "forget my budget", report, "en") == reply
+
+
+def test_u_10a_an_erasure_that_found_nothing_keeps_its_own_acknowledgement():
+    from core import memory_gate
+    report = {"fields": ("budget",), "complete": True, "deleted": 0, "rewritten": 0}
+    out = memory_gate.settle_memory_deletion_claims(
+        "I couldn't find a saved budget figure to delete, so nothing was removed.\n\nI've deleted it from memory.",
+        "forget my budget", report, "en")
+    assert "I've deleted it" not in out and memory_gate.MEMORY_SINGLE_ERASE_EN not in out
+
+
 def test_u_10a_a_licensed_claim_stands_beside_the_field_erasure():
     from core import memory_gate
     report = {"fields": ("budget",), "complete": True, "deleted": 1, "rewritten": 0}
@@ -485,6 +501,14 @@ def test_u_06_the_model_cannot_put_the_old_area_back():
     asyncio.run(build_fc_nodes(provider)["execute_tools"](state))
     (_, params), = provider.calls
     assert not params.get("area") and not params.get("max_budget")
+
+
+def test_u_06_a_reset_shares_no_list_between_conversations():
+    first = _state_node(_FULL, "Clear my filters")
+    first["property_features"].append("lift")
+    first["soft_preferences"].append("Would like garden")
+    second = _state_node(_FULL, "Clear my filters")
+    assert second["property_features"] == [] and second["soft_preferences"] == []
 
 
 def test_u_06_undo_brings_the_search_back():

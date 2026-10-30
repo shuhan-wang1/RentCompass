@@ -420,7 +420,10 @@ def curated_london_name(address: str) -> bool:
     key = re.sub(r"[’']", "", name).strip().lower()
     if not key:
         return False
-    from core.tools.search_properties import LONDON_AREAS
+    try:
+        from core.tools.search_properties import LONDON_AREAS
+    except Exception:
+        return False        # the curated table is a preference, never a reason to fail a lookup
     return key in LONDON_AREAS and key != "london"
 
 

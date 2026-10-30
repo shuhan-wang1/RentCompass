@@ -1323,6 +1323,8 @@ def build_correction_instruction(
 
 CAVEAT_ZH = "请对照房源原始页面核对具体价格。"
 STATION_CAVEAT_ZH = "请对照房源原始页面核对车站名称——本次检索的数据并未确认该车站。"
+FIGURES_CAVEAT = "Please double-check the figures above against their source."
+FIGURES_CAVEAT_ZH = "请对照来源核对以上数字。"
 _CJK = re.compile(r"[\u4e00-\u9fff]")
 
 
@@ -1334,7 +1336,8 @@ def append_caveat(text: str, caveat: str = CAVEAT) -> str:
     (R2-11)."""
     body = (text or "").rstrip()
     if len(_CJK.findall(body)) >= 20:
-        caveat = {CAVEAT: CAVEAT_ZH, STATION_CAVEAT: STATION_CAVEAT_ZH}.get(caveat, caveat)
+        caveat = {CAVEAT: CAVEAT_ZH, STATION_CAVEAT: STATION_CAVEAT_ZH,
+                  FIGURES_CAVEAT: FIGURES_CAVEAT_ZH}.get(caveat, caveat)
     if caveat in body:
         return body
     return f"{body}\n\n{caveat}" if body else caveat
@@ -1351,6 +1354,10 @@ def _caveat_for(verdict: CriticVerdict) -> str:
     prices = any(i.startswith("unsupported_prices:") for i in issues)
     if names and not prices:
         return STATION_CAVEAT
+    if not prices and "unsupported_external_numbers" in issues:
+        # A weather or transport answer with an unchecked figure ended "double-check the
+        # exact prices against the source listing" although it named no price (R3-25).
+        return FIGURES_CAVEAT
     return CAVEAT
 
 

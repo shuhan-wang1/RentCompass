@@ -691,3 +691,17 @@ def test_r3_18_answered_and_cancelled_turns_are_not_replayed():
 def test_r3_10_a_zh_proximity_wish_still_names_the_area():
     from core.tools.search_properties import _extract_area
     assert _extract_area("离国王十字近一点的房子") == "King's Cross"
+
+
+# R3-25 ── a non-price answer with an unchecked figure gets a figures caveat ─────────
+def test_r3_25_the_price_caveat_is_kept_for_prices_only():
+    from types import SimpleNamespace
+    from uk_rent_agent.agent.critic import (CAVEAT, FIGURES_CAVEAT, STATION_CAVEAT, _caveat_for,
+                                             append_caveat)
+    assert _caveat_for(SimpleNamespace(issues=["unsupported_external_numbers"])) == FIGURES_CAVEAT
+    assert _caveat_for(SimpleNamespace(issues=["unsupported_prices:2400",
+                                               "unsupported_external_numbers"])) == CAVEAT
+    assert _caveat_for(SimpleNamespace(issues=["ungrounded_stations:Bow Road"])) == STATION_CAVEAT
+    assert _caveat_for(SimpleNamespace(issues=[])) == CAVEAT
+    zh = append_caveat("明天纽卡斯尔的天气：最高气温十二度，有小雨，风力不大，适合出门看房，记得带伞。", FIGURES_CAVEAT)
+    assert zh.endswith("请对照来源核对以上数字。")

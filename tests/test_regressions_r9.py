@@ -237,3 +237,66 @@ def test_y_04_a_count_replaces_a_standing_studio(message):
 ])
 def test_y_04_a_count_stated_with_the_clear_stays(message, bedrooms):
     assert _state_node(_TWO_BED, message)["bedrooms"] == bedrooms
+
+
+# Y-05 ── a follow-up near a university moves the area; a change of destination does not
+_NO_COMMUTE = dict(_CAMDEN, no_commute=True)
+
+
+@pytest.mark.parametrize("message,area", [
+    ("What about near the University of Edinburgh?", "Edinburgh"), ("near the University of Manchester", "Manchester"),
+    ("What about near UCL?", "Bloomsbury"), ("How about near UCL?", "Bloomsbury"), ("And near UCL?", "Bloomsbury"),
+    ("what about somewhere near the University of Manchester", "Manchester"),
+])
+def test_y_05_a_follow_up_near_a_university_moves_the_area(message, area):
+    stored = _state_node(_CAMDEN, message)
+    assert (stored["area"], stored["areas"]) == (area, [area])
+
+
+@pytest.mark.parametrize("message", ["What about near the University of Edinburgh?", "What about near UCL?"])
+def test_y_05_a_stated_no_commute_stays(message):
+    stored = _state_node(_NO_COMMUTE, message)
+    assert stored["no_commute"] is True and not stored.get("commute_destination") and not stored.get("destination")
+    params = _search_params(message, _NO_COMMUTE)
+    assert params["no_commute"] is True and not params.get("commute_destination")
+
+
+def test_y_05_a_stated_commute_replaces_no_commute():
+    stored = _state_node(_NO_COMMUTE, "Find a flat near UCL, I work at Canary Wharf")
+    assert stored["no_commute"] is False and "Canary Wharf" in stored["commute_destination"]
+
+
+def test_y_05_a_destination_left_in_another_city_goes():
+    standing = dict(_CAMDEN, commute_destination="Imperial College London, South Kensington, London SW7 2AZ",
+                    destination="Imperial College London, South Kensington, London SW7 2AZ")
+    stored = _state_node(standing, "What about near the University of Edinburgh?")
+    assert stored["area"] == "Edinburgh" and "London" not in str(stored.get("commute_destination"))
+
+
+@pytest.mark.parametrize("message", [
+    "How far is the first one from UCL?", "Is the flat near UCL?", "I study at UCL", "What is near UCL?",
+    "Are there supermarkets near UCL?", "What about the University of Edinburgh?",
+])
+def test_y_05_a_mention_of_a_university_moves_nothing(message):
+    assert _state_node(_CAMDEN, message)["area"] == "Camden"
+
+
+_ISLINGTON = {"area": "Islington", "areas": ["Islington"], "bedrooms": 1, "max_budget": 2200, "room_type": "whole",
+              "commute_destination": "Bank", "destination": "Bank"}
+
+
+@pytest.mark.parametrize("message,destination", [
+    ("如果换成去 Canary Wharf 呢？", "Canary Wharf, London E14 5AB"),
+    ("如果通勤改去 Canary Wharf 呢", "Canary Wharf, London E14 5AB"),
+    ("换成去 Bank 上班", "Bank"),
+])
+def test_y_05_zh_a_new_destination_keeps_the_area(message, destination):
+    stored = _state_node(_ISLINGTON, message)
+    assert stored["areas"] == ["Islington"] and stored["commute_destination"] == destination
+    params = _search_params(message, _ISLINGTON)
+    assert params["area"] == "Islington" and params["commute_destination"] == destination
+
+
+@pytest.mark.parametrize("message,area", [("换成 Hackney", "Hackney"), ("改成 Hackney 吧", "Hackney"), ("换到 Hackney 呢", "Hackney")])
+def test_y_05_zh_an_area_switch_stays_one(message, area):
+    assert _state_node(_ISLINGTON, message)["areas"] == [area]

@@ -1103,7 +1103,10 @@ _ZH_WORKPLACE_CHANGE = re.compile(
     r"(?:(?:工作地点|上班地点|实习地点|通勤地点|通勤目的地|目的地|公司|单位|办公室)\s*(?:也)?(?:改成|改为|改到|换成|换到|搬到|变成|搬去)\s*(?:了)?\s*(?:在|去|到)?\s*"
     r"([^，。！？,.!?;；]{2,30}?)\s*(?:附近|那边|这边)?\s*(?:上班|工作|了)?\s*(?=$|[，。！？,.!?;；])"
     r"|(?:改成|改为|改到|换成|换到|搬到)\s*(?:了)?\s*(?:在|去|到)\s*"
-    r"([^，。！？,.!?;；]{2,30}?)\s*(?:附近|那边|这边)?\s*(?:上班|工作|实习|办公))")
+    r"([^，。！？,.!?;；]{2,30}?)\s*(?:附近|那边|这边)?\s*(?:上班|工作|实习|办公)"
+    # 如果换成去 Canary Wharf 呢？ / 如果通勤改去 Canary Wharf 呢 replaced the area (r06 4298c21d).
+    r"|(?:换成|改成|改为|通勤(?:也)?(?:改|换))\s*(?:去|到)\s*"
+    r"([^，。！？,.!?;；]{2,30}?)\s*(?:呢|的话|吧)?\s*(?=$|[，。！？,.!?;；]))")
 
 
 # The place named before its label is rewritten to the labelled form the parser below reads.
@@ -1374,9 +1377,13 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         # "I work from home so I don't commute at all" names no destination ("all").
         labelled_destination = None
     from core.constraint_updates import commute_disowned
+    from core.tools.search_properties import institution_home_area
     disowned = commute_disowned(current_message)
-    if disowned:
-        # "commute to UCL not needed" names the place to refuse it (W-04).
+    if disowned or (result.get('no_commute') and not labelled_destination
+                    and institution_home_area(current_message)):
+        # "commute to UCL not needed" names the place to refuse it (W-04). A home near a
+        # university is no commute to it either, for someone who said they have none (r06).
+        disowned = True
         labelled_destination = message_destination = None
     # "Forget that I work at Canary Wharf" asks to DROP the destination; it used to SET it
     # (2026-10-19 A-11). The cue must sit in the same sentence, before the destination.
@@ -1530,11 +1537,13 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
                 # the city the search left is dropped; a new one can be stated again.
                 result['commute_destination'] = result['destination'] = None
     if (not new_area or contextual_work_area) and edited_areas is None and result.get('area'):
-        from core.tools.search_properties import institution_home_area
         near_institution = institution_home_area(current_message)
         if near_institution and result.get('area') != near_institution:
             result['area'], result['areas'] = near_institution, [near_institution]
             changed = True
+            if _destination_left_behind(result.get('commute_destination') or result.get('destination'),
+                                        [near_institution]):
+                result['commute_destination'] = result['destination'] = None     # as for a city switch
 
     # Room type stated this turn (e.g. answering the soft gate "我要ensuite") folds into
     # the accumulated criteria even without any find/search verb.

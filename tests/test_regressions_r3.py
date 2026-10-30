@@ -448,7 +448,7 @@ def test_r3_16_a_negative_budget_sets_no_ceiling(message):
 
 
 @pytest.mark.parametrize("message,amount", [
-    ("£1500-2000 budget", 1500), ("Budget - £1,800", 1800), ("between £1,500 - £2,000", 1500),
+    ("£1500-2000 budget", 2000), ("Budget - £1,800", 1800), ("between £1,500 - £2,000", 2000),
 ])
 def test_r3_16_ranges_and_dashes_are_unchanged(message, amount):
     from core.tools.search_properties import _extract_budget

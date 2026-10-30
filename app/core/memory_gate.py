@@ -428,7 +428,7 @@ def restates_across_languages(proposal: str, clause: str) -> bool:
     except Exception:
         _ZH_AREA_MAP = {}
     known = " ".join([str(clause or "")] + [area for zh, area in _ZH_AREA_MAP.items() if zh in (clause or "")])
-    names = re.findall(r"(?<=[\w,;'’)]\s)[A-Z][a-z]+", proposal or "")
+    names = re.findall(r"(?<=[\w,;'’)]\s)[A-Z][a-z]+(?:['’]s)?", proposal or "")
     return all(_latin_tokens(name) <= _latin_tokens(known) for name in names)
 
 

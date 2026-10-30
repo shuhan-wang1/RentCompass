@@ -653,6 +653,20 @@ def _expand_thousands(t: str) -> str:
     return _THOUSANDS_K.sub(_expand, t)
 
 
+# "budget £1,800-2,500" searched at £1,800 while the reply spoke of £2,500 (V-04): the ceiling of
+# a range is its top.
+_BUDGET_RANGE = re.compile(
+    r'(?:\bbetween\s+)?£?(?<![\d.])(\d{3,5})(?!\d|\.\d)\s*(?:-|–|—|~|～|到|至|\bto\b|(?<=\s)and\b)\s*'
+    r'(£?\s*)(\d{3,5})(?!\d|\.\d)')
+
+
+def _range_ceiling(match) -> str:
+    low, high = int(match.group(1)), int(match.group(3))
+    if high <= low or (' and' in match.group(0) and 'between' not in match.group(0)):
+        return match.group(0)
+    return f"£{high}" if ('£' in match.group(0)) else str(high)
+
+
 def _extract_budget(text: str):
     """Pull an explicit monthly/weekly budget out of the *current* user message.
     Returns (amount:number, period:'week'|'month') or (None, None). Deterministic regex
@@ -665,6 +679,7 @@ def _extract_budget(text: str):
     from core.constraint_updates import without_conditional_stretch
     t = _plain_figures(without_conditional_stretch(scoped_update_text(text)).lower())
     t = _expand_thousands(t)
+    t = _BUDGET_RANGE.sub(_range_ceiling, t)
     # "budget -500" became a £500 ceiling and was quoted back as the user's budget (R3-16):
     # a negative amount is no budget at all. A range's dash ("£1500-2000") follows a digit.
     t = re.sub(r'(?<![\w£.])-£?\d[\d.]*|£\s*-\s*\d[\d.]*|\bminus\s+£?\s*\d[\d.]*', ' ', t)

@@ -124,7 +124,8 @@ DIMENSIONS = tuple(d for d, _c, _t in DIMENSION_CUES)
 # there; a named kind of place keeps its own cue.
 _ZH_NEAR_WORDS = frozenset({"附近", "周边"})
 _ZH_ASKS_WHAT_IS_NEAR = re.compile(
-    r"(?:附近|周边)[^，。！？,.!?；;]{0,8}?(?:有什么|有啥|有哪些|怎么样|如何|环境|配套|设施|方便|好吃|好玩|吃的|玩的|生活)")
+    r"(?:附近|周边)[^，。！？,.!?；;]{0,8}?(?:有什么|有啥|有哪些|怎么样|如何|环境|配套|设施|方便|好吃|好玩|吃的|玩的|生活|"
+    r"餐馆|饭店|中餐|咖啡|健身|公园|学校|医院|诊所|银行|地铁|公交|车站|商店|商场)")
 
 
 def cues_hit(cues, message: str) -> bool:

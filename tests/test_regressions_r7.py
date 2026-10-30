@@ -66,6 +66,17 @@ def test_v_02_a_date_after_start_again_is_no_reset(message):
     assert _state_node(_CAMDEN, message)["area"] == "Camden"
 
 
+def test_v_02_a_restart_of_the_service_is_no_reset():
+    message = "After the restart: what are my current criteria and what was the cheapest listing you showed?"
+    assert _state_node(_CAMDEN, message)["area"] == "Camden"
+
+
+@pytest.mark.parametrize("message,area", [("start over in Marylebone", "Marylebone"), ("start again in Mayfair", "Mayfair")])
+def test_v_02_a_place_that_opens_like_a_month_is_a_place(message, area):
+    out = _state_node(_CAMDEN, message)
+    assert out["area"] == area and out["max_budget"] is None
+
+
 # V-03 ── the gate asks once, is not re-dispatched, and "any budget" is an answer
 _GATE_Q = ("Before I search, could you confirm a couple of things: what room type you'd like "
            "(studio / en-suite / shared)? You can also just say \"continue\" to search anyway, or "
@@ -363,12 +374,16 @@ def test_v_09_near_is_no_amenity_question(message):
 
 @pytest.mark.parametrize("message", [
     "Angel附近有什么超市？", "这里附近有什么？", "周边环境怎么样", "附近配套如何", "附近要有超市", "what's nearby?",
+    "附近有中餐馆吗？", "那附近有中餐馆吗?",
     "Any supermarkets near the first flat?", "What's near the flat?", "How close is the nearest gym?",
     "Is there anything good around there?", "Are there shops close by?", "Find a flat near a Tesco",
 ])
 def test_v_09_a_real_question_still_runs(message):
+    from core.dimensions import cued_dimensions
     from core.tool_policy import unasked_nearby_lookup
     assert not unasked_nearby_lookup({"address": "Angel"}, message)
+    if "附近" in message or "周边" in message:
+        assert "nearby" in cued_dimensions(message)
 
 
 @pytest.mark.parametrize("message", ["Find a flat near Angel", "Any flats near Finsbury Park?",
@@ -432,6 +447,7 @@ def _remember_turn(message, proposal, *, search=True):
     ("请记住：我对猫过敏，我喜欢安静的Knightsbridge。预算每月2600镑，一居室，不需要通勤，继续。",
      "User is allergic to cats and prefers quiet Knightsbridge."),
     ("请记住我在金丝雀码头上班，帮我找房", "User works at Canary Wharf."),
+    ("请记住我在国王十字上班，帮我找房", "User works at King's Cross."),
     ("Please remember that I have a dog, and find me a flat", "用户有一只狗。"),
 ])
 def test_v_10_a_translated_proposal_saves_the_users_words(message, proposal):
@@ -572,7 +588,7 @@ def test_v_15_a_zh_withdrawal_removes_the_wish(message, wish):
     assert _state_node(state, message)["soft_preferences"] == ["Would like gym"]
 
 
-@pytest.mark.parametrize("message", ["我喜欢公园", "要有洗碗机", "这里的公园怎么样？"])
+@pytest.mark.parametrize("message", ["我喜欢公园", "要有洗碗机", "这里的公园怎么样？", "不要离公园太远", "别的公园也行"])
 def test_v_15_a_mention_is_no_withdrawal(message):
     state = {"area": "Bow", "soft_preferences": ["Would like park", "Must have dishwasher"]}
     out = _state_node(state, message)["soft_preferences"]
@@ -835,3 +851,42 @@ def test_c_07_a_busy_erasure_has_its_own_page_text_and_retry_after():
     with appmod.app.test_request_context():
         response = appmod._conversation_busy_response(Busy(), forgotten=False, status="busy")
     assert response.status_code == 409 and response.headers["Retry-After"] == "3"
+
+
+# V-03 ── the whole loop, with a scripted model
+def _gate_loop(*script):
+    from langchain_core.messages import AIMessage
+
+    from core.agent_loop import build_fc_nodes
+    from tests.test_agent_contract_guards import Chat, Provider, Result, Spec, _drive, _state, _tc
+    call = _tc("search_properties", {"user_query": "Show me flats to rent in Manchester, any budget",
+                                     "area": "Manchester"}, "c0")
+    gate = dict(_GATE_ARTIFACT["raw_data"])
+    provider = Provider([Spec("search_properties")], {"search_properties": Result(False, gate)})
+    llm = Chat(AIMessage(content="", tool_calls=[call]),
+               *[AIMessage(content="", tool_calls=[{**call, "id": f"c{i}"}]) if step == "recall"
+                 else AIMessage(content=step) for i, step in enumerate(script, 1)])
+    nodes = build_fc_nodes(provider, agent_llm=llm)
+    state = asyncio.run(_drive(nodes, _state("Show me flats to rent in Manchester, any budget")))
+    return provider, nodes["format_output_fc"](state)
+
+
+def test_v_03_a_recall_ends_on_the_question_with_one_dispatch():
+    provider, out = _gate_loop("recall", "I couldn't run the search.")
+    assert [name for name, _ in provider.calls] == ["search_properties"]
+    assert out["final_response"] == _GATE_Q and out["response_type"] == "clarification"
+
+
+def test_v_03_a_failure_claim_gives_way_to_the_question():
+    provider, out = _gate_loop("I couldn't run the Manchester search. Could you tell me the room type?")
+    assert out["final_response"] == _GATE_Q and out["response_type"] == "clarification"
+
+
+@pytest.mark.parametrize("message,amount", [
+    ("budget 1800-2500", 2500), ("£1,800-£2,500", 2500), ("between £1800 and £2500", 2500),
+    ("预算1,800-2,500", 2500), ("预算在1800到2500之间", 2500),
+    ("budget £1800 and 2 beds", 1800),
+])
+def test_v_04_the_ceiling_of_a_range_is_its_top(message, amount):
+    from core.tools.search_properties import _extract_budget
+    assert _extract_budget(message)[0] == amount

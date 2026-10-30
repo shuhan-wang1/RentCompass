@@ -916,14 +916,15 @@ _CRITERIA_NOUN = (r"(?:(?:search\s+)?(?:criteria|criterion|filters?|preferences|
 _RESET_DETERMINER = (r"(?:my|the|our|these|those|your|this)?\s*(?:current\s+|saved\s+)?")
 # "start over in Hackney" resets; "start again in May" is a date.
 _RESET_ENDS = (r"(?=\s*(?:$|[.,!?;:，。！？：]|and\b|with\b|please\b|(?:in|from|around|near)\s+"
-               r"(?!(?:the\s+)?(?:\d|new\b|next\b|spring|summer|autumn|fall|winter|jan|feb|mar|apr|may|"
-               r"jun|jul|aug|sep|oct|nov|dec|mon|tue|wed|thu|fri|sat|sun))))")
+               r"(?!(?:the\s+)?(?:\d|new\b|next\b|(?:spring|summer|autumn|fall|winter|january|february|"
+               r"march|april|may|june|july|august|sept?(?:ember)?|october|november|december|monday|"
+               r"tuesday|wednesday|thursday|friday|saturday|sunday)\b))))")
 _RESET_ALL_CRITERIA = re.compile(
     r"\b(?:reset|restart|clear|wipe|scrap|erase)\s+(?:out\s+)?(?:all\s+(?:of\s+)?)?" + _RESET_DETERMINER + _CRITERIA_NOUN
     + r"|\b(?:forget|remove|delete|drop)\s+all\s+(?:of\s+)?" + _RESET_DETERMINER + _CRITERIA_NOUN
     + r"|\b(?:reset|clear|wipe)\s+(?:out\s+)?everything\b(?!\s+(?:about|you|i\b))"
     r"|\b(?:(?:start|begin)(?:ing)?\s+(?:all\s+)?(?:again|over|afresh|anew)\b"
-    r"(?:\s+from\s+(?:the\s+beginning|scratch))?|restart(?:ing)?\b)" + _RESET_ENDS +
+    r"(?:\s+from\s+(?:the\s+beginning|scratch))?|(?<!the\s)(?<!a\s)(?<!after\s)restart(?:ing)?\b)" + _RESET_ENDS +
     r"|\b(?:start|begin|search|do\s+(?:it|this))\s+(?:all\s+over\s+)?from\s+scratch\b"
     r"|重新开始(?!上|工作|读|学|租约|计时)|从头(?:开始|来)|从零开始|全部重来|重来一次|重新来过?"
     r"|(?:清空|重置|清除|清掉)(?:掉|一下)?(?:我的|所有的?|全部的?)*(?:搜索|筛选|查询|找房)?的?"

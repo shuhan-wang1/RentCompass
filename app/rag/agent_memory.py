@@ -1111,7 +1111,7 @@ _SELF_INTRODUCTION = _IdentityStatement(re.compile(_SELF_INTRODUCTION_PATTERN, r
 # position looking for an "@" (O(n²) in one C call, holding the GIL — 10 s for 60k chars).
 _EMAIL_RE = re.compile(r"(?<![\w.+-])[\w.+-]{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63}){1,8}")
 _PHONE_RE = re.compile(
-    r"(?<![\d£$])(?:\+44\s?\(?0?\)?\s?\d|\(0\d|\b0\d)(?:[\s)-]{0,2}\d){8,9}(?!\d)")
+    r"(?<![\d£$])(?:\+44\s?\(?0?\)?\s?\d|\(0\d|(?<![a-z0-9_])0\d)(?:[\s)-]{0,2}\d){8,9}(?!\d)", re.I)
 # Clause boundaries: sentence/clause punctuation (a comma or full stop between digits is a
 # thousands separator or a decimal point, never a boundary), or "and/but" introducing a new
 # first-person clause ("... a year and I'm on a visa").

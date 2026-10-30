@@ -4435,8 +4435,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 proposed = str(args.get("content") or args.get("fact") or "")
                 points_back = bool(clause) and bool(getattr(
                     mem_gate, "remember_points_back", lambda _m: False)(cur_msg))
+                translated = getattr(mem_gate, "restates_across_languages", lambda *_a: False)
                 if (clause and stated_fn is not None and not stated_fn(proposed, clause)
-                        and (points_back or stated_fn(clause, proposed))):
+                        and (points_back or stated_fn(clause, proposed)
+                             or translated(proposed, clause))):
                     # "… Please remember that I have a cat." with a search in the same batch:
                     # the model's paraphrase ("pet owner, needs a pet-friendly property") or
                     # the whole request is not the user's own statement, so the tainted-turn

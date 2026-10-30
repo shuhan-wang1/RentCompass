@@ -406,6 +406,32 @@ def content_is_user_stated(content: str, current_message: str) -> bool:
     return (present / len(significant)) >= _SHARE_THRESHOLD
 
 
+def restates_across_languages(proposal: str, clause: str) -> bool:
+    """True when ``proposal`` is a translation of ``clause`` as far as text can show.
+
+    「我对猫过敏，我喜欢安静的Chelsea」 and "User is allergic to cats and prefers a quiet Chelsea"
+    share no token, so the overlap test cannot tell the model's translation from a tool-derived
+    line and the user's explicit save was refused (V-10). What survives translation is compared
+    instead: any amount, and any capitalised name, of the proposal must be in the clause, read
+    through the zh place table. Only the clause is ever saved, so a wrong True stores the user's
+    own words. "flat viewing at 1400 Camden Road" for 「记住我预算1400」 names a place they did not.
+    A clause holding a secret or a personal detail keeps its own path: refused, or confirmed."""
+    if bool(_CJK_RE.search(proposal or "")) == bool(_CJK_RE.search(clause or "")):
+        return False
+    from rag.agent_memory import redact_secrets, redact_sensitive
+    if redact_secrets(clause)[1] or {"identity", "contact", "address"} & set(redact_sensitive(clause)[1]):
+        return False
+    if not {n for n in _numbers(proposal) if len(n) >= 3} <= _numbers(clause):
+        return False
+    try:
+        from core.tools.search_properties import _ZH_AREA_MAP
+    except Exception:
+        _ZH_AREA_MAP = {}
+    known = " ".join([str(clause or "")] + [area for zh, area in _ZH_AREA_MAP.items() if zh in (clause or "")])
+    names = re.findall(r"(?<=[\w,;'’)]\s)[A-Z][a-z]+", proposal or "")
+    return all(_latin_tokens(name) <= _latin_tokens(known) for name in names)
+
+
 _REMEMBER_CLAUSE_EN = re.compile(
     r"\b(?:please\s+)?(?:remember|note|keep\s+in\s+mind|don'?t\s+forget)\s+(?:that\s+|this\s*:\s*)?"
     r"(?P<fact>[^.!?;\n]{3,300})", re.IGNORECASE)

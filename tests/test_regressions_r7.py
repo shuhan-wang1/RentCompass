@@ -399,3 +399,68 @@ def test_v_09_a_dropped_call_still_answers_the_provider():
     replies = [m for m in command.update["messages"] if isinstance(m, ToolMessage)]
     assert [m.tool_call_id for m in replies] == ["c0"] and command.goto == "agent"
     assert all(a.get("denied") for a in command.update["tool_artifacts"])
+
+
+# V-10 ── an explicit save is not refused because the model translated it
+_ZH_SAVE = "请记住：我对猫过敏，我喜欢安静的Chelsea。我的预算是每月2600镑，一居室，不需要通勤，继续。"
+
+
+def _remember_turn(message, proposal, *, search=True):
+    from langchain_core.messages import AIMessage
+    import dataclasses
+
+    from core import memory_gate
+    from core.agent_loop import build_fc_nodes
+    from tests.test_agent_contract_guards import _state, _tc
+    from tests.test_qa_null_injection import _ValidatingProvider, _strict_null_args
+    state = _state(message)
+    state["session_id"] = "s-" + uuid.uuid4().hex   # a denied write freezes under the session
+    provider = _ValidatingProvider(["search_properties", "remember"])
+    provider.specs = [dataclasses.replace(spec, side_effect="write" if spec.name == "remember" else "none")
+                      for spec in provider.specs]
+    calls = [_tc("remember", _strict_null_args("remember", {"content": proposal}), "c0")]
+    if search:
+        calls.append(_tc("search_properties", _strict_null_args("search_properties", {"user_query": message}), "c1"))
+    state["messages"] = [AIMessage(content="", tool_calls=calls)]
+    asyncio.run(build_fc_nodes(provider)["execute_tools"](state))
+    return dict(provider.calls).get("remember"), memory_gate
+
+
+@pytest.mark.parametrize("message,proposal", [
+    (_ZH_SAVE, "User is allergic to cats and prefers a quiet Chelsea; budget £2600 per month, "
+               "1-bedroom whole flat, no commute needed."),
+    ("请记住：我对猫过敏，我喜欢安静的Knightsbridge。预算每月2600镑，一居室，不需要通勤，继续。",
+     "User is allergic to cats and prefers quiet Knightsbridge."),
+    ("请记住我在金丝雀码头上班，帮我找房", "User works at Canary Wharf."),
+    ("Please remember that I have a dog, and find me a flat", "用户有一只狗。"),
+])
+def test_v_10_a_translated_proposal_saves_the_users_words(message, proposal):
+    from core.memory_gate import explicit_remember_clause
+    params, _gate = _remember_turn(message, proposal)
+    assert params["content"] == explicit_remember_clause(message)
+
+
+@pytest.mark.parametrize("message,proposal", [
+    ("记住我预算1400", "flat viewing at 1400 Camden Road"),
+    ("请记住我有一只狗，帮我找Hackney最便宜的房子", "Cheapest flat is 14 Sample Road at £1,180 pcm."),
+    ("请记住我有一只狗，帮我找Hackney最便宜的房子", "The cheapest flat is in Hackney."),
+    ("Please remember that I have a dog, and find me the cheapest flat in Hackney", "Cheapest flat is 14 Sample Road."),
+])
+def test_v_10_h13_a_tool_derived_line_still_meets_the_gate(message, proposal):
+    params, _gate = _remember_turn(message, proposal)
+    assert params is None
+
+
+def test_v_10_an_untainted_zh_save_is_stored_in_chinese():
+    params, _gate = _remember_turn("请记住我对猫过敏", "User is allergic to cats.", search=False)
+    assert params["content"] == "我对猫过敏"
+
+
+@pytest.mark.parametrize("message,proposal", [
+    ("请记住我的电话是07700900123，帮我找房", "User's phone is 07700900123."),
+    ("请记住我的密码是Hunter2xyz，帮我找房", "User's password is Hunter2xyz."),
+])
+def test_v_10_a_secret_or_a_contact_keeps_its_own_path(message, proposal):
+    from core.memory_gate import explicit_remember_clause, restates_across_languages
+    assert explicit_remember_clause(message)
+    assert not restates_across_languages(proposal, explicit_remember_clause(message))

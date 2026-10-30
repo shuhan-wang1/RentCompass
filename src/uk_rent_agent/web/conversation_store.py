@@ -447,6 +447,21 @@ def _now_iso() -> str:
         return now.isoformat()
 
 
+# The reply a later turn reads. Cut at 500 characters, the weather section of a compound answer
+# was invisible next turn, which then said it still owed the weather and fetched it again
+# (V-11). Evidence lines stay out: they quote listing text, which as an assistant message would
+# read as the assistant's own words, and the listings block carries it as data.
+HISTORY_REPLY_CHARS = 4000
+_EVIDENCE_LINE = re.compile(
+    r"^\s*(?:Returned listing details|Reported features|Availability|返回的房源详情|房源所列配置|可入住信息)\s*[:：]")
+
+
+def history_reply(text) -> str:
+    """``text`` as the hot history keeps it; the context assembler bounds what is sent."""
+    lines = [line for line in str(text or "").split("\n") if not _EVIDENCE_LINE.match(line)]
+    return "\n".join(lines).strip()[:HISTORY_REPLY_CHARS]
+
+
 class ConversationStore:
     def __init__(self, db_path):
         self.db_path = str(db_path)
@@ -916,7 +931,7 @@ class ConversationStore:
                 pending_user = msg["content"]
             elif msg["role"] == "assistant":
                 history.append({"user": pending_user or "",
-                                "assistant": (msg["content"] or "")[:500]})
+                                "assistant": history_reply(msg["content"])})
                 pending_user = None
         if max_len and len(history) > max_len:
             history = history[-max_len:]

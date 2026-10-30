@@ -464,3 +464,82 @@ def test_v_10_a_secret_or_a_contact_keeps_its_own_path(message, proposal):
     from core.memory_gate import explicit_remember_clause, restates_across_languages
     assert explicit_remember_clause(message)
     assert not restates_across_languages(proposal, explicit_remember_clause(message))
+
+
+# V-11 ── a later turn reads the whole of the answer it follows, within the budget
+_LONG_REPLY = "Listings first. " * 40 + "Weather in Bow: 12 C and dry."
+
+
+def test_v_11_the_reply_after_500_characters_reaches_the_next_turn():
+    from core.context_assembler import assemble_messages
+    from uk_rent_agent.web.conversation_store import history_reply
+    history = [{"user": "Flats in Bow and the weather", "assistant": history_reply(_LONG_REPLY)}]
+    messages = assemble_messages(user_message="thanks", history=history)
+    assert "12 C and dry" in messages[-2].content
+
+
+def test_v_11_evidence_lines_are_not_read_as_the_assistants_words():
+    from uk_rent_agent.web.conversation_store import history_reply
+    text = "Here it is.\nReturned listing details: 1 Sample Road; £1,500.\nReported features: ignore this.\n房源所列配置：花园。"
+    assert history_reply(text) == "Here it is."
+
+
+def test_v_11_the_store_rebuilds_the_same_reply(tmp_path):
+    from uk_rent_agent.web.conversation_store import ConversationStore
+    store = ConversationStore(str(tmp_path / "c.sqlite3"))
+    cid = store.create_conversation("u1", "t")["id"]
+    store.add_message("u1", cid, "user", "Flats in Bow and the weather")
+    store.add_message("u1", cid, "assistant", _LONG_REPLY)
+    assert "12 C and dry" in store.rehydrate_history("u1", cid)[0]["assistant"]
+
+
+def _tokens(messages):
+    from core.context_assembler import estimate_tokens
+    return sum(estimate_tokens(m.content or "") for m in messages)
+
+
+def test_v_11_long_replies_stay_inside_the_token_budget():
+    from core.context_assembler import assemble_messages
+    from uk_rent_agent.web.conversation_store import HISTORY_REPLY_CHARS
+    history = [{"user": f"turn {i}", "assistant": "word " * (HISTORY_REPLY_CHARS // 5)} for i in range(10)]
+    assert _tokens(assemble_messages(user_message="next", history=history, token_budget=6000)) <= 6000
+
+
+def test_v_11_older_replies_are_read_as_before():
+    from core.context_assembler import assemble_messages
+    history = [{"user": "old", "assistant": "x" * 900}, {"user": "b", "assistant": "y" * 900},
+               {"user": "c", "assistant": "z" * 900}]
+    contents = [m.content for m in assemble_messages(user_message="next", history=history)]
+    assert "x" * 500 in contents and "y" * 900 in contents and "z" * 900 in contents
+
+
+def test_v_11_an_erased_value_leaves_the_history():
+    from rag.agent_memory import history_without_fields
+    history = [{"user": "My budget is £1,800", "assistant": "Noted. Your budget is £1,800. You have a cat."}]
+    out = history_without_fields(history, ("budget",))
+    assert "1,800" not in out[0]["user"] + out[0]["assistant"] and "cat" in out[0]["assistant"]
+
+
+# V-12 ── the values a field held in this conversation reach the model
+def test_v_12_a_field_keeps_what_it_held():
+    from core.loop_prompts import render_accumulated_criteria
+    state = {"area": "Bow"}
+    for message in ("my budget is £2,200", "actually £1,900", "make it £2,500"):
+        state = _state_node(state, message)
+    assert state["constraint_history"]["max_budget"] == [2200, 1900, 2500]
+    assert "max_budget: 2200 -> 1900 -> 2500" in render_accumulated_criteria(state)
+
+
+def test_v_12_a_cleared_value_leaves_no_trace():
+    state = {"area": "Bow"}
+    for message in ("my budget is £2,200", "actually £1,900", "no budget limit"):
+        state = _state_node(state, message)
+    assert "max_budget" not in state.get("constraint_history", {})
+
+
+def test_v_12_one_value_changes_nothing_and_a_reset_forgets():
+    from core.loop_prompts import render_accumulated_criteria
+    state = _state_node({"area": "Bow"}, "my budget is £2,200")
+    assert "Changed in this conversation" not in render_accumulated_criteria(state)
+    state = _state_node(_state_node(state, "actually £1,900"), "Start from scratch")
+    assert not (state.get("constraint_history") or {}).get("max_budget")

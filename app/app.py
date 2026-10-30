@@ -3286,7 +3286,8 @@ def _write_back_turn(user_id, conversation_id, user_message, assistant_text,
         if criteria_overwrite:
             _sess.persistent_state.setdefault('accumulated_search_criteria', {})
             _sess.persistent_state['accumulated_search_criteria'].update(criteria_overwrite)
-        _sess.history.append({'user': user_message, 'assistant': (assistant_text or '')[:500]})
+        from uk_rent_agent.web.conversation_store import history_reply
+        _sess.history.append({'user': user_message, 'assistant': history_reply(assistant_text)})
         if len(_sess.history) > MAX_HISTORY_LENGTH:
             # Capture the turns about to fall out of the hot window so they can be folded
             # into the rolling summary (background) — otherwise their context is lost.
@@ -3522,6 +3523,17 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         _single_memory_erase = erasure_request_names_other_memory(user_message)
         if _erase_fields:
             _memory_erasure = _am.forget_fact(user_id, _erase_fields)
+            # An erased value stays out of what the model reads next: this conversation's
+            # earlier turns, and the record of how the criteria changed (V-11, V-12).
+            from rag.agent_memory import history_without_fields
+            history_snapshot = history_without_fields(history_snapshot, _erase_fields)
+            with turn_lock:
+                _session = _get_session(user_id, conversation_id)
+                _session.history = history_without_fields(_session.history, _erase_fields)
+            _changes = (persistent_snapshot.get('accumulated_search_criteria') or {}).get(
+                'constraint_history')
+            if 'budget' in _erase_fields and isinstance(_changes, dict):
+                _changes.pop('max_budget', None)
         _lineage = conversation_store.get_branch_lineage(user_id, conversation_id)
         _mems = _am.retrieve(user_message, session_id=user_id, user_id=user_id, n=6,
                              branch_lineage=_lineage)

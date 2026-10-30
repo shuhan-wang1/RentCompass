@@ -2073,6 +2073,28 @@ _PREVIOUS_BUDGET = re.compile(
     r"(?:之前|原来|上一次|上次)的预算", re.I)
 
 
+_HISTORY_FIELDS = ("max_budget", "area", "bedrooms", "room_type", "commute_destination")
+_HISTORY_VALUES = 6
+
+
+def _with_constraint_history(after: dict, before: dict, changed) -> dict:
+    """``after`` with each changed field's values recorded, oldest first (V-12). A cleared value
+    leaves no trace: the user took it back, and it may have been an erasure."""
+    history = {field: list(values) for field, values in (after.get("constraint_history") or {}).items()}
+    for field in _HISTORY_FIELDS:
+        if field not in changed:
+            continue
+        value, old = after.get(field), (before or {}).get(field)
+        if value is None:
+            history.pop(field, None)
+            continue
+        values = history.setdefault(field, [] if old is None else [old])
+        if not values or values[-1] != value:
+            values.append(value)
+        del values[:-_HISTORY_VALUES]
+    return {**after, "constraint_history": history}
+
+
 def undo_last_change(before: dict, after: dict, message: str) -> dict:
     """``after`` with this turn's undo applied, and the replaced values recorded."""
     text = str(message or "")
@@ -2094,13 +2116,13 @@ def undo_last_change(before: dict, after: dict, message: str) -> dict:
         result["constraint_sources"] = sources
         result["_last_change"] = None
         logger.info("criteria.last_change_undone fields=%s", ",".join(fields))
-        return result
+        return _with_constraint_history(result, before, fields)
     changed = [f for f in _LAST_CHANGE_FIELDS if (after or {}).get(f) != (before or {}).get(f)]
     if not changed or after is before:
         return after
     result = dict(after)
     result["_last_change"] = {"before": {f: (before or {}).get(f) for f in _LAST_CHANGE_FIELDS}}
-    return result
+    return _with_constraint_history(result, before, changed)
 
 
 _RECALL_KWS = [
@@ -5926,7 +5948,9 @@ def _make_critic_node():
                                     or ec.get("recommended_registry") or [])
                 + list(ec.get("shown_alternatives") or []),   # shown, not matches (r6d)
                 stated_budgets=[(state.get("accumulated_search_criteria") or {}).get(field)
-                                for field in ("max_budget", "monthly_total_budget")],
+                                for field in ("max_budget", "monthly_total_budget")]
+                + list(((state.get("accumulated_search_criteria") or {}).get("constraint_history")
+                        or {}).get("max_budget") or []),
                 user_message=ec.get("current_message") or _current_message(
                     state.get("user_query") or ""),
                 reply_language=_reply_language_from_ctx(

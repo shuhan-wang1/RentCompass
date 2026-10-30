@@ -830,6 +830,22 @@ def _without_field_clauses(text: str, field: str) -> str:
     return rest
 
 
+def history_without_fields(history: list, fields: tuple) -> list:
+    """``history`` turns with what they say about the erased ``fields`` removed. The reply is
+    no longer cut at 500 characters, so a recap's tail can hold a value the user just erased."""
+    cleaned = []
+    for turn in history or []:
+        if not isinstance(turn, dict):
+            cleaned.append(turn)
+            continue
+        kept = dict(turn)
+        for key in ("user", "assistant"):
+            for field in fields:
+                kept[key] = _without_field_clauses(str(kept.get(key) or ""), field)
+        cleaned.append(kept)
+    return cleaned
+
+
 # zh has no word boundaries, so the cue has to govern the field inside one clause: "请把已保存
 # 的预算更新为2000英镑，并删掉我对猫过敏这条信息" asked to UPDATE the budget and it was scrubbed
 # because a cue and a term sat anywhere in the message (U-10a). Between them only the words of a

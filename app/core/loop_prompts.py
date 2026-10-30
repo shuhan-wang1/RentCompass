@@ -366,7 +366,8 @@ def render_accumulated_criteria(criteria: Optional[Dict[str, Any]]) -> str:
         return ""
     body: List[str] = []
     for key, value in criteria.items():
-        if key in ('constraint_sources', 'plans', 'criteria_repair_provenance') or key.startswith('_'):
+        if key in ('constraint_sources', 'plans', 'criteria_repair_provenance',
+                   'constraint_history') or key.startswith('_'):
             continue
         if value in (None, "", [], {}, ()):
             continue
@@ -375,8 +376,21 @@ def render_accumulated_criteria(criteria: Optional[Dict[str, Any]]) -> str:
         return ""
     return "\n".join(
         ["=== ACCUMULATED SEARCH CRITERIA (confirmed so far) ===", *body,
+         *_changed_values(criteria.get('constraint_history')),
          "=== END ACCUMULATED SEARCH CRITERIA ==="]
     )
+
+
+def _changed_values(history: Any) -> List[str]:
+    """What the user set in this conversation, oldest first: "What did I say my budget was
+    originally?" had only the current value and an old saved memory to answer from (V-12)."""
+    rows = [f"{field}: {' -> '.join(str(v) for v in values)}"
+            for field, values in (history if isinstance(history, dict) else {}).items()
+            if isinstance(values, list) and len(values) > 1]
+    if not rows:
+        return []
+    return ["Changed in this conversation, oldest first, the last is current (this outranks "
+            "saved memory for what the user said here):", *rows]
 
 
 def render_focused_property(record: Optional[Dict[str, Any]]) -> str:

@@ -200,14 +200,45 @@ def _exact_station_match(location: str) -> dict | None:
     status, data = _tfl_get(f"/StopPoint/Search/{_STATION_SUFFIX.sub('', text).strip()}",
                             {'modes': _STATION_MODES})
     matches = (data or {}).get('matches') if isinstance(data, dict) else None
-    for match in matches or []:
-        if isinstance(match, dict) and match.get('id') and _station_key(match.get('name')) == key:
-            found = {'in_london': True, 'station': True, 'token': match.get('id'),
-                     'name': match.get('name')}
-            if match.get('lat') is not None and match.get('lon') is not None:
-                found['coords'] = {'lat': match.get('lat'), 'lng': match.get('lon')}
-            return found
+    exact = [m for m in matches or []
+             if isinstance(m, dict) and m.get('id') and _station_key(m.get('name')) == key]
+    # "Clapham Junction" and "Bank" match TfL interchange hubs (HUBCLJ, HUBBAN). The journey
+    # planner does not know a hub id and disambiguated it to a "Cycle Hub" in Richmond and a
+    # "HUBBARD DRIVE" in Chessington, priced as success (U-01). Only a station's own NaPTAN id
+    # is a stop; a hub is resolved to the station at its position.
+    for match in exact:
+        if not _is_hub_id(match.get('id')):
+            return _station_found(match.get('id'), match.get('name'), match.get('lat'), match.get('lon'))
+    for match in exact:
+        lat, lon = match.get('lat'), match.get('lon')
+        if lat is None or lon is None:
+            continue
+        status, data = _tfl_get('/StopPoint', {
+            'lat': lat, 'lon': lon, 'radius': 300,
+            'stopTypes': 'NaptanMetroStation,NaptanRailStation', 'modes': _STATION_MODES,
+        })
+        stops = (data or {}).get('stopPoints') if isinstance(data, dict) else None
+        named = sorted((stop for stop in stops or []
+                        if isinstance(stop, dict) and stop.get('id') and not _is_hub_id(stop.get('id'))
+                        and _station_key(stop.get('commonName')) == key),
+                       key=lambda stop: (0 if stop.get('stopType') == 'NaptanMetroStation' else 1,
+                                         stop.get('distance') or 0))
+        if named:
+            return _station_found(named[0].get('id'), named[0].get('commonName'), lat, lon)
+    # No station of that name: the geocoder resolves it as before.
     return None
+
+
+def _is_hub_id(stop_id) -> bool:
+    """True for a TfL interchange hub id (HUBxxx), which is not a journey-planner stop."""
+    return str(stop_id or '').upper().startswith('HUB')
+
+
+def _station_found(stop_id, name, lat, lon) -> dict:
+    found = {'in_london': True, 'station': True, 'token': stop_id, 'name': name}
+    if lat is not None and lon is not None:
+        found['coords'] = {'lat': lat, 'lng': lon}
+    return found
 
 
 def _resolve_station(location: str) -> dict:
@@ -231,7 +262,8 @@ def _resolve_station(location: str) -> dict:
 
     # v3: resolutions are now checked against the input's postcode district (R2-09); a v2
     # entry may hold a wrong-district station.
-    cache_key = create_cache_key('tfl_resolve_station_v3', location.lower())
+    # v4: a v3 entry may hold a TfL hub id (HUBCLJ) as the stop token (U-01).
+    cache_key = create_cache_key('tfl_resolve_station_v4', location.lower())
     cached = _cache_get(cache_key, _GEO_TTL)
     if cached is not None:
         return cached
@@ -312,6 +344,8 @@ def _resolve_station(location: str) -> dict:
     # Geocoding failed: try a direct station-name search (handles bare names).
     status, data = _tfl_get(f"/StopPoint/Search/{location}", {'modes': _STATION_MODES})
     matches = (data or {}).get('matches') if isinstance(data, dict) else None
+    # A hub id is not a stop the journey planner knows (U-01).
+    matches = [m for m in matches or [] if isinstance(m, dict) and not _is_hub_id(m.get('id'))]
     if matches:
         top = matches[0]
         result.update({'in_london': True, 'station': True,

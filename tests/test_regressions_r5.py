@@ -73,3 +73,81 @@ def test_t_02_a_postcode_search_area_is_not_locked_as_the_destination(monkeypatc
     # A postcode the message names as the workplace is still locked (unchanged behaviour).
     res = asyncio.run(search_properties_impl(area="SW1A 1AA", current_message="I work at SW1A 1AA"))
     assert res["known_criteria"]["commute_destination"] == palace
+
+
+# U-01 ── a TfL interchange hub id is never handed to the journey planner as a stop ───
+def _no_cache(monkeypatch, gti):
+    monkeypatch.setattr(gti, "_cache_get", lambda *a, **k: None)
+    monkeypatch.setattr(gti, "_cache_set", lambda *a, **k: None)
+
+
+@pytest.mark.parametrize("location", ["Bank", "Bank station", "Bank Underground Station"])
+def test_u_01_a_hub_match_prefers_the_stations_own_naptan_id(monkeypatch, location):
+    from core.tools import get_transport_info as gti
+    _no_cache(monkeypatch, gti)
+    monkeypatch.setattr(gti, "_geocode", lambda text: (_ for _ in ()).throw(
+        AssertionError("an exact station match needs no geocode")))
+
+    def fake_tfl(path, params=None, **_k):
+        assert path.startswith("/StopPoint/Search/")
+        return 200, {"matches": [
+            {"id": "HUBBAN", "name": "Bank", "lat": 51.5133, "lon": -0.0886, "topMostParentId": "HUBBAN"},
+            {"id": "940GZZLUBNK", "name": "Bank Underground Station", "lat": 51.5133, "lon": -0.0890}]}
+    monkeypatch.setattr(gti, "_tfl_get", fake_tfl)
+    resolved = gti._resolve_station(location)
+    assert resolved["token"] == "940GZZLUBNK" and resolved["name"] == "Bank Underground Station"
+
+
+@pytest.mark.parametrize("location", ["Clapham Junction", "Clapham Junction Rail Station"])
+def test_u_01_a_hub_only_match_resolves_to_the_station_at_the_hub(monkeypatch, location):
+    from core.tools import get_transport_info as gti
+    _no_cache(monkeypatch, gti)
+    monkeypatch.setattr(gti, "_geocode", lambda text: (_ for _ in ()).throw(
+        AssertionError("the hub's own station needs no geocode")))
+    calls = []
+
+    def fake_tfl(path, params=None, **_k):
+        calls.append(path)
+        if path.startswith("/StopPoint/Search/"):
+            return 200, {"matches": [{"id": "HUBCLJ", "name": "Clapham Junction", "lat": 51.4642,
+                                      "lon": -0.1704, "topMostParentId": "HUBCLJ"}]}
+        assert path == "/StopPoint" and params["radius"] == 300
+        return 200, {"stopPoints": [
+            {"id": "HUBCLJ", "commonName": "Clapham Junction", "stopType": "TransportInterchange", "distance": 5},
+            {"id": "910GCLPHMJC", "commonName": "Clapham Junction Rail Station",
+             "stopType": "NaptanRailStation", "distance": 40},
+            {"id": "940GZZLUCPC", "commonName": "Clapham Common Underground Station",
+             "stopType": "NaptanMetroStation", "distance": 290}]}
+    monkeypatch.setattr(gti, "_tfl_get", fake_tfl)
+    resolved = gti._resolve_station(location)
+    assert resolved["token"] == "910GCLPHMJC" and resolved["name"] == "Clapham Junction Rail Station"
+    assert not resolved["token"].startswith("HUB")
+
+
+def test_u_01_a_hub_with_no_station_of_its_name_falls_back_to_the_geocoder(monkeypatch):
+    from core.tools import get_transport_info as gti
+    _no_cache(monkeypatch, gti)
+    monkeypatch.setattr(gti, "_geocode", lambda text: {"lat": 51.5033, "lng": -0.1145, "postcode": "SE1 8SW"})
+
+    def fake_tfl(path, params=None, **_k):
+        if path.startswith("/StopPoint/Search/"):
+            return 200, {"matches": [{"id": "HUBWAT", "name": "Waterloo", "lat": 51.5033, "lon": -0.1145}]}
+        if params and params.get("radius") == 300:
+            return 200, {"stopPoints": [{"id": "HUBWAT", "commonName": "Waterloo", "stopType": "TransportInterchange"}]}
+        return 200, {"stopPoints": [{"id": "940GZZLUWLO", "commonName": "Waterloo Underground Station",
+                                     "stopType": "NaptanMetroStation", "distance": 60}]}
+    monkeypatch.setattr(gti, "_tfl_get", fake_tfl)
+    resolved = gti._resolve_station("Waterloo")
+    assert resolved["token"] == "940GZZLUWLO"
+
+
+def test_u_01_the_name_search_fallback_skips_hub_ids(monkeypatch):
+    from core.tools import get_transport_info as gti
+    _no_cache(monkeypatch, gti)
+    monkeypatch.setattr(gti, "_geocode", lambda text: None)
+
+    def fake_tfl(path, params=None, **_k):
+        return 200, {"matches": [{"id": "HUBBAN", "name": "Bank-ish"},
+                                 {"id": "940GZZLUBNK", "name": "Bank Underground Station"}]}
+    monkeypatch.setattr(gti, "_tfl_get", fake_tfl)
+    assert gti._resolve_station("Bankish")["token"] == "940GZZLUBNK"

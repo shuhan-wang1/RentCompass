@@ -3616,8 +3616,21 @@ async def search_properties_impl(
         # 目标。此处在 memory-stripped 的本轮原始消息上做保守的目的地扫描（仅当 classify_place
         # 确认为 university/workplace 才命中；纯居住区/裸城市绝不命中），命中即锁为通勤目标。
         # 仅在用户未显式给出 commute_destination 且未声明 no_commute 时运行。
+        def _curated_home_key(value):
+            return re.sub(r"[’']", "", str(value or "").split(",")[0].strip().lower())
+
         if (not no_commute and not commute_destination and msg_for_extraction):
             _msg_dest = extract_destination_from_text(msg_for_extraction)
+            _named_key = _curated_home_key((_msg_dest or {}).get("name"))
+            if (_msg_dest and search_area and _named_key == _curated_home_key(search_area)
+                    and (_named_key in LONDON_AREAS or _named_key in _KNOWN_AREAS
+                         or _named_key in _CUE_ONLY_AREAS)
+                    and not names_place_as_workplace(msg_for_extraction, _msg_dest.get("name"))
+                    and not re.search(r"\b(?:job|work|office|stud(?:y|ying)|commut\w*)\b|上班|工作|上学|通勤",
+                                      msg_for_extraction, re.I)):
+                # "actually make that Euston" names the curated home area being searched, not a
+                # workplace (S-05).
+                _msg_dest = None
             if _msg_dest and is_destination(_msg_dest):
                 _dest_name = _msg_dest.get("name") or search_area or "your destination"
                 commute_destination = _msg_dest.get("address") or _dest_name
@@ -3653,7 +3666,13 @@ async def search_properties_impl(
 
         # 步骤 1.4b: 若"想住的区域"其实是一个目的地 token（用户把 UCL/某公司当住哪说），
         # 且上面 1.4a 尚未锁定，则在此重分类为通勤目标。
-        if not locked_commute_dest and search_area and not search_area_from_commute_dest:
+        # A curated home area the user named ("make that Euston") is where they want to live: a
+        # live classification of its station made it the commute destination, which then rode
+        # along on the next search of another area (S-05).
+        _home_key = _curated_home_key(_clean_area(search_area))
+        if (not locked_commute_dest and search_area and not search_area_from_commute_dest
+                and _home_key not in LONDON_AREAS and _home_key not in _KNOWN_AREAS
+                and _home_key not in _CUE_ONLY_AREAS):
             _place = classify_place(search_area)
             if is_destination(_place):
                 _token = search_area

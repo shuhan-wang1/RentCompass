@@ -769,3 +769,30 @@ def test_s_06_the_fc_save_reply_names_the_withheld_details():
     out = build_fc_nodes(_NoTools())["format_output_fc"](state)
     assert "I did not save the name" in out["final_response"]
     assert "Sam Example" not in out["final_response"]
+
+
+# S-05 ── a curated home area is never reclassified as the commute destination ───────
+def test_s_05_a_station_named_home_area_is_not_locked_as_the_destination(monkeypatch):
+    import asyncio
+    from core.scraping import on_demand
+    from core.tools.search_properties import search_properties_impl
+    euston = "Euston, Eversholt Street, London NW1 2DU"
+
+    def fake_classify(name):
+        key = (name or "").strip().lower()
+        if key in ("euston", "ucl"):
+            return {"kind": "workplace", "slug": key, "city": "london", "address": euston,
+                    "source": "osm"}
+        return {"kind": "area", "slug": key, "city": None, "address": None, "source": "landmark"}
+    monkeypatch.setattr(on_demand, "classify_place", fake_classify)
+    monkeypatch.setattr(on_demand, "is_destination",
+                        lambda r: (r.get("kind") if isinstance(r, dict) else r) in ("university", "workplace"),
+                        raising=False)
+    monkeypatch.setattr(on_demand, "get_listings", lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("the soft gate fires before any scrape")))
+    res = asyncio.run(search_properties_impl(area="Euston", current_message="actually make that Euston"))
+    assert res["known_criteria"]["commute_destination"] is None
+    assert res["known_criteria"]["area"] == "Euston"
+    # A real destination named as the area is still locked (unchanged behaviour).
+    res = asyncio.run(search_properties_impl(area="UCL", current_message="places near UCL"))
+    assert res["known_criteria"]["commute_destination"] == euston

@@ -393,6 +393,12 @@ def test_v_09_an_english_home_search_needs_no_lookup_either(message):
     assert unasked_nearby_lookup({"address": "Angel", "poi_type": "all"}, message)
 
 
+@pytest.mark.parametrize("message", ["Find pubs near Kings Cross", "compare housing evidence", "Tell me about Camden"])
+def test_v_09_a_message_that_is_no_home_search_keeps_the_lookup(message):
+    from core.tool_policy import unasked_nearby_lookup
+    assert not unasked_nearby_lookup({"address": "Camden"}, message)
+
+
 def test_v_09_a_type_the_model_named_runs():
     from core.tool_policy import unasked_nearby_lookup
     assert not unasked_nearby_lookup({"address": "Angel", "poi_type": "park"}, "Find a flat near Angel")

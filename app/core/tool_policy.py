@@ -371,6 +371,11 @@ def standalone_rent_conversion(message: str) -> Optional[tuple[str, float]]:
     return "month_to_week", amount
 
 
+# What the unasked lookups all came with: a home search, or a fact to remember. "Tell me about
+# Camden" is neither, and a look at the area is a fair answer to it.
+_HOME_REQUEST = re.compile(
+    r"(?<![a-z])(?:flats?|homes?|houses?|apartments?|studios?|rooms?|properties|property|listings?|bedrooms?|"
+    r"\d\s*-?\s*beds?|rent(?:al)?|budget|commute|remember)(?![a-z])|房|租|居室|单间|公寓|预算|通勤|上班|记住", re.I)
 # The words a message asks about its surroundings with. A home search "near" a place does not:
 # what sits between the question word and "near" may not be the home it wants.
 _HOME_NOUN = r"(?:flats?|homes?|houses?|apartments?|studios?|rooms?|properties|listings?|\d-bed|bedrooms?)"
@@ -384,7 +389,8 @@ _ASKS_ABOUT_SURROUNDINGS = re.compile(
 _AMENITY_WORD = re.compile(
     r"\b(?:restaurants?|food|dining|eat|cafes?|coffee|supermarkets?|grocer\w*|tesco|sainsbury\w*|asda|"
     r"lidl|aldi|waitrose|convenience|corner\s+shop|pharmac\w*|chemists?|schools?|gps?|doctors?|clinics?|"
-    r"medical|gyms?|fitness|workout|parks?|stations?|tube|underground|bus(?:es)?|bus\s+stops?|banks|atms?|"
+    r"medical|gyms?|fitness|workout|parks?|pubs?|bars?|stations?|tube|underground|bus(?:es)?|bus\s+stops?|"
+    r"banks|atms?|"
     r"cash\s+machines?)\b|餐厅|餐馆|饭店|吃的|超市|便利店|咖啡|药店|药房|学校|小学|中学|医生|诊所|健身|公园|绿地|"
     r"地铁|公交|巴士|银行|取钱", re.I)
 # A place's own name is no amenity: "Finsbury Park", "Bethnal Green", "Covent Garden".
@@ -392,14 +398,15 @@ _NAMED_GREEN_PLACE = re.compile(r"\b[A-Z][\w'’]+\s+(?:Park|Green|Gardens?)\b")
 
 
 def unasked_nearby_lookup(args: dict, message: str) -> bool:
-    """True for an amenity lookup nobody asked for: no type named by the call and no amenity,
-    or question about the surroundings, in the message (V-09)."""
+    """True for an amenity lookup nobody asked for: no type named by the call, a home search or
+    a save for a message, and no amenity or question about the surroundings in it (V-09)."""
     from core.dimensions import cued_dimensions
     if str(args.get("poi_type") or "all").strip().lower() != "all":
         return False
     text = _NAMED_GREEN_PLACE.sub(" ", str(message or ""))
-    return not ("nearby" in cued_dimensions(text) or _AMENITY_WORD.search(text)
-                or _ASKS_ABOUT_SURROUNDINGS.search(text))
+    return bool(_HOME_REQUEST.search(text)) and not (
+        "nearby" in cued_dimensions(text) or _AMENITY_WORD.search(text)
+        or _ASKS_ABOUT_SURROUNDINGS.search(text))
 
 
 def read_tool_denial(tool: str, args: dict, *, current_message: str) -> Optional[ReadDenial]:

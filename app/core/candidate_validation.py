@@ -1040,6 +1040,11 @@ def _known_commute_caps(state: dict) -> set[float]:
             caps.add(number)
     current = str((state.get("extracted_context") or {}).get("current_message") or
                   state.get("user_query") or "")
+    # So is one stated earlier: "you dropped the 30-minute limit" in a recap of criteria the user
+    # changed was removed as an unverified commute claim (V-19).
+    current = " ".join([current] + [str(turn.get("user") or "") for turn in
+                                    (state.get("extracted_context") or {}).get("history") or []
+                                    if isinstance(turn, dict)])
     # A user's explicitly stated ceiling is a constraint even before a criteria refresh.
     # Read only user text, never the answer whose measurements are being checked.
     for pattern in (

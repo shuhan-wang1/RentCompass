@@ -4360,6 +4360,14 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         if (acc.get('area') and not acc.get('areas') and not keep_model_area
                 and not (kept_city and acc.get('area') == kept_city)):
             p['areas'] = [acc['area']]
+        # A comparison searches every place it names and stores none of them: the stored
+        # criteria are authoritative above, and the turn searched one area while the reply
+        # said the other had no listings (r06 964d569e, 2e376445, ba0ec277).
+        from core.tools.search_properties import comparison_areas
+        _compared = comparison_areas(p.get("current_message") or "",
+                                     acc.get("areas") or ([acc["area"]] if acc.get("area") else []))
+        if len(_compared) > 1:
+            p["area"], p["areas"] = _compared[0], _compared
         if cd and not acc.get('no_commute'):
             p['commute_destination'] = cd
         # 「温莎附近有房吗」 cleared the area, and the old commute destination then chose where to

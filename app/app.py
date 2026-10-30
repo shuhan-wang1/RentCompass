@@ -3783,11 +3783,11 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     if isinstance(tool_data, dict) and 'recommendations' in tool_data:
         # Check the final user constraints again, independently of the tool's echo.
         from core.candidate_validation import validate_candidates, candidate_reason_text
-        from core.criteria_contract import reconcile_search_criteria
+        from core.criteria_contract import criteria_with_compared_areas, reconcile_search_criteria
         accumulated = reconcile_search_criteria(
             final_state.get('accumulated_search_criteria') or {}, tool_data.get('search_criteria') or {})
         final_state['accumulated_search_criteria'] = accumulated
-        actual_criteria = dict(accumulated)
+        actual_criteria = criteria_with_compared_areas(accumulated, user_message)
         if accumulated.get('max_budget') is not None:
             actual_criteria['rent_filter_ceiling_monthly'] = (tool_data.get('search_criteria') or {}).get('max_budget_monthly')
             actual_criteria['max_budget_monthly'] = accumulated['max_budget']

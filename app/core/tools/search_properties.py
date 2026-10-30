@@ -1701,7 +1701,8 @@ _COMPARISON_SEARCH_ASK = re.compile(
 def compares_areas_only(text: str) -> bool:
     """True when the message compares places or shown listings and asks for no search."""
     source = str(text or "")[:2000]
-    return bool(_COMPARISON_CUE.search(source)) and not _COMPARISON_SEARCH_ASK.search(source)
+    return ((bool(_COMPARISON_CUE.search(source)) or len(comparison_areas(source)) > 1)
+            and not _COMPARISON_SEARCH_ASK.search(source))
 
 
 def _drop_city_qualifier(areas: list[str], phrase: str) -> list[str]:
@@ -1718,6 +1719,66 @@ def _drop_city_qualifier(areas: list[str], phrase: str) -> list[str]:
             phrase, re.I):
         return [a for a in areas if a != "London"]
     return areas
+
+
+_COMPARE_NEGATED = re.compile(r"\b(?:don.t|do\s+not|no\s+need\s+to|never|not)\s+(?:\w+\s+){0,2}compar|不用比|不要比|别比", re.I)
+_COMPARE_LIST_JOIN = r"\s*(?:,\s*(?:and\s+)?|、|&|\band\b|\bwith\b|\bto\b|\bagainst\b|\bvs\.?|\bversus\b|和|与|跟|同|及)\s*"
+_COMPARE_ZH_JOIN = r"\s*(?:、|和|与|跟|同|及)\s*"
+
+
+def comparison_areas(text: str, standing: list | None = None) -> list[str]:
+    """The places a message asks to compare, in order; fewer than two means no comparison.
+
+    "Compare A with B", "A vs B" and 「比较A和B」 name both. "Compare with B" compares ``standing``
+    with B. A comparison searches these places and stores none of them, so nothing here says
+    what the search area is. Only a place directly governed by the comparison counts:
+    "Compare the cheapest from Bethnal Green with the one in Angel you showed" asks about
+    shown listings (U-03) and returns nothing."""
+    source = str(text or "")[:2000]
+    if not _COMPARISON_CUE.search(source) and not re.search(r"\bcompared\b|相比|比一比|比一下|哪(?:个|里|边)", source, re.I):
+        return []
+    if _COMPARE_NEGATED.search(source):
+        return []
+    standing = [a for a in (standing or []) if isinstance(a, str) and a.strip()]
+    names = {**_KNOWN_AREAS, **_ZH_AREA_MAP, **_CUE_ONLY_AREAS}
+    for area in standing:
+        names.setdefault(re.sub(r"[’']", '', area.lower()), area)
+    alternatives = '|'.join(re.escape(n) for n in sorted(names, key=len, reverse=True))
+    one = rf"(?<![a-z])(?:{alternatives})(?![a-z])(?:,\s*london\b)?"
+    place = re.compile(one, re.I)
+    text_form = re.sub(r"[’']", "", source)
+
+    def canonical(phrase: str) -> list[str]:
+        found = []
+        for match in place.finditer(phrase):
+            key = re.sub(r",\s*london$", "", match.group().lower())
+            area = names.get(match.group()) or names.get(key)
+            if area and area not in found:
+                found.append(area)
+        return found
+
+    def with_standing(phrase: str) -> list[str]:
+        found = list(standing)
+        for area in canonical(phrase):
+            if area.lower() not in {a.lower() for a in found}:
+                found.append(area)
+        return found
+
+    home_noun = r"(?:(?:the\s+)?(?:rents?|prices?|costs?|flats?|homes?|listings?|areas?)\s+(?:in\s+|of\s+|for\s+|between\s+)?|between\s+)?"
+    both = re.search(rf"(?:\bcompar(?:e|ing)\s+{home_noun}|比较|对比|比一比|比一下)(?:一下|下)?\s*(?:看看\s*)?"
+                     rf"({one}(?:{_COMPARE_LIST_JOIN}{one})+)", text_form, re.I)
+    both = both or re.search(rf"({one}(?:\s*(?:vs\.?|versus|v\.)\s*{one})+)", text_form, re.I)
+    both = both or re.search(rf"({one}\s+compare[sd]?\s+(?:to|with|against)\s+{one})", text_form, re.I)
+    both = both or re.search(rf"({one}(?:{_COMPARE_ZH_JOIN}{one})+)\s*的?[^，。？！?!；;]{{0,8}}?"
+                             r"(?:比较|对比|比一比|比一下|相比|哪个|哪里|哪边)", text_form, re.I)
+    if both:
+        return canonical(both.group(1))
+    other = re.search(rf"\bcompar(?:e|ed|ing)\s+(?:(?:it|this|that|these|them|those|the\s+(?:search|results?|area|listings?)"
+                      rf"|my\s+(?:search|area))\s+)?(?:(?:to|with|against)\s+)({one}(?:{_COMPARE_LIST_JOIN}{one})*)",
+                      text_form, re.I)
+    other = other or re.search(rf"\bcompar(?:e|ing)\s+({one})\s*(?:too\b|as\s+well\b|also\b|[,.!?]|$)", text_form, re.I)
+    other = other or re.search(rf"(?:和|跟|与|同)\s*({one})\s*(?:比较|对比|比一比|比一下)", text_form, re.I)
+    return with_standing(other.group(1)) if other else []
 
 
 # Edits to the CURRENT area list (R1-02 / ledger A-05). "Add Islington as well.",
@@ -3785,6 +3846,8 @@ async def search_properties_impl(
         fresh_areas = edited_areas if edited_areas is not None else _extract_areas(msg_for_extraction)
         if len(fresh_areas) == 1 and bare_city_downgrades(fresh_areas[0], search_area):
             fresh_areas = []    # a bare "London" never widens a finer requested area (R1-01)
+        if len(comparison_areas(msg_for_extraction, req_areas)) > 1:
+            fresh_areas = []    # both places were passed; one read from the words would replace them
         if (search_area and fresh_areas and edited_areas is None
                 and all(names_place_as_workplace(msg_for_extraction, a) for a in fresh_areas)):
             # "I also work in Shoreditch" names the commute destination; the requested home

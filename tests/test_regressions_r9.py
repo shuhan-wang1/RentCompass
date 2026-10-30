@@ -73,3 +73,99 @@ def test_y_01_the_stated_rent_form_means_this_listings_monthly_rent(text):
 def test_y_01_a_rent_after_a_fare_is_corrected_in_the_same_form():
     out = bind_listing_links("Camden Road: Travelcard £119.90 a month; the rent is £1750.", _CAMDEN_ROAD)
     assert out == "Camden Road: Travelcard £119.90 a month; the rent is £1800."
+
+
+# Y-02 ── a comparison covers both places and stores neither
+def _search_params(message: str, accumulated: dict, **model) -> dict:
+    """What the executor sends to the tool after this turn's state node."""
+    import asyncio
+
+    from langchain_core.messages import AIMessage
+
+    from core.agent_loop import build_fc_nodes
+    from tests.test_agent_contract_guards import _state, _tc
+    from tests.test_qa_null_injection import _ValidatingProvider, _strict_null_args
+    state = _state(message)
+    state["accumulated_search_criteria"] = _state_node(accumulated, message)
+    args = _strict_null_args("search_properties", {"user_query": message, **model})
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("search_properties", args, "c0")])]
+    provider = _ValidatingProvider(["search_properties"])
+    asyncio.run(build_fc_nodes(provider)["execute_tools"](state))
+    (_, params), = provider.calls
+    return params
+
+
+@pytest.mark.parametrize("message,areas", [
+    ("Now compare with Hackney, and check the weather there.", ["Camden", "Hackney"]),
+    ("Compare with Hackney", ["Camden", "Hackney"]),
+    ("compare it to Islington", ["Camden", "Islington"]),
+    ("Compare Stratford with Bow for a 1-bed in terms of price", ["Stratford", "Bow"]),
+    ("Compare Stratford and Bow", ["Stratford", "Bow"]),
+    ("Stratford vs Bow", ["Stratford", "Bow"]),
+    ("Stratford vs. Bow for a 1-bed", ["Stratford", "Bow"]),
+    ("How does Camden compare to Hackney?", ["Camden", "Hackney"]),
+    ("compare the rents in Camden, Hackney and Islington", ["Camden", "Hackney", "Islington"]),
+    ("和哈克尼比较一下", ["Camden", "Hackney"]),
+    ("比较一下哈克尼和伊斯灵顿", ["Hackney", "Islington"]),
+    ("比较一下Hackney和Camden哪个便宜", ["Hackney", "Camden"]),
+    ("哈克尼和伊斯灵顿哪个便宜", ["Hackney", "Islington"]),
+    ("Hackney和Camden比一比", ["Hackney", "Camden"]),
+])
+def test_y_02_a_comparison_searches_both_and_stores_neither(message, areas):
+    from core.tools.search_properties import comparison_areas
+    assert comparison_areas(message, ["Camden"]) == areas
+    stored = _state_node(_CAMDEN, message)
+    assert (stored["area"], stored["areas"]) == ("Camden", ["Camden"])
+    params = _search_params(message, _CAMDEN, area="Camden", areas=["Camden"])
+    assert (params["area"], params["areas"]) == (areas[0], areas)
+
+
+def test_y_02_a_first_turn_comparison_searches_both():
+    params = _search_params("帮我比较一下哈克尼和伊斯灵顿，预算2000，两居室，不需要通勤", {}, area="Islington", areas=["Islington"])
+    assert params["areas"] == ["Hackney", "Islington"]
+    assert params["max_budget"] == 2000 and params["bedrooms"] == 2 and params["no_commute"] is True
+
+
+@pytest.mark.parametrize("message", [
+    "How did Camden compare to this?", "Compare listings 1 and 2",
+    "Compare the cheapest from Bethnal Green with the cheapest in Angel you showed earlier.",
+    "Don't compare with Hackney", "show me Hackney listings too", "Which is cheaper, the first or the second?",
+])
+def test_y_02_no_pair_of_places_is_no_comparison(message):
+    from core.tools.search_properties import comparison_areas
+    assert len(comparison_areas(message, ["Camden"])) < 2
+
+
+def test_y_02_adding_an_area_stays_an_edit_of_the_stored_list():
+    assert _state_node(_CAMDEN, "Add Hackney as well")["areas"] == ["Camden", "Hackney"]
+
+
+def test_y_02_the_compared_rows_are_not_outside_the_area():
+    from core.candidate_validation import validate_candidates
+    from core.criteria_contract import criteria_with_compared_areas
+    rows = [{"address": "1 Mare Street, London E8", "price": "£1900/month", "area": "Hackney", "bedrooms": 1,
+             "property_type": "Flat", "url": "https://www.onthemarket.com/details/1/"}]
+    criteria = dict(_CAMDEN, max_budget=None, bedrooms=None, room_type=None)
+    assert validate_candidates(rows, criteria, [])["excluded"]
+    compared = criteria_with_compared_areas(criteria, "Compare with Hackney")
+    assert not validate_candidates(rows, compared, [])["excluded"]
+    assert criteria["areas"] == ["Camden"]
+    assert criteria_with_compared_areas(criteria, "Find a 1-bed")["areas"] == ["Camden"]
+
+
+@pytest.mark.parametrize("message", [
+    "Now compare with Islington, and check the weather there.", "比较一下卡姆登和伊斯灵顿", "Compare Camden with Islington",
+])
+def test_y_02_the_tool_keeps_both_places(monkeypatch, message):
+    from tests import test_multi_area_and_recommender as multi
+    multi._all_areas_classifier(monkeypatch)
+    monkeypatch.setenv("DESC_ENRICH_ENABLED", "0")
+    monkeypatch.setenv("AREA_RECOS_ENABLED", "0")
+    areas = ["Camden", "Islington"]
+    geo = {"Camden": multi._CAMDEN_GEO, "Islington": multi._ISLINGTON_GEO}
+    rows = {area: [multi._row(f"1 {area} Road", 1500, area, geo=geo[area])] for area in areas}
+    monkeypatch.setattr(multi.on_demand, "get_listings", multi._fake_get_listings(rows))
+    result = multi._run(area="Camden", areas=areas, current_message=message, no_commute=True, confirmed=True,
+                        max_budget=3000, bedrooms=1)
+    assert {row.get("area") for row in result["recommendations"]} == set(areas)
+    assert result["search_criteria"]["areas"] == areas

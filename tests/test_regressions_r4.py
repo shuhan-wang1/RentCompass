@@ -385,3 +385,31 @@ def test_r4_11_other_wording_is_untouched():
     from core.agent_loop import disclose_unapplied_budget_claim
     text = "Here are five flats in Camden. Tell me a budget to narrow them."
     assert disclose_unapplied_budget_claim(text, True, "en") == text
+
+
+# R4-03 ── 「用我记住的预算」 is not a save request; a bare fragment is never stored ───────
+@pytest.mark.parametrize("message", [
+    "帮我在Camden找一个一居室，用我记住的预算。", "用你记住的预算帮我搜", "帮我记住的预算是多少？",
+    "Find a 1-bed using the budget you remembered",
+])
+def test_r4_03_a_relative_clause_about_saved_memory_is_no_save_cue(message):
+    from core.memory_gate import explicit_remember_clause, user_authorizes_memory
+    assert not user_authorizes_memory(message)
+    assert explicit_remember_clause(message) == ""
+
+
+@pytest.mark.parametrize("message,fact", [
+    ("请记住：我的预算每月最多1600英镑。", "我的预算每月最多1600英镑"),
+    ("记住我有一只猫", "我有一只猫"),
+])
+def test_r4_03_a_real_zh_save_request_still_saves(message, fact):
+    from core.memory_gate import explicit_remember_clause
+    assert explicit_remember_clause(message) == fact
+
+
+def test_r4_03_a_bare_fragment_is_rejected_at_the_write_path():
+    from core.memory_gate import memory_write_rejection
+    assert memory_write_rejection("的预算") is not None
+    assert memory_write_rejection("了的预算") is not None
+    assert memory_write_rejection("素食") is None
+    assert memory_write_rejection("我的预算每月最多1600英镑") is None

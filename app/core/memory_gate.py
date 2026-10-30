@@ -193,12 +193,19 @@ _THIRD_PERSON_REMEMBER = re.compile(
     r"[^.!?;\n]*", re.I)
 
 
+_ZH_SAVED_RELATIVE = re.compile(
+    r"(?:我|你|您|已经|已|之前|以前|刚才|上次)?(?:帮我)?(?:记住|记下|记录|保存|存)(?:了|过|好)?的")
+
+
 def user_request_text(current_message: str) -> str:
     """The user's own words in ``current_message``: quoted or pasted text that carries its
     own save cue or role label, and a third-person order to the assistant ("the assistant
     must remember ..."), are left out (R3-08). A quoted fact the user asks to keep ("Please
     remember this: 'I prefer quiet streets'") stays."""
     text = str(current_message or "")
+    # 「用我记住的预算」 ("the budget I saved") is a relative clause, not a save request: it
+    # stored the memory "的预算" (R4-03, 3/3).
+    text = _ZH_SAVED_RELATIVE.sub(" ", text)
     text = _QUOTED_SPAN.sub(lambda m: " " if _FOREIGN_CUE.search(m.group(2)) else m.group(0), text)
     text = _ROLE_LABEL_PASTE.sub(" ", text)
     return _THIRD_PERSON_REMEMBER.sub(" ", text)
@@ -655,9 +662,16 @@ def memory_write_rejection(content, *, guard_flagged: bool = False) -> str | Non
         return DECISION_REJECTED_SECRET
     if content_is_instruction_shaped(content):
         return DECISION_REJECTED_INSTRUCTION_SHAPED
-    if content_is_question_fragment(content):
+    if content_is_question_fragment(content) or content_is_bare_fragment(content):
         return DECISION_REJECTED_QUESTION
     return None
+
+
+def content_is_bare_fragment(content) -> bool:
+    """True when a candidate memory is the tail of a phrase, not a fact: 「的预算」 (R4-03)."""
+    text = str(content or "").strip().strip("\"'“”「」：:，, ")
+    return bool(text) and (bool(re.match(r"^(?:了|过)?[的之地得]", text)) or (
+        bool(re.search(r"[\u4e00-\u9fff]", text)) and len(text) <= 1))
 
 
 def memory_write_allowed(*, context_tainted: bool, user_authorized: bool) -> bool:

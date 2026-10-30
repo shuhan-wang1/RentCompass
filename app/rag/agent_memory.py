@@ -1013,6 +1013,38 @@ _SELF_INTRODUCTION_PATTERN = (
     rf"|(?P<cue4>我是)(?P<name4>(?:欧阳|司马|上官|诸葛|[{_ZH_SURNAME}])[\u4e00-\u9fff]{{1,2}}?)"
     r"(?<![人生员师士领族者工家长女子客东友])"
     r"(?=\s*(?:$|[，,。.！!？?；;、]|想|要|打算|正在|在找|来))")
+_PLACE_SUFFIX = re.compile(r"\s+(?:town|road|central|circus|park|square|station|street)$")
+
+
+def _is_curated_place(name: str) -> bool:
+    """True for a place the search itself knows, with or without "Town" or "Road" after it."""
+    try:
+        from core.tools.search_properties import _CUE_ONLY_AREAS, _KNOWN_AREAS
+    except Exception:
+        return False
+    key = re.sub(r"[’']", "", " ".join(str(name or "").lower().split()))
+    return any(k in _KNOWN_AREAS or k in _CUE_ONLY_AREAS for k in (key, _PLACE_SUFFIX.sub("", key)))
+
+
+def _introduces_a_place(match: re.Match) -> bool:
+    """"Camden here" and "this is Hackney here" say where, not who (V-01). "I'm Victoria" and
+    "this is Chelsea speaking" name a person whatever the table holds."""
+    following = match.string[match.end():match.end() + 12].lstrip().lower()
+    name = match.group("name3") or (match.group("name2") if following.startswith("here") else None)
+    return bool(name) and _is_curated_place(name)
+
+
+class _IdentityStatement:
+    """A compiled pattern with its "<place> here" matches left out, for ``.search`` callers."""
+
+    def __init__(self, pattern: re.Pattern):
+        self.pattern = pattern
+
+    def finditer(self, text: str):
+        return (m for m in self.pattern.finditer(text) if not _introduces_a_place(m))
+
+    def search(self, text: str):
+        return next(self.finditer(text), None)
 
 
 # ── Sensitive personal data in AUTO-memory (2026-10-19 A-09) ─────────────────
@@ -1063,7 +1095,7 @@ _SENSITIVE_CLAUSE_PATTERNS = (
         r"(?:儿子|女儿|孩子)(?:叫|名叫|名字)|(?:小学|中学|幼儿园)(?:上学|读书|念书)|就读于", re.I)),
     # A self-identifying name (R1-08): "Hi. My name is Priya Raman, ..." stayed in the
     # episodic layer while the assistant told the user "I don't have your name".
-    ("identity", re.compile(
+    ("identity", _IdentityStatement(re.compile(
         r"\b(?:my|user'?s?|the user'?s|his|her|their)\s+(?:full\s+|first\s+|last\s+|sur|given\s+|family\s+)?"
         r"name\b|\b(?:i\s+am|i'm|user\s+is|they\s+are|he\s+is|she\s+is)\s+(?:called|named)\b|"
         r"\bcall\s+me\s+(?-i:[A-Z])|我叫|我的名字|名字(?:是|叫)|我姓|用户(?:名叫|叫|的名字)|"
@@ -1072,9 +1104,9 @@ _SENSITIVE_CLAUSE_PATTERNS = (
         r"\b(?:my|our)\s+(?:\w+\s+)?(?:landlord|landlady|agent|neighbou?r|boss|manager|employer|"
         r"colleague|flatmate|housemate|roommate|partner|wife|husband|friend|mother|mum|mom|father|"
         r"dad|brother|sister|son|daughter|guarantor)(?:['’]s\s+(?:full\s+|first\s+|last\s+)?name\b|"
-        r"\s+is\s+(?:called|named)\b)|房东(?:叫|名叫|的名字)|" + _SELF_INTRODUCTION_PATTERN, re.I)),
+        r"\s+is\s+(?:called|named)\b)|房东(?:叫|名叫|的名字)|" + _SELF_INTRODUCTION_PATTERN, re.I))),
 )
-_SELF_INTRODUCTION = re.compile(_SELF_INTRODUCTION_PATTERN, re.I)
+_SELF_INTRODUCTION = _IdentityStatement(re.compile(_SELF_INTRODUCTION_PATTERN, re.I))
 # Anchored and bounded: unanchored, a long word or digit run was re-scanned from every
 # position looking for an "@" (O(n²) in one C call, holding the GIL — 10 s for 60k chars).
 _EMAIL_RE = re.compile(r"(?<![\w.+-])[\w.+-]{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63}){1,8}")
@@ -1312,9 +1344,10 @@ def redact_sensitive(text: str) -> tuple[str, list[str]]:
             # The name goes, not its clause: "Hi I'm <Name> looking for a 1-bed" keeps the rest.
             if "identity" not in found:
                 found.append("identity")
-            value = _SELF_INTRODUCTION.sub(
-                lambda m: (m.group("cue") or m.group("cue2") or m.group("cue3")
-                           or m.group("cue4") or "") + _SENSITIVE_MARKER, value)
+            value = _SELF_INTRODUCTION.pattern.sub(
+                lambda m: m.group(0) if _introduces_a_place(m) else (
+                    (m.group("cue") or m.group("cue2") or m.group("cue3")
+                     or m.group("cue4") or "") + _SENSITIVE_MARKER), value)
         out: list[str] = []
         start = 0
         bounds = [(m.start(), m.end()) for m in _CLAUSE_BOUNDARY.finditer(value)]

@@ -1158,12 +1158,16 @@ MEMORY_ERASURE_NOTE = (
     "be recalled in any conversation. Do not say it is still stored or that you cannot delete it.")
 MEMORY_ERASED_ACK_EN = (
     "Done: I've deleted the {fields} you saved from my memory, so it won't come back in this or "
-    "any later conversation. Tell me a new {fields} whenever you want one applied.")
-MEMORY_ERASED_ACK_ZH = "已从我的记忆中删除你保存的{fields}，本次和以后的对话都不会再使用它。需要时告诉我新的{fields}即可。"
+    "any later conversation.")
+MEMORY_ERASED_ACK_ZH = "已从我的记忆中删除你保存的{fields}，本次和以后的对话都不会再使用它。"
+# Not on a turn that states the new value: "Forget my budget, I now have £2600."
+MEMORY_ERASED_ASK_EN = " Tell me a new {fields} whenever you want one applied."
+MEMORY_ERASED_ASK_ZH = "需要时告诉我新的{fields}即可。"
 MEMORY_ERASURE_INCOMPLETE_EN = (
     "I tried to delete the {fields} you saved, but I could not confirm that every saved copy is "
-    "gone. Please ask again, or use \"forget me\" to erase all of your saved data.")
-MEMORY_ERASURE_INCOMPLETE_ZH = "我尝试删除你保存的{fields}，但无法确认所有副本都已删除。请再试一次，或使用“删除我的所有数据”。"
+    "gone. Please ask again, or use \"Delete my data\" in your profile menu to erase all of "
+    "your saved data.")
+MEMORY_ERASURE_INCOMPLETE_ZH = "我尝试删除你保存的{fields}，但无法确认所有副本都已删除。请再试一次，或使用个人菜单中的“删除我的数据”清除你保存的全部数据。"
 MEMORY_ERASURE_KEPT_NOTE = (
     " Saved notes that also stated other facts were KEPT with only the {fields} removed; "
     "those other facts are still stored.")
@@ -1200,7 +1204,8 @@ def memory_erasure_removed_nothing(report) -> bool:
                 and not (report.get("deleted") or report.get("rewritten")))
 
 
-def memory_erasure_texts(report, reply_language: str = "en") -> tuple[str, str]:
+def memory_erasure_texts(report, reply_language: str = "en", *,
+                         states_new_value: bool = False) -> tuple[str, str]:
     """(model note, user acknowledgement) for this turn's erasure ``report`` (R2-03)."""
     fields = [f for f in (report or {}).get("fields") or () if f in _ERASURE_FIELD_NAMES]
     if not fields:
@@ -1219,6 +1224,8 @@ def memory_erasure_texts(report, reply_language: str = "en") -> tuple[str, str]:
             "Some saved copies may remain. ")
     else:
         ack = (MEMORY_ERASED_ACK_ZH if zh else MEMORY_ERASED_ACK_EN).format(fields=label)
+        if not states_new_value:
+            ack += (MEMORY_ERASED_ASK_ZH if zh else MEMORY_ERASED_ASK_EN).format(fields=label)
         if report.get("rewritten"):
             # A note that also stated other facts lost only the field (R4-01).
             note += MEMORY_ERASURE_KEPT_NOTE.format(fields=" and ".join(
@@ -1227,12 +1234,13 @@ def memory_erasure_texts(report, reply_language: str = "en") -> tuple[str, str]:
     return note, ack
 
 
-def acknowledge_memory_erasure(text: str, report, reply_language: str = "en") -> str:
+def acknowledge_memory_erasure(text: str, report, reply_language: str = "en", *,
+                               states_new_value: bool = False) -> str:
     """``text`` stating the erasure this turn performed: sentences that deny it ("I can't
     delete saved memories", "your budget is still stored") are dropped and the fixed
     acknowledgement leads the reply (R2-03)."""
     body = str(text or "")
-    _note, ack = memory_erasure_texts(report, reply_language)
+    _note, ack = memory_erasure_texts(report, reply_language, states_new_value=states_new_value)
     if not ack or ack in body:
         return body
     if report.get("complete") and not memory_erasure_removed_nothing(report):

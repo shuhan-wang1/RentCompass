@@ -979,6 +979,13 @@ def answer_with_clarification(text: str, question: str, *, alone: bool = False) 
     return f"{rest}\n\n{question}" if rest else question
 
 
+def _is_memory_request(message: str) -> bool:
+    """True for "Please remember that my budget is £1,400": the budget word is not a search."""
+    from core.memory_gate import user_authorizes_memory
+    return bool(user_authorizes_memory(message)) and not re.search(
+        r"\b(?:find|search|show|look(?:ing)?\s+for|listings?)\b|找|搜|房源", str(message or ""), re.I)
+
+
 def _asks_for_listings(message: str) -> bool:
     """True when the user's own message is about finding homes or changing search criteria."""
     return bool(re.search(
@@ -3178,6 +3185,8 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             lines.append("所以暂时没有可以展示的房源。")
         elif reason == "tool_call_error" and not searched:
             lines.append("这次的查询未能执行，所以还没能核实你问的内容。")
+        elif _is_memory_request(cm):
+            lines.append("这条内容本轮没有保存，也没有其他结果可以展示。")
         elif searched or _asks_for_listings(cm):
             lines.append("目前还没有可以直接展示的房源结果。")
         elif not has_results and not missing_lines:
@@ -3246,6 +3255,8 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             lines.append("So I have no listings to show you for this request yet.")
         elif reason == "tool_call_error" and not searched:
             lines.append("The lookup failed this turn, so I could not check what you asked.")
+        elif _is_memory_request(cm):
+            lines.append("That was not saved to memory this turn, and there is nothing else to show.")
         elif searched or _asks_for_listings(cm):
             # Listing results only on a turn about listings (R4-10): a gym or restaurant
             # question was told "I do not yet have listing results ready to show" (r07 B-F12).

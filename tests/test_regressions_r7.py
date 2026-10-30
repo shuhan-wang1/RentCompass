@@ -735,3 +735,103 @@ def test_v_23_the_remember_tool_says_no_gender_from_a_name():
 def test_v_24_listings_keep_the_card_order():
     from core import loop_prompts
     assert "never re-sort them in the text" in loop_prompts.behaviour_rules()
+
+
+# P3 ── B-F13 an erasure that states the new value asks for no new value
+def test_b_f13_the_ack_does_not_ask_for_what_the_message_gave():
+    from core.memory_gate import acknowledge_memory_erasure
+    report = {"fields": ("budget",), "complete": True, "deleted": 1, "rewritten": 0}
+    asks = acknowledge_memory_erasure("", report, "en")
+    gives = acknowledge_memory_erasure("", report, "en", states_new_value=True)
+    assert "Tell me a new budget" in asks and "I've deleted the budget" in gives
+    assert "Tell me a new budget" not in gives
+    assert "告诉我新的" not in acknowledge_memory_erasure("", report, "zh", states_new_value=True)
+
+
+# Small ── the incomplete-erasure text names the real menu entry
+def test_small_the_incomplete_erasure_names_the_page_label():
+    from core.memory_gate import MEMORY_ERASURE_INCOMPLETE_EN, MEMORY_ERASURE_INCOMPLETE_ZH
+    assert "Delete my data" in MEMORY_ERASURE_INCOMPLETE_EN and "forget me" not in MEMORY_ERASURE_INCOMPLETE_EN
+    assert "删除我的数据" in MEMORY_ERASURE_INCOMPLETE_ZH
+
+
+# P3 ── A-F8 a failed save does not talk about listings
+@pytest.mark.parametrize("message,listings", [
+    ("Please remember that I am vegan and my budget is £1,400.", False),
+    ("Please remember that I am vegan, and find me a flat", True),
+    ("Find me a flat under £1,400", True),
+])
+def test_a_f8_a_failed_save_says_so(message, listings):
+    from core.agent_loop import _artifact_grounded_fallback_answer
+    from tests.test_agent_contract_guards import _state
+    out = _artifact_grounded_fallback_answer(_state(message), reason="provider_error")
+    assert ("listing results" in out) is listings
+    assert ("not saved to memory" in out) is (not listings)
+
+
+# P3 ── B-F6 a pair beyond London gets no London-calibrated figure
+def test_b_f6_outside_coverage_gives_no_figure(monkeypatch):
+    from core import maps_service
+    points = {"Newcastle": {"lat": 54.97, "lng": -1.61}, "Leeds": {"lat": 53.80, "lng": -1.55}}
+    monkeypatch.setattr(maps_service, "_get_coordinates", lambda a: points[a])
+    monkeypatch.setattr(maps_service, "_tfl_journey", lambda *a: None)
+    monkeypatch.setattr(maps_service, "straight_line_travel_estimate",
+                        lambda *a, **k: {"minutes": 500, "distance_km": 130.0})
+    out = maps_service.calculate_travel_details("Newcastle", "Leeds", "transit")
+    assert out["estimated_duration_minutes"] is None and out["estimate_high_minutes"] is None
+    assert "outside" in out["basis_note"].lower() and out["duration_minutes"] is None
+
+
+def test_b_f6_a_short_pair_keeps_its_estimate(monkeypatch):
+    from core import maps_service
+    points = {"Watford": {"lat": 51.75, "lng": -0.39}, "Bank": {"lat": 51.51, "lng": -0.09}}
+    monkeypatch.setattr(maps_service, "_get_coordinates", lambda a: points[a])
+    monkeypatch.setattr(maps_service, "_tfl_journey", lambda *a: None)
+    monkeypatch.setattr(maps_service, "straight_line_travel_estimate",
+                        lambda *a, **k: {"minutes": 60, "distance_km": 34.0})
+    assert maps_service.calculate_travel_details("Watford", "Bank", "transit")["estimated_duration_minutes"]
+
+
+# P3 ── C-F03, C-F04, C-07 through the API
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    from uk_rent_agent.web.conversation_store import ConversationStore
+    appmod = importlib.import_module("app")
+    monkeypatch.setattr(appmod, "conversation_store", ConversationStore(str(tmp_path / "c.sqlite3")))
+    monkeypatch.setattr(appmod, "_runtime_config",
+                        replace(appmod._runtime_config, allow_legacy_client_user_id=True))
+    monkeypatch.setattr(appmod._api_rate_limiter, "allow", lambda *a, **k: (True, 0))
+    appmod.app.config.update(TESTING=True)
+    return appmod.app.test_client()
+
+
+@pytest.mark.parametrize("title", ["", "   ", "a" * 1001])
+def test_c_f03_a_blank_or_huge_title_is_refused_on_create(client, title):
+    response = client.post("/api/conversations", json={"user_id": "guest-" + uuid.uuid4().hex, "title": title})
+    assert response.status_code == 400
+
+
+def test_c_f03_no_title_and_a_normal_one_still_work(client):
+    user = "guest-" + uuid.uuid4().hex
+    assert client.post("/api/conversations", json={"user_id": user}).status_code == 201
+    assert client.post("/api/conversations", json={"user_id": user, "title": "New chat"}).status_code == 201
+
+
+def test_c_f04_security_headers(client):
+    headers = client.get("/api/conversations").headers
+    assert headers["X-Content-Type-Options"] == "nosniff" and headers["X-Frame-Options"] == "DENY"
+
+
+def test_c_07_a_busy_erasure_has_its_own_page_text_and_retry_after():
+    import pathlib
+    page = (pathlib.Path(__file__).parents[1] / "app" / "unified-ui.html").read_text(encoding="utf-8")
+    assert page.count("error_forget_busy:") == 2 and "t('error_forget_busy')" in page
+    appmod = importlib.import_module("app")
+
+    class Busy:
+        turn_id, retry_after = "background-job:1", 299
+    with appmod.app.test_request_context():
+        response = appmod._conversation_busy_response(Busy(), forgotten=False, status="busy")
+    assert response.status_code == 409 and response.headers["Retry-After"] == "3"

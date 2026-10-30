@@ -673,6 +673,21 @@ def _tfl_changes_count(journey: dict) -> int | None:
     return max(0, boardings - 1)
 
 
+_TFL_AREA = (51.25, 51.72, -0.56, 0.34)     # lat min/max, lon min/max: Greater London
+_BEYOND_TFL_KM = 40
+
+
+def _beyond_tfl_coverage(origin: dict, destination: dict, distance_km) -> bool:
+    """True when an end of a long pair lies outside Greater London."""
+    south, north, west, east = _TFL_AREA
+    try:
+        inside = all(south <= float(p['lat']) <= north and west <= float(p['lng']) <= east
+                     for p in (origin, destination))
+        return not inside and float(distance_km) > _BEYOND_TFL_KM
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
 def calculate_travel_details(origin_address: str, destination_address: str, mode: str = "transit",
                              *, origin_coordinates=None) -> dict | None:
     """Travel time + route, with the BASIS of the number attached to the number.
@@ -732,6 +747,14 @@ def calculate_travel_details(origin_address: str, destination_address: str, mode
     # producer knows the mode; passing it means the calibration can never be applied to a mode
     # it was not fitted on, whoever calls. withdraw_uncalibrated_mode stays as a second line of
     # defence for callers that pass their own payloads in.
+    if _beyond_tfl_coverage(o, d, est.get('distance_km')):
+        # Newcastle to Leeds came back as "385-754 minutes": a formula fitted on London
+        # journeys says nothing about a 150 km trip (B-F6).
+        out.update(describe_estimate(None, est.get('distance_km'), mode=mode))
+        out['route_summary'] = 'Outside TfL coverage: no journey time is available for this pair.'
+        out['basis_note'] = ("This pair is outside the area TfL covers, so no journey time could "
+                             "be established. Say so; suggest National Rail for rail journeys.")
+        return out
     out.update(describe_estimate(est['minutes'], est.get('distance_km'), mode=mode))
     return out
 

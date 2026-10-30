@@ -537,6 +537,8 @@ def _canary_headers(response):
     single after_request hook is cheaper and less error-prone than per-endpoint edits, and
     the values are process constants (no per-request work). X-Request-Id stays set by the
     turn endpoints themselves (it is per-request)."""
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"    # the map iframe is srcdoc, not a framed page
     response.headers["X-Agent-Arch"] = AGENT_ARCH
     response.headers["X-Agent-Version"] = APP_CANDIDATE_SHA
     response.headers["X-Agent-Specialists"] = "1" if MANAGER_V1_SPECIALISTS else "0"
@@ -1537,6 +1539,18 @@ def _conversation_busy_response(exc, **body):
     response.status_code = 409
     response.headers["Retry-After"] = _busy_retry_after(exc)
     return response
+
+
+_TITLE_REQUEST_MAX_CHARS = 1000
+
+
+def _validate_title(title: str) -> None:
+    """A title a person could have typed. The store keeps 200 characters of it; a blank one or a
+    100k one is refused on create as on rename, not quietly replaced or cut (C-F03)."""
+    if not title.strip():
+        raise ApiError(400, "title is required")
+    if len(title) > _TITLE_REQUEST_MAX_CHARS:
+        raise ApiError(400, f"title must be at most {_TITLE_REQUEST_MAX_CHARS} characters")
 
 
 def get_json_or_400() -> dict:
@@ -3819,7 +3833,10 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
                                              _memory_language)
     if _memory_erasure:
         from core.memory_gate import acknowledge_memory_erasure
-        response_text = acknowledge_memory_erasure(response_text, _memory_erasure, _memory_language)
+        from core.tools.search_properties import _extract_budget
+        response_text = acknowledge_memory_erasure(
+            response_text, _memory_erasure, _memory_language,
+            states_new_value=_extract_budget(user_message)[0] is not None)
     # Only the server says a memory was deleted; a request it cannot perform is said plainly (U-10a).
     from core.memory_gate import settle_memory_deletion_claims
     response_text = settle_memory_deletion_claims(response_text, user_message, _memory_erasure,
@@ -4589,6 +4606,8 @@ def create_conversation():
     if data.get('title') is not None and not isinstance(data.get('title'), str):
         # A list/number/object title reached `.strip()` in the store and 500'd (C-09).
         raise ApiError(400, "title must be a string")
+    if data.get('title') is not None:
+        _validate_title(data['title'])
     # Stamp architecture provenance at creation (this process's constants).
     conv = conversation_store.create_conversation(
         user_id, title=data.get('title'),
@@ -4602,8 +4621,9 @@ def rename_conversation(cid):
     data = get_json_or_400()
     user_id, _ = resolve_identity(data)
     title = data.get('title')
-    if not isinstance(title, str) or not title.strip():
+    if not isinstance(title, str):
         raise ApiError(400, "title is required")
+    _validate_title(title)
     conv = conversation_store.rename_conversation(user_id, cid, title.strip())
     if conv is None:
         raise ApiError(404, "conversation not found")

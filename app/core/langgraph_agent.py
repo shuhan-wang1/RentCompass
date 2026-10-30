@@ -1229,8 +1229,18 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
             result['areas'] = edited_areas
             changed = True
     else:
-        new_areas = _extract_areas(current_message)
-        new_area = new_areas[0] if new_areas else _extract_area(current_message)
+        from core.tools.search_properties import compares_areas_only, preferred_area_switch
+        if compares_areas_only(current_message):
+            # "Compare the cheapest from Bethnal Green with the cheapest in Angel you showed
+            # earlier." asks about places, it does not move the search (U-03).
+            new_areas, new_area = [], None
+        else:
+            new_areas = _extract_areas(current_message)
+            new_area = new_areas[0] if new_areas else _extract_area(current_message)
+            if not new_area:
+                # "No wait, Islington was better. Go back." switches back (U-02).
+                new_area = preferred_area_switch(current_message)
+                new_areas = [new_area] if new_area else []
     # A curated contextual workplace does not also become a home area.
     def _place_key(value):
         return re.sub(r'[^a-z0-9]+', ' ', str(value or '').lower()).strip()

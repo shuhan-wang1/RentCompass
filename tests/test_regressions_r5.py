@@ -151,3 +151,47 @@ def test_u_01_the_name_search_fallback_skips_hub_ids(monkeypatch):
                                  {"id": "940GZZLUBNK", "name": "Bank Underground Station"}]}
     monkeypatch.setattr(gti, "_tfl_get", fake_tfl)
     assert gti._resolve_station("Bankish")["token"] == "940GZZLUBNK"
+
+
+# U-02 ── "<Area> was better. Go back." switches back to that area ─────────────────
+@pytest.mark.parametrize("message,area", [
+    ("No wait, Islington was better. Go back.", "Islington"),
+    ("Islington is better", "Islington"),
+    ("Actually Angel looks much better.", "Angel"),
+    ("go back to Islington", "Islington"),
+    ("back to Islington", "Islington"),
+    ("还是Islington好", "Islington"),
+    ("回到Islington", "Islington"),
+])
+def test_u_02_an_area_preference_statement_switches_back(message, area):
+    acc = _state_node(_CAMDEN, message)
+    assert acc["area"] == area and acc["areas"] == [area]
+    assert acc["bedrooms"] == 1 and acc["max_budget"] == 2200
+
+
+@pytest.mark.parametrize("message", [
+    "Is Islington better?",
+    "Islington is better than Camden for nightlife",
+    "The second one is better",
+    "Islington was better for transport, but stay with Camden",
+])
+def test_u_02_a_question_or_a_comparison_fact_keeps_the_area(message):
+    assert _state_node(_CAMDEN, message)["area"] == "Camden"
+
+
+# U-03 ── a comparison of places or shown listings changes no criteria ─────────────
+@pytest.mark.parametrize("message", [
+    "Compare the cheapest listing from Bethnal Green with the cheapest in Angel you showed earlier.",
+    "compare the first result there with the first result in Hackney",
+    "Which is cheaper, Hackney or Islington?",
+    "Hackney vs Islington",
+    "比较一下Hackney和Islington的房子",
+])
+def test_u_03_a_comparison_keeps_the_criteria(message):
+    acc = _state_node(_CAMDEN, message)
+    assert acc["area"] == "Camden" and acc["areas"] == ["Camden"]
+    assert acc["bedrooms"] == 1 and acc["max_budget"] == 2200
+
+
+def test_u_03_a_search_request_with_a_comparison_still_switches():
+    assert _state_node(_CAMDEN, "Switch to Hackney and compare it with Camden")["area"] == "Hackney"

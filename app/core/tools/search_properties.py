@@ -1580,6 +1580,53 @@ def _area_switch_target(text: str) -> str | None:
     return None
 
 
+# "No wait, Islington was better. Go back." searched Camden again under a verified header
+# (U-02): a statement that an area was/is the better one is a switch back to it.
+_PREFERRED_AREA = re.compile(
+    r"([a-z][a-z’'\-\s]{1,30}?)\s+(?:was|is|’s|'s|seemed|seems|looked|looks|sounds|sounded)\s+"
+    r"(?:(?:much|way|a\s+lot|actually|definitely|really|clearly|the)\s+)*"
+    r"(?:better|nicer|best|preferable)\b(?!\s*(?:than|for|at|in|if|when|value|on|off|with)\b)", re.I)
+_PREFERRED_AREA_ZH = re.compile(r"(?:还是|觉得)\s*(.{1,20}?)\s*(?:更好|比较好|好一些|好点|好)")
+
+
+def preferred_area_switch(text: str) -> str | None:
+    """The area a "<Area> was better" / 还是<Area>好 statement switches back to, else None.
+
+    A question ("Is Islington better?") or a comparison with "than" names no switch."""
+    for clause in re.split(r"[.;!\n。；！]", str(text or "")[:2000]):
+        if not clause.strip() or "?" in clause or "？" in clause:
+            continue
+        if re.match(r"\s*(?:is|was|would|do|does|which|whether)\b", clause, re.I):
+            continue
+        match = _PREFERRED_AREA.search(clause) or _PREFERRED_AREA_ZH.search(clause)
+        if match:
+            area = _match_known_area(match.group(1))
+            if area:
+                return area
+    return None
+
+
+# "Compare the cheapest listing from Bethnal Green with the cheapest in Angel you showed
+# earlier." made Angel the search area (U-03). A comparison of places or shown listings
+# changes no criteria unless it also asks for a search.
+_COMPARISON_CUE = re.compile(
+    r"\b(?:compare|comparing|comparison|versus|vs\.?)\b"
+    r"|\bwhich\b[^.?!\n]{0,60}\b(?:cheaper|better|closer|safer|nicer|quieter|bigger|best|cheapest)\b"
+    r"[^.?!\n]{0,60}\bor\b"
+    r"|\bwhich\b[^.?!\n]{0,40}\bor\b[^.?!\n]{0,60}\b(?:cheaper|better|closer|safer|nicer|quieter)\b"
+    r"|比较|对比|哪个(?:更|比较)|哪里(?:更|比较)", re.I)
+_COMPARISON_SEARCH_ASK = re.compile(
+    r"\b(?:switch|move|change)\b[^.?!\n]{0,30}\b(?:to|search|area)\b"
+    r"|\b(?:find|search|show|look\s+for|get)\b[^.?!\n]{0,30}\b(?:flats?|homes?|houses?|properties|"
+    r"listings|places|studios|rooms)\b|找房|搜索|换到|改成", re.I)
+
+
+def compares_areas_only(text: str) -> bool:
+    """True when the message compares places or shown listings and asks for no search."""
+    source = str(text or "")[:2000]
+    return bool(_COMPARISON_CUE.search(source)) and not _COMPARISON_SEARCH_ASK.search(source)
+
+
 def _drop_city_qualifier(areas: list[str], phrase: str) -> list[str]:
     """"Hackney, London" is ONE place: a London area qualified by its city, not two search
     areas. Restoring a saved default "1-bed in Hackney, London" searched all of London and

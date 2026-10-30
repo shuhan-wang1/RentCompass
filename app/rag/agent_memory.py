@@ -441,6 +441,62 @@ _CRITERIA_FACT = re.compile(
     r"commute)\b|预算|租金|找|想住|区域|通勤|卧室|开间", re.I)
 
 
+# What a withdrawn requirement looks like in a stored sentence, by the labels of
+# core.langgraph_agent.requirements_withdrawn (W-08).
+_REQUIREMENT_TOPICS = {
+    "balcony": re.compile(r"\b(?:balcon(?:y|ies)|terraces?)\b|阳台|露台", re.I),
+    "garden": re.compile(r"\b(?:gardens?|outdoor\s+space)\b|花园|院子", re.I),
+    "parking": re.compile(r"\b(?:parking|car\s+park)\b|停车|车位", re.I),
+    "gym": re.compile(r"\b(?:gym|fitness)\b|健身房", re.I),
+    "pool": re.compile(r"\b(?:swimming\s+)?pool\b|泳池", re.I),
+    "laundry": re.compile(r"\blaundry\b|洗衣房", re.I),
+    "concierge": re.compile(r"\bconcierge\b|前台|门卫", re.I),
+    "washing machine": re.compile(r"\bwasher[- ]dryer\b|\bwashing[- ]machine\b|洗衣机", re.I),
+    "dishwasher": re.compile(r"\bdish\s?washer\b|洗碗机", re.I),
+    "park": re.compile(r"\bparks?\b|\bgreen\s+spaces?\b|公园|绿地", re.I),
+    "pets": re.compile(r"\bpets?\b|\bpet[- ]friendly\b|\bcats?\b|\bdogs?\b|宠物|猫|狗", re.I),
+    "furnished": re.compile(r"\bfurnish\w*|\bfurniture\b|家具|家私", re.I),
+    "lift": re.compile(r"\b(?:lifts?|elevators?)\b|电梯", re.I),
+    "step-free": re.compile(r"\bstep[- ]free\b|\blevel\s+access\b|无台阶", re.I),
+    "wheelchair-accessible": re.compile(r"\bwheelchair\b|轮椅", re.I),
+}
+_REQUIREMENT_VERB = re.compile(
+    r"\b(?:wants?|wanted|needs?|needed|requires?|required|requirements?|must|looking\s+for|seek\w*|"
+    r"prefers?|preferences?|would\s+like|wish(?:es)?|has\s+to\s+have|should\s+have|"
+    r"allow\w*|accept\w*|friendly)\b|要|需要|必须|希望|想要|偏好|喜欢", re.I)
+_ROW_CLAUSES = re.compile(r"(?<=[.;。；!！])\s*")
+_REQUIREMENT_AFTER = (r"\s*,?\s*(?:\b(?:and|with|plus)\s+|和|与)(?:(?:a|an|the|some|access\s+to)\s+)?"
+                      r"(?:[\w-]+\s+)?{word}(?:\s+(?:access|allowed|included))?")
+_REQUIREMENT_BEFORE = r"(?:(?:a|an|the|some)\s+)?{word}\s*(?:,\s*(?:and\s+)?|\band\s+|和|与)\s*"
+
+
+def _states_requirement(text: str, topic: re.Pattern) -> bool:
+    """True when one clause of ``text`` states ``topic`` as a requirement."""
+    return any(topic.search(clause) and _REQUIREMENT_VERB.search(clause)
+               for clause in _ROW_CLAUSES.split(str(text or "")))
+
+
+def _without_requirement(text: str, topics: list) -> str:
+    """``text`` with only its other facts, or '' when nothing else is left in it."""
+    clauses = [clause for clause in _ROW_CLAUSES.split(str(text or "")) if clause.strip()]
+    kept = [clause for clause in clauses if not any(_states_requirement(clause, t) for t in topics)]
+    if kept:
+        return " ".join(kept).strip()
+    trimmed = str(text or "").strip()
+    for topic in topics:
+        found = topic.search(trimmed)
+        word = re.escape(found.group()) if found else None
+        for form in (_REQUIREMENT_AFTER, _REQUIREMENT_BEFORE) if word else ():
+            match = re.search(form.format(word=word), trimmed, re.I)
+            if match:
+                trimmed = trimmed[:match.start()] + trimmed[match.end():]
+                break
+    trimmed = trimmed.strip()
+    if trimmed == str(text or "").strip() or any(_states_requirement(trimmed, t) for t in topics):
+        return ""
+    return trimmed
+
+
 def _criteria_row(text: str) -> bool:
     value = str(text or "")
     return bool(_CRITERIA_FACT.search(value)) and not _THIRD_PARTY.search(value)
@@ -1708,6 +1764,8 @@ class AgentMemory:
         # user_id -> {field: epoch seconds of the last erasure of that field} (R4-01).
         self._erasures = {}
         self._erasure_lock = threading.Lock()
+        # user_id -> turns an edit took out: their late jobs keep no facts (W-08).
+        self._retired_turns = {}
 
     def erased_fields_since(self, user_id, started_at) -> tuple:
         """Fields erased for ``user_id`` at or after ``started_at`` (ISO or epoch seconds)."""
@@ -2084,7 +2142,7 @@ class AgentMemory:
                     # into an UPDATE of it is still added beside it, verbatim (R4-02).
                     if ev == "UPDATE" and text in facts:
                         self.add(text, "semantic", session_id, user_id, importance=7,
-                                 extra_meta={"source": SOURCE_AUTO})
+                                 extra_meta=self._auto_row_meta())
                     continue
                 loosened = None
                 if ev in ("UPDATE", "DELETE") and oid in texts:
@@ -2099,11 +2157,11 @@ class AgentMemory:
                     for fact in facts:
                         if loosened in _row_bounds(fact):
                             self.add(fact, "semantic", session_id, user_id, importance=7,
-                                     extra_meta={"source": SOURCE_AUTO})
+                                     extra_meta=self._auto_row_meta())
                     continue
                 if ev == "ADD" and text:
                     self.add(text, "semantic", session_id, user_id, importance=7,
-                             extra_meta={"source": SOURCE_AUTO})
+                             extra_meta=self._auto_row_meta())
                 elif ev == "UPDATE" and oid and text:
                     update_failed = not self._update_semantic(oid, text, turn_ref)
                     if update_failed:
@@ -2111,7 +2169,7 @@ class AgentMemory:
                         # releasing the non-reentrant lock above, otherwise an UPDATE
                         # failure deadlocks the durable outbox worker forever.
                         self.add(text, "semantic", session_id, user_id, importance=7,
-                                 extra_meta={"source": SOURCE_AUTO})
+                                 extra_meta=self._auto_row_meta())
                 elif ev == "DELETE" and oid:
                     with self._lock:
                         try:
@@ -2120,6 +2178,14 @@ class AgentMemory:
                             pass
         except Exception as e:
             print(f"[memory] consolidate error_type={type(e).__name__}")
+
+    def _auto_row_meta(self) -> dict:
+        """Provenance of an auto-extracted row: where it came from, so a withdrawal or an edit
+        can take it back (W-08). The keys are not the episodic ``conversation_id`` and
+        ``turn_id``, which scope a row to a branch: semantic rows stay user-global."""
+        return {"source": SOURCE_AUTO,
+                "origin_conversation_id": getattr(self._turn_local, "conversation_id", None),
+                "origin_turn_id": getattr(self._turn_local, "turn_id", None)}
 
     def _update_semantic(self, oid, text, turn_ref=None) -> bool:
         """Rewrite one semantic row in place, recording WHEN and by which turn.
@@ -2181,10 +2247,86 @@ class AgentMemory:
                 rewritten += 1
         return rewritten
 
+    def retire_withdrawn_requirements(self, user_id, labels) -> int:
+        """Remove what the extractor kept of requirements the user withdrew (W-08).
+
+        "The user wants a balcony" outlived "Remove the balcony requirement", and the next recall
+        listed it. Only an auto-extracted row or a reflection that states the requirement goes:
+        never an explicit "please remember" row, a row of unknown origin, or a fact about another
+        person. "The user has a cat" states no requirement and stays. A row with another fact
+        beside the requirement loses that part only."""
+        uid = _valid_user_id(user_id)
+        patterns = [_REQUIREMENT_TOPICS[label] for label in labels or () if label in _REQUIREMENT_TOPICS]
+        if uid is None or not patterns:
+            return 0
+        retired = 0
+        for mtype in ("semantic", "reflection"):
+            try:
+                rows = self.col.get(where={"$and": [{"user_id": uid}, {"mtype": mtype}]})
+            except Exception:
+                continue
+            metas = rows.get("metadatas") or []
+            for index, (oid, doc) in enumerate(zip(rows.get("ids") or [], rows.get("documents") or [])):
+                meta = (metas[index] if index < len(metas) else None) or {}
+                if mtype == "semantic" and meta.get("source") != SOURCE_AUTO:
+                    continue
+                if _THIRD_PARTY.search(doc) or not any(_states_requirement(doc, p) for p in patterns):
+                    continue
+                kept = _without_requirement(doc, patterns)
+                if kept and mtype == "semantic" and self._update_semantic(oid, kept):
+                    retired += 1
+                    continue
+                with self._lock:
+                    try:
+                        self.col.delete(ids=[oid])
+                        retired += 1
+                    except Exception:
+                        pass
+        if retired:
+            print(f"[memory] retired_withdrawn_requirements rows={retired}")
+        return retired
+
+    def retire_turn_rows(self, user_id, conversation_id, turn_ids) -> int:
+        """Remove the auto-extracted rows that came from turns an edit took out (W-08). A row with
+        no provenance stays, and an explicit "please remember" row is never touched. A job of
+        such a turn that runs later keeps no facts either."""
+        uid = _valid_user_id(user_id)
+        turns = {str(turn) for turn in turn_ids or () if turn}
+        if uid is None or not conversation_id or not turns:
+            return 0
+        with self._erasure_lock:
+            self._retired_turns.setdefault(uid, set()).update(turns)
+        try:
+            rows = self.col.get(where={"$and": [{"user_id": uid}, {"mtype": "semantic"}]})
+        except Exception:
+            return 0
+        doomed = []
+        metas = rows.get("metadatas") or []
+        for index, oid in enumerate(rows.get("ids") or []):
+            meta = (metas[index] if index < len(metas) else None) or {}
+            if meta.get("source") != SOURCE_AUTO:
+                continue
+            if meta.get("origin_conversation_id") == str(conversation_id) and (
+                    meta.get("origin_turn_id") in turns or meta.get("updated_turn_id") in turns):
+                doomed.append(oid)
+        if doomed:
+            with self._lock:
+                try:
+                    self.col.delete(ids=doomed)
+                except Exception:
+                    return 0
+            print(f"[memory] retired_turn_rows rows={len(doomed)}")
+        return len(doomed)
+
+    def _turn_was_retired(self, user_id, turn_id) -> bool:
+        with self._erasure_lock:
+            return bool(turn_id) and str(turn_id) in (self._retired_turns.get(user_id) or ())
+
     def remember_turn(self, user_msg, assistant_msg, session_id="default",
                       user_id=None, tool_used=None, idempotency_key=None,
                       conversation_id=None, turn_id=None, turn_started_at=None,
-                      context_tainted=False, criteria_changes=None, memory_withheld=None):
+                      context_tainted=False, criteria_changes=None, memory_withheld=None,
+                      withdrawn_requirements=None):
         """After-turn entry point (run this in the background — it makes LLM calls).
 
         ``memory_withheld`` is the turn's conversation-memory decision, taken when the turn
@@ -2278,11 +2420,14 @@ class AgentMemory:
             # Only a change the user's message states as their own criterion supersedes what
             # memory holds (stress A-08: "my friend lives in Peckham" is not a new area).
             changes = user_stated_changes(_sanitize_changes(criteria_changes), user_msg)
+            self.retire_withdrawn_requirements(user_id, withdrawn_requirements)
             self._turn_local.turn_id = turn_id
+            self._turn_local.conversation_id = conversation_id
             try:
                 if changes and not opted_out:
                     self._supersede_slot_facts(changes, user_id, turn_id)
                 if (not opted_out and not instruction_withheld
+                        and not self._turn_was_retired(user_id, turn_id)
                         and not _is_trivial_for_extraction(user_msg)):
                     # Semantic facts come from the USER message only, on every turn (R2-06):
                     # the assistant's text — a recall answer, a reflection it quoted, a
@@ -2296,6 +2441,7 @@ class AgentMemory:
                                           user_msg=user_msg)
             finally:
                 self._turn_local.turn_id = None
+                self._turn_local.conversation_id = None
             if not opted_out:
                 # A withheld turn triggers no reflection: nothing new is inferred about a user
                 # while they asked not to be remembered (r6-M1).

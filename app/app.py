@@ -3008,6 +3008,16 @@ def _turn_memory_contract(final_state: dict) -> dict:
     return final_state.get('memory_write_contract') or {}
 
 
+def _memory_withdrawn_requirements(before, after, user_message) -> list:
+    """The requirements this turn withdrew, for the memory job (W-08). Never raises."""
+    try:
+        from core.langgraph_agent import requirements_withdrawn
+        return requirements_withdrawn(before, after, user_message)
+    except Exception as exc:
+        print(f"[memory] withdrawn requirements skipped; error_type={type(exc).__name__}")
+        return []
+
+
 def _memory_criteria_changes(before, after) -> dict:
     """The turn's criteria slot changes for the memory job; never raises (R3-02)."""
     try:
@@ -3119,6 +3129,8 @@ def _apply_background_job(job: dict, worker_id: str) -> None:
                 context_tainted=bool(payload.get("context_tainted", False)),
                 **({"criteria_changes": payload["criteria_changes"]}
                    if payload.get("criteria_changes") else {}),
+                **({"withdrawn_requirements": payload["withdrawn_requirements"]}
+                   if payload.get("withdrawn_requirements") else {}),
                 **({"memory_withheld": bool(payload["memory_withheld"])}
                    if "memory_withheld" in payload else {}),
             )
@@ -3957,6 +3969,8 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             # assistant prose): "Make that Poplar" replaces the stored area (R3-02).
             "criteria_changes": _memory_criteria_changes(
                 _criteria_before_turn, final_state.get('accumulated_search_criteria')),
+            "withdrawn_requirements": _memory_withdrawn_requirements(
+                _criteria_before_turn, final_state.get('accumulated_search_criteria'), user_message),
             # Taken when the turn started (r6-M1): the job may run after a later turn lifted
             # the pause, so it must not re-read the conversation's flag.
             "memory_withheld": bool(_memory_turn.get('withhold')),
@@ -4781,7 +4795,24 @@ def edit_turn(cid):
         raise  # non-fork error → global handler (500)
 
     idempotent = bool(child.pop("idempotent", False))
+    if not idempotent:
+        _retire_memory_of_edited_turns(user_id, cid, turn_id.strip())
     return jsonify({"conversation": child, "idempotent": idempotent}), (200 if idempotent else 201)
+
+
+def _retire_memory_of_edited_turns(user_id, cid, turn_id) -> None:
+    """What the extractor kept of the edited turn and the ones after it goes with them: "must be
+    furnished" outlived its own edit (W-08). The source conversation is untouched. Never raises."""
+    try:
+        turns = conversation_store.list_turns(user_id, cid)
+        started = next((t.get("started_at") for t in turns if t.get("id") == turn_id), None)
+        if started is None:
+            return
+        removed = [t.get("id") for t in turns if str(t.get("started_at") or "") >= str(started)]
+        from rag.agent_memory import get_agent_memory
+        get_agent_memory().retire_turn_rows(user_id, cid, removed)
+    except Exception as exc:
+        print(f"[memory] edited turn retirement skipped; error_type={type(exc).__name__}")
 
 
 @app.route('/api/conversations/<cid>/version_map', methods=['GET'])

@@ -972,7 +972,9 @@ def _soft_amenity_updates(message: str, soft_preferences: list) -> list | None:
     withdrawn = {name for name in names if _zh_wish_withdrawn(name, message)}
     for name in names:
         for match in re.finditer(r"(?<![A-Za-z])" + re.escape(name) + r"(?![A-Za-z])", message or '', re.I):
-            if _asks_about_a_listing(message, match.start(), match.end()):
+            from core.constraint_updates import clause_at, is_hypothetical
+            if (_asks_about_a_listing(message, match.start(), match.end())
+                    or is_hypothetical(clause_at(message, match.start(), match.end()))):
                 continue        # "Did I remove the balcony requirement?" removes nothing
             if (_feature_retracted_here(message, match.start(), match.end())
                     or _AMENITY_NEGATED_BEFORE_RE.search(message[max(0, match.start() - 50):match.start()])):
@@ -989,6 +991,34 @@ def _soft_amenity_updates(message: str, soft_preferences: list) -> list | None:
         if name in names and name not in withdrawn and value not in updated:
             updated.append(value)
     return updated if updated != current else None
+
+
+# Every requirement a turn can withdraw, as the labels the memory layer knows them by (W-08).
+_WITHDRAWABLE_FEATURES = {"pets allowed": "pets", "cats allowed": "pets", "furnished": "furnished",
+                          "lift": "lift", "step-free": "step-free",
+                          "wheelchair-accessible": "wheelchair-accessible"}
+_WITHDRAWABLE_AMENITIES = ("balcony", "garden", "parking", "gym", "pool", "laundry", "concierge",
+                           "washing machine", "dishwasher", "park")
+
+
+def requirements_withdrawn(before: dict, after: dict, message: str) -> list:
+    """The labels of the requirements this turn withdrew: what left the criteria, and what the
+    message withdraws whether or not this conversation held it ("I removed the balcony
+    requirement earlier" in a new conversation). A reset of the search withdraws nothing from
+    long-term memory (U-06)."""
+    from core.constraint_updates import resets_all_criteria
+    if resets_all_criteria(message):
+        return []
+
+    def _labels(criteria):
+        values = [str(v) for key in ("property_features", "soft_preferences")
+                  for v in (criteria or {}).get(key) or []]
+        return {_WITHDRAWABLE_FEATURES.get(v, _amenity_name(v)) for v in values}
+    labels = _labels(before) - _labels(after)
+    probe = {"property_features": list(_WITHDRAWABLE_FEATURES),
+             "soft_preferences": [f"Must have {name}" for name in _WITHDRAWABLE_AMENITIES]}
+    labels |= _labels(probe) - _labels(_apply_explicit_criteria_updates(probe, message))
+    return sorted(labels & (set(_WITHDRAWABLE_FEATURES.values()) | set(_WITHDRAWABLE_AMENITIES)))
 
 
 _ANYWHERE = re.compile(

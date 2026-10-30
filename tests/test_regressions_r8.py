@@ -527,3 +527,159 @@ def test_w_07_the_weather_of_a_place_in_question_waits_for_the_answer():
     assert _read_waits_for_answer("get_weather", {"location": "Springfield"}, "Which Springfield do you mean?")
     assert not _read_waits_for_answer("get_weather", {"location": "Leeds"}, "Which room type would you like?")
     assert not _read_waits_for_answer("get_transport_info", {"location": "Leeds"}, "Leeds or York?")
+
+
+# W-08 ── what the extractor kept of a withdrawn or edited-away requirement goes
+@pytest.fixture
+def memory(tmp_path, monkeypatch):
+    from rag import agent_memory as am_mod
+    monkeypatch.setattr(am_mod, "call_ollama", lambda *a, **k: '{"facts": []}')
+    return am_mod.AgentMemory(db_path=str(tmp_path / "mem"))
+
+
+def _auto_row(memory, text, *, conversation="c1", turn="t1"):
+    memory._turn_local.conversation_id, memory._turn_local.turn_id = conversation, turn
+    try:
+        return memory.add(text, "semantic", "u1", "u1", importance=7, extra_meta=memory._auto_row_meta())
+    finally:
+        memory._turn_local.conversation_id = memory._turn_local.turn_id = None
+
+
+def _saved_texts(memory):
+    return sorted(record["text"] for record in memory.semantic_records(user_id="u1"))
+
+
+def test_w_08_a_new_auto_row_carries_where_it_came_from(memory):
+    row = _auto_row(memory, "The user wants a balcony", conversation="c9", turn="t9")
+    meta = memory.col.get(ids=[row])["metadatas"][0]
+    assert meta["source"] == "auto_extracted"
+    assert meta["origin_conversation_id"] == "c9" and meta["origin_turn_id"] == "t9"
+    assert "conversation_id" not in meta and "turn_id" not in meta      # semantic rows stay global
+
+
+def test_w_08_the_consolidator_records_the_turn(memory, monkeypatch):
+    from rag import agent_memory as am_mod
+    monkeypatch.setattr(am_mod, "call_ollama", lambda *a, **k: (
+        '{"ops": [{"event": "ADD", "id": null, "text": "The user wants a balcony"}]}'))
+    memory._turn_local.conversation_id, memory._turn_local.turn_id = "c2", "t2"
+    memory._consolidate(["The user wants a balcony"], "u1", "u1")
+    memory._turn_local.conversation_id = memory._turn_local.turn_id = None
+    (meta,) = memory.col.get(where={"mtype": "semantic"})["metadatas"]
+    assert meta["origin_conversation_id"] == "c2" and meta["origin_turn_id"] == "t2"
+
+
+def test_w_08_a_withdrawal_retires_the_row_and_nothing_else(memory):
+    _auto_row(memory, "The user wants a balcony")
+    _auto_row(memory, "The user wants a garden")
+    memory.add("The user wants a balcony (saved)", "semantic", "u1", "u1", importance=7,
+               extra_meta={"source": "explicit_remember"})
+    memory.add("The user's partner wants a balcony", "semantic", "u1", "u1", importance=7,
+               extra_meta={"source": "auto_extracted"})
+    assert memory.retire_withdrawn_requirements("u1", ["balcony"]) == 1
+    assert _saved_texts(memory) == ["The user wants a balcony (saved)", "The user wants a garden",
+                                    "The user's partner wants a balcony"]
+
+
+def test_w_08_a_row_with_no_source_stays(memory):
+    memory.add("The user wants a balcony", "semantic", "u1", "u1", importance=7)
+    assert memory.retire_withdrawn_requirements("u1", ["balcony"]) == 0
+    assert _saved_texts(memory) == ["The user wants a balcony"]
+
+
+def test_w_08_a_row_without_provenance_is_retired_by_topic(memory):
+    memory.add("User needs a balcony", "semantic", "u1", "u1", importance=7,
+               extra_meta={"source": "auto_extracted"})
+    assert memory.retire_withdrawn_requirements("u1", ["balcony"]) == 1
+
+
+def test_w_08_a_fact_is_not_a_requirement(memory):
+    _auto_row(memory, "The user has a cat")
+    assert memory.retire_withdrawn_requirements("u1", ["pets"]) == 0
+    assert _saved_texts(memory) == ["The user has a cat"]
+
+
+@pytest.mark.parametrize("row,left", [
+    ("The user wants a 1-bed flat with a balcony", "The user wants a 1-bed flat"),
+    ("The user wants a balcony and a garden", "The user wants a garden"),
+    ("The user wants a balcony. The user works at Bank.", "The user works at Bank."),
+])
+def test_w_08_the_other_facts_of_a_row_stay(memory, row, left):
+    _auto_row(memory, row)
+    assert memory.retire_withdrawn_requirements("u1", ["balcony"]) == 1
+    assert _saved_texts(memory) == [left]
+
+
+def test_w_08_a_reflection_that_restates_it_goes_too(memory):
+    memory.add("The user seems to need a pet-friendly home", "reflection", "u1", "u1", importance=7)
+    memory.add("The user cares about safety", "reflection", "u1", "u1", importance=7)
+    assert memory.retire_withdrawn_requirements("u1", ["pets"]) == 1
+    assert memory.col.get(where={"mtype": "reflection"})["documents"] == ["The user cares about safety"]
+
+
+def test_w_08_remember_turn_retires_before_it_extracts(memory):
+    _auto_row(memory, "The user wants a balcony")
+    assert memory.remember_turn("Remove the balcony requirement", "Done.", session_id="u1", user_id="u1",
+                                withdrawn_requirements=["balcony"]) is True
+    assert _saved_texts(memory) == []
+
+
+def test_w_08_an_edit_retires_the_rows_of_the_removed_turns(memory):
+    _auto_row(memory, "The user must have a furnished flat", conversation="c1", turn="t2")
+    _auto_row(memory, "The user wants a studio", conversation="c1", turn="t1")
+    _auto_row(memory, "The user works at Bank", conversation="c2", turn="t2")
+    memory.add("The user must have a furnished flat (saved)", "semantic", "u1", "u1", importance=7,
+               extra_meta={"source": "explicit_remember", "origin_conversation_id": "c1", "origin_turn_id": "t2"})
+    memory.add("The user likes quiet streets", "semantic", "u1", "u1", importance=7,
+               extra_meta={"source": "auto_extracted"})
+    assert memory.retire_turn_rows("u1", "c1", ["t2"]) == 1
+    assert _saved_texts(memory) == ["The user likes quiet streets", "The user must have a furnished flat (saved)",
+                                    "The user wants a studio", "The user works at Bank"]
+
+
+def test_w_08_a_row_rewritten_by_a_removed_turn_goes(memory):
+    row = _auto_row(memory, "The user wants a studio", conversation="c1", turn="t1")
+    memory._update_semantic(row, "The user wants a 2-bed", "t2")
+    assert memory.retire_turn_rows("u1", "c1", ["t2"]) == 1
+
+
+def test_w_08_a_late_job_of_a_removed_turn_keeps_no_facts(memory, monkeypatch):
+    from rag import agent_memory as am_mod
+    monkeypatch.setattr(am_mod, "call_ollama", lambda *a, **k: (_ for _ in ()).throw(AssertionError("extracted")))
+    memory.retire_turn_rows("u1", "c1", ["t3"])
+    assert memory.remember_turn("I need a furnished flat with a garden", "Noted.", session_id="u1", user_id="u1",
+                                conversation_id="c1", turn_id="t3", memory_withheld=False) is True
+
+
+@pytest.mark.parametrize("before,message,labels", [
+    ({"soft_preferences": ["Must have balcony"]}, "Remove the balcony requirement", ["balcony"]),
+    ({}, "I removed the balcony requirement earlier.", ["balcony"]),
+    ({"property_features": ["pets allowed"]}, "算了，不要宠物要求了", ["pets"]),
+    ({"property_features": ["furnished", "lift"]}, "I no longer need a lift", ["lift"]),
+    ({"soft_preferences": ["Must have balcony"]}, "Do I need a balcony?", []),
+    ({"soft_preferences": ["Would like balcony"]}, "What if I dropped the balcony?", []),
+    ({"soft_preferences": ["Must have balcony"]}, "Reset all my criteria and start from scratch", []),
+    ({"soft_preferences": ["Would like balcony"]}, "Actually I need a balcony", []),
+])
+def test_w_08_the_labels_a_turn_withdraws(before, message, labels):
+    from core.langgraph_agent import requirements_withdrawn
+    assert requirements_withdrawn(before, _state_node(before, message), message) == labels
+
+
+def test_w_08_an_edit_takes_the_edited_turn_and_those_after_it(monkeypatch):
+    import importlib
+
+    from rag import agent_memory as am_mod
+    appmod = importlib.import_module("app")
+    calls = []
+
+    class _Memory:
+        def retire_turn_rows(self, user_id, cid, turns):
+            calls.append((user_id, cid, turns))
+    turns = [{"id": "t1", "started_at": "2026-10-30T10:00:00"}, {"id": "t2", "started_at": "2026-10-30T10:01:00"},
+             {"id": "t3", "started_at": "2026-10-30T10:02:00"}]
+    monkeypatch.setattr(appmod.conversation_store, "list_turns", lambda user, cid: turns)
+    monkeypatch.setattr(am_mod, "get_agent_memory", lambda: _Memory())
+    appmod._retire_memory_of_edited_turns("u1", "c1", "t2")
+    assert calls == [("u1", "c1", ["t2", "t3"])]
+    appmod._retire_memory_of_edited_turns("u1", "c1", "gone")
+    assert len(calls) == 1

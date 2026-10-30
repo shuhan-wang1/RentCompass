@@ -225,7 +225,8 @@ def detect_relative_budget_delta(text: str) -> float | None:
     new absolute ceiling ("raise the budget to £2400"), which the caller must keep treating
     as a ceiling.
     """
-    message = str(text or "")
+    from core.constraint_updates import zh_money_digits
+    message = zh_money_digits(text)      # 「预算提高两百」 is a delta, not a £200 ceiling (W-06)
     if not message.strip():
         return None
     if _ABSOLUTE_TARGET.search(message):

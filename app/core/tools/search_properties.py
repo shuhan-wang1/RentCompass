@@ -35,6 +35,7 @@ from uk_rent_agent.domain import constants as C
 from core.tenancy_reference import monthly_from_weekly
 from core.source_status import source_failure_summary, FAILED_SOURCE_STATES
 from core.constraint_updates import (
+    zh_money_digits,
     scoped_update_text, mention_is_requirement, is_hypothetical, clause_at, date_is_cleared,
     is_criteria_consultation,
 )
@@ -465,12 +466,14 @@ def _amount_role(text: str, lo: int, hi: int) -> str:
     "total cap ... and rent ceiling" does not inherit the earlier total role.
     """
     punctuation = r'[。!?;；\n，,]|(?<!\d)\.(?!\d)'
-    before = re.split(punctuation, text[:lo])[-1][-110:]
+    # Runs once per amount, so the whole prefix made a long unpunctuated paste quadratic. Only the
+    # last 110 characters of the clause are read, so a bounded window gives the same result.
+    before = re.split(punctuation, text[max(0, lo - 400):lo])[-1][-110:]
     before = re.split(r'(?:£\s*)?(?<![\d.])\d[\d,]*(?:\.\d+)?', before)[-1]
     before = re.split(r'\b(?:separate from|apart from|as distinct from|versus|rather than)\b', before, flags=re.I)[-1]
     if re.search(r'(?:\b(?:and|but|while|whereas)\b|和|以及|而)\s*£?\s*$', before, re.I):
         before = ''  # Amount-first phrase after an explicit quantity coordinator.
-    tail = re.split(punctuation, text[hi:])[0]
+    tail = re.split(punctuation, text[hi:hi + 400])[0]
     after = re.split(r'£|\b(?:while|whereas)\b', tail, flags=re.I)[0][:110]
     if '£' in tail:
         # The last coordinator before the next amount starts that quantity's
@@ -665,7 +668,50 @@ def _range_ceiling(match) -> str:
     low, high = int(match.group(1)), int(match.group(3))
     if high <= low or (' and' in match.group(0) and 'between' not in match.group(0)):
         return match.group(0)
-    return f"£{high}" if ('£' in match.group(0)) else str(high)
+    # "between 1800 and 2500" has no other money word, so it gave no budget at all (W-06).
+    money = '£' in match.group(0) or ('between' in match.group(0) and not (
+        1900 <= low <= high <= 2100 or _MEASURE_AFTER_FIGURE.match(match.string, match.end())))
+    return f"£{high}" if money else str(high)
+
+
+# "at least £1,800" stored a floor as the ceiling, so nothing above it was ever searched (W-06). No
+# slot holds a floor: the figure stays out of the ceiling and the state node keeps it as a note.
+_BUDGET_FLOOR = re.compile(
+    r"\b(?:at\s+least|no\s+less\s+than|not\s+less\s+than|minimum(?:\s+of)?|min\.?)"
+    r"(?:\s+(?:budget|rent|price))?(?:\s+(?:of|is))?\s*£?\s*\d{3,5}(?:\.\d{1,2})?(?!\d)"
+    r"|£?\s*(?<![\d.])\d{3,5}(?:\.\d{1,2})?(?!\d)\s*(?:(?:pcm|a\s+month|per\s+month)\s+)?"
+    r"(?:or\s+more|minimum\b|min\b)"
+    r"|(?:至少|起码|最少|不低于|不少于)\s*(?:每月|月租|预算)?\s*£?\s*\d{3,5}(?!\d)"
+    r"|(?<![\d.])\d{3,5}\s*(?:镑|英镑|块)?\s*以上", re.I)
+
+
+def budget_floor_notes(text: str) -> list[str]:
+    """The user's own floor phrases ("at least £1,800"), kept as soft notes beside the ceiling."""
+    t = zh_money_digits(_plain_figures(scoped_update_text(str(text or ''))))
+    return [" ".join(match.group().split())[:60] for match in _BUDGET_FLOOR.finditer(t)
+            if not is_hypothetical(clause_at(t, match.start(), match.end()))
+            and not _MEASURE_AFTER_FIGURE.match(t, match.end())]
+
+
+# A correction that names a figure and nothing else: "make it 2500", "Actually make it 2500" and
+# "actually 2500 please" kept the old ceiling while the reply said the budget had moved (D-05). The
+# whole sentence has to be the edit, and 3 digits are the least: "make it 2" and "make it 2
+# bedrooms" are not budgets.
+_BARE_BUDGET_EDIT = re.compile(
+    r"^\W*(?P<lead>(?:(?:no|ok(?:ay)?|sorry|hmm+|wait|yes|yeah|well|right|actually|then)\W+)*)"
+    r"(?P<cue>(?:let['’]?s\s+)?(?:(?:make|set|change|put|raise|lower|bump|drop|up|increase|reduce|move)\s+"
+    r"(?:it|that|this)(?:\s+(?:up|down))?(?:\s+to)?\s+|(?:say|try|go\s+(?:with|for)|how\s+about|what\s+about)\s+)"
+    r"|改成\s*|改为\s*|换成\s*|调到\s*|调成\s*|提到\s*|降到\s*)?"
+    r"£?\s*(?P<amount>\d{3,5}(?:\.\d{1,2})?)\s*(?:(?:pcm|a\s+month|per\s+month|pounds?)\b\s*|镑\s*|英镑\s*)?"
+    r"(?P<tail>(?:(?:please|then|instead|now|thanks|thank\s+you|max(?:imum)?)\b|吧|了|[\s.,!?。！？])*)$", re.I)
+
+
+def _bare_budget_edit(t: str):
+    for sentence in re.split(r"(?<=[.!?。！？])\s+", t.strip()):
+        match = _BARE_BUDGET_EDIT.match(sentence)
+        if match and (match.group('lead') or match.group('cue') or re.search(r'[^\W\d_]', match.group('tail'))):
+            return match
+    return None
 
 
 def _extract_budget(text: str):
@@ -678,12 +724,14 @@ def _extract_budget(text: str):
     # A conditional stretch ("could stretch to £2,100 for the right place") is not a ceiling
     # (stress A-08); the state node keeps it as a soft note instead.
     from core.constraint_updates import without_conditional_stretch
-    t = _plain_figures(without_conditional_stretch(scoped_update_text(text)).lower())
+    t = zh_money_digits(_plain_figures(without_conditional_stretch(scoped_update_text(text)).lower()))
     t = _expand_thousands(t)
+    t = _BUDGET_FLOOR.sub(lambda match: ' ' * len(match.group()), t)
     t = _BUDGET_RANGE.sub(_range_ceiling, t)
     # "budget -500" became a £500 ceiling and was quoted back as the user's budget (R3-16):
     # a negative amount is no budget at all. A range's dash ("£1500-2000") follows a digit.
     t = re.sub(r'(?<![\w£.])-£?\d[\d.]*|£\s*-\s*\d[\d.]*|\bminus\s+£?\s*\d[\d.]*', ' ', t)
+    bare_edit = _bare_budget_edit(t)
     t = _mask_years(t)
     if (re.search(r'not\s+(?:yet\s+)?(?:chosen|decided)|haven.t (?:yet )?chosen|尚未(?:选择|决定)|还没选|未确定', t, re.I)
             and re.search(r'\bor\b|还是|或者', t, re.I)
@@ -747,7 +795,7 @@ def _extract_budget(text: str):
     for pattern in (
         r'(?:budget\b|ceiling\b|最多|预算|上限|不超过|不高于|不多于|小于|低于|少于|至多|顶多)'
         r'[^£\d。;；]{0,30}£?\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)',
-        r'(?:under|below|up\s+to|no\s+more\s+than|max(?:imum)?)\s*£?\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)',
+        r'(?:under|below|up\s+to|no\s+more\s+than|at\s+most|max(?:imum)?)\s*£?\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)',
         # "What about Camden at £900?" / "3 bedrooms in Edinburgh at £900" names the price
         # point of the search (R4-05) — only with an area/search/bedroom word before it,
         # so a listing's "at £2,000" in a question about that listing is not a budget.
@@ -777,6 +825,8 @@ def _extract_budget(text: str):
         m = max(explicit, key=lambda item: item.start())
         val = _money_value(m.group(1))
         return valid_amount(val, _budget_period_near(t, m.start(1), m.end(1)))
+    if bare_edit:
+        return valid_amount(_money_value(bare_edit.group('amount')), 'month')
     # A question in a sentence of its own that names no figure does not make the stated
     # amount a question: "Make it £2,800. Also what do you remember about me?" kept the old
     # ceiling (R3-06).
@@ -804,6 +854,8 @@ def _extract_budget(text: str):
     if m:
         if _amount_role(t, m.start(1), m.end(1)) in ('per_person', 'total'):
             return None, None
+        if re.search(r'押金|保证金|工资|收入|月薪|年薪', t[max(0, m.start(1) - 8):m.end(1) + 8]):
+            return None, None       # 「我有两千块押金」 is no ceiling
         val = _money_value(m.group(1))
         return valid_amount(val, _budget_period_near(t, m.start(1), m.end(1)))
     if amount is None:
@@ -2609,7 +2661,7 @@ def _states_relative_budget_edit(text) -> bool:
         delta = detect_relative_budget_delta(text)
         if delta is None:
             return False
-        for match in _BUDGET_CEILING_MARKER.finditer(str(text or "")):
+        for match in _BUDGET_CEILING_MARKER.finditer(zh_money_digits(text)):
             raw = (match.group(1) or match.group(2) or "").replace(",", "")
             try:
                 if abs(float(raw) - abs(float(delta))) < 1e-9:

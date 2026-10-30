@@ -62,6 +62,37 @@ def without_third_party_clauses(text: str) -> str:
 # A conditional stretch is not a new ceiling (stress A-08): "my budget could stretch to £2,100
 # for the right place" raised max_budget 1,900 -> 2,100. Narrower than the memory layer's
 # _SOFT_BOUND on purpose: "Could you find flats under £2,000?" is a ceiling.
+# Full-width digits were folded long ago; zh numerals never were: 两千五百镑, 二千镑, 两千五, 三千以内 and
+# 一千八百 gave no budget, the search ran unfiltered and later replies still quoted the figure (W-06).
+# A digit after 千 with no unit counts hundreds (两千五 is 2500), after 百 tens. 三千多, 几千 and 两三千
+# are not figures anyone can search on, so they stay as they are.
+_ZH_DIGITS = {'零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9}
+_ZH_NUMERAL_BEFORE = r'(?<![一二两三四五六七八九十百千万零几数\d])'
+_ZH_NUMERAL_AFTER = r'(?![一二两三四五六七八九十百千万零几多来余])'
+_ZH_MONEY = re.compile(
+    _ZH_NUMERAL_BEFORE + r'(?:(?P<wan>[一二两三])万(?P<wan_k>[一二两三四五六七八九])?'
+    r'|(?P<k>[一二两三四五六七八九])千(?:零(?P<k_ten>[一二三四五六七八九])十'
+    r'|(?P<k_h>[一二两三四五六七八九])(?:百(?:(?P<k_t>[一二三四五六七八九])十?)?)?)?'
+    r'|(?P<h>[二两三四五六七八九])百(?:(?P<h_t>[一二三四五六七八九])十?)?)' + _ZH_NUMERAL_AFTER)
+_DIGIT_THOUSANDS = re.compile(r'(?<![\d.])(\d)千(?:(\d)百?)?(?![\d多来余])')
+
+
+def _zh_money_value(match) -> str:
+    def digit(name):
+        return _ZH_DIGITS.get(match.group(name) or '零', 0)
+    return str(digit('wan') * 10000 + digit('wan_k') * 1000 + digit('k') * 1000 + digit('k_h') * 100
+               + digit('k_ten') * 10 + digit('k_t') * 10 + digit('h') * 100 + digit('h_t') * 10)
+
+
+def zh_money_digits(text: str) -> str:
+    """``text`` with zh numerals of 200 and over written in digits, for the budget parsers."""
+    value = str(text or '')
+    if not re.search(r'[百千万]', value):
+        return value
+    value = _DIGIT_THOUSANDS.sub(lambda m: str(int(m.group(1)) * 1000 + int(m.group(2) or 0) * 100), value)
+    return _ZH_MONEY.sub(_zh_money_value, value)
+
+
 _STRETCH_CUE = re.compile(
     r"\b(?:stretch\w*|at\s+a\s+push|for\s+the\s+right\s+(?:place|flat|home|property|one)|"
     r"wiggle\s+room|leeway|willing\s+to\s+go|would\s+consider\s+(?:going|paying)|"

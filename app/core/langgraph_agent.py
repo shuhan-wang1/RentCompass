@@ -1287,7 +1287,8 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     # "my budget could stretch to £2,100 for the right place" keeps the ceiling (the budget
     # extractor skips it) and is kept beside it as the user's own soft note (stress A-08).
     from core.constraint_updates import conditional_stretch_notes
-    for note in conditional_stretch_notes(current_message):
+    from core.tools.search_properties import budget_floor_notes
+    for note in conditional_stretch_notes(current_message) + budget_floor_notes(current_message):
         existing = result.setdefault('soft_preferences', [])
         if note not in existing:
             existing.append(note)

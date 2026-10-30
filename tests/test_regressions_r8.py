@@ -407,3 +407,84 @@ def test_d_02_a_refused_instruction_keeps_its_notice():
     artifact = {"tool": "remember", "success": True, "raw_data": {
         "success": False, "security_decision": "rejected_instruction_shaped", "error": "no"}}
     assert "not instructions" in memory_notice(memory_contract_from_artifacts([artifact]), "en")
+
+
+# W-06, D-05 ── the forms a budget comes in
+_HACKNEY = {"area": "Hackney", "areas": ["Hackney"], "bedrooms": 1}
+_BUDGETED = dict(_HACKNEY, max_budget=1900)
+
+
+@pytest.mark.parametrize("text,digits", [
+    ("两千五百镑", "2500镑"), ("二千镑", "2000镑"), ("两千五", "2500"), ("三千以内", "3000以内"),
+    ("一千八百", "1800"), ("一千八", "1800"), ("三千二百五十", "3250"), ("两千零五十", "2050"), ("九百", "900"),
+    ("八百五", "850"), ("一万二", "12000"), ("2千5", "2500"), ("2千", "2000"), ("十二", "十二"),
+    ("三千多", "三千多"), ("几千", "几千"), ("两三千", "两三千"), ("一百", "一百"), ("Camden", "Camden"),
+])
+def test_w_06_zh_numerals_become_digits(text, digits):
+    from core.constraint_updates import zh_money_digits
+    assert zh_money_digits(text) == digits
+
+
+@pytest.mark.parametrize("message,budget", [
+    ("找Hackney一居室，预算两千五百镑，不用通勤，继续", 2500), ("预算二千镑", 2000), ("预算两千五", 2500),
+    ("预算三千以内", 3000), ("月租一千八百", 1800), ("三千以内", 3000), ("两千左右的房子", 2000),
+    ("预算一千八到两千五", 2500),
+])
+def test_w_06_a_zh_budget_is_a_budget(message, budget):
+    assert _state_node(_HACKNEY, message)["max_budget"] == budget
+
+
+@pytest.mark.parametrize("message", ["离地铁一千米以内", "三千多", "我有两千块押金", "重新找一下"])
+def test_w_06_other_zh_figures_are_no_budget(message):
+    assert _state_node(_HACKNEY, message).get("max_budget") is None
+
+
+@pytest.mark.parametrize("message,budget", [("预算提高两百", 2100), ("预算减少三百", 1600), ("预算加一千", 2900)])
+def test_w_06_a_zh_delta_stays_a_delta(message, budget):
+    assert _state_node(_BUDGETED, message)["max_budget"] == budget
+
+
+@pytest.mark.parametrize("message", ["at least £1,800", "minimum £1,500", "£1,800 or more", "至少1800", "1800以上",
+                                     "budget at least £1,800"])
+def test_w_06_a_floor_is_no_ceiling(message):
+    out = _state_node(_BUDGETED, message)
+    assert out["max_budget"] == 1900 and out["soft_preferences"]
+    assert _state_node(_HACKNEY, message).get("max_budget") is None
+
+
+def test_w_06_a_floor_is_not_listed_as_unchecked():
+    from core.candidate_validation import unchecked_requirements
+    assert unchecked_requirements(_state_node(_BUDGETED, "at least £1,800")) == []
+
+
+@pytest.mark.parametrize("message,budget", [
+    ("between 1800 and 2500", 2500), ("between £1800 and £2500", 2500), ("at least 1800 and at most 2500", 2500),
+])
+def test_w_06_the_ceiling_of_a_range_is_its_top(message, budget):
+    assert _state_node(_BUDGETED, message)["max_budget"] == budget
+
+
+@pytest.mark.parametrize("message", ["between 2020 and 2025", "between 1800 and 2500 sq ft"])
+def test_w_06_a_range_of_something_else_is_no_budget(message):
+    assert _state_node(_BUDGETED, message)["max_budget"] == 1900
+
+
+@pytest.mark.parametrize("message,budget", [
+    ("Actually make it 2500", 2500), ("make it 2500", 2500), ("actually 2500 please", 2500), ("make it £2500", 2500),
+    ("make it 2,500 a month", 2500), ("how about 2500?", 2500), ("改成2500", 2500), ("make it 2k", 2000),
+    ("Make it 2500. Also what do you remember about me?", 2500), ("Actually make it 2000", 2000),
+])
+def test_d_05_a_figure_in_an_edit_is_the_budget(message, budget):
+    assert _state_node(_BUDGETED, message)["max_budget"] == budget
+
+
+@pytest.mark.parametrize("message", [
+    "make it 2", "make it 2 bedrooms", "make it 45 minutes", "make it 1500 sq ft", "actually 2 beds",
+    "actually 1800 Camden Road", "2500",
+])
+def test_d_05_anything_else_is_not(message):
+    assert _state_node(_BUDGETED, message)["max_budget"] == 1900
+
+
+def test_d_05_make_it_2_stays_the_bedrooms():
+    assert _state_node(_BUDGETED, "make it 2 bedrooms")["bedrooms"] == 2

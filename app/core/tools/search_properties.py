@@ -1991,7 +1991,9 @@ _ZH_PLACE_FILLER = re.compile(
 # Not a place: a listing, the user's own home or a kind of place inside the current area.
 _ZH_NOT_A_PLACE = re.compile(
     r"[我你他她这那哪第套个某些的]|^(?:地铁站?|车站|火车站?|公交站?|公交车站|学校|大学|学院|公司|单位|医院|公园|"
-    r"超市|商场|市中心|市区|市内|城区|郊区|区域|地区|地方|当地|河边|海边|办公室|图书馆|健身房|教堂)$")
+    r"超市|商场|市中心|市区|市内|城区|郊区|区域|地区|地方|当地|河边|海边|办公室|图书馆|健身房|教堂)$"
+    # A street or a station inside the search area (R2-11): 「剑桥路附近的公寓」.
+    r"|(?:大街|街|路|道|巷|广场|车站|地铁站|站)$")
 
 
 def _zh_place_negated(text: str, start: int, end: int) -> bool:

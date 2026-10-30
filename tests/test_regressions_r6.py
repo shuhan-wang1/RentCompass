@@ -247,14 +247,14 @@ def test_u_09_a_home_search_near_an_institution_moves_the_area(message, area):
     "从第一个到伦敦大学学院要多久?", "去伦敦政治经济学院通勤多久", "到牛津大学多远", "我在牛津大学读书",
     "我在伦敦大学学院上学", "我在伦敦大学学院附近上班", "不要牛津大学附近的房子", "如果在牛津大学附近找房会更便宜吗",
     "帝国理工附近的房租贵吗", "帝国理工附近有地铁吗", "地铁站附近的房子", "公园附近有房吗", "我家附近有房吗",
-    "这套附近有超市吗",
+    "这套附近有超市吗", "牛津街附近有房吗", "剑桥路附近的公寓",
 ])
 def test_u_09_anything_else_keeps_the_area(message):
     acc = _state_node({"area": "Bristol", "areas": ["Bristol"], "bedrooms": 1, "max_budget": 1200}, message)
     assert acc["area"] == "Bristol" and acc["areas"] == ["Bristol"]
 
 
-@pytest.mark.parametrize("message", ["温莎附近有房吗", "牛津街附近有房吗", "UCL附近有房吗"])
+@pytest.mark.parametrize("message", ["温莎附近有房吗", "UCL附近有房吗", "Hogsmeade附近有房吗"])
 def test_u_09_a_place_nothing_here_resolves_does_not_reuse_the_old_area(message):
     acc = _state_node({"area": "Bristol", "areas": ["Bristol"], "bedrooms": 1, "max_budget": 1200}, message)
     assert acc["area"] is None and acc["areas"] == []

@@ -1554,6 +1554,14 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     if beds:
         result['bedrooms'], result['bedrooms_minimum'] = beds[0], beds[0] != beds[1]
         changed = True
+    # A studio has no bedroom count and a count is no studio: both together find nothing.
+    # What this message stated wins (r06 d7fe7ce7).
+    if room_type == 'studio' and result.get('bedrooms'):
+        result['bedrooms'], result['bedrooms_minimum'] = 0, False
+        changed = True
+    elif beds and beds[0] and not room_type and result.get('room_type') == 'studio':
+        result['room_type'] = None
+        changed = True
 
     minutes = _extract_commute_minutes(current_message)
     if minutes and result.get('max_travel_time') != minutes:
@@ -1727,6 +1735,8 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
 
     from core.constraint_updates import cleared_fields
     for field in cleared_fields(current_message):
+        if field == 'bedrooms' and beds:
+            continue    # 取消两间卧室的要求，改成一居室: the count this message states (r06 982f7a70)
         result[field] = [] if field == 'property_features' else None
         if field == 'area':
             result['areas'] = []

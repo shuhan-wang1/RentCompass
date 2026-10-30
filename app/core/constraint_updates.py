@@ -328,7 +328,8 @@ def clause_at(text: str, start: int, end: int) -> str:
 
 _WITHDRAWN_BEFORE_MENTION = re.compile(
     r"(?<!n't )(?<!n’t )(?<!\bnot )(?<!\bnever )"
-    r"\b(?:never\s*mind|forget(?:\s+about)?|scrap|ditch|drop|skip|no\s+longer\s+(?:want|need))"
+    r"\b(?:never\s*mind|forget(?:\s+about)?|scrap|ditch|drop|skip|retract|withdraw|cancel|remove|delete|undo"
+    r"|no\s+longer\s+(?:want|need))"
     r"(?:\s+(?:the|a|an|my|that|this))?\s+$", re.I)
 
 
@@ -369,6 +370,8 @@ def mention_is_requirement(text: str, start: int, end: int) -> bool:
     # "I don't need a balcony after all" recorded "Must have balcony" (stress A-04 replay).
     if re.search(r'(?:not(?: a| an)?|no|without|remove|exclude|avoid|delete|don.t want'
                  r'|(?:don.t|do not|doesn.t|does not) need|no need for)\s+(?:\w+\s+){0,3}$'
+                 # "1 bed rather than studio" stored the studio beside the count.
+                 r'|\b(?:rather\s+than|instead\s+of)\s+(?:(?:a|an|the|my)\s+)?$'
                  r'|(?:不(?:要|是|需要|想|考虑)|取消|删除|移除|去掉|排除)[^，。；;!?]{0,14}$', before, re.I):
         return False
     # "Never mind studio, 2 beds" kept the studio, so every later search asked for a studio

@@ -204,3 +204,36 @@ def test_y_03_a_need_stated_beside_the_question_stays():
 def test_y_03_a_budget_in_a_later_sentence_still_counts():
     stored = _state_node(_HACKNEY, "Which of the listings you showed me in Bow was cheapest? Make the budget £2,000.")
     assert stored["max_budget"] == 2000 and stored["areas"] == ["Hackney"]
+
+
+# Y-04 ── a studio has no stale bedroom count, and a restated count survives a clear
+_TWO_BED = {"area": "Camden", "areas": ["Camden"], "bedrooms": 2, "max_budget": 2500, "room_type": "whole"}
+
+
+@pytest.mark.parametrize("message", [
+    "Retract the 2 beds; I want a studio.", "Retract the 2 beds; I want a studio instead.", "Cancel the 2 bedrooms; a studio please",
+    "Remove the 2 beds, I want a studio", "I want a studio", "Make it a studio", "不要两居室，要studio", "改成单间公寓",
+    "A studio instead of 2 beds", "2 beds is too much, a studio please",
+])
+def test_y_04_a_studio_drops_the_bedroom_count(message):
+    stored = _state_node(_TWO_BED, message)
+    assert stored["room_type"] == "studio" and stored["bedrooms"] == 0 and not stored.get("bedrooms_minimum")
+
+
+def test_y_04_the_search_never_gets_a_studio_with_a_count():
+    params = _search_params("Retract the 2 beds; I want a studio.", _TWO_BED)
+    assert params["room_type"] == "studio" and not params.get("bedrooms")
+
+
+@pytest.mark.parametrize("message", ["Let's say max 1 bed rather than studio.", "1 bed instead of a studio", "Make it 1 bed"])
+def test_y_04_a_count_replaces_a_standing_studio(message):
+    stored = _state_node(dict(_TWO_BED, room_type="studio", bedrooms=0), message)
+    assert stored["bedrooms"] == 1 and stored["room_type"] != "studio"
+
+
+@pytest.mark.parametrize("message,bedrooms", [
+    ("把我的预算调回 1800，另外取消两间卧室的要求，改成一居室。", 1), ("取消两间卧室的要求，改成一居室", 1),
+    ("Remove the bedrooms requirement, make it 1 bed", 1), ("取消两间卧室的要求", None), ("Remove the bedrooms filter", None),
+])
+def test_y_04_a_count_stated_with_the_clear_stays(message, bedrooms):
+    assert _state_node(_TWO_BED, message)["bedrooms"] == bedrooms

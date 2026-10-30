@@ -460,3 +460,32 @@ def test_r4_08_the_fc_answer_carries_the_question_of_a_clarifying_search():
     out = build_fc_nodes(_NoTools())["format_output_fc"](state)
     assert _CLARIFY_Q in out["final_response"]
     assert "try again later" not in out["final_response"]
+
+
+# R4-09 ── a secret code word is a credential in every memory row ────────────────────
+@pytest.mark.parametrize("text,secret", [
+    ("Please remember I'm allergic to cats. My secret code word is PINEAPPLE-77.", "PINEAPPLE-77"),
+    ("my code word: banana", "banana"),
+    ("My memorable word is Rosebud", "Rosebud"),
+    ("The answer to my security question is Fluffy", "Fluffy"),
+    ("我的暗号是天王盖地虎", "天王盖地虎"),
+])
+def test_r4_09_a_code_word_is_redacted(text, secret):
+    from rag.agent_memory import redact_secrets
+    redacted, found = redact_secrets(text)
+    assert secret not in redacted and "credentials" in found
+
+
+@pytest.mark.parametrize("text", ["I want a word with the landlord", "a secret garden would be nice"])
+def test_r4_09_ordinary_words_are_kept(text):
+    from rag.agent_memory import redact_secrets
+    assert redact_secrets(text) == (text, [])
+
+
+def test_r4_09_the_episodic_log_keeps_no_code_word(r4_memory):
+    am, store = r4_memory
+    user = "u_r409"
+    assert store.remember_turn("Please remember I'm allergic to cats and I always want a quiet "
+                               "street. My secret code word is PINEAPPLE-77.", "Saved.",
+                               session_id="s1", user_id=user)
+    assert "PINEAPPLE" not in "\n".join(_docs(store, user))

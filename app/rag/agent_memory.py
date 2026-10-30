@@ -930,6 +930,12 @@ _SECRET_PATTERNS = tuple((name, re.compile(pattern, re.I)) for name, pattern in 
     ("credentials", r"\b(?:user\s*name|username|login|log-in|user\s*id)(?:\s+(?:is|was)\s*|\s*[:=]\s*)"
                     r"(?:user\s+)?" + _SECRET_VALUE),
     ("credentials", r"(?:密码|口令|验证码|PIN码)\s*(?:是|为|:|：)?\s*(?P<v>[^\s，。,;；]{1,64})"),
+    # "My secret code word is PINEAPPLE-77." was kept by the episodic log and read back from
+    # it (R4-09): a code word, a memorable word or a security answer is a credential too.
+    ("credentials", r"\b(?:(?:secret|security|memorable|safe|verbal)\s+(?:code\s*)?(?:word|phrase|code|answer)|"
+                    r"code\s*word|security\s+question\s+answer|answer\s+to\s+(?:my|the)\s+security\s+question)s?\b"
+                    r"(?:\s+(?:is|was)\s*|\s*[:=]\s*)" + _SECRET_VALUE),
+    ("credentials", r"(?:暗号|密语|安全问题(?:的)?答案|安全码)\s*(?:是|为|:|：)?\s*(?P<v>[^\s，。,;；]{1,64})"),
     ("payment", r"\b(?:cvv2?|cvc2?|cv2|csc|security\s+code)\b" + _IS + r"(?P<v>\d{3,4})\b"),
     ("payment", r"\b(?:exp(?:iry|ires|iration)?(?:\s+date)?|valid\s+(?:thru|through|until))\b" + _IS
                 + r"(?P<v>(?:0?[1-9]|1[0-2])\s*[/-]\s*(?:\d{4}|\d{2}))\b"),

@@ -5052,8 +5052,9 @@ def generate_property_map():
     Returns:
     HTML content of the interactive map or error
     """
-    data = request.get_json()
-    if not data or not data.get('address'):
+    # A body that is not an object ([1], "s", 5) answered 500 at data.get (U-07).
+    data = get_json_or_400()
+    if not data.get('address'):
         return jsonify({"error": "Property address is required"}), 400
     
     try:

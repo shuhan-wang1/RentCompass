@@ -467,3 +467,59 @@ def test_u_06_the_model_cannot_put_the_old_area_back():
 def test_u_06_undo_brings_the_search_back():
     reset = _state_node(_FULL, "Clear my filters")
     assert _state_node(reset, "Undo that last change")["area"] == "Camden"
+
+
+# U-07 ── a body or field of the wrong type is a 400, never a 500
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    appmod = importlib.import_module("app")
+    from dataclasses import replace
+
+    from uk_rent_agent.web.auth_store import AuthStore
+    monkeypatch.setattr(appmod, "auth_store", AuthStore(str(tmp_path / "auth.sqlite3")))
+    monkeypatch.setattr(appmod, "_runtime_config",
+                        replace(appmod._runtime_config, allow_legacy_client_user_id=True))
+    monkeypatch.setattr(appmod._api_rate_limiter, "allow", lambda *a, **k: (True, 0))
+    appmod.app.config.update(TESTING=True)
+    return appmod.app.test_client()
+
+
+@pytest.mark.parametrize("body", ["[1]", '"s"', "5", "true", "null"])
+def test_u_07_generate_map_rejects_a_body_that_is_no_object(client, body):
+    response = client.post("/api/generate_map", data=body, content_type="application/json")
+    assert response.status_code == 400 and "error" in response.get_json()
+
+
+def test_u_07_generate_map_still_needs_an_address(client):
+    assert client.post("/api/generate_map", json={"price": "1"}).status_code == 400
+
+
+@pytest.mark.parametrize("value", [5, 1.5, True, [1], {"a": 1}, [], {}, 0, False])
+def test_u_07_register_rejects_a_display_name_that_is_no_string(client, value):
+    response = client.post("/api/auth/register", json={
+        "username": "name" + uuid.uuid4().hex[:8], "password": "a-long-enough-passphrase",
+        "display_name": value})
+    assert response.status_code == 400 and "display_name" in response.get_json()["error"]
+
+
+@pytest.mark.parametrize("value", [None, "", "Sam"])
+def test_u_07_register_still_takes_a_missing_or_string_display_name(client, value):
+    response = client.post("/api/auth/register", json={
+        "username": "name" + uuid.uuid4().hex[:8], "password": "a-long-enough-passphrase",
+        "display_name": value})
+    assert response.status_code == 200
+
+
+@pytest.mark.parametrize("name,valid", [
+    ("abc", True), ("a" * 32, True), ("abc\n", False), ("a" * 32 + "\n", False), ("ab", False),
+    ("a" * 33, False), ("a b c", False), (5, False),
+])
+def test_u_07_a_username_is_matched_whole(name, valid):
+    from uk_rent_agent.web.auth_store import valid_username
+    assert valid_username(name) is valid
+
+
+def test_u_07_register_rejects_a_trailing_newline(client):
+    response = client.post("/api/auth/register", json={
+        "username": "name\n", "password": "a-long-enough-passphrase"})
+    assert response.status_code == 400

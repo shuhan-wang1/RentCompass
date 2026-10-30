@@ -1893,6 +1893,35 @@ def _bind_listing_travel_time(bindings: list[dict], row: dict) -> None:
         existing["estimate"] = [minutes]
 
 
+def _same_pair_measurement(routes: list[dict], binding: dict) -> dict | None:
+    """The route already measured for this origin, destination and mode, else None."""
+    if binding.get("minutes") is None:
+        return None
+    return next((prior for prior in routes
+                 if prior.get("minutes") is not None and prior.get("mode") == binding.get("mode")
+                 and set(map(_norm, prior["labels"])) & set(map(_norm, binding["labels"]))
+                 and set(map(_norm, prior["destinations"])) & set(map(_norm, binding["destinations"]))),
+                None)
+
+
+def _add_route_measurement(route: dict, binding: dict) -> None:
+    """One pair planned several times in a turn (now, then at the time the user meant) is one
+    route with several measurements. Kept apart, the bindings tied on every line naming the pair
+    and the 27 minutes the answer quoted was replaced by the first result, a night bus (U-13).
+    The latest call is the route's figure and the others stay quotable."""
+    others = {route["minutes"], *(route.get("alt_minutes") or []), *(binding.get("alt_minutes") or [])}
+    others.discard(binding["minutes"])
+    route["minutes"] = binding["minutes"]
+    route["alt_minutes"] = sorted(others)
+    route["place_alternatives"] = sorted(others)
+    route["labels"] = list(dict.fromkeys(route["labels"] + binding["labels"]))
+    route["destinations"] = list(dict.fromkeys(route["destinations"] + binding["destinations"]))
+    route["legs"] = (binding.get("legs") or []) + (route.get("legs") or [])
+    if not route["legs"]:
+        route.pop("legs")
+    route["remeasured"] = True
+
+
 def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
     """Combine stale candidate ledgers with this turn's explicitly bound route results.
 
@@ -1984,6 +2013,8 @@ def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
                     equivalent["alt_minutes"] = binding["alt_minutes"]
             if estimate:
                 equivalent["estimate"] = sorted(set(equivalent.get("estimate") or []) | set(estimate))
+        elif (repeat := _same_pair_measurement(routes, binding)) is not None:
+            _add_route_measurement(repeat, binding)
         elif not any(binding == prior for prior in routes):
             routes.append(binding)
 
@@ -2017,7 +2048,7 @@ def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
                  r["minutes"]) for r in routes}
     # Two tools may name the same station slightly differently. A default is allowed only
     # for a genuinely single origin/destination/measurement, or the legacy nameless result.
-    default = routes[0] if len(distinct) == 1 else None
+    default = routes[0] if len(distinct) == 1 and not routes[0].get("remeasured") else None
     if default is not None and (state.get("candidate_validation") or {}).get("statuses"):
         current = str((state.get("extracted_context") or {}).get("current_message")
                       or state.get("user_query") or "").lower()
@@ -2800,6 +2831,9 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
         # A fastest itinerary is not an accessibility audit or a personalised travel time.
         return False
     bounded = _bound_is_evidenced(fragment, binding["minutes"])
+    if bounded is False and any(_bound_is_evidenced(fragment, figure) is True
+                                for figure in binding.get("place_alternatives") or []):
+        bounded = True      # any measurement of the named pair evidences it (U-13)
     if bounded is not None:
         return bounded
     own = {binding["minutes"]} | set(binding.get("alt_minutes") or [])   # the route's figures
@@ -3130,7 +3164,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 # route of the turn satisfies it (r06 27d8b56d).
                 measured_routes = [c for c in pool if c.get("minutes") is not None]
                 return bool(measured_routes) and all(
-                    _bound_is_evidenced(fragment, c["minutes"]) is True for c in measured_routes)
+                    _bound_is_evidenced(fragment, figure) is True for c in measured_routes
+                    for figure in [c["minutes"], *(c.get("place_alternatives") or [])])
             if effective is not None:
                 return False
             if _per_period_line(line, fragment):
@@ -3777,6 +3812,28 @@ def _commute_unverified_note(zh: bool) -> str:
             "Note: some commute claims could not be verified and have been removed from this answer.")
 
 
+def _superseded_journeys(artifacts: list) -> set:
+    """ids of the transport results another result of the same pair answers better: the time the
+    user asked for over "now", otherwise the latest call (U-13). Results for several requested
+    times of one pair all stay."""
+    groups: dict = {}
+    for artifact in artifacts:
+        if (not _usable_artifact(artifact)
+                or artifact.get("tool") not in {"calculate_commute", "get_transport_info"}):
+            continue
+        raw = artifact["raw_data"]
+        origin = _place_labels(raw.get("from_address") or raw.get("from"))
+        target = _place_labels(raw.get("to_address") or raw.get("to"))
+        if origin and target and _measured_minutes(raw) is not None:
+            groups.setdefault((_norm(origin[0]), _norm(target[0])), []).append(artifact)
+    superseded: set = set()
+    for group in groups.values():
+        asked = [a for a in group
+                 if (a["raw_data"].get("journey_time") or {}).get("time_basis") == "user_requested"]
+        superseded.update(id(a) for a in group if not any(a is kept for kept in (asked or group[-1:])))
+    return superseded
+
+
 def render_structured_evidence_fallback(state: dict, *, language: str | None = None) -> str:
     """Render independent facts from THIS turn's completed artifacts, without an LLM.
 
@@ -3801,7 +3858,10 @@ def render_structured_evidence_fallback(state: dict, *, language: str | None = N
     usable_tools = {a.get('tool') for a in artifacts if _usable_artifact(a)}
     has_forecast = any(_usable_artifact(a) and a.get('tool') == 'get_weather'
                        and a['raw_data'].get('weather_type') == 'forecast' for a in artifacts)
+    superseded = _superseded_journeys(artifacts)
     for artifact in artifacts:
+        if id(artifact) in superseded:
+            continue
         if not _usable_artifact(artifact):
             if (isinstance(artifact, dict) and artifact.get('tool') in {'get_transport_info', 'get_weather'}
                     and not any(artifact.get(flag) for flag in ('timed_out','denied','abandoned','outcome_unknown'))):

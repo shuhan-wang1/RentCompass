@@ -369,6 +369,7 @@ def _remember_turn(message: str, proposal: str):
     from tests.test_agent_contract_guards import _state, _tc
     from tests.test_qa_null_injection import _ValidatingProvider, _strict_null_args
     state = _state(message)
+    state["session_id"] = "s-" + uuid.uuid4().hex   # a denied write freezes under the session
     provider = _ValidatingProvider(["search_properties", "remember"])
     provider.specs = [dataclasses.replace(spec, side_effect="write" if spec.name == "remember" else "none")
                       for spec in provider.specs]
@@ -577,3 +578,66 @@ def test_u_08_a_name_in_a_save_request_waits_for_a_confirmation():
     contract = {"requested": True, "attempted": True, "success": True,
                 "stored_content": "I prefer quiet streets"}
     assert "I did not save the name" in with_withheld_details_note("Saved.", contract, message, "en")
+
+
+# U-13 ── every result of a pair evidences a claim about it; the fallback quotes the right one
+def _journey(minutes, tool="get_transport_info", basis="now", summary="Tube Northern to Waterloo (12 min)"):
+    legs = [{"mode": "tube", "duration_minutes": minutes, "line": "Northern", "to": "Waterloo"}]
+    return {"tool": tool, "success": True, "args": {}, "raw_data": {
+        "success": True, "query_type": "journey", "duration_minutes": minutes, "route_summary": summary,
+        "route_legs": legs, "journey_time": {"time_basis": basis},
+        "from": {"input": "Camden Town Underground Station",
+                 "resolved_station": "Camden Town Underground Station", "naptan": "940GZZLUCTN"},
+        "to": {"input": "Waterloo Station", "resolved_station": "Waterloo", "naptan": "HUBWAT"}}}
+
+
+def _turn(*artifacts):
+    message = "and from Camden Town to Waterloo?"
+    return {"tool_artifacts": list(artifacts), "user_query": message,
+            "extracted_context": {"current_message": message, "reply_language": "en"}}
+
+
+@pytest.mark.parametrize("claim", [
+    "Camden Town to Waterloo takes about 27 minutes on the Northern line, with one change.",
+    "It's 27 minutes by Tube from Camden Town to Waterloo.",
+    "Camden Town to Waterloo takes 32 minutes at night.",
+    "Camden Town to Waterloo is under half an hour on a weekday morning.",
+])
+def test_u_13_any_result_of_the_pair_evidences_the_claim(claim):
+    from core.candidate_validation import validate_commute_response
+    state = _turn(_journey(32, summary="Bus N29 (15 min) -> Bus N3 (10 min)"), _journey(31), _journey(27, basis="user_requested"))
+    assert validate_commute_response(claim, state) == claim
+
+
+def test_u_13_a_figure_of_no_result_still_goes():
+    from core.candidate_validation import validate_commute_response
+    state = _turn(_journey(32), _journey(27, basis="user_requested"))
+    claim = "Camden Town to Waterloo takes 19 minutes on the Northern line."
+    assert "19 minutes" not in validate_commute_response(claim, state)
+
+
+def test_u_13_an_unnamed_bound_still_has_to_hold_for_every_measurement():
+    from core.candidate_validation import validate_commute_response
+    state = _turn(_journey(32), _journey(27, basis="user_requested"))
+    claim = "Either way, this is a short commute, comfortably under 30 minutes."
+    assert "under 30 minutes" not in validate_commute_response(claim, state)
+
+
+def test_u_13_the_fallback_prefers_the_time_the_user_asked_for():
+    from core.candidate_validation import render_structured_evidence_fallback
+    out = render_structured_evidence_fallback(
+        _turn(_journey(32), _journey(31), _journey(27, basis="user_requested")), language="en")
+    assert "27 minutes" in out and "32 minutes" not in out and "31 minutes" not in out
+
+
+def test_u_13_the_fallback_otherwise_takes_the_latest_call():
+    from core.candidate_validation import render_structured_evidence_fallback
+    out = render_structured_evidence_fallback(_turn(_journey(32), _journey(31)), language="en")
+    assert "31 minutes" in out and "32 minutes" not in out
+
+
+def test_u_13_two_requested_times_both_stay():
+    from core.candidate_validation import render_structured_evidence_fallback
+    out = render_structured_evidence_fallback(
+        _turn(_journey(32, basis="user_requested"), _journey(27, basis="user_requested")), language="en")
+    assert "27 minutes" in out and "32 minutes" in out

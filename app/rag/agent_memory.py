@@ -1209,6 +1209,18 @@ _IS = r"(?:\s+(?:is|was)\s*|\s*[:=]\s*|\s+)"
 # Each pattern names the secret itself as group ``v``; the label before it ("my CVV",
 # "password") stays, so the reply and the log can say what was withheld.
 _SECRET_PATTERNS = tuple((name, re.compile(pattern, re.I)) for name, pattern in (
+    # An API key is recognised by its shape, label or none, in any language: every form of "sk-…"
+    # passed, "api_key=sk-…" included, and a zh clause could be saved verbatim (D-06).
+    ("credentials", r"(?<![A-Za-z0-9_-])(?P<v>(?:sk|pk|rk)-(?:[a-z]{2,8}-)?[A-Za-z0-9_-]{16,}"
+                    r"|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[abpr]-[A-Za-z0-9-]{16,}"
+                    r"|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}"
+                    r"|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,})(?![A-Za-z0-9_-])"),
+    # A value with a digit, or a long one: "my API key is stored elsewhere" states none.
+    ("credentials", r"(?<![A-Za-z0-9])(?:api[_ -]?key|secret[_ -]?key|access[_ -]?token|auth[_ -]?token|"
+                    r"bearer\s+token|private[_ -]?key)(?![A-Za-z0-9])"
+                    r"(?:\s+(?:is|was)\s*|\s*[:=：]\s*|\s*(?:是|为)\s*)"
+                    r"(?=[^\s,;]*\d|[^\s,;]{16,})" + _SECRET_VALUE),
+    ("credentials", r"(?:密钥|秘钥|令牌)\s*(?:是|为|[:=：])\s*" + _SECRET_VALUE),
     # "with password S3cret!pass" has no "is"; a bare word after "password" ("the password
     # reset page") is only a secret when it carries a digit or a symbol.
     ("credentials", r"\b(?:password|passcode|passphrase|pwd)\b(?:\s+(?:is|was)\s*|\s*[:=]\s*)" + _SECRET_VALUE),

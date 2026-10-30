@@ -451,15 +451,25 @@ def _now_iso() -> str:
 # was invisible next turn, which then said it still owed the weather and fetched it again
 # (V-11). Evidence lines stay out: they quote listing text, which as an assistant message would
 # read as the assistant's own words, and the listings block carries it as data.
+#
+# Review of what else gets through (D-12): any other line can quote a listing, and the last two
+# replies can add 7000 characters, but in 502 replies of two rounds the most added was 3466 (p90
+# 1111) and none held a phone number. The size stays, since cutting it brings V-11 back and the
+# assembler already bounds the total. What is stripped is what cannot help the next turn: a line
+# labelled as a listing's own text, under a bullet or bold as well, and a contact detail.
 HISTORY_REPLY_CHARS = 4000
 _EVIDENCE_LINE = re.compile(
-    r"^\s*(?:Returned listing details|Reported features|Availability|返回的房源详情|房源所列配置|可入住信息)\s*[:：]")
+    r"^\s*(?:[-*•]\s+)?(?:\*\*)?\s*(?:Returned listing details|Reported features|Availability|"
+    r"(?:Property |Listing )?description|Agent|Contact|"
+    r"返回的房源详情|房源所列配置|可入住信息|房源描述|中介|联系方式)\s*(?:\*\*)?\s*[:：]", re.I)
+_CONTACT_DETAIL = re.compile(
+    r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z0-9.-]+|(?<![\d£.])(?:\+44\s?(?:\(0\)\s?)?|0)\d(?:[ -]?\d){8,10}(?!\d)")
 
 
 def history_reply(text) -> str:
     """``text`` as the hot history keeps it; the context assembler bounds what is sent."""
     lines = [line for line in str(text or "").split("\n") if not _EVIDENCE_LINE.match(line)]
-    return "\n".join(lines).strip()[:HISTORY_REPLY_CHARS]
+    return _CONTACT_DETAIL.sub("[contact detail]", "\n".join(lines)).strip()[:HISTORY_REPLY_CHARS]
 
 
 class ConversationStore:

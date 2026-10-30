@@ -796,3 +796,16 @@ def test_s_05_a_station_named_home_area_is_not_locked_as_the_destination(monkeyp
     # A real destination named as the area is still locked (unchanged behaviour).
     res = asyncio.run(search_properties_impl(area="UCL", current_message="places near UCL"))
     assert res["known_criteria"]["commute_destination"] == euston
+
+
+@pytest.mark.parametrize("message,budget", [
+    ("Can you find a 2-bed with enough storage under £2,000?", 2000),
+    ("Any flat with enough light, budget £1,900?", 1900),
+])
+def test_s_01_a_sufficiency_word_elsewhere_in_a_search_question_keeps_the_budget(message, budget):
+    assert _state_node(_BOW_1BED, message)["max_budget"] == budget
+
+
+def test_r4_06a_a_nearby_places_question_at_a_postcode_keeps_the_area():
+    assert _state_node(_GLASGOW, "Any nearby supermarkets around SW1A 1AA?")["area"] == "Glasgow"
+    assert _state_node(_GLASGOW, "Find flats with a gym nearby around SW1A 1AA")["area"] == "SW1A 1AA"

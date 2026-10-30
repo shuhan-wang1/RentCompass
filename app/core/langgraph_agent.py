@@ -773,6 +773,13 @@ def _postcode_search_location(message: str) -> str | None:
     from core.constraint_updates import one_off_distance_question, one_off_transport_question
     if one_off_distance_question(message) or one_off_transport_question(message):
         return None
+    # "Any nearby supermarkets around SW1A 1AA?" asks about the place, not where to live.
+    if re.search(r"\b(?:supermarkets?|shops?|gyms?|parks?|schools?|cafes?|restaurants?|pubs?|"
+                 r"amenities|nearby|weather|forecast|crime|safety|safe)\b|超市|健身房|公园|学校|天气|治安",
+                 message, re.I) and not re.search(
+                     r"\b(?:flats?|homes?|houses?|propert(?:y|ies)|rent|listings?|beds?|bedrooms?|"
+                     r"studios?|search|find|live|living)\b|房|租|找", message, re.I):
+        return None
     before = re.split(r'[.!?;。！？；\n]', message[max(0, match.start() - 60):match.start()])[-1]
     if re.search(r"\b(?:work\w*|office|stud(?:y|ying)|commut\w*|school|university|college|campus|"
                  r"from|to|journey|route|far)\b|上班|工作|上学|通勤|到", before, re.I) and not re.search(

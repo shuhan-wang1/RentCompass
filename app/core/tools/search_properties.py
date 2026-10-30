@@ -614,12 +614,15 @@ _SUFFICIENCY_QUESTION = re.compile(
 
 
 def _asks_if_amount_suffices(t: str, start: int, end: int) -> bool:
-    """True when the amount at ``t[start:end]`` sits in a question about whether it suffices."""
+    """True when the amount at ``t[start:end]`` sits in a question about whether it suffices.
+
+    The sufficiency word must follow the amount closely: "a 2-bed with enough storage under
+    £2,000?" asks for a search at £2,000."""
     lo = max([m.end() for m in re.finditer(r'[。.!?！？;；\n](?!\d)', t[:start])] or [0])
     stop = re.search(r'[。!?！？;；\n]|(?<!\d)\.(?!\d)', t[end:])
     hi = end + stop.end() if stop else len(t)
     sentence = t[lo:hi]
-    return bool(_SUFFICIENCY_QUESTION.search(sentence)
+    return bool(_SUFFICIENCY_QUESTION.search(t[end:min(hi, end + 24)])
                 and (sentence.rstrip().endswith(('?', '？')) or '吗' in sentence))
 
 

@@ -4452,6 +4452,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     logger.info("fc_loop.remember_content_from_user_clause")
                     args["content"] = clause
                     args.pop("fact", None)
+            if name in ('calculate_commute', 'calculate_commute_cost'):
+                _coords = _listing_coords_for(args.get('from_address'), ec)
+                if _coords:
+                    args['_from_coordinates'] = {'lat': _coords[0], 'lng': _coords[1]}
             if name in ('calculate_commute_cost', 'check_transport_cost'):
                 office_days = (state.get('accumulated_search_criteria') or {}).get('office_days_per_week')
                 spec = specs.get(name)

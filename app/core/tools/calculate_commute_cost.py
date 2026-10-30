@@ -109,6 +109,13 @@ def _get_zone_from_address(address: str) -> Optional[int]:
             print("   📮 从地址提取到 postcode postcode_present=True")
             return _get_zone_from_postcode(postcode)
 
+        # A listing's display address ends in its district: "King Square, London, EC1V".
+        district = re.search(r'(?:^|[\s,])([A-Z]{1,2}\d{1,2}[A-Z]?)\s*$', address.upper().strip())
+        if district:
+            zone = _get_zone_from_postcode(f"{district.group(1)} 0AA")
+            if zone is not None:
+                return zone
+
         # 如果无法从地址提取，使用免费地理编码（Postcodes.io/Nominatim）获取 postcode
         from core.maps_service import geocode_address
 
@@ -284,6 +291,7 @@ def calculate_commute_cost_impl(
     travel_type: str = "student",
     mode: str = "transit",
     office_days_per_week: Optional[float] = None,
+    _from_coordinates=None,
 ) -> dict:
     """
     计算综合通勤成本（时间 + 费用）
@@ -332,7 +340,8 @@ def calculate_commute_cost_impl(
             best_estimate_minutes, is_measured, withdraw_uncalibrated_mode,
         )
 
-        details = calculate_travel_basis(from_address, to_address, mode)
+        details = calculate_travel_basis(from_address, to_address, mode, **(
+            {'origin_coordinates': _from_coordinates} if _from_coordinates else {}))
         if not details:
             return {
                 'success': False,

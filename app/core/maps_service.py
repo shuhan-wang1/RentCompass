@@ -673,7 +673,8 @@ def _tfl_changes_count(journey: dict) -> int | None:
     return max(0, boardings - 1)
 
 
-def calculate_travel_details(origin_address: str, destination_address: str, mode: str = "transit") -> dict | None:
+def calculate_travel_details(origin_address: str, destination_address: str, mode: str = "transit",
+                             *, origin_coordinates=None) -> dict | None:
     """Travel time + route, with the BASIS of the number attached to the number.
 
     ``duration_minutes`` is set if and only if the TfL Journey Planner actually returned an
@@ -681,6 +682,9 @@ def calculate_travel_details(origin_address: str, destination_address: str, mode
     ``estimated_duration_minutes`` with a range and a caveat, and ``duration_minutes`` is
     ``None`` — a haversine guess must not arrive in a field that reads as a measured journey
     time. See ``core.commute_basis`` for why (short trips estimate 1.8x-6x low).
+
+    ``origin_coordinates`` are a listing's own (lat, lon): "King Square, London, EC1V" does not
+    geocode, and the model then fell back to a station and gave no monthly cost (V-18).
 
     Returns None only when the addresses could not be geocoded, i.e. a real failure.
     """
@@ -690,7 +694,7 @@ def calculate_travel_details(origin_address: str, destination_address: str, mode
         return None
     origin_n = _normalize_address_for_routing(origin_address)
     dest_n = _normalize_address_for_routing(destination_address)
-    o = _get_coordinates(origin_n)
+    o = origin_coordinates or _get_coordinates(origin_n)
     d = _get_coordinates(dest_n)
     if not o or not d:
         return None
@@ -707,7 +711,8 @@ def calculate_travel_details(origin_address: str, destination_address: str, mode
         out.update(describe_measured(int(journey['duration'])))
         return out
 
-    est = straight_line_travel_estimate(origin_n, dest_n, mode)
+    est = straight_line_travel_estimate(origin_n, dest_n, mode, **(
+        {'origin_coordinates': origin_coordinates} if origin_coordinates else {}))
     if est is None:
         return None
     out = {
@@ -732,7 +737,7 @@ def calculate_travel_details(origin_address: str, destination_address: str, mode
 
 
 def calculate_travel_basis(origin_address: str, destination_address: str,
-                           mode: str = "transit") -> dict | None:
+                           mode: str = "transit", *, origin_coordinates=None) -> dict | None:
     """CACHED, basis-aware travel payload — the single producer both commute tools read.
 
     Same shape as ``calculate_travel_details`` (it IS ``calculate_travel_details``, memoised),
@@ -755,7 +760,9 @@ def calculate_travel_basis(origin_address: str, destination_address: str,
         return None
     origin_n = _normalize_address_for_routing(origin_address)
     dest_n = _normalize_address_for_routing(destination_address)
-    cache_key = create_cache_key('calculate_travel_basis_v1', origin_n, dest_n, mode)
+    cache_key = (create_cache_key('calculate_travel_basis_v1', origin_n, dest_n, mode, str(origin_coordinates))
+                 if origin_coordinates else
+                 create_cache_key('calculate_travel_basis_v1', origin_n, dest_n, mode))
     cached_result = get_from_cache(cache_key)
     if cached_result is not None:
         print(
@@ -764,7 +771,8 @@ def calculate_travel_basis(origin_address: str, destination_address: str,
         )
         return cached_result
 
-    out = calculate_travel_details(origin_address, destination_address, mode)
+    out = calculate_travel_details(origin_address, destination_address, mode, **(
+        {'origin_coordinates': origin_coordinates} if origin_coordinates else {}))
     if out is None:
         return None
     set_to_cache(cache_key, out)
@@ -1110,7 +1118,7 @@ def get_environmental_data(address: str) -> dict:
 
 
 def straight_line_travel_estimate(origin_address: str, destination_address: str,
-                                  mode: str = "transit") -> dict | None:
+                                  mode: str = "transit", *, origin_coordinates=None) -> dict | None:
     """Distance-based travel-time GUESS. Returns ``{'minutes', 'distance_km'}`` or None.
 
     This is NOT a journey time, and callers must not present it as one — see
@@ -1122,14 +1130,14 @@ def straight_line_travel_estimate(origin_address: str, destination_address: str,
         return None
 
     # v2: the cached value used to be a bare int; the shape changed, so the key must too.
-    cache_key = create_cache_key('straight_line_travel_estimate_v2',
-                                 origin_address, destination_address, mode)
+    cache_key = create_cache_key('straight_line_travel_estimate_v2', origin_address,
+                                 destination_address, mode, *([str(origin_coordinates)] if origin_coordinates else []))
     cached_result = get_from_cache(cache_key)
     if cached_result is not None:
         return cached_result
 
     # Try to get coordinates
-    origin_coords = _get_coordinates(origin_address)
+    origin_coords = origin_coordinates or _get_coordinates(origin_address)
     dest_coords = _get_coordinates(destination_address)
 
     if not origin_coords or not dest_coords:

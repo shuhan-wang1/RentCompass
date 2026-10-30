@@ -610,3 +610,47 @@ def test_v_17_the_recap_reads_three_states(criteria, line):
     from core.loop_prompts import render_accumulated_criteria
     text = render_accumulated_criteria(criteria)
     assert line in text and "no_commute: False" not in text
+
+
+# V-18 ── a commute from a listing starts at the listing's own coordinates
+@pytest.mark.parametrize("tool", ["calculate_commute", "calculate_commute_cost"])
+def test_v_18_the_listing_coordinates_reach_the_commute_tool(tool):
+    from langchain_core.messages import AIMessage
+
+    from core.agent_loop import build_fc_nodes
+    from tests.test_agent_contract_guards import _state, _tc
+    from tests.test_qa_null_injection import _ValidatingProvider, _strict_null_args
+    message = "Whats the commute from the first one to Canary Wharf?"
+    state = _state(message)
+    state["extracted_context"]["last_results"] = [{"address": "King Square, London, EC1V",
+                                                   "geo_location": "51.5262,-0.0989"}]
+    args = _strict_null_args(tool, {"from_address": "King Square, London, EC1V",
+                                    "to_address": "Canary Wharf, London"})
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc(tool, args, "c0")])]
+    provider = _ValidatingProvider([tool])
+    asyncio.run(build_fc_nodes(provider)["execute_tools"](state))
+    (_, params), = provider.raw_calls
+    assert params["_from_coordinates"] == {"lat": 51.5262, "lng": -0.0989}
+
+
+def test_v_18_the_route_is_planned_from_those_coordinates(monkeypatch):
+    from core import maps_service
+    monkeypatch.setattr(maps_service, "_get_coordinates", lambda a: None if "King Square" in a else {"lat": 51.5, "lng": -0.02})
+    seen = {}
+
+    def journey(origin, destination, mode):
+        seen["origin"] = origin
+        return {"duration": 17, "legs": []}
+    monkeypatch.setattr(maps_service, "_tfl_journey", journey)
+    monkeypatch.setattr(maps_service, "_summarise_tfl_legs", lambda j: ([], "route"))
+    monkeypatch.setattr(maps_service, "_tfl_changes_count", lambda j: 0)
+    assert maps_service.calculate_travel_details("King Square, London, EC1V", "Bank", "transit") is None
+    out = maps_service.calculate_travel_details("King Square, London, EC1V", "Bank", "transit",
+                                                origin_coordinates={"lat": 51.52, "lng": -0.09})
+    assert out["duration_minutes"] == 17 and seen["origin"]["lat"] == 51.52
+
+
+@pytest.mark.parametrize("address,zone", [("King Square, London, EC1V", 1), ("St. Clements Street, Islington, London, N7", 2)])
+def test_v_18_a_display_address_gives_its_zone(address, zone):
+    from core.tools.calculate_commute_cost import _get_zone_from_address
+    assert _get_zone_from_address(address) == zone

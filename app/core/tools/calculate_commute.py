@@ -36,7 +36,8 @@ def transport_hub_address(address: str) -> str:
 def calculate_commute_impl(
     from_address: str,
     to_address: str,
-    mode: str = "transit"
+    mode: str = "transit",
+    _from_coordinates=None,
 ) -> dict:
     """
     计算两个地址之间的通勤时间
@@ -75,7 +76,8 @@ def calculate_commute_impl(
         routed_to = transport_hub_address(to_address)
 
         # 调用地图服务计算通勤时间 + 真实路线（TfL 线路明细）
-        details = calculate_travel_details(routed_from, routed_to, mode)
+        details = calculate_travel_details(routed_from, routed_to, mode, **(
+            {'origin_coordinates': _from_coordinates} if _from_coordinates else {}))
 
         if not details:
             return {

@@ -368,6 +368,19 @@ def _london_now():
     return datetime.now(ZoneInfo("Europe/London"))
 
 
+def _now_journey_time() -> dict:
+    """Evidence for a journey planned for the current London time."""
+    now = _london_now()
+    evidence = {'timezone': 'Europe/London', 'time_basis': 'now',
+                'planned_at': now.strftime('%Y-%m-%d %H:%M')}
+    if now.hour < 6:
+        evidence['night_service_note'] = (
+            f"Planned for now ({now.strftime('%H:%M')} London time), so this is a night-service "
+            "journey. A weekday daytime journey is usually quicker and may use other lines and "
+            "fares; state the planning time, and offer to plan it for a daytime departure.")
+    return evidence
+
+
 _MONTHS = {name.lower(): month for month in range(1, 13)
            for name in (calendar_date(2000, month, 1).strftime('%B'),
                         calendar_date(2000, month, 1).strftime('%b'))}
@@ -696,6 +709,11 @@ def _do_journey(from_location: str, to_location: str, want_fare: bool,
         out["planned_for"] = planned_for
     if time_evidence:
         out['journey_time'] = time_evidence
+    elif requested_time is None:
+        # Planned for "now" (the documented default): say when that was, and at night that the
+        # result is a night-service journey (R4-14: 01:20-01:50 queries returned 102-139 min
+        # night buses and a bus fare for a tube question).
+        out['journey_time'] = _now_journey_time()
     # Note which stops we matched (satisfies the disambiguation "note in output").
     if frm.get('name') or to.get('name'):
         out["stations_used"] = f"{frm.get('name') or from_location} -> {to.get('name') or to_location}"

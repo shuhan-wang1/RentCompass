@@ -682,3 +682,24 @@ def test_r4_07b_a_wind_speed_the_result_does_not_hold_is_still_unsupported():
     from uk_rent_agent.agent.critic import unsupported_external_numbers
     evidence = [{"get_weather#1": _WEATHER}]
     assert unsupported_external_numbers("Wind 30 km/h today.", evidence, "weather")
+
+
+# R4-14 (conservative part) ── a journey planned for "now" states when, and flags night ─
+def test_r4_14_a_night_journey_says_it_was_planned_for_now(monkeypatch):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from core.tools import get_transport_info as gti
+    monkeypatch.setattr(gti, "_london_now",
+                        lambda: datetime(2026, 10, 30, 1, 20, tzinfo=ZoneInfo("Europe/London")))
+    evidence = gti._now_journey_time()
+    assert evidence["time_basis"] == "now" and evidence["planned_at"] == "2026-10-30 01:20"
+    assert "night-service" in evidence["night_service_note"]
+
+
+def test_r4_14_a_daytime_journey_has_no_night_note(monkeypatch):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from core.tools import get_transport_info as gti
+    monkeypatch.setattr(gti, "_london_now",
+                        lambda: datetime(2026, 10, 30, 8, 30, tzinfo=ZoneInfo("Europe/London")))
+    assert "night_service_note" not in gti._now_journey_time()

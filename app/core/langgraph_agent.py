@@ -1070,10 +1070,30 @@ _DEST_TRAILING_TIME = re.compile(
 
 # 「改成在金丝雀码头上班」, 「工作地点改成金丝雀码头」: the workplace moved (V-07).
 _ZH_WORKPLACE_CHANGE = re.compile(
-    r"(?:(?:工作地点|上班地点|实习地点|公司|单位|办公室)\s*(?:也)?(?:改成|改为|改到|换成|换到|搬到|变成|搬去)\s*(?:了)?\s*(?:在|去|到)?\s*"
+    r"(?:(?:工作地点|上班地点|实习地点|通勤地点|通勤目的地|目的地|公司|单位|办公室)\s*(?:也)?(?:改成|改为|改到|换成|换到|搬到|变成|搬去)\s*(?:了)?\s*(?:在|去|到)?\s*"
     r"([^，。！？,.!?;；]{2,30}?)\s*(?:附近|那边|这边)?\s*(?:上班|工作|了)?\s*(?=$|[，。！？,.!?;；])"
     r"|(?:改成|改为|改到|换成|换到|搬到)\s*(?:了)?\s*(?:在|去|到)\s*"
     r"([^，。！？,.!?;；]{2,30}?)\s*(?:附近|那边|这边)?\s*(?:上班|工作|实习|办公))")
+
+
+# The place named before its label is rewritten to the labelled form the parser below reads.
+_WORKPLACE_NAMED_FIRST = None
+_NOT_A_PLACE_RUN = (r"(?!(?:What|Where|Which|Who|Why|When|How|It|This|That|There|Here|Change|Switch|Update|Set|Move|"
+                    r"Make|Use|Keep|Remove|Drop|Forget|Clear|Cancel|Is|Was|Actually|Now|Please|And|But|So)\b)")
+
+
+def _workplace_named_first(text: str) -> str:
+    """``text`` with "Make it Canary Wharf as the workplace" read as "my workplace is Canary
+    Wharf". "My" needs a verb or a copula: "Change my commute" names no place."""
+    global _WORKPLACE_NAMED_FIRST
+    if _WORKPLACE_NAMED_FIRST is None:
+        from core.tools.search_properties import WORKPLACE_AFTER_PLACE
+        place = r"[A-Z][\w'’\-]*(?:\s+[A-Z][\w'’\-]*){0,3}"
+        _WORKPLACE_NAMED_FIRST = re.compile(
+            r"\b(?i:make|have|use|set)(?:\s+(?i:it|that))?\s+(" + place + r")(?i:" + WORKPLACE_AFTER_PLACE + r")"
+            r"|\b" + _NOT_A_PLACE_RUN + r"(" + place + r")(?i:" + WORKPLACE_AFTER_PLACE.replace(
+                r"(?:is\s+)?(?:now\s+)?my", r"is\s+(?:now\s+)?my") + r")")
+    return _WORKPLACE_NAMED_FIRST.sub(lambda m: f"my workplace is {m.group(1) or m.group(2)}", text)
 
 
 def _destination_clause(text: str) -> str:
@@ -1280,12 +1300,13 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     # is never an address, even if a generic place classifier accepts it.
     # "my workplace is King's Cross station" names the place without a preposition; a
     # correction phrased that way used to change nothing (A-03). "St." is not a sentence end.
-    _dest_source = re.sub(r"\b(St|Dr|Mt)\.\s", r"\1 ", current_message)
+    _dest_source = _workplace_named_first(re.sub(r"\b(St|Dr|Mt)\.\s", r"\1 ", current_message))
     # The preposition-free form is only for "my office/workplace is <Place>", and the place
     # must be capitalised: "my job is remote", "my work is hybrid", "my job is stressful"
     # name no place (review of the A-03 fix).
     labelled_destination = re.search(
-        r'\b(?:(?i:my (?:office|workplace)\s+is)\s+(?=[A-Z])'
+        r'\b(?:(?i:my (?:office|workplace)\s+is(?:\s+now)?|(?:(?:my|the)\s+)?(?:commute\s+)?destination\s*(?:is(?:\s+now)?|[:=]))'
+        r'\s+(?=[A-Z])'
         r'(?!(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Weekdays?|Weekends?|'
         r'January|February|March|April|May|June|July|August|September|October|November|'
         r'December|Hybrid|Remote|Closed|Open)\b)|'
@@ -1293,7 +1314,15 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         # the old destination while the commute tool used the new one (R3-03).
         r'(?i:(?:my (?:office|workplace)(?:\s+(?:has\s+)?(?:moved|relocated)|\s+is\s+(?:now|moving))?'
         r'|i\s+(?:(?:actually|now|currently|also|still|really)\s+)?work(?:\s+(?:now|actually|currently))?'
-        r'|commute|(?:a\s+)?(?:public[- ]transport\s+)?journey)'
+        # "Change the commute destination to King's Cross", "Commute is now to Stratford" and
+        # "Change my commute from Bank to Stratford" left the destination, and the reply
+        # claimed the change (W-03).
+        r'|commut(?:e|ing)(?:\s+destination)?(?:\s+is\s+now|\s+has\s+moved|\s+now)?'
+        # With a verb only: "the commute from the first one to Bank" asks about a journey.
+        r'|(?:change|switch|move|update)\s+(?:the\s+|my\s+)?commute(?:\s+destination)?\s+from\s+'
+        r'[^.!?;,\n]{2,40}?(?=\s+to\s)'
+        r'|(?:change|set|update|switch|move)\s+(?:the\s+|my\s+)?destination'
+        r'|(?:a\s+)?(?:public[- ]transport\s+)?journey)'
         r'\s+(?:is\s+)?(?:next to|near|at|to|in)\s+)'
         # "I will be working at Canary Wharf instead", "my new job is at Bank" (V-07). "at a
         # bank" and "in finance" say what the job is, not where.

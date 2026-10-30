@@ -1930,14 +1930,24 @@ def travel_target_at(text: str, start: int) -> bool:
     return bool(_TRAVEL_BEFORE_PLACE.search(before))
 
 
+# "Make it Canary Wharf as the workplace instead", "Make Bank my workplace", "Stratford is now my
+# office": the place comes first (W-03).
+WORKPLACE_AFTER_PLACE = (
+    r"\s+(?:as\s+(?:the\s+|my\s+|our\s+)?(?:new\s+)?|(?:is\s+)?(?:now\s+)?my\s+(?:new\s+)?)"
+    r"(?:workplace|office|place\s+of\s+work|commute\s+destination|commute|destination)\b")
+_WORKPLACE_AFTER_PLACE = re.compile(WORKPLACE_AFTER_PLACE, re.I)
+
+
 def names_place_as_workplace(text: str, place: str) -> bool:
-    """True when every mention of ``place`` in ``text`` is introduced as a workplace."""
+    """True when every mention of ``place`` in ``text`` is introduced as a workplace or as the
+    end of the commute."""
     source = re.sub(r"[’']", "", str(text or ""))
     key = re.sub(r"[’']", "", str(place or "")).strip()
     if not key:
         return False
-    starts = [m.start() for m in re.finditer(r"(?<![a-z])" + re.escape(key) + r"(?![a-z])", source, re.I)]
-    return bool(starts) and all(workplace_place_at(source, start) for start in starts)
+    found = list(re.finditer(r"(?<![a-z])" + re.escape(key) + r"(?![a-z])", source, re.I))
+    return bool(found) and all(workplace_place_at(source, m.start()) or travel_target_at(source, m.start())
+                               or _WORKPLACE_AFTER_PLACE.match(source, m.end()) for m in found)
 
 
 # "Tell me more about Arbutus Street in Haggerston." changed the search area Hackney ->

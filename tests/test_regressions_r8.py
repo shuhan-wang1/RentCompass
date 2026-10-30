@@ -130,3 +130,67 @@ def test_w_02_a_filter_is_not_withdrawn_by_a_question():
     stored = dict(_CAMDEN, property_features=["furnished", "lift"])
     assert _state_node(stored, "电梯要求取消了吗？")["property_features"] == ["furnished", "lift"]
     assert _state_node(stored, "家具要求取消了吗？")["property_features"] == ["furnished", "lift"]
+
+
+# W-03 ── a workplace change moves the destination and leaves the area
+def _search_params(message: str, accumulated: dict, **model) -> dict:
+    """What the executor sends to the tool after this turn's state node."""
+    import asyncio
+
+    from langchain_core.messages import AIMessage
+
+    from core.agent_loop import build_fc_nodes
+    from tests.test_agent_contract_guards import _state, _tc
+    from tests.test_qa_null_injection import _ValidatingProvider, _strict_null_args
+    state = _state(message)
+    state["accumulated_search_criteria"] = _state_node(accumulated, message)
+    args = _strict_null_args("search_properties", {"user_query": message, **model})
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("search_properties", args, "c0")])]
+    provider = _ValidatingProvider(["search_properties"])
+    asyncio.run(build_fc_nodes(provider)["execute_tools"](state))
+    (_, params), = provider.calls
+    return params
+
+
+_ISLINGTON = {"area": "Islington", "areas": ["Islington"], "bedrooms": 1, "max_budget": 2200, "room_type": "whole",
+              "commute_destination": "Bank", "destination": "Bank", "max_travel_time": 40}
+
+
+@pytest.mark.parametrize("message,destination", [
+    ("Actually make it Canary Wharf as the workplace instead", "Canary Wharf, London E14 5AB"),
+    ("Actually make it King's Cross as the workplace instead", "King's Cross"),
+    ("Make Stratford my workplace", "Stratford"), ("Stratford is now my office", "Stratford"),
+    ("Use Stratford as my office", "Stratford"), ("Change the commute destination to King's Cross", "King's Cross"),
+    ("Change my commute destination to Stratford", "Stratford"), ("Set the destination to Stratford", "Stratford"),
+    ("Commute is now to Stratford", "Stratford"), ("My commute is now to Canary Wharf", "Canary Wharf, London E14 5AB"),
+    ("Commute destination is now Stratford", "Stratford"), ("Commute destination: Stratford", "Stratford"),
+    ("Change my commute from Bank to Stratford", "Stratford"), ("my workplace is now Stratford", "Stratford"),
+    ("Switch my commute to King's Cross instead of Bank", "King's Cross"), ("Change my workplace to Stratford", "Stratford"),
+    ("通勤目的地改成Stratford", "Stratford"), ("把通勤地点换成金丝雀码头", "Canary Wharf, London E14 5AB"),
+    ("把上班地点改成Stratford", "Stratford"),
+])
+def test_w_03_the_workplace_moves_and_the_area_stays(message, destination):
+    out = _state_node(_ISLINGTON, message)
+    assert out["area"] == "Islington" and out["areas"] == ["Islington"]
+    assert out["commute_destination"] == destination and out["destination"] == destination
+
+
+@pytest.mark.parametrize("message", ["What is my commute destination?", "Where is my workplace?", "通勤改成30分钟"])
+def test_w_03_a_question_or_a_limit_moves_nothing(message):
+    assert _state_node(_ISLINGTON, message)["commute_destination"] == "Bank"
+
+
+@pytest.mark.parametrize("message", ["Make it Stratford", "Make it Stratford instead", "I want a flat near Stratford"])
+def test_w_03_an_area_switch_stays_one(message):
+    out = _state_node(_ISLINGTON, message)
+    assert out["area"] == "Stratford" and out["commute_destination"] == "Bank"
+
+
+@pytest.mark.parametrize("message,destination", [
+    ("Actually make it Canary Wharf as the workplace instead", "Canary Wharf, London E14 5AB"),
+    ("Commute to Stratford instead", "Stratford"), ("把上班地点改成Stratford", "Stratford"),
+    ("把通勤地点换成金丝雀码头", "Canary Wharf, London E14 5AB"),
+])
+def test_w_03_the_search_runs_at_the_old_area_with_the_new_destination(message, destination):
+    params = _search_params(message, _ISLINGTON, commute_destination="Bank")
+    assert params["area"] == "Islington" and params["commute_destination"] == destination

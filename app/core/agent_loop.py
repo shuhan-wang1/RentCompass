@@ -4177,8 +4177,11 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             kept_city = (switched if switched and bare_city_downgrades(switched, p.get("area"))
                          else None)
             from core.tools.search_properties import names_place_as_workplace
+            from core.langgraph_agent import _ZH_WORKPLACE_CHANGE
             if (switched and (p.get("area") or acc.get("area"))
-                    and names_place_as_workplace(p.get("current_message") or "", switched)):
+                    and (names_place_as_workplace(p.get("current_message") or "", switched)
+                         # 「把上班地点改成Stratford」: the zh parser's own reading (W-03).
+                         or _ZH_WORKPLACE_CHANGE.search(p.get("current_message") or ""))):
                 switched = None     # a workplace never replaces a known home area (r19)
         except Exception:
             switched = kept_city = None

@@ -348,7 +348,12 @@ def housing_update_text(text: str) -> str:
                 r'|\b(?:my (?:job|work)|a job)\b.{0,35}\b(?:near|next to|at|in)\b'
                 r'|\b(?:wheelchair|step.free|doorways?|corridors?|bathroom|cats?|pets?|landlord|permission|consent|lifts?|elevators?|balcony|garden)\b'
                 r'|\bfocus on\b|月租|租金|预算|卧室|整租|到岗|入住|起租|轮椅|无台阶|猫|许可|电梯|阳台|花园', clause, re.I)
-            if area_action or explicit_slot or re.search(r'\b(?:search|find|rent)\b.{0,35}\b(?:flat|home|house|property|properties|studio|bedroom)|'
+            # "Show me Angel flats under £2100 and tell me the weather there." searched the old
+            # area (R4-07, 18/18): a "show me" request and "<homes> under £N" are housing too.
+            if area_action or explicit_slot or re.search(r'\b(?:search|find|rent|show(?:\s+me)?|look(?:ing)?\s+for|get\s+me)\b'
+                         r'.{0,35}\b(?:flat|home|house|property|properties|studio|bedroom|apartment|places|listings)|'
+                         r'\b(?:flats?|homes?|houses?|studios?|apartments?|places|listings)\b.{0,25}'
+                         r'\b(?:under|below|up\s+to|max(?:imum)?)\s*£?\s*\d|'
                          r'\b(?:set|change|raise|lower|remove|drop)\b.{0,30}\b(?:budget|bedroom|area|room type|commute destination|my office)|'
                          r'找房|搜索房源|找.{0,8}(?:公寓|卧|住处)|预算改|改为|改回|恢复', clause, re.I):
                 affirmative.append(clause)
@@ -774,8 +779,10 @@ def cleared_fields(text: str) -> set[str]:
 # still carried the destination (A-F5). The topic word must be the direct object of the
 # withdrawal ("forget [everything we said] [about] [the] location"); "Don't forget the
 # area" and "ignore my friend's area" are not withdrawals.
+# "Retract the commute again." and "Retract the area" changed nothing (R4-05, R4-02).
 _TOPIC_VERB = (r"(?<!n't )(?<!\bnot )(?<!\bnever )"
-               r"\b(?:forget|disregard|ignore|never\s*mind|scrap|drop|clear|reset|cancel|ditch)\b")
+               r"\b(?:forget|disregard|ignore|never\s*mind|scrap|drop|clear|reset|cancel|ditch|"
+               r"retract|withdraw|remove|undo|lose|delete)\b")
 _TOPIC_EVERYTHING = (r"(?:\s+about)?(?:\s+(?:everything|anything|all))?"
                      r"(?:\s+(?:that\s+)?(?:we|i|you)(?:\s+(?:have|'ve|had))?\s+"
                      r"(?:said|discussed|talked\s+about|mentioned|covered|agreed)"
@@ -789,11 +796,27 @@ _TOPIC_RE = {
                            r"|(?:忘掉|忘记|忘了|不管|别管|不考虑|不用考虑|不要考虑)[^。，,.!?；;]{0,12}(?:位置|地点|地段)",
                            re.I),
     'area': re.compile(_TOPIC_VERB + _TOPIC_EVERYTHING + _TOPIC_OBJECT
-                       + r"(?:areas?|neighbou?rhoods?)\b"
-                       r"|(?:忘掉|忘记|忘了|不管|别管|不考虑|不用考虑|不要考虑)[^。，,.!?；;]{0,12}(?:区域|地区)",
+                       + r"(?:areas?|neighbou?rhoods?)\b(?!\s+(?:like|near|around|with)\b)"
+                       r"|(?:忘掉|忘记|忘了|不管|别管|不考虑|不用考虑|不要考虑|撤销|撤回|取消|去掉)"
+                       r"[^。，,.!?；;]{0,12}(?:区域|地区)"
+                       # "I don't care about the area any more, anywhere in London." kept Bow
+                       # and answered from the old results as "outside the requested areas"
+                       # (R4-02): the user widens the search to anywhere.
+                       r"|\b(?:don.t|do\s+not|no\s+longer)\s+care\s+(?:about\s+)?(?:the\s+|which\s+|what\s+)?"
+                       r"(?:areas?|neighbou?rhoods?)\b"
+                       r"|\b(?:areas?|neighbou?rhoods?)\s+(?:doesn.t|does\s+not|no\s+longer|don.t)\s+matters?\b"
+                       r"|\bany\s+(?:area|neighbou?rhood|part\s+of\s+(?:london|the\s+city))\s+"
+                       r"(?:is|will\s+do|works)\b"
+                       r"|\banywhere(?=\s+in\s+(?:london|the\s+city)\b|\s+(?:is\s+fine|is\s+ok(?:ay)?|will\s+do|"
+                       r"works|at\s+all)\b|\s*(?:[.,!;]|$))"
+                       r"|哪里都(?:行|可以|好)|哪儿都(?:行|可以|好)|哪都(?:行|可以)|(?:伦敦)?任何(?:地方|区域|地区)都?(?:行|可以)?"
+                       r"|(?:区域|地区)(?:无所谓|不限|都行|都可以)|不限(?:区域|地区)",
                        re.I),
     'commute': re.compile(_TOPIC_VERB + _TOPIC_EVERYTHING + _TOPIC_OBJECT
-                          + r"(?:commut(?:e|es|ing)|journey\s+to\s+work)\b(?!\s+(?:time|limit|filter|cap|max))",
+                          + r"(?:commut(?:e|es|ing)|journey\s+to\s+work)\b"
+                          r"(?!\s+(?:time|limit|filter|cap|max|times|duration))"
+                          # 「撤销通勤要求，在Hackney找」 (R4-04); 取消通勤时间限制 lifts only the limit.
+                          r"|(?:撤销|撤回|取消|去掉|删除|删掉)[^。，,.!?；;]{0,6}通勤(?!时间|时长|限制)",
                           re.I),
 }
 
@@ -923,6 +946,28 @@ def one_off_distance_question(text: str) -> bool:
                     or re.match(r'\s*(?:out\s+of\s+curiosity,?\s+)?(?:how|is|are|what|which)\b', sentence, re.I)
                     or re.search(r'[吗呢]\s*$|多远|多久', sentence))
         if question and _DISTANCE_QUESTION.search(sentence) and _LISTING_DEICTIC.search(sentence):
+            return True
+    return False
+
+
+_TRANSPORT_QUESTION = re.compile(
+    r"\b(?:fares?|zones?|travel\s*cards?|oyster|tickets?|how\s+(?:do|can|would)\s+i\s+get|"
+    r"(?:tube|train|bus|dlr)\s+(?:from|to|between)|transport\s+links?|connected)\b"
+    r"|票价|几区|怎么去|交通(?:怎么样|方便吗)", re.I)
+
+
+def one_off_transport_question(text: str) -> bool:
+    """True when the message asks about a fare, zone or journey and states no commute of the
+    user's own: "What are the fares and zones for Clapham to Canary Wharf?" made Canary
+    Wharf the search's commute destination for the rest of the conversation (R4-06)."""
+    value = str(text or '')[:2000]
+    if _OWN_COMMUTE_STATEMENT.search(value):
+        return False
+    for sentence in re.split(r'(?<=[!?？。！])\s*|(?<=\.)\s+', value):
+        question = (sentence.rstrip().endswith(('?', '？'))
+                    or re.match(r'\s*(?:how|is|are|what|which|does|do)\b', sentence, re.I)
+                    or re.search(r'[吗呢]\s*$', sentence))
+        if question and _TRANSPORT_QUESTION.search(sentence):
             return True
     return False
 

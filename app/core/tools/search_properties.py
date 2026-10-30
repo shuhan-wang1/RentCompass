@@ -915,6 +915,16 @@ def _extract_bedrooms(text: str):
     t = scoped_update_text(text).lower()
     nums = {'零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, 'six': 6, **_WORD_NUMS}
     t = re.sub(r'\bminimum bedroom count\s+(?:with|to|of|is)\s+([0-6]|one|two|three|four|five|six)\b', r'at least \1 bedrooms', t)
+    # The field named before its value: "Set bedrooms to 3", "the bedrooms to 2", "beds: 2",
+    # 「把卧室数改成两间」「房间数改成3」 kept the old count (R4-04, 9/9).
+    t = re.sub(r'\b(?:number\s+of\s+bed(?:room)?s|bed(?:room)?\s+count|bed(?:room)?s?)\s*'
+               r'(?:(?:to|at|=|:)\s*|(?:is|are)\s+now\s+|now\s+)'
+               r'([0-6]|one|two|three|four|five|six)\b(?!\s*(?:bed|mins?\b|minutes?|hours?|%|pm\b|am\b|:\d|\.\d))',
+               r'\1 bedrooms', t)
+    t = re.sub(r'(?:卧室(?:数量?|个数)?|房间(?:数量?|个数)|居室数?)\s*'
+               r'(?:改成|改为|改到|设为|设成|调到|调整为|调整到|换成|变成|要|[=:：])\s*'
+               r'([0-6一二两三四五六])\s*(?:个|间|室)?',
+               r'\1间卧室', t)
     # 「改成2个卧室」「两个卧室」「两室一厅」 (S-01): a measure word may sit before 卧室, and 室 on
     # its own is a bedroom when it ends the phrase or comes before 厅/卫.
     pattern = (r'(?<!\d)([0-6零一二两三四五六]|one|two|three|four|five|six)\s*-?\s*(?:bed(?:room)?s?\b|'
@@ -1249,6 +1259,10 @@ _ZH_AREA_MAP = {
     "阿克顿": "Acton", "伯蒙德西": "Bermondsey", "海格特": "Highgate",
     "海布里": "Highbury", "芬斯伯里公园": "Finsbury Park", "沃尔瑟姆斯托": "Walthamstow",
     "迈尔恩德": "Mile End", "金斯顿": "Kingston", "肯特镇": "Kentish Town",
+    # "帮我找贝斯沃特的两居室" kept Hackney/Clapham, and "伦敦玛丽女王大学附近的房子" kept Bristol
+    # (R4-06): homes near Queen Mary are a Mile End search.
+    "贝斯沃特": "Bayswater", "贝斯沃特尔": "Bayswater",
+    "伦敦玛丽女王大学": "Mile End", "玛丽女王大学": "Mile End",
 }
 
 # Curated set of well-known UK cities + London boroughs/areas (canonical spelling).
@@ -2132,7 +2146,9 @@ def _in_place_list(text: str, start: int, end: int) -> bool:
 def _follow_up_cue(text: str, start: int, end: int) -> bool:
     if _in_place_list(text, start, end):
         return False
-    before = re.split(r"[.;!?,，。；！？\n]", text[max(0, start - 40):start])[-1]
+    # Leading spaces are dropped so the clause-start cue "area X" also matches after a comma:
+    # "Set bedrooms to 3, area Shoreditch, budget £3,500." kept Camden (R4-04).
+    before = re.split(r"[.;!?,，。；！？\n]", text[max(0, start - 40):start])[-1].lstrip()
     after = text[end:end + 30]
     if _FOLLOW_UP_CUE_BEFORE.search(before) or re.match(r"\s+instead\b", after):
         return True

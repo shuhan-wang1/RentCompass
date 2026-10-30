@@ -374,7 +374,14 @@ def searched_without_budget(artifacts) -> bool:
 _APPLIED_BUDGET_CLAIM = re.compile(
     r"\b(?:within|under|below|inside|in)\s+(?:your|the)\s+£\s?\d[\d,]*(?:\s*(?:/|per|a)\s*(?:month|pcm|mo))?"
     r"\s+(?:monthly\s+)?(?:limit|budget|ceiling|max(?:imum)?|cap)\b|"
-    r"(?:预算|上限)\s*£?\s?\d[\d,]*\s*(?:镑)?(?:以内|之内|范围内)", re.I)
+    r"(?:预算|上限)\s*£?\s?\d[\d,]*\s*(?:镑)?(?:以内|之内|范围内)|"
+    # "I applied your saved £2,000 monthly maximum when searching" while the search had no
+    # budget (R4-11).
+    r"\b(?:applied|used|using|applying|kept|keeping)\s+(?:your|the)\s+(?:saved\s+|stored\s+|remembered\s+)?"
+    r"(?:£\s?\d[\d,]*\s+)?(?:monthly\s+)?(?:budget|limit|ceiling|max(?:imum)?|cap)\b|"
+    r"\b(?:applied|used|using|applying)\s+(?:your|the)\s+(?:saved\s+|stored\s+|remembered\s+)?"
+    r"£\s?\d[\d,]*|"
+    r"(?:已|已经)?(?:按|按照|用|使用)(?:了)?(?:你|您)?(?:保存|记住|之前保存)的预算", re.I)
 
 
 def disclose_unapplied_budget_claim(text: str, searched_without_budget: bool,

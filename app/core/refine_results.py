@@ -455,8 +455,32 @@ def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, A
                          clause, re.I):
             return None
 
+    # A question about getting around ("What are the fares and zones for Clapham to Canary
+    # Wharf?", "How is Hackney connected by tube?") names an area without asking to narrow the
+    # list: it shrank the cards 10 -> 5 and got no answer (R4-02b). Any other question that
+    # does not ask to narrow ("only", "which of these", "keep", "what about X?") goes to the
+    # model too.
+    narrowing = re.search(
+        r'\b(?:only|just|keep|filter|remove|drop|exclude|hide|sort|order|rank|narrow|cheapest|'
+        r'under|over|below|above|which\s+(?:of\s+)?(?:these|those|them|ones)|any\s+of\s+(?:these|them))\b|'
+        r'只|仅|保留|筛选|去掉|排除|排序|其中|这些', text, re.I)
+    if not narrowing and re.search(
+            r'\b(?:fares?|zones?|travel\s*cards?|oyster|transport|connected|connections?|links?|'
+            r'tube|underground|overground|dlr|trains?|buses|bus|commut\w*|stations?|'
+            r'how\s+(?:far|long|do\s+i\s+get)|get\s+(?:to|from))\b|'
+            r'交通|地铁|通勤|几区|怎么去|多远|多久|公交|火车', text, re.I):
+        return None
+    if (not narrowing and text.rstrip().endswith(('?', '？'))
+            and not re.match(r'\s*(?:and\s+)?(?:what|how)\s+about\b', text, re.I)
+            and re.search(r'^\s*(?:what|which|how|is|are|does|do|where|when|why|who|can|could)\b|'
+                          r'吗[?？]?\s*$|[什怎哪]', text, re.I)):
+        return None
     # Hard bail-outs: this is a new/wider search, not a narrowing of what is shown.
     if _NEW_SEARCH_RE.search(text) or _WIDEN_RE.search(text):
+        return None
+    # Withdrawing or widening the area ("anywhere in London") needs new data (R4-02).
+    from core.constraint_updates import withdrawn_topics
+    if withdrawn_topics(text):
         return None
     from core.tools.search_properties import _extract_area, _extract_budget_clear
     if _extract_budget_clear(text):
@@ -471,6 +495,10 @@ def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, A
     if named_area and names_place_as_workplace(text, named_area):
         # "I also work in Shoreditch" names a commute destination, not a subset (r18).
         named_area = None
+    if named_area and named_area.strip().lower() == 'london' and not any(
+            str(r.get('area') or '').strip().lower() == 'london' for r in previous if isinstance(r, dict)):
+        # The whole city covers the boroughs on screen: a wider search, not a subset (R4-02).
+        return None
     if named_area:
         if re.search(r'\b(?:and|or)\b|和|及|、', text, re.I):
             labels = {str(r.get('area')).strip().lower()

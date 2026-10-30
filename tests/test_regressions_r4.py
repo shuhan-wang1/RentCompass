@@ -154,3 +154,234 @@ def test_r4_01_a_late_job_of_an_earlier_turn_does_not_write_the_value_back(r4_me
              + datetime.timedelta(seconds=1)).isoformat()
     assert store.erased_fields_since(user, later) == ()
     assert store.erased_fields_since(user, started) == ("budget",)
+
+
+# R4-02 ── "anywhere in London" widens the area; it never re-filters the old results ──
+_BOW_NO_COMMUTE = {"area": "Bow", "areas": ["Bow"], "bedrooms": 1, "max_budget": 2200,
+                   "room_type": "whole", "no_commute": True}
+_SHOWN_BOW = [{"area": "Bow", "address": "Tredegar Square, London, E3", "price": "£1650/month",
+               "bedrooms": 1},
+              {"area": "Bow", "address": "Yeo Street, London E3", "price": "£1700/month",
+               "bedrooms": 1}]
+
+
+@pytest.mark.parametrize("message", [
+    "Retract the area: I don't care about the area any more, anywhere in London.",
+    "anywhere in London",
+    "伦敦任何地方都可以",
+    "哪里都行",
+    "Any area is fine",
+])
+def test_r4_02_anywhere_widens_a_london_search_to_london(message):
+    from core.refine_results import parse_refinement
+    acc = _state_node(_BOW_NO_COMMUTE, message)
+    assert acc["area"] == "London" and acc["areas"] == ["London"]
+    assert parse_refinement(message, _SHOWN_BOW) is None
+
+
+@pytest.mark.parametrize("message", [
+    "I don't care about the area any more", "Retract the area", "撤销区域要求",
+])
+def test_r4_02_withdrawing_the_area_clears_it(message):
+    acc = _state_node(_BOW_NO_COMMUTE, message)
+    assert not acc.get("area") and not acc.get("areas")
+
+
+@pytest.mark.parametrize("message", [
+    "Is there anywhere cheaper?", "anywhere near the station?", "Don't forget the area",
+])
+def test_r4_02_other_anywhere_phrases_keep_the_area(message):
+    assert _state_node(_BOW_NO_COMMUTE, message)["area"] == "Bow"
+
+
+def test_r4_02_london_covers_every_london_area_in_the_validator():
+    from core.candidate_validation import validate_candidates
+    rows = [{"title": "Tredegar Square", "address": "Tredegar Square, London, E3", "area": "Bow",
+             "price": "£1650/month", "bedrooms": 1, "room_type": "whole",
+             "url": "https://example.test/1"},
+            {"title": "Mill Road", "address": "Mill Road, Cambridge", "area": "Cambridge",
+             "price": "£1650/month", "bedrooms": 1, "room_type": "whole",
+             "url": "https://example.test/2"}]
+    out = validate_candidates(rows, {"area": "London", "areas": ["London"], "bedrooms": 1,
+                                     "max_budget": 2200, "room_type": "whole", "no_commute": True})
+    reasons = {s["candidate"]["url"]: s["reasons"] for s in out["statuses"]}
+    assert not any("outside the requested areas" in r for r in reasons["https://example.test/1"])
+    assert any("outside the requested areas" in r for r in reasons["https://example.test/2"])
+
+
+# R4-02b ── a transport question naming a shown area is a question, not a filter ─────
+_SHOWN_TWO_AREAS = [{"area": "Clapham", "address": "x, Clapham, London SW4", "price": "£2000/month"},
+                    {"area": "Hackney", "address": "y, Hackney, London E8", "price": "£2100/month"}]
+
+
+@pytest.mark.parametrize("message", [
+    "What are the fares and zones for Clapham to Canary Wharf?",
+    "Which zones are the Clapham ones in, and what's a travelcard?",
+    "Clapham transport links?",
+    "How is Hackney connected by tube?",
+    "Is Clapham safe?",
+    "Clapham到金丝雀码头的地铁要多久？",
+])
+def test_r4_02b_a_question_about_a_shown_area_reaches_the_model(message):
+    from core.refine_results import parse_refinement
+    assert parse_refinement(message, _SHOWN_TWO_AREAS) is None
+
+
+@pytest.mark.parametrize("message", [
+    "only the Clapham ones", "Which of these are in Clapham?", "just the Hackney ones please",
+])
+def test_r4_02b_an_explicit_narrowing_still_refines(message):
+    from core.refine_results import parse_refinement
+    spec = parse_refinement(message, _SHOWN_TWO_AREAS)
+    assert spec and spec["filters"][0]["kind"] == "area"
+
+
+# R4-04 ── "<field> to <value>" and list-form corrections ────────────────────────────
+_CAMDEN_1BED = {"area": "Camden", "areas": ["Camden"], "bedrooms": 1, "max_budget": 2200,
+                "room_type": "whole"}
+
+
+@pytest.mark.parametrize("message,area,beds,budget", [
+    ("Set bedrooms to 3, area Shoreditch, budget £3,500.", "Shoreditch", 3, 3500),
+    ("Set the budget to £2,000 and the bedrooms to 2.", "Camden", 2, 2000),
+    ("把卧室数改成两间，预算改成2600", "Camden", 2, 2600),
+    ("撤销通勤要求，在Hackney找", "Hackney", 1, 2200),
+    ("bedrooms: 2", "Camden", 2, 2200),
+    ("房间数改成3", "Camden", 3, 2200),
+    ("卧室改成2个", "Camden", 2, 2200),
+    ("Bedrooms now 2", "Camden", 2, 2200),
+    ("Change the area to Shoreditch and make it 2 bedrooms", "Shoreditch", 2, 2200),
+])
+def test_r4_04_a_field_named_before_its_value_is_applied(message, area, beds, budget):
+    acc = _state_node(_CAMDEN_1BED, message)
+    assert (acc["area"], acc["bedrooms"], acc["max_budget"]) == (area, beds, budget)
+
+
+@pytest.mark.parametrize("message", ["beds at 10pm", "the bedroom is 20 sqm", "卧室要朝南"])
+def test_r4_04_other_bedroom_mentions_change_nothing(message):
+    assert _state_node(_CAMDEN_1BED, message)["bedrooms"] == 1
+
+
+def test_r4_04_a_minimum_after_the_slot_value_is_kept():
+    acc = _state_node(_CAMDEN_1BED, "bedrooms to 2 minimum")
+    assert acc["bedrooms"] == 2 and acc.get("bedrooms_minimum") is True
+
+
+# R4-05 ── "Retract the commute (again)." withdraws the commute ──────────────────────
+_CAMDEN_BANK = {"area": "Camden", "areas": ["Camden"], "bedrooms": 1, "max_budget": 2200,
+                "room_type": "whole", "commute_destination": "Bank", "destination": "Bank",
+                "max_travel_time": 30, "no_commute": False}
+
+
+@pytest.mark.parametrize("message", [
+    "Retract the commute again.", "Retract the commute.", "Withdraw the commute requirement.",
+    "Undo the commute", "撤销通勤要求", "取消通勤要求",
+])
+def test_r4_05_retracting_the_commute_clears_it(message):
+    acc = _state_node(_CAMDEN_BANK, message)
+    assert acc.get("commute_destination") is None and acc.get("max_travel_time") is None
+    assert acc.get("no_commute") is True
+    assert acc["area"] == "Camden"
+
+
+def test_r4_05_lifting_only_the_limit_keeps_the_destination():
+    acc = _state_node(_CAMDEN_BANK, "取消通勤时间限制")
+    assert acc["commute_destination"] == "Bank" and acc.get("max_travel_time") is None
+
+
+# R4-06 ── a new place replaces the stale area / destination ─────────────────────────
+_GLASGOW = {"area": "Glasgow", "areas": ["Glasgow"], "bedrooms": 1, "max_budget": 2200,
+            "room_type": "whole"}
+_BRISTOL_UNI = {"area": "Bristol", "areas": ["Bristol"], "bedrooms": 1, "max_budget": 1800,
+                "room_type": "whole", "commute_destination": "University of Bristol",
+                "destination": "University of Bristol", "no_commute": False}
+
+
+@pytest.mark.parametrize("message,postcode", [
+    ("And near SW1A 1AA postcode?", "SW1A 1AA"),
+    ("What about EC1A 4HQ?", "EC1A 4HQ"),
+    ("Find a flat near e1 6an", "E1 6AN"),
+])
+def test_r4_06a_a_postcode_is_the_new_search_location(message, postcode):
+    acc = _state_node(_GLASGOW, message)
+    assert acc["area"] == postcode and acc["areas"] == [postcode]
+    assert acc.get("commute_destination") in (None, "")
+
+
+@pytest.mark.parametrize("message", [
+    "How far is SW1A 1AA from the first one?", "I work at EC1A 4HQ",
+])
+def test_r4_06a_a_postcode_in_a_question_or_a_workplace_is_not_the_area(message):
+    assert _state_node(_GLASGOW, message)["area"] == "Glasgow"
+
+
+def test_r4_06a_a_postcode_is_never_read_as_a_headquarters():
+    from core.scraping.on_demand import extract_destination_from_text
+    assert extract_destination_from_text("What about EC1A 4HQ?") is None
+
+
+@pytest.mark.parametrize("message", [
+    "What are the fares and zones for Clapham to Canary Wharf?",
+    "How do I get from Clapham to Canary Wharf?",
+    "Which zones is Canary Wharf in?",
+])
+def test_r4_06b_a_fare_or_zone_question_sets_no_commute_destination(message):
+    acc = _state_node({"area": "Hackney", "areas": ["Hackney", "Clapham"], "max_budget": 2500}, message)
+    assert not acc.get("commute_destination")
+    later = _state_node(acc, "Find me a 2-bed in Bayswater")
+    assert later["area"] == "Bayswater" and not later.get("commute_destination")
+
+
+def test_r4_06b_a_stated_commute_still_sets_the_destination():
+    acc = _state_node({"area": "Hackney", "areas": ["Hackney"]},
+                      "I work at Canary Wharf, what are the fares from Hackney?")
+    assert "Canary Wharf" in (acc.get("commute_destination") or "")
+
+
+@pytest.mark.parametrize("message,area", [
+    ("查一下伦敦玛丽女王大学附近的房子，预算2000以内", "Mile End"),
+    ("帮我找贝斯沃特的两居室", "Bayswater"),
+])
+def test_r4_06c_zh_place_names_replace_the_old_area(message, area):
+    acc = _state_node(_BRISTOL_UNI, message)
+    assert acc["area"] == area and acc["areas"] == [area]
+    # The Bristol destination stays behind when the search moves to London.
+    assert not acc.get("commute_destination")
+
+
+# R4-07 ── a mixed "search + weather" turn switches the area ─────────────────────────
+@pytest.mark.parametrize("message", [
+    "Show me Angel flats under £2100 and tell me the weather there.",
+    "Show me flats in Angel under £2100 and tell me the weather there.",
+])
+def test_r4_07_a_search_clause_beside_a_weather_question_switches_the_area(message):
+    acc = _state_node({"area": "Camden", "areas": ["Camden"], "max_budget": 2100}, message)
+    assert acc["area"] == "Angel" and acc["areas"] == ["Angel"]
+
+
+@pytest.mark.parametrize("message", [
+    "What's the weather in Angel? Keep my search unchanged", "Show me the weather in Angel",
+    "show me the fare from Angel to Bank",
+])
+def test_r4_07_a_weather_or_fare_question_alone_keeps_the_area(message):
+    acc = _state_node({"area": "Camden", "areas": ["Camden"], "max_budget": 2100}, message)
+    assert acc["area"] == "Camden"
+
+
+# R4-11 ── "I applied your saved £2,000 monthly maximum" with no budget in the search ─
+@pytest.mark.parametrize("text,lang", [
+    ("I applied your saved £2,000 monthly maximum when searching. Here are 5 flats.", "en"),
+    ("Using your saved budget, here are the flats.", "en"),
+    ("已按你保存的预算搜索，以下是结果。", "zh"),
+])
+def test_r4_11_an_applied_saved_budget_claim_without_a_budget_gets_the_note(text, lang):
+    from core.agent_loop import disclose_unapplied_budget_claim
+    out = disclose_unapplied_budget_claim(text, True, lang)
+    assert out != text and ("without a budget filter" in out or "没有使用预算筛选" in out)
+    assert disclose_unapplied_budget_claim(text, False, lang) == text
+
+
+def test_r4_11_other_wording_is_untouched():
+    from core.agent_loop import disclose_unapplied_budget_claim
+    text = "Here are five flats in Camden. Tell me a budget to narrow them."
+    assert disclose_unapplied_budget_claim(text, True, "en") == text

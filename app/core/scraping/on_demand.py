@@ -1032,6 +1032,9 @@ def _dest_candidate_gate(cand: str) -> bool:
     return source == "landmark" and key in UNIVERSITY_KEYS
 
 
+_UK_POSTCODE_RE = re.compile(r"\b[A-Z]{1,2}[0-9][A-Z0-9]?\s*[0-9][A-Z]{2}\b", re.I)
+
+
 def extract_destination_from_text(text: str) -> dict | None:
     """Scan a raw user message for a commute DESTINATION (university/workplace) and
     return the first confirmed one, else None.
@@ -1050,6 +1053,9 @@ def extract_destination_from_text(text: str) -> dict | None:
     Shoreditch") yields None and never a false lock. NEVER raises."""
     if not text or not text.strip():
         return None
+    # "What about EC1A 4HQ?" stored the destination "HQ" (the inward code read as a
+    # headquarters, R4-06): a postcode is never a named destination here.
+    text = _UK_POSTCODE_RE.sub(lambda m: " " * len(m.group()), text)
     seen: set[str] = set()
     try:
         for m in _DEST_CANDIDATE_RE.finditer(text):

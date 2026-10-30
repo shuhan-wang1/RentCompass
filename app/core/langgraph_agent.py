@@ -748,6 +748,35 @@ def resolve_previous_area(accumulated: dict, message: str, history) -> dict:
 _LONDON_POSTCODE = re.compile(r"\b(?:EC|WC|E|N|NW|SE|SW|W)\d{1,2}[A-Z]?\b(?:\s*\d[A-Z]{2})?", re.I)
 
 
+_UK_POSTCODE_IN_MESSAGE = re.compile(r"\b([A-Z]{1,2}[0-9][A-Z0-9]?)\s*([0-9][A-Z]{2})\b", re.I)
+
+
+def _postcode_search_location(message: str) -> str | None:
+    """The full UK postcode the message names as where to search, else None.
+
+    A postcode after a work/study/commute cue is a destination, and one in a distance or
+    journey question is a one-off ("how far is SW1A 1AA from the first one?")."""
+    match = _UK_POSTCODE_IN_MESSAGE.search(str(message or '')[:2000])
+    if not match:
+        return None
+    from core.constraint_updates import one_off_distance_question, one_off_transport_question
+    if one_off_distance_question(message) or one_off_transport_question(message):
+        return None
+    before = re.split(r'[.!?;。！？；\n]', message[max(0, match.start() - 60):match.start()])[-1]
+    if re.search(r"\b(?:work\w*|office|stud(?:y|ying)|commut\w*|school|university|college|campus|"
+                 r"from|to|journey|route|far)\b|上班|工作|上学|通勤|到", before, re.I) and not re.search(
+                     r"\b(?:near|around|close\s+to|by|in)\s+(?:the\s+)?(?:postcode\s+)?$", before, re.I):
+        return None
+    return f"{match.group(1).upper()} {match.group(2).upper()}"
+
+
+_OTHER_CITY_IN_DESTINATION = re.compile(
+    r"\b(?:manchester|leeds|edinburgh|bristol|glasgow|cardiff|birmingham|liverpool|sheffield|"
+    r"newcastle|nottingham|leicester|coventry|oxford|cambridge|brighton|york|southampton|"
+    r"aberdeen|dundee|belfast|swansea|norwich|exeter|plymouth|derby|reading|bath|durham|"
+    r"canterbury|warwick|lancaster|st\s+andrews)\b", re.I)
+
+
 def _destination_left_behind(destination, new_areas) -> bool:
     """True when a London commute destination stays behind a switch to another UK city."""
     from core.tools.search_properties import LONDON_AREAS
@@ -755,6 +784,12 @@ def _destination_left_behind(destination, new_areas) -> bool:
     if not dest or not new_areas:
         return False
     keys = [re.sub(r"[’']", "", str(area or "").lower()).strip() for area in new_areas]
+    if keys and all(key == "london" or key in LONDON_AREAS or _LONDON_POSTCODE.fullmatch(key)
+                    for key in keys):
+        # A London search left a destination in another city behind: "伦敦玛丽女王大学附近的
+        # 房子" after a Bristol search kept "University of Bristol" (R4-06).
+        return bool(_OTHER_CITY_IN_DESTINATION.search(dest)) and not re.search(
+            r"\blondon\b", dest, re.I)
     if any(not key or key == "london" or key in LONDON_AREAS for key in keys):
         return False
     if any(key in dest.lower() for key in keys):
@@ -797,6 +832,23 @@ def _soft_amenity_updates(message: str, soft_preferences: list) -> list | None:
     return updated if updated != current else None
 
 
+_ANYWHERE = re.compile(
+    r'\banywhere\b|\bany\s+(?:area|neighbou?rhood|part\s+of)\b|哪里都|哪儿都|哪都|任何(?:地方|区域|地区)|'
+    r'(?:区域|地区)(?:无所谓|不限|都行|都可以)|不限(?:区域|地区)', re.I)
+
+
+def _widens_to_london(message: str, accumulated: dict) -> bool:
+    """True when an area withdrawal says "anywhere" and the search is a London one."""
+    if not _ANYWHERE.search(message or ''):
+        return False
+    if re.search(r'\blondon\b|伦敦', message or '', re.I):
+        return True
+    from core.tools.search_properties import LONDON_AREAS
+    standing = list(accumulated.get('areas') or ([accumulated['area']] if accumulated.get('area') else []))
+    keys = [re.sub(r"[’']", '', str(area or '').lower()).strip() for area in standing]
+    return bool(keys) and all(key == 'london' or key in LONDON_AREAS for key in keys)
+
+
 def _withdraw_criteria_topics(accumulated: dict, message: str) -> dict:
     """Clear every slot of a topic the user withdrew as a whole (R4-14).
 
@@ -812,6 +864,10 @@ def _withdraw_criteria_topics(accumulated: dict, message: str) -> dict:
     cleared: dict = {}
     if topics & {'location', 'area'}:
         cleared.update(area=None, areas=[])
+        if 'location' not in topics and _widens_to_london(message, accumulated):
+            # "I don't care about the area any more, anywhere in London." widens a London
+            # search to the whole city instead of leaving no area at all (R4-02).
+            cleared.update(area='London', areas=['London'])
     if topics & {'location', 'commute'}:
         cleared.update(commute_destination=None, destination=None)
     if 'commute' in topics:
@@ -1091,8 +1147,9 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
             message_destination = {'address': named, 'name': named}
     known_destination = (None if forget_destination else
                          _known_destination_address(named if labelled_destination else current_message))
-    from core.constraint_updates import one_off_distance_question
-    distance_question = not labelled_destination and one_off_distance_question(current_message)
+    from core.constraint_updates import one_off_distance_question, one_off_transport_question
+    distance_question = not labelled_destination and (one_off_distance_question(current_message)
+                                                      or one_off_transport_question(current_message))
     if distance_question:
         # "how far is the first one from UCL?" asks about one journey (R3-10).
         known_destination = message_destination = None
@@ -1153,6 +1210,11 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
                             # "my partner works in Canary Wharf" names a workplace (r18)
                             or bool(new_area and not new_areas[1:]
                                     and names_place_as_workplace(current_message, new_area)))
+    if not new_area and edited_areas is None:
+        # "And near SW1A 1AA postcode?" searched the old area (R4-06): a postcode the user
+        # names as where to look is the new search location.
+        new_area = _postcode_search_location(current_message)
+        new_areas = [new_area] if new_area else new_areas
     if new_area and not contextual_work_area:
         new_areas = new_areas or [new_area]
         if result.get('area') != new_area or result.get('areas') != new_areas:

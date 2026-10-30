@@ -38,6 +38,19 @@ def _norm(value: Any) -> str:
     return " ".join(str(value or "").strip().lower().split())
 
 
+def _is_in_london(candidate: dict, area: str) -> bool:
+    """True when the candidate's area is a London area or its address/coordinates are in London."""
+    import re as _re
+    from core.tools.search_properties import LONDON_AREAS
+    if _re.sub(r"[’']", "", area) in LONDON_AREAS:
+        return True
+    address = " ".join(str(candidate.get(key) or "") for key in ("address", "Address", "provider_address"))
+    if _re.search(r"\blondon\b", address, _re.I):
+        return True
+    from core.commute import in_london
+    return in_london(candidate.get("geo_location") or candidate.get("Geo_Location"))
+
+
 def candidate_key(candidate: dict) -> str:
     """Stable identity for evidence binding; a listing URL beats a display name."""
     url = _norm(candidate.get("url") or candidate.get("URL"))
@@ -459,7 +472,9 @@ def validate_candidates(candidates: list[dict], criteria: dict | None,
             actual_area = _norm(candidate.get("area") or candidate.get("Area"))
             if not actual_area:
                 unknown_reasons.append("area is not verified")
-            elif actual_area not in requested_areas:
+            elif actual_area not in requested_areas and not (
+                    'london' in requested_areas and _is_in_london(candidate, actual_area)):
+                # "anywhere in London" asks for the whole city: Bow is inside it (R4-02).
                 reasons.append(f"area {actual_area} is outside the requested areas")
 
         requested_features = constraints["property_features"]

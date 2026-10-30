@@ -1957,7 +1957,8 @@ def _extract_area(text: str) -> str | None:
         # "第一套离国王十字远吗？" asks how far a listing is from the place; it moved the search
         # area to King's Cross (R3-10).
         if re.search(r'(?:离|距离|到)\s*$', prefix) and re.match(
-                r'\s*(?:有|大概|大约)?(?:多远|多近|远|近|要多久|多久|多长时间|几分钟|步行|走路)', suffix):
+                # A question only: 「离国王十字近一点的房子」 still asks to live near it.
+                r'\s*(?:有|大概|大约)?(?:多远|多近|要多久|多久|多长时间|几分钟|(?:远|近)(?:吗|不|么|嘛|[？?]))', suffix):
             return True
         # The city word that opens an institution's name is not a home area: "从第一个到
         # 伦敦大学学院要多久?" (UCL) switched a King's Cross search to all of London (R1-04).

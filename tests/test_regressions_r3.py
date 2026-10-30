@@ -686,3 +686,8 @@ def test_r3_18_answered_and_cancelled_turns_are_not_replayed():
     cancelled = [_msg("user", "Find me a studio in Bow under £1200."),
                  _msg("assistant", CANCELLED_TURN_TEXTS[0], "error"), _msg("user", "hello")]
     assert criteria_with_undelivered_turns(start, cancelled) is start
+
+
+def test_r3_10_a_zh_proximity_wish_still_names_the_area():
+    from core.tools.search_properties import _extract_area
+    assert _extract_area("离国王十字近一点的房子") == "King's Cross"

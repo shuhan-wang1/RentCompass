@@ -194,3 +194,80 @@ def test_w_03_an_area_switch_stays_one(message):
 def test_w_03_the_search_runs_at_the_old_area_with_the_new_destination(message, destination):
     params = _search_params(message, _ISLINGTON, commute_destination="Bank")
     assert params["area"] == "Islington" and params["commute_destination"] == destination
+
+
+# W-04 ── a place the user names beats the stale area
+@pytest.mark.parametrize("message,area", [
+    ("Find a 2 bed in Inverness", "Inverness"), ("Show me flats in Reading under £1,500", "Reading"),
+    ("Find a flat in Bath", "Bath"), ("find me a place in inverness", "Inverness"),
+    ("Find a 3-bed house in Inverness under £1,200 near a school, and tell me safety", "Inverness"),
+    ("Find somewhere in Knightsbridge", "Knightsbridge"), ("Find a flat in Leeds", "Leeds"),
+])
+def test_w_04_a_named_place_wins(message, area):
+    out = _state_node(_CAMDEN, message)
+    assert out["area"] == area and out["areas"] == [area]
+
+
+@pytest.mark.parametrize("message", [
+    "flats in reading", "Is there a bath in the flat?", "Find a flat with a bath", "Find a flat in Atlantis",
+    "I am reading about flats", "What if I found a flat in Reading?",
+])
+def test_w_04_a_word_or_an_unknown_place_changes_nothing(message):
+    assert _state_node(_CAMDEN, message)["area"] == "Camden"
+
+
+def test_w_04_the_tool_and_the_state_read_the_same_place():
+    from core.tools.search_properties import _extract_area, _extract_areas
+    assert _extract_area("Find a 2 bed in Inverness") == "Inverness"
+    assert _extract_areas("Show me flats in Reading under £1,500") == ["Reading"]
+
+
+_MANCHESTER = {"area": "Manchester", "areas": ["Manchester"], "bedrooms": 2, "max_budget": 1400,
+               "no_commute": True, "room_type": "whole"}
+
+
+def test_w_04_near_ucl_with_the_commute_disowned():
+    out = _state_node(_MANCHESTER, "Find a flat near UCL for a student, 1 bed, under 1800, commute to UCL not needed")
+    assert out["area"] == "Bloomsbury" and out["areas"] == ["Bloomsbury"]
+    assert out["no_commute"] is True and not out.get("commute_destination") and not out.get("destination")
+    assert out["bedrooms"] == 1 and out["max_budget"] == 1800
+
+
+@pytest.mark.parametrize("message,area", [
+    ("I want to live near Imperial College", "South Kensington"),
+    ("Find me a studio near King's College London", "Holborn"),
+    ("Find a flat near the University of Manchester", "Manchester"),
+])
+def test_w_04_a_home_near_a_university_moves_the_search(message, area):
+    assert _state_node(dict(_CAMDEN, area="Leeds", areas=["Leeds"]), message)["area"] == area
+
+
+@pytest.mark.parametrize("message", ["I study at UCL", "Is the flat near UCL?"])
+def test_w_04_a_university_named_otherwise_moves_nothing(message):
+    assert _state_node(_CAMDEN, message)["area"] == "Camden"
+
+
+def test_w_04_an_area_named_with_the_university_wins():
+    assert _state_node(_CAMDEN, "Find a flat near UCL in Hackney")["area"] == "Hackney"
+
+
+@pytest.mark.parametrize("message", [
+    "commute to King's Cross not needed", "commute to King's Cross is not needed",
+    "I don't need to commute to King's Cross", "no commute to King's Cross please",
+])
+def test_w_04_a_disowned_commute_is_no_destination(message):
+    stored = dict(_CAMDEN, commute_destination="King's Cross", destination="King's Cross", max_travel_time=30)
+    out = _state_node(stored, message)
+    assert out["no_commute"] is True and not out.get("commute_destination") and out.get("max_travel_time") is None
+
+
+def test_w_04_the_model_cannot_bring_a_disowned_destination_back():
+    message = "Find a flat near UCL, 1 bed, under 1800, commute to UCL not needed"
+    params = _search_params(message, _MANCHESTER, commute_destination="UCL")
+    assert params["area"] == "Bloomsbury" and params.get("no_commute") is True
+    assert "commute_destination" not in params
+
+
+@pytest.mark.parametrize("message", ["My commute to Bank is 30 minutes", "commute to Bank needed"])
+def test_w_04_the_destination_ends_at_the_verb(message):
+    assert _state_node(_CAMDEN, message)["commute_destination"] == "Bank"

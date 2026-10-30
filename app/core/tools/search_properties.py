@@ -133,7 +133,8 @@ def _extract_no_commute(text: str) -> bool:
                                 r'每周[^。;；]{0,15}(?:到公司|到岗)|(?:需要|要|仍然)通勤', positive_t, re.I)
     if attendance or explicit_travel:
         return False
-    return any(p in t for p in _NO_COMMUTE_PHRASES)
+    from core.constraint_updates import commute_disowned
+    return any(p in t for p in _NO_COMMUTE_PHRASES) or commute_disowned(t)
 
 
 # Room-type synonyms -> canonical value ('studio' | 'ensuite' | 'shared'). Substring
@@ -2247,6 +2248,9 @@ def _extract_area(text: str) -> str | None:
             if re.search(r'(?<![a-z])' + re.escape(key) + r'(?![a-z])', t):
                 return _KNOWN_AREAS[key]
     # (b) explicit switch / location cue + a VALIDATED known place.
+    named_home = _home_search_place(text)
+    if named_home:
+        return named_home
     for m in _AREA_CUE_RE.finditer(t):
         if _listing_reference_cue(t, m):
             continue
@@ -2276,6 +2280,59 @@ _CUE_ONLY_AREAS = {
     "canning town": "Canning Town", "poplar": "Poplar", "chessington": "Chessington",
     "inverness": "Inverness",
 }
+# Cities whose name is also a common word, which is why the curated table leaves them out. In a
+# home search and capitalised they are places: "Show me flats in Reading under £1,500" kept Camden,
+# while 雷丁 and 巴斯 always worked (W-04).
+_HOME_SEARCH_ONLY_AREAS = {"reading": "Reading", "bath": "Bath"}
+_HOME_SEARCH_PLACE = re.compile(
+    r"\b(?:flats?|apartments?|studios?|houses?|homes?|rooms?|maisonettes?|propert(?:y|ies)|places?|"
+    r"accommodation|rentals?|beds?|bedrooms?|somewhere|something|anything)"
+    r"(?:\s+(?:to\s+rent|for\s+rent|available))?\s+(?:in|around)\s+"
+    r"(?P<place>[a-z][a-z’'\-]+(?:\s+[a-z][a-z’'\-]+)?)", re.I)
+
+
+def _home_search_place(text: str) -> str | None:
+    """The place outside the curated table that a home search names ("Find a 2 bed in Inverness"
+    kept the old area, and the search ran there), else None. The state node, the tool and the
+    executor all read it through _extract_area, so they cannot disagree."""
+    from core.constraint_updates import is_hypothetical, mention_is_requirement
+    for match in _HOME_SEARCH_PLACE.finditer(text or ""):
+        words = re.sub(r"[’']", "", match.group("place"))
+        for candidate in (words, words.split()[0]):
+            key = candidate.lower()
+            area = _CUE_ONLY_AREAS.get(key) or (_HOME_SEARCH_ONLY_AREAS.get(key) if candidate[0].isupper() else None)
+            if (area and not is_hypothetical(clause_at(text, match.start("place"), match.end("place")))
+                    and mention_is_requirement(text, match.start("place"), match.end("place"))):
+                return area
+    return None
+
+
+_NEAR_INSTITUTION = re.compile(
+    r"\b(?i:near|around|close\s+to|next\s+to|beside|by)\s+(?:(?i:the)\s+)?"
+    r"(?P<name>[A-Z][\w'’&.\-]*(?:\s+(?:(?i:of)\s+)?[A-Z][\w'’&.\-]*){0,4})")
+_HOME_SEARCH_WORD = re.compile(
+    r"\b(?:flats?|apartments?|studios?|houses?|homes?|rooms?|accommodation|bed(?:room)?s?|"
+    r"propert(?:y|ies)|find|search|look(?:ing)?\s+for|rent|live|living)\b", re.I)
+
+
+def institution_home_area(text: str) -> str | None:
+    """The area around a curated university a home search asks to be near, else None: "Find a
+    flat near UCL ..." after a Manchester search kept Manchester and showed commutes of 1023
+    minutes, where a new conversation searched Bloomsbury (W-04). Curated names only, so this
+    never touches the network."""
+    from core.scraping.on_demand import UNIVERSITY_KEYS, _match_location
+    source = str(text or "")[:2000]
+    for match in _NEAR_INSTITUTION.finditer(source):
+        if not _HOME_SEARCH_WORD.search(clause_at(source, match.start(), match.end())):
+            continue
+        slug, _city, key, kind = _match_location(match.group("name"))
+        if kind == "landmark" and key in UNIVERSITY_KEYS:
+            words = str(slug or "").replace("-", " ")
+            return (LONDON_AREAS.get(words) or _KNOWN_AREAS.get(words)
+                    or _CUE_ONLY_AREAS.get(words) or words.title() or None)
+    return None
+
+
 # An explicit switch / short follow-up: "switch to X", "make that X", "how about X?", "what
 # about X?", "go back to X", "and X?", "X instead". Clause-local, read on lower-cased text.
 _FOLLOW_UP_CUE_BEFORE = re.compile(

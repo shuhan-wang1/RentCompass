@@ -1090,10 +1090,16 @@ def _workplace_named_first(text: str) -> str:
         from core.tools.search_properties import WORKPLACE_AFTER_PLACE
         place = r"[A-Z][\w'’\-]*(?:\s+[A-Z][\w'’\-]*){0,3}"
         _WORKPLACE_NAMED_FIRST = re.compile(
-            r"\b(?i:make|have|use|set)(?:\s+(?i:it|that))?\s+(" + place + r")(?i:" + WORKPLACE_AFTER_PLACE + r")"
+            # "keep King's Cross as destination" changes nothing, and is matched to stay as it is.
+            r"\b(?i:keep|leave)\s+" + place + r"(?i:" + WORKPLACE_AFTER_PLACE + r")"
+            r"|\b(?i:make|have|use|set)(?:\s+(?i:it|that))?\s+(" + place + r")(?i:" + WORKPLACE_AFTER_PLACE + r")"
             r"|\b" + _NOT_A_PLACE_RUN + r"(" + place + r")(?i:" + WORKPLACE_AFTER_PLACE.replace(
                 r"(?:is\s+)?(?:now\s+)?my", r"is\s+(?:now\s+)?my") + r")")
-    return _WORKPLACE_NAMED_FIRST.sub(lambda m: f"my workplace is {m.group(1) or m.group(2)}", text)
+
+    def _labelled(match):
+        named = match.group(1) or match.group(2)
+        return f"my workplace is {named}" if named else match.group(0)
+    return _WORKPLACE_NAMED_FIRST.sub(_labelled, text)
 
 
 def _destination_clause(text: str) -> str:
@@ -1336,6 +1342,11 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
             labelled_destination.string[:labelled_destination.end()], re.I):
         # "I work from home so I don't commute at all" names no destination ("all").
         labelled_destination = None
+    from core.constraint_updates import commute_disowned
+    disowned = commute_disowned(current_message)
+    if disowned:
+        # "commute to UCL not needed" names the place to refuse it (W-04).
+        labelled_destination = message_destination = None
     # "Forget that I work at Canary Wharf" asks to DROP the destination; it used to SET it
     # (2026-10-19 A-11). The cue must sit in the same sentence, before the destination.
     # "Never mind LSE, I will be working at Canary Wharf": the cue has its own object.
@@ -1363,6 +1374,8 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         named = re.split(r'\s+and\s+|,\s*(?:and|where|so|but|which|because|as|i\b|i.[dm]\b|my\b|'
                          r'find|looking|search|show|please)'
                          r'|\s+(?:so|but|because|since|which|where|while)\s+'
+                         # "My commute to Bank is 30 minutes" stored "Bank is 30 minutes".
+                         r'|\s+(?:is|takes?|needed|required)\b'
                          r'|\s+for\s+|\s+(?:arriving|leaving|departing)\b'
                          r'|\s+(?:of\s+(?:about\s+)?|within\s+|under\s+|at most\s+)(?=\d)'
                          # "King's Cross, max 30 minutes" / "Soho, no more than 35 minutes" /
@@ -1383,7 +1396,7 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
                 and not re.fullmatch(r'(?:all|home|work|the moment|present|least|most|times?)',
                                      named, re.I):
             message_destination = {'address': named, 'name': named}
-    known_destination = (None if forget_destination else
+    known_destination = (None if forget_destination or disowned else
                          _known_destination_address(named if labelled_destination else current_message))
     from core.constraint_updates import one_off_distance_question, one_off_transport_question
     distance_question = not labelled_destination and (one_off_distance_question(current_message)
@@ -1485,6 +1498,12 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
                 # Manchester against a commute to South Kensington (R2-10). A destination in
                 # the city the search left is dropped; a new one can be stated again.
                 result['commute_destination'] = result['destination'] = None
+    if (not new_area or contextual_work_area) and edited_areas is None and result.get('area'):
+        from core.tools.search_properties import institution_home_area
+        near_institution = institution_home_area(current_message)
+        if near_institution and result.get('area') != near_institution:
+            result['area'], result['areas'] = near_institution, [near_institution]
+            changed = True
 
     # Room type stated this turn (e.g. answering the soft gate "我要ensuite") folds into
     # the accumulated criteria even without any find/search verb.
@@ -1516,7 +1535,8 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     # I just live there / WFH" sets the flag AND drops any stale travel-time limit so
     # the next search never re-applies a filter the user has disowned.
     ml = current_message.lower()
-    names_destination = _known_destination_address(ml) is not None and not distance_question
+    names_destination = (_known_destination_address(ml) is not None and not distance_question
+                         and not disowned)
     commute_intent = (bool(minutes) or names_destination or bool(message_destination)
                       or bool(days) or bool(re.search(r'\bi do commute\b|我(?:确实|需要)?通勤', current_message, re.I)))
     if commute_intent:

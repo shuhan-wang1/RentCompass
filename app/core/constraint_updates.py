@@ -1008,6 +1008,22 @@ def without_criteria_reset(text: str) -> str:
     return ''.join(out)
 
 
+# "commute to UCL not needed" stored UCL as the destination (W-04): the place is named only to say
+# that the user does not go there.
+_COMMUTE_DISOWNED = re.compile(
+    r"\bcommut\w*(?:\s+(?:time\s+)?(?:to|into)\s+[^,.;!?\n]{1,40}?)?\s+(?:is\s+|are\s+)?"
+    r"(?:(?:not|no\s+longer)\s+(?:needed|required|necessary|relevant|important)"
+    r"|isn.t\s+(?:needed|required|necessary|relevant|important)|unnecessary)\b"
+    r"|\b(?:no|without\s+a|(?:don.t|do\s+not)\s+need\s+a)\s+commut\w*\s+(?:to|into)\b"
+    r"|\b(?:don.t|do\s+not|won.t|will\s+not|no\s+need\s+to)\s+(?:need\s+to\s+|have\s+to\s+)?commute\s+(?:to|into)\b"
+    r"|(?:不用|不需要|无需|不必)通勤(?:到|去)", re.I)
+
+
+def commute_disowned(text: str) -> bool:
+    """True when the message says the commute it names does not apply."""
+    return bool(_COMMUTE_DISOWNED.search(str(text or '')[:4000]))
+
+
 def commute_withdrawal_drops_destination(text: str) -> bool:
     """A no-commute statement withdraws the destination too, unless it only lifts the limit.
 
@@ -1054,6 +1070,9 @@ def drop_withdrawn_places(params: dict, accumulated: dict, message: str) -> tupl
     message names again is the user's choice and stays."""
     p = dict(params or {})
     dropped = []
+    if commute_disowned(message) and isinstance(p.get('commute_destination'), str):
+        p.pop('commute_destination', None)      # "commute to UCL not needed" names it to refuse it
+        dropped.append('commute_destination')
     for field, cleared in (('commute_destination', 'commute_destination'), ('location', 'area')):
         value = p.get(field)
         if (isinstance(value, str) and value.strip() and withdrawn_by_user(accumulated, cleared)

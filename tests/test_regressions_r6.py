@@ -785,3 +785,29 @@ def test_u_12_get_weather_of_another_town_takes_the_first_uk_place(monkeypatch):
     weather, seen = _open_meteo(monkeypatch, [place])
     weather.get_weather_impl("Exeter")
     assert [params["latitude"] for url, params in seen if "forecast" in url] == [50.72]
+
+
+# T-04 ── a claim that nothing is listed, from a turn that searched nothing, says so
+@pytest.mark.parametrize("reply", [
+    "That's a sample of two, and I have no Clapham listings in the cache to set against them.",
+    "I don't have rent figures for Hackney.", "There are no listings for Bow.", "Nothing is listed in Angel.",
+])
+def test_t_04_an_unsearched_absence_gets_the_note(reply):
+    from core.agent_loop import UNSEARCHED_ABSENCE_NOTE_EN, disclose_unsearched_absence
+    out = disclose_unsearched_absence(reply, [{"tool": "check_safety"}], "en")
+    assert out.startswith(reply) and UNSEARCHED_ABSENCE_NOTE_EN in out
+    assert disclose_unsearched_absence(out, [], "en") == out
+
+
+def test_t_04_zh():
+    from core.agent_loop import UNSEARCHED_ABSENCE_NOTE_ZH, disclose_unsearched_absence
+    assert UNSEARCHED_ABSENCE_NOTE_ZH in disclose_unsearched_absence("缓存里没有Clapham的房源。", [], "zh")
+
+
+@pytest.mark.parametrize("reply,artifacts", [
+    ("I have no Clapham listings in the cache.", [{"tool": "search_properties"}]),
+    ("Hackney is safer than Clapham.", []), ("Here are three listings in Camden.", []),
+])
+def test_t_04_a_searched_or_unrelated_reply_stays(reply, artifacts):
+    from core.agent_loop import disclose_unsearched_absence
+    assert disclose_unsearched_absence(reply, artifacts, "en") == reply

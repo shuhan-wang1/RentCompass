@@ -398,6 +398,34 @@ def disclose_unchecked_places(text: str, artifacts, history, reply_language: str
     return body if note in body else f"{body.rstrip()}\n\n{note}"
 
 
+# "I have no Clapham listings in the cache" and "I don't have rent figures for Hackney" came from
+# a turn that ran no listing search, so they said nothing about the data (T-04).
+_UNSEARCHED_ABSENCE = re.compile(
+    r"\bno\s+(?:\w+\s+){0,2}listings?\s+(?:in|on\s+file|for|at|available|cached|stored|saved)\b|"
+    r"\b(?:don.t|do\s+not)\s+(?:currently\s+)?have\s+(?:any\s+)?(?:\w+\s+){0,3}"
+    r"(?:listings?|rent\s+(?:figures?|data|prices?))\s+(?:for|in|on|at)\b|"
+    r"\bnothing\s+(?:is\s+)?(?:listed|available|cached)\s+(?:in|for|at)\b|"
+    r"(?:缓存|数据库|数据)(?:中|里)?(?:没有|暂无)[^，。！？\n]{0,12}(?:房源|租金)|"
+    r"(?:没有|暂无)[^，。！？\n]{0,10}的?(?:房源|租金数据|租金数字)", re.I)
+UNSEARCHED_ABSENCE_NOTE_EN = (
+    "Note: I did not run a listing search in this turn, so this is not a checked result. Ask me "
+    "to search and I will check.")
+UNSEARCHED_ABSENCE_NOTE_ZH = "补充：本轮没有搜索房源，以上说法未经核实。需要的话，我可以搜索后再确认。"
+register_protected_system_text(UNSEARCHED_ABSENCE_NOTE_EN, UNSEARCHED_ABSENCE_NOTE_ZH)
+
+
+def disclose_unsearched_absence(text: str, artifacts, reply_language: str = "en") -> str:
+    """``text`` with a note when it states that listings or rents are missing for a place while
+    this turn ran no listing search."""
+    body = str(text or "")
+    if (any(isinstance(a, dict) and a.get("tool") == "search_properties" for a in (artifacts or []))
+            or not _UNSEARCHED_ABSENCE.search(body)):
+        return body
+    note = UNSEARCHED_ABSENCE_NOTE_ZH if str(reply_language or "").lower().startswith("zh") \
+        else UNSEARCHED_ABSENCE_NOTE_EN
+    return body if note in body else f"{body.rstrip()}\n\n{note}"
+
+
 def with_unapplied_turn_values(validation: dict, message: str, criteria: dict,
                                language: str = "en") -> dict:
     """``validation`` whose unchecked list names an area or bedroom count this turn's own words
@@ -6054,6 +6082,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             searched_without_budget=searched_without_budget(artifacts))
         response = disclose_unchecked_places(
             response, artifacts, (state.get("extracted_context") or {}).get("history") or [], lang)
+        response = disclose_unsearched_absence(response, artifacts, lang)
         return {"final_response": _apply_memory_contract(response),
                 "response_type": response_type, "tool_data": tool_data}
 

@@ -3673,9 +3673,15 @@ async def search_properties_impl(
         # live classification of its station made it the commute destination, which then rode
         # along on the next search of another area (S-05).
         _home_key = _curated_home_key(_clean_area(search_area))
+        # "And near SW1A 1AA postcode?" searched that postcode as the home area, and its live
+        # classification locked it as the commute destination too (T-02). A full postcode is a
+        # place to live unless the message names it as a workplace or study place.
+        _home_postcode = bool(re.fullmatch(r"[a-z]{1,2}[0-9][a-z0-9]?[\s-]*[0-9][a-z]{2}", _home_key)
+                              and not re.search(r"\b(?:job|work|office|stud(?:y|ying)|commut\w*)\b|上班|工作|上学|通勤",
+                                                msg_for_extraction or "", re.I))
         if (not locked_commute_dest and search_area and not search_area_from_commute_dest
                 and _home_key not in LONDON_AREAS and _home_key not in _KNOWN_AREAS
-                and _home_key not in _CUE_ONLY_AREAS):
+                and _home_key not in _CUE_ONLY_AREAS and not _home_postcode):
             _place = classify_place(search_area)
             if is_destination(_place):
                 _token = search_area

@@ -760,6 +760,16 @@ _LONDON_POSTCODE = re.compile(r"\b(?:EC|WC|E|N|NW|SE|SW|W)\d{1,2}[A-Z]?\b(?:\s*\
 
 
 _UK_POSTCODE_IN_MESSAGE = re.compile(r"\b([A-Z]{1,2}[0-9][A-Z0-9]?)\s*([0-9][A-Z]{2})\b", re.I)
+# A work/study place word governing the postcode: "I work near", "my office is near", "study at",
+# "my job is based in", "commute to". Only filler words may sit between the cue and the postcode.
+_WORKPLACE_BEFORE_POSTCODE = re.compile(
+    r"\b(?:work\w*|job|office|workplace|employer|stud(?:y|ying|ies)|school|university|uni|college|"
+    r"campus|commut\w*|intern\w*|placement)"
+    r"(?:\s+(?:is|are|was|will\s+be|[’']s|sits?|based|located|right|just|somewhere|at|in|near|"
+    r"around|close\s+to|next\s+to|by|beside|on|the|a|an|postcode))+\s*$", re.I)
+_WORKPLACE_AFTER_POSTCODE = re.compile(
+    r"\s*(?:附近|旁边|周边|一带|那边|那里)?\s*(?:上班|工作|上学|读书|实习|办公)"
+    r"|\s*(?:is|'s|’s)\s+where\s+(?:i|we)\s+(?:work|study)", re.I)
 
 
 def _postcode_search_location(message: str) -> str | None:
@@ -767,8 +777,8 @@ def _postcode_search_location(message: str) -> str | None:
 
     A postcode after a work/study/commute cue is a destination, and one in a distance or
     journey question is a one-off ("how far is SW1A 1AA from the first one?")."""
-    match = _UK_POSTCODE_IN_MESSAGE.search(str(message or '')[:2000])
-    if not match:
+    message = str(message or '')[:2000]
+    if not _UK_POSTCODE_IN_MESSAGE.search(message):
         return None
     from core.constraint_updates import one_off_distance_question, one_off_transport_question
     if one_off_distance_question(message) or one_off_transport_question(message):
@@ -780,12 +790,19 @@ def _postcode_search_location(message: str) -> str | None:
                      r"\b(?:flats?|homes?|houses?|propert(?:y|ies)|rent|listings?|beds?|bedrooms?|"
                      r"studios?|search|find|live|living)\b|房|租|找", message, re.I):
         return None
-    before = re.split(r'[.!?;。！？；\n]', message[max(0, match.start() - 60):match.start()])[-1]
-    if re.search(r"\b(?:work\w*|office|stud(?:y|ying)|commut\w*|school|university|college|campus|"
-                 r"from|to|journey|route|far)\b|上班|工作|上学|通勤|到", before, re.I) and not re.search(
-                     r"\b(?:near|around|close\s+to|by|in)\s+(?:the\s+)?(?:postcode\s+)?$", before, re.I):
-        return None
-    return f"{match.group(1).upper()} {match.group(2).upper()}"
+    for match in _UK_POSTCODE_IN_MESSAGE.finditer(message):
+        before = re.split(r'[.!?;。！？；\n]', message[max(0, match.start() - 60):match.start()])[-1]
+        after = re.split(r'[.!?;。！？；\n]', message[match.end():match.end() + 40])[0]
+        if _WORKPLACE_BEFORE_POSTCODE.search(before) or _WORKPLACE_AFTER_POSTCODE.match(after):
+            # "I work near EC2M 7PY" / "My office is near SW1A 1AA" / 在EC2M 7PY附近上班 name the
+            # workplace, not where to live: the "near" exemption below made it the area (T-01).
+            continue
+        if re.search(r"\b(?:work\w*|office|stud(?:y|ying)|commut\w*|school|university|college|campus|"
+                     r"from|to|journey|route|far)\b|上班|工作|上学|通勤|到", before, re.I) and not re.search(
+                         r"\b(?:near|around|close\s+to|by|in)\s+(?:the\s+)?(?:postcode\s+)?$", before, re.I):
+            continue
+        return f"{match.group(1).upper()} {match.group(2).upper()}"
+    return None
 
 
 _OTHER_CITY_IN_DESTINATION = re.compile(

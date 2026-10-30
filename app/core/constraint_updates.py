@@ -165,8 +165,36 @@ def fold_fullwidth_ascii(text) -> str:
     return str(text or '').translate(_FULLWIDTH_ASCII)
 
 
+# A quoted passage introduced as someone else's text ("Here is a listing note: '...'", "the
+# agent wrote: \"...\"") or carrying its own save cue or role label is not the user's
+# criteria: the pasted note's "£300" became the search's max_budget (S-04; R3-08 kept it out
+# of memory only).
+_PASTE_LEAD_IN = re.compile(
+    r"\b(?:listing|agent|agent'?s|landlord|landlord'?s|letting\s+agent|advert|ad|someone|he|she|they)\b"
+    r"[^.!?;\n\"'“‘「]{0,20}\b(?:note|notes|wrote|writes|said|says|message|text|description|reads?)\b"
+    r"[^.!?;\n\"'“‘「]{0,6}[:：]?\s*$", re.I)
+
+
+def without_pasted_text(text: str) -> str:
+    """``text`` without quoted third-party passages and pasted instructions (S-04)."""
+    value = str(text or '')
+    if not re.search(r"[\"'“‘「『]|\b(?:system|assistant|developer)\s*:", value, re.I):
+        return value
+    from core.memory_gate import (_FOREIGN_CUE, _QUOTED_SPAN, _ROLE_LABEL_PASTE,
+                                  _THIRD_PERSON_REMEMBER)
+
+    def _quoted(match):
+        lead = value[max(0, match.start() - 60):match.start()]
+        if _FOREIGN_CUE.search(match.group(2)) or _PASTE_LEAD_IN.search(lead):
+            return ' '
+        return match.group(0)
+    value = _QUOTED_SPAN.sub(_quoted, value)
+    value = _ROLE_LABEL_PASTE.sub(' ', value)
+    return _THIRD_PERSON_REMEMBER.sub(' ', value)
+
+
 def scoped_update_text(text: str) -> str:
-    text = str(text or '')
+    text = without_pasted_text(str(text or ''))
     text = without_third_party_clauses(text)
     # Withdrawn experiments and other people's plans are references, not updates.
     # Each clause pattern is anchored at a clause START (``_CLAUSE_START``). Unanchored, the

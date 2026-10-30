@@ -393,6 +393,39 @@ def disclose_unchecked_places(text: str, artifacts, history, reply_language: str
     return body if note in body else f"{body.rstrip()}\n\n{note}"
 
 
+def with_unapplied_turn_values(validation: dict, message: str, criteria: dict,
+                               language: str = "en") -> dict:
+    """``validation`` whose unchecked list names an area or bedroom count this turn's own words
+    state but the search did not use: "Set bedrooms to 3, area Shoreditch" searched Camden with
+    1 bedroom under "Meets all declared conditions (verified)" (R4-04). The header then covers
+    only what was checked."""
+    if not isinstance(validation, dict) or not message or not isinstance(criteria, dict):
+        return validation
+    from core.tools.search_properties import _extract_area, _extract_bedrooms, names_place_as_workplace
+    zh = str(language or "").lower().startswith("zh")
+    labels = []
+    try:
+        area = _extract_area(message)
+        searched = [str(a) for a in (criteria.get("areas") or [criteria.get("area")]) if a]
+        if (area and not names_place_as_workplace(message, area)
+                and area.strip().lower() not in {a.strip().lower() for a in searched}
+                and not (area.strip().lower() == "london" and searched)):
+            used = ", ".join(searched) or ("未指定" if zh else "none")
+            labels.append(f"区域 {area}（本次搜索使用的是 {used}）" if zh
+                          else f"area {area} (this search used {used})")
+        beds = _extract_bedrooms(message)
+        used_beds = criteria.get("bedrooms")
+        if beds and used_beds is not None and beds[0] != used_beds:
+            labels.append(f"{beds[0]} 间卧室（本次搜索使用的是 {used_beds}）" if zh
+                          else f"{beds[0]} bedrooms (this search used {used_beds})")
+    except Exception:
+        return validation
+    if not labels:
+        return validation
+    unchecked = [str(item) for item in (validation.get("unchecked") or [])]
+    return dict(validation, unchecked=unchecked + [label for label in labels if label not in unchecked])
+
+
 def searched_without_budget(artifacts) -> bool:
     """True when this turn ran a listing search whose criteria carried no budget."""
     for artifact in artifacts or []:
@@ -5901,6 +5934,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 response = "\n\n".join(part for part in (
                     lead, render_similar_listings(panel_recs, language=language)) if part)
             else:
+                if requires_status:
+                    validation = with_unapplied_turn_values(
+                        validation, str(ec.get('current_message') or ''),
+                        search_found.get('search_criteria') or {}, language)
                 response = (render_candidate_status(validation, language=language)
                             if requires_status else
                             final_response or search_found.get("summary")

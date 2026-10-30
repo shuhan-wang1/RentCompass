@@ -853,10 +853,17 @@ def _successful_numeric_evidence(evidence: Any, key: Any = "") -> str:
             return ""
         if "raw_data" in evidence:
             return _successful_numeric_evidence(evidence.get("raw_data"))
-        return " ".join(
+        # A value whose unit sits in a sibling key ("wind_speed": 11.5, "wind_speed_unit":
+        # "km/h") is written with it: "Wind 11.5 km/h" in a weather answer was graded an
+        # unsupported figure, and the regenerated answer dropped the weather (R4-07).
+        sibling_units = [f"{value:g} {evidence[f'{child_key}_unit']}"
+                         for child_key, value in evidence.items()
+                         if isinstance(value, (int, float)) and not isinstance(value, bool)
+                         and isinstance(evidence.get(f"{child_key}_unit"), str)]
+        return " ".join([
             _successful_numeric_evidence(value, child_key) for child_key, value in evidence.items()
             if not isinstance(value, (bytes, bytearray))
-        )
+        ] + sibling_units)
     if isinstance(evidence, str):
         return evidence
     return _numeric_leaf_text(key, evidence)

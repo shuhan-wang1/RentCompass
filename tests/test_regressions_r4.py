@@ -508,3 +508,80 @@ def test_s_03_an_on_file_question_is_a_recall_question(message):
 def test_s_03_other_questions_are_not_recall_questions(message):
     import app as appmod
     assert not appmod._asks_what_is_remembered(message)
+
+
+# R4-13 ── a named station resolves by its own name, not by a nearby geocode ─────────
+def test_r4_13_a_station_name_with_a_suffix_resolves_to_that_station(monkeypatch):
+    from core.tools import get_transport_info as gti
+    monkeypatch.setattr(gti, "_cache_get", lambda *a, **k: None)
+    monkeypatch.setattr(gti, "_cache_set", lambda *a, **k: None)
+    monkeypatch.setattr(gti, "_geocode", lambda text: {"lat": 51.530, "lng": -0.124, "postcode": "N1C 4AA"})
+
+    def fake_tfl(path, params=None, **_k):
+        if path.startswith("/StopPoint/Search/"):
+            return 200, {"matches": [
+                {"id": "940GZZLUCTN", "name": "Camden Town Underground Station", "lat": 51.539, "lon": -0.142},
+                {"id": "940GZZLUKSX", "name": "King's Cross St. Pancras Underground Station"}]}
+        return 200, {"stopPoints": [{"id": "940GZZLUKSX", "commonName": "King's Cross St. Pancras Underground Station",
+                                     "stopType": "NaptanMetroStation", "distance": 100}]}
+    monkeypatch.setattr(gti, "_tfl_get", fake_tfl)
+    resolved = gti._resolve_station("Camden Town Underground Station")
+    assert resolved["token"] == "940GZZLUCTN" and resolved["name"] == "Camden Town Underground Station"
+
+
+def test_r4_13_an_address_still_goes_to_the_geocoder(monkeypatch):
+    from core.tools import get_transport_info as gti
+    monkeypatch.setattr(gti, "_cache_get", lambda *a, **k: None)
+    monkeypatch.setattr(gti, "_cache_set", lambda *a, **k: None)
+    monkeypatch.setattr(gti, "_geocode", lambda text: {"lat": 51.546, "lng": -0.075, "postcode": "E8 2AA"})
+    searched = []
+
+    def fake_tfl(path, params=None, **_k):
+        searched.append(path)
+        return 200, {"stopPoints": [{"id": "910GDALSKLD", "commonName": "Dalston Kingsland Rail Station",
+                                     "stopType": "NaptanRailStation", "distance": 300}]}
+    monkeypatch.setattr(gti, "_tfl_get", fake_tfl)
+    assert gti._resolve_station("Kingsland Road, London E8")["name"] == "Dalston Kingsland Rail Station"
+    assert not any(p.startswith("/StopPoint/Search/") for p in searched)
+
+
+def test_r4_13_station_keys_ignore_suffixes_and_punctuation():
+    from core.tools.get_transport_info import _station_key
+    assert _station_key("King's Cross St. Pancras Underground Station") == _station_key("Kings Cross St Pancras")
+    assert _station_key("Stratford (London) Rail Station") == "stratford"
+
+
+# R4-12 ── an airport is routed to its station; a long final walk is flagged ─────────
+def _commute(monkeypatch, legs, captured):
+    import core.maps_service as ms
+    from core.tools import calculate_commute as cc
+
+    def fake_details(frm, to, mode):
+        captured.append((frm, to))
+        return {"duration_minutes": sum(l["duration_minutes"] for l in legs), "source": "tfl",
+                "route_legs": legs, "route_summary": "x", "changes_count": 1}
+    monkeypatch.setattr(ms, "calculate_travel_details", fake_details)
+    return cc.calculate_commute_impl("South Kensington", "Heathrow", "transit")
+
+
+def test_r4_12_heathrow_is_routed_to_the_terminal_station(monkeypatch):
+    captured = []
+    out = _commute(monkeypatch, [{"mode": "tube", "duration_minutes": 50, "from": "South Kensington",
+                                  "to": "Heathrow Terminals 2 & 3"}], captured)
+    assert captured[0][1].startswith("Heathrow Terminals 2 & 3")
+    assert out["to_address"] == "Heathrow" and out["success"] is True
+    assert "endpoint_check" not in out
+
+
+def test_r4_12_a_long_final_walk_is_flagged(monkeypatch):
+    out = _commute(monkeypatch, [{"mode": "tube", "duration_minutes": 60, "to": "Hatton Cross"},
+                                 {"mode": "walking", "duration_minutes": 48, "from": "Hatton Cross",
+                                  "to": "Airside Road Tunnel"}], [])
+    assert out["endpoint_check"] == "final_walk_long" and "48-minute walk" in out["caveat"]
+
+
+def test_r4_12_other_places_are_unchanged():
+    from core.tools.calculate_commute import transport_hub_address
+    assert transport_hub_address("Heathrow Airport, London") .startswith("Heathrow Terminals")
+    assert transport_hub_address("Hatton Garden") == "Hatton Garden"
+    assert transport_hub_address("Bank") == "Bank"

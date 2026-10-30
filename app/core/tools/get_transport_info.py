@@ -171,6 +171,45 @@ def _postcode_area(district: str) -> str:
     return re.match(r'[A-Z]*', str(district or '').upper()).group()
 
 
+_STATION_SUFFIX = re.compile(
+    r"\s*(?:\((?:london|h&c line|[a-z ]+ line)\)\s*)?"
+    r"(?:(?:underground|tube|dlr|overground|rail(?:way)?|elizabeth\s+line)\s+)?station\s*$", re.I)
+
+
+def _station_key(name) -> str:
+    """A station name compared without its suffix, punctuation or "&"."""
+    value = _STATION_SUFFIX.sub("", str(name or "").strip())
+    value = re.sub(r"\s*\((?:london|[a-z ]+ line)\)\s*", " ", value, flags=re.I)
+    value = value.lower().replace("&", " and ")
+    value = re.sub(r"[’'.]", "", value)
+    value = re.sub(r"\bsaint\b", "st", value)
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", value).split())
+
+
+def _exact_station_match(location: str) -> dict | None:
+    """TfL's station whose name IS ``location`` (a station suffix aside), else None.
+
+    Only a bare name is looked up: an address, a postcode or anything with a digit or a
+    comma goes to the geocoder as before."""
+    text = str(location or "").strip()
+    if not text or re.search(r"[\d,]", text) or len(text) > 60:
+        return None
+    key = _station_key(text)
+    if not key:
+        return None
+    status, data = _tfl_get(f"/StopPoint/Search/{_STATION_SUFFIX.sub('', text).strip()}",
+                            {'modes': _STATION_MODES})
+    matches = (data or {}).get('matches') if isinstance(data, dict) else None
+    for match in matches or []:
+        if isinstance(match, dict) and match.get('id') and _station_key(match.get('name')) == key:
+            found = {'in_london': True, 'station': True, 'token': match.get('id'),
+                     'name': match.get('name')}
+            if match.get('lat') is not None and match.get('lon') is not None:
+                found['coords'] = {'lat': match.get('lat'), 'lng': match.get('lon')}
+            return found
+    return None
+
+
 def _resolve_station(location: str) -> dict:
     """Resolve a free-text place/postcode/station to a fare-chargeable TfL station.
 
@@ -199,6 +238,14 @@ def _resolve_station(location: str) -> dict:
 
     result = {"input": location, "in_london": None, "station": False, "token": None,
               "name": None, "coords": None}
+    # "Camden Town Underground Station" geocoded next to King's Cross and was priced from
+    # King's Cross St. Pancras (R4-13). A station name resolves by TfL's own name first, and
+    # only an exact match (suffixes and punctuation aside) is taken.
+    exact = _exact_station_match(location)
+    if exact:
+        result.update(exact)
+        _cache_set(cache_key, result)
+        return result
     geo = _geocode(location)
     if not (geo and geo.get('lat') is not None):
         # Scraped listing addresses often end in an outward-only postcode

@@ -7,6 +7,32 @@ from core.tool_system import Tool
 from typing import Optional
 
 
+# Airports and other hubs the geocoder places at an arbitrary point of a large site.
+_TRANSPORT_HUBS = {
+    "heathrow": "Heathrow Terminals 2 & 3, Hounslow TW6 1EW",
+    "heathrow airport": "Heathrow Terminals 2 & 3, Hounslow TW6 1EW",
+    "london heathrow": "Heathrow Terminals 2 & 3, Hounslow TW6 1EW",
+    "london heathrow airport": "Heathrow Terminals 2 & 3, Hounslow TW6 1EW",
+    "gatwick": "Gatwick Airport railway station, Crawley RH6 0RD",
+    "gatwick airport": "Gatwick Airport railway station, Crawley RH6 0RD",
+    "london gatwick": "Gatwick Airport railway station, Crawley RH6 0RD",
+    "stansted": "Stansted Airport railway station, CM24 1RW",
+    "stansted airport": "Stansted Airport railway station, CM24 1RW",
+    "london city airport": "London City Airport DLR station, London E16 2PX",
+    "city airport": "London City Airport DLR station, London E16 2PX",
+    "luton airport": "Luton Airport Parkway station, Luton LU2 9NQ",
+}
+_LONG_FINAL_WALK_MIN = 25
+
+
+def transport_hub_address(address: str) -> str:
+    """The station address of an airport named on its own, else ``address`` unchanged."""
+    key = " ".join(str(address or "").lower().replace(",", " ").split())
+    key = key[:-len(" uk")] if key.endswith(" uk") else key
+    key = key[:-len(" london")] if key.endswith(" london") and key != "london" else key
+    return _TRANSPORT_HUBS.get(key.strip(), address)
+
+
 def calculate_commute_impl(
     from_address: str,
     to_address: str,
@@ -42,8 +68,14 @@ def calculate_commute_impl(
         except Exception:
             pass
 
+        # "Heathrow" geocoded to "Airside Road Tunnel, Hillingdon" and the route ended with a
+        # 48-minute walk (R4-12): an airport resolves to its station.
+        # The requested addresses stay what the result reports (evidence binds to them).
+        routed_from = transport_hub_address(from_address)
+        routed_to = transport_hub_address(to_address)
+
         # 调用地图服务计算通勤时间 + 真实路线（TfL 线路明细）
-        details = calculate_travel_details(from_address, to_address, mode)
+        details = calculate_travel_details(routed_from, routed_to, mode)
 
         if not details:
             return {
@@ -70,6 +102,10 @@ def calculate_commute_impl(
             'basis': details.get('basis'),
             'basis_note': details.get('basis_note'),
         }
+        if routed_to != to_address:
+            base['routed_to_address'] = routed_to
+        if routed_from != from_address:
+            base['routed_from_address'] = routed_from
 
         duration = details.get('duration_minutes')
         if duration is not None and is_measured(details.get('source')):
@@ -86,6 +122,18 @@ def calculate_commute_impl(
                 ),
                 'basis': details.get('basis') or BASIS_MEASURED,
             })
+            legs = [leg for leg in (base.get('route_legs') or []) if isinstance(leg, dict)]
+            last = legs[-1] if legs else {}
+            walk = last.get('duration_minutes')
+            if (len(legs) > 1 and str(last.get('mode') or '').lower() == 'walking'
+                    and isinstance(walk, (int, float)) and walk > _LONG_FINAL_WALK_MIN):
+                # A long last walk usually means the destination was placed at the wrong point.
+                base['endpoint_check'] = 'final_walk_long'
+                base['caveat'] = (
+                    f"This route ends with a {walk:g}-minute walk"
+                    + (f" from {last.get('from')}" if last.get('from') else "")
+                    + "; the destination may have been placed at the wrong point. Say so, and "
+                      "ask the user to confirm the exact address before relying on this time.")
             return base
 
         # No journey plan. Everything derived from a straight-line guess is either

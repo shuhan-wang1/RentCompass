@@ -2049,6 +2049,20 @@ def _zh_institution_area(place: str, bare: bool) -> str | None:
     return None
 
 
+def _zh_named_home_area(place: str, bare: bool) -> str | None:
+    """The known area closing ``place``: in 「找一个Angel附近的一居室…还有去国王十字的车费」 it is the
+    home, whatever else the message names (V-16)."""
+    if bare:
+        return None
+    latin = re.search(r"[a-z][a-z’'\-\s]{1,35}$", place, re.I)
+    if latin:
+        return _match_known_area(latin.group())
+    for zh, canon in _ZH_AREA_MAP.items():
+        if place.endswith(zh):
+            return canon
+    return None
+
+
 def unresolved_zh_search_place(text: str) -> str | None:
     """The place a zh home search names when no area could be read from it: the standing area
     must not be searched in its place (U-09). None for a kind of place ("地铁站附近的房子")."""
@@ -2147,7 +2161,7 @@ def _extract_area(text: str) -> str | None:
     _zh_london = _zh_city = None
     near_home = _zh_near_home_place(text)
     if near_home:
-        institution_area = _zh_institution_area(*near_home)
+        institution_area = _zh_institution_area(*near_home) or _zh_named_home_area(*near_home)
         if institution_area:
             return institution_area
 
@@ -2172,6 +2186,10 @@ def _extract_area(text: str) -> str | None:
         # 伦敦大学学院要多久?" (UCL) switched a King's Cross search to all of London (R1-04).
         # A verb or 的 before 大学 ("在伦敦读大学", "伦敦的大学") keeps the city.
         if re.match(r'(?:(?![读上念考去在的找住租和与])[一-鿿]){0,6}?(?:大学|学院|医院)', suffix):
+            return True
+        # 「去国王十字的车费」 names where the journey ends (V-16).
+        if re.search(r'(?:去|到|至|往)\s*$', prefix) and re.match(
+                r'\s*(?:的)?(?:车费|票价|路费|路线|交通费|地铁|怎么走|要多久|多久|多长时间)', suffix):
             return True
         return bool(re.match(r'\s*(?:附近)?(?:找(?=工作|实习))?(?:上班|工作|实习|上学|读书|上课|办公|通勤)', suffix)
                     or re.search(r'(?:通勤|上班|上学)(?:到|去)\s*$', prefix))

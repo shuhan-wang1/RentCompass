@@ -385,7 +385,7 @@ def housing_update_text(text: str) -> str:
                          r'\b(?:flats?|homes?|houses?|studios?|apartments?|places|listings)\b.{0,25}'
                          r'\b(?:under|below|up\s+to|max(?:imum)?)\s*£?\s*\d|'
                          r'\b(?:set|change|raise|lower|remove|drop)\b.{0,30}\b(?:budget|bedroom|area|room type|commute destination|my office)|'
-                         r'找房|搜索房源|找.{0,8}(?:公寓|卧|住处)|预算改|改为|改回|恢复', clause, re.I):
+                         r'找房|搜索房源|找.{0,12}(?:公寓|卧|住处|居室|studio|单间)|预算改|改为|改回|恢复', clause, re.I):
                 affirmative.append(clause)
         if not affirmative:
             return ''

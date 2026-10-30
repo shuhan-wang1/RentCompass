@@ -84,6 +84,7 @@ from core.candidate_validation import (
 from core import refine_results
 from core.constraint_updates import commute_query_forbidden
 from core.memory_contract import (
+    RECALL_TURN_WRITE_ERROR,
     compose_memory_contract_response,
     memory_contract_from_artifact,
     memory_contract_from_artifacts,
@@ -5456,7 +5457,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 # a distinct reason and no frozen candidate (there is nothing new to save).
                 artifacts.append(_artifact(
                     turn, name, None, digest, success=False,
-                    error="denied: recall-question turn, memory write blocked", denied=True))
+                    error=RECALL_TURN_WRITE_ERROR, denied=True))
                 messages.append(ToolMessage(
                     content=json.dumps({
                         "success": False, "data": None,

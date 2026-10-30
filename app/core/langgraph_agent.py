@@ -620,8 +620,12 @@ def update_search_criteria(accumulated: dict, new_criteria: dict) -> dict:
 
     # no_commute: never downgrade here (True is sticky); an explicit commute
     # mention resets it in _apply_explicit_criteria_updates, not on a merge.
-    if 'no_commute' in new_criteria or result.get('no_commute'):
-        result['no_commute'] = bool(result.get('no_commute')) or bool(new_criteria.get('no_commute'))
+    # A search that did not ask leaves it unset: False from turn 2 read as "you have a commute"
+    # in a recap of a user who never mentioned one (V-17).
+    if new_criteria.get('no_commute') or result.get('no_commute'):
+        result['no_commute'] = True
+    elif 'no_commute' in new_criteria and result.get('commute_destination'):
+        result['no_commute'] = False
 
     # bedrooms: only accept a definite single count (ignore "0-2" range strings the
     # tool emits when the user did not pin a bedroom number).
@@ -669,6 +673,27 @@ def update_search_criteria(accumulated: dict, new_criteria: dict) -> dict:
 _AMENITY_NEGATED_BEFORE_RE = re.compile(
     r"(?:\b(?:don.t|do not|doesn.t|does not|no longer)\s+(?:need|want|care about)|\bno need for|"
     r"\bno|\bwithout)\s+(?:(?:a|an|the|any|my)\s+)?(?:\w+\s+)?$|(?:不需要|不用|不要)\s*$", re.I)
+
+
+# 「忘掉我喜欢公园这件事」 and 「不要洗碗机了」 named no English label, so the wish stayed and went
+# into the next search while the reply said it would not be used (V-15).
+_AMENITY_ZH_WORDS = {
+    "park": ("公园", "绿地"), "dishwasher": ("洗碗机",), "washing machine": ("洗衣机",), "garden": ("花园", "院子"),
+    "balcony": ("阳台", "露台"), "gym": ("健身房",), "parking": ("停车位", "车位", "停车"), "pool": ("泳池", "游泳池"),
+    "laundry": ("洗衣房",), "concierge": ("前台", "门卫"),
+}
+_ZH_WISH_WITHDRAWN_BEFORE = re.compile(r"(?:忘掉|忘记|忘了|不要|不用|不需要|不必|别|去掉|取消|删掉|删除|移除)[^，。！？；,.!?;]{0,10}$")
+_ZH_WISH_WITHDRAWN_AFTER = re.compile(r"[^，。！？；,.!?;]{0,6}(?:不要了|算了|不用了|不需要了|不必了|无所谓|取消|去掉)")
+
+
+def _zh_wish_withdrawn(name: str, message: str) -> bool:
+    """True when the message withdraws the amenity ``name`` in its Chinese word."""
+    for word in _AMENITY_ZH_WORDS.get(name, ()):
+        for match in re.finditer(re.escape(word), message or ''):
+            if (_ZH_WISH_WITHDRAWN_BEFORE.search(message[:match.start()])
+                    or _ZH_WISH_WITHDRAWN_AFTER.match(message, match.end())):
+                return True
+    return False
 
 
 def _is_short_preference(value) -> bool:
@@ -889,7 +914,7 @@ def _soft_amenity_updates(message: str, soft_preferences: list) -> list | None:
     plain = {str(v).strip() for v in current
              if not str(v).startswith(leads) and _is_short_preference(v)}
     names |= plain
-    withdrawn = set()
+    withdrawn = {name for name in names if _zh_wish_withdrawn(name, message)}
     for name in names:
         for match in re.finditer(r"(?<![A-Za-z])" + re.escape(name) + r"(?![A-Za-z])", message or '', re.I):
             if (_feature_retracted_here(message, match.start(), match.end())
@@ -1018,7 +1043,7 @@ def _strip_destination_time_words(place: str) -> str:
 _RESET_CRITERIA = {
     'area': None, 'areas': [], 'max_budget': None, 'budget_period': None, 'bedrooms': None,
     'bedrooms_minimum': False, 'room_type': None, 'commute_destination': None, 'destination': None,
-    'max_travel_time': None, 'no_commute': False, 'move_in_date': None, 'office_days_per_week': None,
+    'max_travel_time': None, 'no_commute': None, 'move_in_date': None, 'office_days_per_week': None,
     'property_features': [], 'soft_preferences': [], 'amenities_of_interest': [],
 }
 

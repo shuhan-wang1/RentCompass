@@ -543,3 +543,70 @@ def test_v_12_one_value_changes_nothing_and_a_reset_forgets():
     assert "Changed in this conversation" not in render_accumulated_criteria(state)
     state = _state_node(_state_node(state, "actually £1,900"), "Start from scratch")
     assert not (state.get("constraint_history") or {}).get("max_budget")
+
+
+# V-14 ── a write the model tried on a recall turn does not replace the recall
+def test_v_14_a_denied_write_on_a_recall_turn_leaves_the_answer():
+    from core.memory_contract import (RECALL_TURN_WRITE_ERROR, compose_memory_contract_response,
+                                      memory_contract_from_artifacts)
+    contract = memory_contract_from_artifacts([{"tool": "remember", "denied": True, "success": False,
+                                                "error": RECALL_TURN_WRITE_ERROR}])
+    assert contract == {}
+    assert compose_memory_contract_response("I have nothing saved.", contract) == "I have nothing saved."
+
+
+def test_v_14_any_other_denied_write_keeps_its_notice():
+    from core.memory_contract import memory_contract_from_artifacts
+    contract = memory_contract_from_artifacts([{"tool": "remember", "denied": True, "success": False,
+                                                "error": "denied: tainted write requires confirmation"}])
+    assert contract["requested"] and contract["attempted"] is False
+
+
+# V-15 ── a zh withdrawal reaches the English-labelled wish
+@pytest.mark.parametrize("message,wish", [
+    ("忘掉我喜欢公园这件事。", "Would like park"), ("不要洗碗机了", "Must have dishwasher"),
+    ("洗碗机算了", "Would like dishwasher"), ("不需要阳台", "Would like balcony"),
+])
+def test_v_15_a_zh_withdrawal_removes_the_wish(message, wish):
+    state = {"area": "Bow", "soft_preferences": [wish, "Would like gym"]}
+    assert _state_node(state, message)["soft_preferences"] == ["Would like gym"]
+
+
+@pytest.mark.parametrize("message", ["我喜欢公园", "要有洗碗机", "这里的公园怎么样？"])
+def test_v_15_a_mention_is_no_withdrawal(message):
+    state = {"area": "Bow", "soft_preferences": ["Would like park", "Must have dishwasher"]}
+    out = _state_node(state, message)["soft_preferences"]
+    assert "Would like park" in out and "Must have dishwasher" in out
+
+
+# V-16 ── the home before 附近 is the area; a fare's destination is not
+@pytest.mark.parametrize("message,area", [
+    ("找一个Angel附近的一居室预算2300以内，同时告诉我Angel的天气和治安，还有去国王十字的车费", "Angel"),
+    ("找一个Hackney附近的两居室，还有到金丝雀码头的路线", "Hackney"),
+    ("帮我找卡姆登附近的studio，去国王十字的票价是多少", "Camden"),
+])
+def test_v_16_the_home_is_what_comes_before_near(message, area):
+    assert _state_node({}, message, [])["area"] == area
+
+
+def test_v_16_a_fare_alone_moves_nothing():
+    assert _state_node({"area": "Bow", "areas": ["Bow"]}, "去国王十字的车费多少钱")["area"] == "Bow"
+
+
+# V-17 ── an unstated commute stays unstated
+def test_v_17_a_search_does_not_make_no_commute_false():
+    from core.langgraph_agent import update_search_criteria
+    assert update_search_criteria({"area": "Bow"}, {"no_commute": False}).get("no_commute") is None
+    assert update_search_criteria({"no_commute": True}, {"no_commute": False})["no_commute"] is True
+
+
+@pytest.mark.parametrize("criteria,line", [
+    ({"area": "Bow", "no_commute": False}, "commute: not specified"),
+    ({"area": "Bow"}, "commute: not specified"),
+    ({"area": "Bow", "no_commute": True}, "no_commute: True"),
+    ({"area": "Bow", "no_commute": False, "commute_destination": "Bank"}, "commute_destination: Bank"),
+])
+def test_v_17_the_recap_reads_three_states(criteria, line):
+    from core.loop_prompts import render_accumulated_criteria
+    text = render_accumulated_criteria(criteria)
+    assert line in text and "no_commute: False" not in text

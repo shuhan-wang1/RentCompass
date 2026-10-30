@@ -26,6 +26,9 @@ _MEMORY_CLAIM_PATTERNS = (
 )
 
 
+RECALL_TURN_WRITE_ERROR = "denied: recall-question turn, memory write blocked"
+
+
 def memory_contract_from_artifact(artifact: dict | None) -> dict:
     """Project one write artifact onto the user-visible side-effect contract."""
     if not isinstance(artifact, dict):
@@ -62,7 +65,10 @@ def memory_contract_from_artifacts(artifacts: list | None) -> dict:
     "Remember that I have a cat. 记住我对花粉过敏。" made two successful writes and the reply
     echoed only the last. Each acknowledged text is listed; a mix of saved and failed writes
     says so."""
-    contracts = [memory_contract_from_artifact(a) for a in (artifacts or []) if isinstance(a, dict)]
+    # A write the model tried on a pure recall turn was no request of the user's: the notice
+    # would replace the recall answer (V-14).
+    contracts = [memory_contract_from_artifact(a) for a in (artifacts or []) if isinstance(a, dict)
+                 and a.get("error") != RECALL_TURN_WRITE_ERROR]
     contracts = [c for c in contracts if c]
     if not contracts:
         return {}

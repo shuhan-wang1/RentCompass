@@ -369,11 +369,14 @@ def render_accumulated_criteria(criteria: Optional[Dict[str, Any]]) -> str:
         if key in ('constraint_sources', 'plans', 'criteria_repair_provenance',
                    'constraint_history') or key.startswith('_'):
             continue
-        if value in (None, "", [], {}, ()):
+        if value in (None, "", [], {}, ()) or (key == 'no_commute' and not value):
             continue
         body.append(f"{key}: {value}")
     if not body:
         return ""
+    if not (criteria.get('no_commute') or criteria.get('commute_destination')
+            or criteria.get('destination')):
+        body.append("commute: not specified (the user has not said whether they commute)")
     return "\n".join(
         ["=== ACCUMULATED SEARCH CRITERIA (confirmed so far) ===", *body,
          *_changed_values(criteria.get('constraint_history')),

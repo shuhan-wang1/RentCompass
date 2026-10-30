@@ -488,3 +488,42 @@ def test_d_05_anything_else_is_not(message):
 
 def test_d_05_make_it_2_stays_the_bedrooms():
     assert _state_node(_BUDGETED, "make it 2 bedrooms")["bedrooms"] == 2
+
+
+# W-07 ── a place named for the weather is never replaced by another
+def _weather_location(message: str, area="Manchester"):
+    from core.agent_loop import _explicit_weather_reads
+    state = {"tool_artifacts": [], "accumulated_search_criteria": {"area": area, "areas": [area]}}
+    reads = _explicit_weather_reads(state, [], message)
+    return reads[0][1]["location"] if reads else None
+
+
+@pytest.mark.parametrize("message,place", [
+    ("Weather in Springfield?", "Springfield"), ("weather in Springfield", "Springfield"),
+    ("What's the weather like in Springfield?", "Springfield"), ("WEATHER IN Springfield", "Springfield"),
+    ("weather in springfield?", "Springfield"), ("Weather forecast for Leeds tomorrow", "Leeds"),
+    ("What is the weather for Milton Keynes", "Milton Keynes"), ("Springfield weather?", "Springfield"),
+    ("Stratford-upon-Avon weather", "Stratford-upon-Avon"), ("Weather in Stratford upon Avon?", "Stratford upon Avon"),
+    ("Springfield的天气", "Springfield"), ("曼彻斯特天气", "Manchester"), ("利兹的天气怎么样", "Leeds"),
+])
+def test_w_07_the_named_place_is_read(message, place):
+    assert _weather_location(message, "Hackney") == place
+
+
+@pytest.mark.parametrize("message", [
+    "weather in the morning", "What's the weather like?", "How's the weather?", "weather tomorrow", "天气怎么样",
+    "Check the weather", "weather in general", "What is the weather in my area?",
+])
+def test_w_07_no_place_named_keeps_the_area(message):
+    assert _weather_location(message) == "Manchester"
+
+
+def test_w_07_a_favourite_does_not_fall_back_to_the_area():
+    assert _weather_location("Check the weather and fare to Bank for my first favourite", "Hackney") is None
+
+
+def test_w_07_the_weather_of_a_place_in_question_waits_for_the_answer():
+    from core.agent_loop import _read_waits_for_answer
+    assert _read_waits_for_answer("get_weather", {"location": "Springfield"}, "Which Springfield do you mean?")
+    assert not _read_waits_for_answer("get_weather", {"location": "Leeds"}, "Which room type would you like?")
+    assert not _read_waits_for_answer("get_transport_info", {"location": "Leeds"}, "Leeds or York?")

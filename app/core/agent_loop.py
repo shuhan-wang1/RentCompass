@@ -2907,8 +2907,54 @@ def _explicit_transport_reads(state: dict, batch_calls: list, message: str) -> l
     return calls
 
 
+# The place a weather request names. "Weather in Springfield?" met a case-sensitive "weather", so
+# the read ran for the previous area, under the question "Which Springfield?" (W-07). The cue is
+# read in any case, the place only as a place: "weather in the morning" names none.
+_WEATHER_NOT_A_PLACE = (
+    r"the|this|that|these|those|my|our|your|a|an|it|there|here|general|today|tomorrow|tonight|"
+    r"now|next|morning|afternoon|evening|spring|summer|autumn|fall|winter|january|february|march|"
+    r"april|may|june|july|august|september|october|november|december|monday|tuesday|wednesday|"
+    r"thursday|friday|saturday|sunday|any|all|each|every|both|case|mind|advance")
+_WEATHER_CUE = (r"(?i:\b(?:weather|forecast)(?:\s+(?:like|forecast|today|tomorrow|now|right\s+now|going\s+to\s+be))*"
+                r"\s+(?:in|for|at|around|near)\s+)")
+_WEATHER_PROPER_NAME = r"[A-Z][a-z’']+(?:[ -](?:(?:upon|on|under|le)[ -])?[A-Z][a-z’']+){0,3}"
+_WEATHER_PLACE_RE = re.compile(_WEATHER_CUE + r"(" + _WEATHER_PROPER_NAME + r")")
+_WEATHER_LOWER_PLACE_RE = re.compile(
+    _WEATHER_CUE + r"(?!(?i:" + _WEATHER_NOT_A_PLACE + r")\b)([a-z][a-z’'\-]{2,})(?:\s*[?.!,]|\s*$)")
+_WEATHER_PLACE_BEFORE_RE = re.compile(
+    r"(?<![A-Za-z])(" + _WEATHER_PROPER_NAME + r")(?:['’]s)?\s*(?:的)?\s*(?:weather|forecast|天气)")
+_WEATHER_NOT_A_PLACE_BEFORE = re.compile(
+    r"^(?:what|how|is|any|check|get|show|tell|also|and|the|today|tomorrow|current|local|good|bad|nice)\b", re.I)
+
+
+def _weather_place_named(text: str) -> Optional[str]:
+    """The place ``text`` asks the weather of, in its own spelling, else None."""
+    named = _WEATHER_PLACE_RE.search(text)
+    if named:
+        return named.group(1)
+    lower = _WEATHER_LOWER_PLACE_RE.search(text)
+    if lower:
+        return lower.group(1).title()
+    before = _WEATHER_PLACE_BEFORE_RE.search(text)
+    if before and not _WEATHER_NOT_A_PLACE_BEFORE.match(before.group(1)):
+        return before.group(1)
+    if '天气' in text:
+        from core.tools.search_properties import _ZH_AREA_MAP
+        for name in sorted(_ZH_AREA_MAP, key=len, reverse=True):
+            if re.search(re.escape(name) + r'(?:的|今天|明天|现在)*天气', text):
+                return _ZH_AREA_MAP[name]
+    return None
+
+
+def _read_waits_for_answer(name: str, params: dict, question) -> bool:
+    """True when the question being asked is which place the weather read is for."""
+    place = str((params or {}).get('location') or '').strip().lower()
+    return name == 'get_weather' and bool(place) and place in str(question or '').lower()
+
+
 def _explicit_weather_reads(state: dict, batch_calls: list, message: str) -> list:
-    """An explicitly requested weather read may run independently of housing clarification."""
+    """An explicitly requested weather read may run independently of housing clarification.
+    A place the request names is never replaced by another one."""
     import re
     from datetime import datetime, timedelta
     from zoneinfo import ZoneInfo
@@ -2921,10 +2967,13 @@ def _explicit_weather_reads(state: dict, batch_calls: list, message: str) -> lis
         return []
     if any(item.get('tool') == 'get_weather' for item in state.get('tool_artifacts') or []):
         return []
-    location = _dimension_location_context(state, batch_calls).get('area')
-    explicit = re.search(r'\bweather\s+(?:in|for)\s+([A-Z][a-z]+(?:[ -][A-Z][a-z]+){0,3})', text)
-    if explicit:
-        location = explicit.group(1)
+    location = _weather_place_named(text)
+    if not location:
+        # "the weather ... for my first favourite": the Saved view is not visible here, and the
+        # previous search area is not where that listing is (W-07).
+        if re.search(r'\bfavou?rites?\b|收藏', text, re.I):
+            return []
+        location = _dimension_location_context(state, batch_calls).get('area')
     if not location:
         return []
     args = {'location': location}
@@ -4019,7 +4068,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                                _explicit_weather_reads(state, [], current_message))
                 available = {spec.name: spec for spec in specs}
                 independent = [(name, params) for name, params in independent
-                    if name in available and getattr(available[name], 'side_effect', 'none') != 'write'
+                    if not _read_waits_for_answer(name, params, payload.get("question"))
+                    and name in available and getattr(available[name], 'side_effect', 'none') != 'write'
                     and not getattr(available[name], 'terminal', False)
                     and _read_tool_denial(_load_tool_policy(), name, params, current_message) is None]
                 if independent:

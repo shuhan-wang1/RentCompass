@@ -606,6 +606,43 @@ def _prices_a_place(t: str, match) -> bool:
                 and _PLACE_PRICE_AFTER.match(t, match.end()))
 
 
+# A question whether an amount is enough ("1500预算够吗？", "is £1,500 enough?") asks about
+# the figure; it does not set it (S-01).
+_SUFFICIENCY_QUESTION = re.compile(
+    r'够[吗么不嘛]|够用|足够|行不行|行吗|现实吗|合理吗|太[少低]了?吗|'
+    r'\b(?:enough|sufficient|reasonable|realistic)\b', re.I)
+
+
+def _asks_if_amount_suffices(t: str, start: int, end: int) -> bool:
+    """True when the amount at ``t[start:end]`` sits in a question about whether it suffices."""
+    lo = max([m.end() for m in re.finditer(r'[。.!?！？;；\n](?!\d)', t[:start])] or [0])
+    stop = re.search(r'[。!?！？;；\n]|(?<!\d)\.(?!\d)', t[end:])
+    hi = end + stop.end() if stop else len(t)
+    sentence = t[lo:hi]
+    return bool(_SUFFICIENCY_QUESTION.search(sentence)
+                and (sentence.rstrip().endswith(('?', '？')) or '吗' in sentence))
+
+
+# A figure measured in metres, kilometres, minutes or square feet is not money.
+_MEASURE_AFTER_FIGURE = re.compile(
+    r'\s*(?:米|公里|千米|分钟|小时|平方|平米|尺|metres?|meters?|m\b|km\b|kilomet\w*|miles?\b|'
+    r'mins?\b|minutes?\b|hours?\b|sq\b|square\b|ft\b|feet\b)', re.I)
+
+
+# "1.5k budget", "£2k max": thousands written with a k (S-01).
+_THOUSANDS_K = re.compile(r'(?<![\w.])(£\s*)?(\d{1,2}(?:\.\d{1,3})?)\s*k\b(?!m)', re.I)
+
+
+def _expand_thousands(t: str) -> str:
+    def _expand(match):
+        from decimal import Decimal
+        value = Decimal(match.group(2)) * 1000
+        if value != value.to_integral_value():
+            return match.group()
+        return f"{match.group(1) or ''}{int(value)}"
+    return _THOUSANDS_K.sub(_expand, t)
+
+
 def _extract_budget(text: str):
     """Pull an explicit monthly/weekly budget out of the *current* user message.
     Returns (amount:number, period:'week'|'month') or (None, None). Deterministic regex
@@ -618,6 +655,7 @@ def _extract_budget(text: str):
     from core.constraint_updates import without_conditional_stretch
     t = without_conditional_stretch(scoped_update_text(text)).lower()
     t = re.sub(r'(?<=\d),(?=\d{3}\b)', '', t)
+    t = _expand_thousands(t)
     # "budget -500" became a £500 ceiling and was quoted back as the user's budget (R3-16):
     # a negative amount is no budget at all. A range's dash ("£1500-2000") follows a digit.
     t = re.sub(r'(?<![\w£.])-£?\d[\d.]*|£\s*-\s*\d[\d.]*|\bminus\s+£?\s*\d[\d.]*', ' ', t)
@@ -690,9 +728,20 @@ def _extract_budget(text: str):
         r'(?:(?:what|how)\s+about|search(?:ing)?|find|show(?:\s+me)?|look(?:ing)?\s+for)\b'
         r'[^£。;；?？]{0,40}?\bat\s+£\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)',
         r'£?\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)[^。;；]{0,12}(?:ceiling|budget|以内|以下)',
+        # The figure before the budget noun: 「改成1500预算」「1500的预算」「换成1500镑的预算」 kept
+        # the old ceiling (S-01, 4/4). Only a unit word and 的 may sit between them.
+        r'(?<![\d.])(\d{3,5}(?:\.\d{1,2})?)(?!\d)\s*(?:£|镑|英镑|块|元)?\s*(?:每月|一个月|每个月)?\s*'
+        r'(?:的|之)?\s*(?:月租|租金|房租)?\s*(?:预算|上限)',
+        # "2,000 max now", "1500 tops": a ceiling word right after the figure.
+        r'(?<![\d.])(\d{3,5}(?:\.\d{1,2})?)(?!\d)\s*(?:pcm|a\s+month|per\s+month)?\s*'
+        r'(?:max(?:imum)?|tops|at\s+most)\b',
     ):
         for candidate in re.finditer(pattern, t):
             clause = clause_at(t, candidate.start(), candidate.end())
+            if _asks_if_amount_suffices(t, candidate.start(1), candidate.end(1)):
+                continue
+            if _MEASURE_AFTER_FIGURE.match(t, candidate.end(1)):
+                continue  # 「离车站1500米以内」 is a distance, not a rent ceiling.
             if (_amount_role(t, candidate.start(1), candidate.end(1)) not in ('per_person', 'total')
                     and not is_hypothetical(clause) and not re.search(r'是否|会怎样|what if|would .*budget', clause)):
                 explicit.append(candidate)
@@ -866,7 +915,11 @@ def _extract_bedrooms(text: str):
     t = scoped_update_text(text).lower()
     nums = {'零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, 'six': 6, **_WORD_NUMS}
     t = re.sub(r'\bminimum bedroom count\s+(?:with|to|of|is)\s+([0-6]|one|two|three|four|five|six)\b', r'at least \1 bedrooms', t)
-    pattern = r'(?<!\d)([0-6零一二两三四五六]|one|two|three|four|five|six)\s*-?\s*(?:bed(?:room)?s?\b|(?:间)?(?:独立)?卧(?:室)?|居(?:室)?)'
+    # 「改成2个卧室」「两个卧室」「两室一厅」 (S-01): a measure word may sit before 卧室, and 室 on
+    # its own is a bedroom when it ends the phrase or comes before 厅/卫.
+    pattern = (r'(?<!\d)([0-6零一二两三四五六]|one|two|three|four|five|six)\s*-?\s*(?:bed(?:room)?s?\b|'
+               r'(?:[个個间間])?(?:独立)?卧(?:室)?|居(?:室)?|'
+               r'室(?=[一二两三0-9]?[厅廳卫衛]|[，,。.!！?？、\s的]|$))')
     candidates = []
     for m in re.finditer(pattern, t):
         clause = clause_at(t, m.start(), m.end())

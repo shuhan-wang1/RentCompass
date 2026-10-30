@@ -967,6 +967,13 @@ def assemble_messages(*, user_message: str,
         discussed_areas=ctx.get("discussed_areas"),
         shown_alternatives=ctx.get("shown_alternatives"),
     )
+    if ctx.get('search_reset'):
+        # After "Can we start from scratch with Hackney?" the state was clean, and the model
+        # brought "1 bed / £2,200" back from the history it still reads (D-04).
+        context_sections = ("The user reset the search in this message: every criterion from earlier in "
+                            "this conversation is gone. Only the criteria listed here and what this "
+                            "message states apply. Do not reuse, mention or compare against any earlier "
+                            "budget, bedroom count, room type or commute.\n\n" + context_sections)
     if ctx.get('current_date'):
         context_sections = (f"Current date in Europe/London: {ctx['current_date']}. "
                             "Distinguish today's date from cached listing dates.\n\n" + context_sections)

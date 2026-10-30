@@ -784,3 +784,27 @@ def test_d_03_what_went_is_in_the_log_through_the_redactors(caplog):
     line = caplog.text
     assert "commute.claims_removed count=2" in line and "12 minutes" in line
     assert "07700900123" not in line and "x" * 161 not in line
+
+
+# D-04 ── a reset reaches the model, not just the state
+def test_d_04_the_model_is_told_the_search_was_reset():
+    from core.agent_loop import _build_messages
+    from tests.test_agent_contract_guards import _state
+    state = _state("Can we start from scratch with Hackney?")
+    state["accumulated_search_criteria"] = {"area": "Hackney", "areas": ["Hackney"]}
+    text = "\n".join(str(message.content) for message in _build_messages(state))
+    assert "The user reset the search in this message" in text
+    state = _state("Find a flat in Hackney")
+    assert "The user reset the search" not in "\n".join(str(m.content) for m in _build_messages(state))
+
+
+def test_d_04_the_search_runs_on_the_users_words():
+    message = "Can we start from scratch with Hackney?"
+    params = _search_params(message, dict(_CAMDEN, max_budget=2200), user_query="1 bed flat in Hackney under £2200 per month")
+    assert params["user_query"] == message and params["area"] == "Hackney"
+    assert "max_budget" not in params and not params.get("bedrooms")
+
+
+def test_d_04_another_search_keeps_the_models_summary():
+    params = _search_params("Find a flat in Hackney", _HACKNEY, user_query="flat in Hackney")
+    assert params["user_query"] == "flat in Hackney"

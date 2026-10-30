@@ -1498,8 +1498,10 @@ def _build_messages(state: AgentState) -> list:
         discussed_areas = []
 
     focus_records = _focus_records(ec)
+    from core.constraint_updates import resets_all_criteria
     context_block = {
         "accumulated_criteria": state.get("accumulated_search_criteria") or {},
+        "search_reset": resets_all_criteria(user_message),
         "current_date": (state.get('extracted_context') or {}).get('current_date'),
         "focused_property": ec.get("focused_property") or (
             focus_records[-1] if focus_records else None),
@@ -4186,6 +4188,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         p = dict(params or {})
         ec = state.get("extracted_context") or {}
         acc = state.get("accumulated_search_criteria") or {}
+        from core.constraint_updates import resets_all_criteria
+        if resets_all_criteria(ec.get("current_message") or ""):
+            # The model's own summary of the request carried the cleared criteria (D-04).
+            p["user_query"] = ec.get("current_message")
         from core.langgraph_agent import _apply_explicit_criteria_updates
         # Relative budget edits were resolved by the state node against the pre-turn
         # ceiling; re-applying one here would add the delta a second time.

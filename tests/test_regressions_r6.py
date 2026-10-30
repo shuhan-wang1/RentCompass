@@ -267,6 +267,11 @@ def test_u_09_a_place_nothing_here_resolves_does_not_reuse_the_old_area(message)
     assert acc["area"] is None and acc["areas"] == []
 
 
+@pytest.mark.parametrize("message", ["从这些房子到伦敦大学学院哪个最近？", "从这些房子到帝国理工哪个最近？"])
+def test_u_09_comparing_listings_by_distance_sets_no_destination(message):
+    assert not _state_node({}, message).get("commute_destination")
+
+
 def test_u_09_the_institution_stays_the_destination_of_a_london_search():
     acc = _state_node({"area": "Bristol", "areas": ["Bristol"], "commute_destination": "University of Bristol"},
                       "伦敦大学学院附近有房吗")

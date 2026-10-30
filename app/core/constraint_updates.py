@@ -1004,11 +1004,13 @@ _LISTING_DEICTIC = re.compile(
     r"(?:one|flat|listing|place|property|home|option|studio)\b"
     r"|\b(?:this|that|these|those)\s+(?:one|ones|flats?|listings?|places?|propert(?:y|ies)|homes?|apartments?)\b"
     r"|\b(?:number|no\.|#)\s*\d\b|\bis\s+it\b|\bare\s+they\b|\bit\s+(?:to|from)\b"
-    r"|第[一二三四五六七八九十\d]+(?:套|个|间|处)|[这那](?:套|个|间|处|几套)", re.I)
+    r"|第[一二三四五六七八九十\d]+(?:套|个|间|处)|[这那](?:套|个|间|处|几套|些)", re.I)
 _DISTANCE_QUESTION = re.compile(
     r"\bhow\s+(?:far|long|close|near)\b|\b(?:distance|far|close|near)\s+(?:away\s+)?(?:from|to)\b"
     r"|\b(?:commute|journey|trip)\s+(?:time\s+)?(?:from|to)\b"
-    r"|离[^，。？?！!]{1,20}(?:远|近|多远|多久|多长时间)|到[^，。？?！!]{1,20}(?:要)?(?:多久|多长时间|多远|远吗|近吗)", re.I)
+    r"|离[^，。？?！!]{1,20}(?:远|近|多远|多久|多长时间)|到[^，。？?！!]{1,20}(?:要)?(?:多久|多长时间|多远|远吗|近吗)"
+    # 「从这些房子到伦敦大学学院哪个最近？」 compares the listings; it states no commute (U-09).
+    r"|到[^，。？?！!]{1,20}(?:哪个|哪套|哪间|哪一个|哪一套)[^，。？?！!]{0,4}(?:最近|最远|最快|更近|更快)", re.I)
 _OWN_COMMUTE_STATEMENT = re.compile(
     r"\b(?:i|we)\s+(?:\w+\s+)?(?:work|study|studies|commute|go\s+to\s+work)\b"
     r"|\bmy\s+(?:office|workplace|work|job|school|university|college|campus|commute)\b"

@@ -66,10 +66,11 @@ def memory_contract_from_artifacts(artifacts: list | None) -> dict:
     echoed only the last. Each acknowledged text is listed; a mix of saved and failed writes
     says so."""
     # A write the model tried on a pure recall turn was no request of the user's: the notice
-    # would replace the recall answer (V-14).
+    # would replace the recall answer (V-14). A question the write path refused is the same: the
+    # reply said "only durable facts, not instructions" and answered nothing (D-02).
     contracts = [memory_contract_from_artifact(a) for a in (artifacts or []) if isinstance(a, dict)
                  and a.get("error") != RECALL_TURN_WRITE_ERROR]
-    contracts = [c for c in contracts if c]
+    contracts = [c for c in contracts if c and c.get("policy_decision") != "rejected_question_not_fact"]
     if not contracts:
         return {}
     if len(contracts) == 1:

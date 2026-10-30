@@ -364,3 +364,46 @@ def test_w_05_a_restored_budget_reaches_the_search_over_the_models_stale_value()
     params = _search_params("Budget back to what it was when I started, find a flat in Camden",
                             _MOVED, max_budget=2500)
     assert params["max_budget"] == 2000
+
+
+# D-01, D-02 ── a recall question gets every saved fact, and a refused question is answered
+@pytest.mark.parametrize("message", [
+    "What did I tell you about my pets?", "Remember what I told you about my pets?",
+    "Remember my budget and what pets I have?", "Remember my budget?", "我之前说过什么？",
+])
+def test_d_01_a_recall_question_reads_every_saved_fact(message):
+    import importlib
+    appmod = importlib.import_module("app")
+    assert appmod._asks_what_is_remembered(message)
+
+
+@pytest.mark.parametrize("message", [
+    "Remember my budget is £2,000", "Remember my budget is £2,000?", "Remember my cat is called Bob?",
+    "Please remember I have a cat", "Remember my budget and my cat", "Find a flat in Camden",
+])
+def test_d_02_a_save_stays_a_save(message):
+    from core.memory_gate import is_pure_recall_question
+    assert not is_pure_recall_question(message)
+
+
+@pytest.mark.parametrize("message", ["Remember my budget and what pets I have?", "Remember my budget?"])
+def test_d_02_the_write_is_not_authorised(message):
+    from core.memory_gate import is_pure_recall_question, user_authorizes_memory
+    assert is_pure_recall_question(message) and not user_authorizes_memory(message)
+
+
+def test_d_02_a_refused_question_adds_no_notice():
+    from core.memory_contract import compose_memory_contract_response, memory_contract_from_artifacts
+    artifact = {"tool": "remember", "success": True, "raw_data": {
+        "success": False, "security_decision": "rejected_question_not_fact", "error": "That was a question."}}
+    contract = memory_contract_from_artifacts([artifact])
+    assert contract == {}
+    assert compose_memory_contract_response("Your budget is £2,000 and you have a cat.", contract) == (
+        "Your budget is £2,000 and you have a cat.")
+
+
+def test_d_02_a_refused_instruction_keeps_its_notice():
+    from core.memory_contract import memory_contract_from_artifacts, memory_notice
+    artifact = {"tool": "remember", "success": True, "raw_data": {
+        "success": False, "security_decision": "rejected_instruction_shaped", "error": "no"}}
+    assert "not instructions" in memory_notice(memory_contract_from_artifacts([artifact]), "en")

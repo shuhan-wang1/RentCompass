@@ -112,6 +112,14 @@ _RECALL_VETO_ZH_RE = (
     re.compile(r"记住[^，,。.；;！!]{0,15}?了(?:吗|没)"),
 )
 
+# "Remember my budget and what pets I have?" and "Remember my budget?" ask: the save cue "remember
+# my" under a question mark met the save path, and the reply refused to save it (D-02). A figure or
+# a stated fact keeps its save reading: "Remember my budget is £2,000?".
+_REMEMBER_AS_QUESTION = re.compile(
+    r"^\W*(?:(?:and|also|so|please)\s+)?remember\s+(?:my|our)\b"
+    r"(?:[^.!?。！？\n\d]*\b(?:what|which|where|how|who|when)\b[^.!?。！？\n\d]*"
+    r"|(?:\s+(?!is\b|are\b|am\b|was\b|ok\b|okay\b|please\b)[a-z'’\-]+){1,3})\s*[?？]\s*$", re.I)
+
 # A recall phrase introduced by a PURPOSE / RESULT subordinator is not a question about
 # what we already know — it states WHY the user wants a fact saved, so the utterance is
 # a SAVE request:
@@ -159,6 +167,8 @@ def _has_recall_cue(text: str) -> bool:
     can never disagree about what counts as a recall question, and the purpose-clause
     exemption cannot be applied in one and forgotten in the other.
     """
+    if _REMEMBER_AS_QUESTION.search(text):
+        return True
     for pat in _RECALL_VETO_EN:
         for m in pat.finditer(text):
             if not _is_purpose_clause(text, m.start()):
@@ -261,6 +271,8 @@ def _has_store_intent(text: str) -> bool:
     """
     if any(phrase in text for phrase in _AUTHORIZE_ZH):
         return True
+    if _REMEMBER_AS_QUESTION.search(text):
+        return False
     for pat in _AUTHORIZE_EN:
         for m in pat.finditer(text):
             head = text[:m.start()]

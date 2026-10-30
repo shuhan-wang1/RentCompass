@@ -3232,7 +3232,12 @@ _RECALL_FACTS_MAX = 100
 
 
 def _asks_what_is_remembered(message: str) -> bool:
-    return bool(_REMEMBERED_QUESTION.search(str(message or "")[:2000]))
+    """True for a question answered from every saved fact. The write gate's recall cues count too:
+    "What did I tell you about my pets?" got the six most relevant rows, which missed the saved
+    cat, and the reply said nothing was saved (D-01)."""
+    from core.memory_gate import is_pure_recall_question
+    text = str(message or "")[:2000]
+    return bool(_REMEMBERED_QUESTION.search(text)) or is_pure_recall_question(text)
 
 
 def _conversation_memory_turn(user_id, conversation_id, user_message) -> dict:

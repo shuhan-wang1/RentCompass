@@ -677,7 +677,7 @@ def _range_ceiling(match) -> str:
 # "at least £1,800" stored a floor as the ceiling, so nothing above it was ever searched (W-06). No
 # slot holds a floor: the figure stays out of the ceiling and the state node keeps it as a note.
 _BUDGET_FLOOR = re.compile(
-    r"\b(?:at\s+least|no\s+less\s+than|not\s+less\s+than|minimum(?:\s+of)?|min\.?)"
+    r"\b(?:at\s+least|no\s+less\s+than|not\s+less\s+than|minimum(?:\s+of)?|min\.?(?=\s*£))"
     r"(?:\s+(?:budget|rent|price))?(?:\s+(?:of|is))?\s*£?\s*\d{3,5}(?:\.\d{1,2})?(?!\d)"
     r"|£?\s*(?<![\d.])\d{3,5}(?:\.\d{1,2})?(?!\d)\s*(?:(?:pcm|a\s+month|per\s+month)\s+)?"
     r"(?:or\s+more|minimum\b|min\b)"

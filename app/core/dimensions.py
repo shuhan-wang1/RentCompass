@@ -145,6 +145,21 @@ def _zh_asks_what_is_near(message: str) -> bool:
     return False
 
 
+# "Find a flat nearby" fanned out to an amenity lookup, as 附近 did (V-09, D-11): the word says
+# where the home is. It cues the row only when it is not about a home.
+_HOME_BEFORE_NEARBY = ("flat", "flats", "apartment", "apartments", "home", "homes", "house", "houses",
+                       "room", "rooms", "studio", "studios", "somewhere", "live", "living", "stay",
+                       "staying", "move", "rent")
+
+
+def _without_home_nearby(message: str) -> str:
+    """``message`` without the "nearby" that closes a home request. No regex: see ``cues_hit``."""
+    text = (message or "").lower()
+    for word in _HOME_BEFORE_NEARBY:
+        text = text.replace(f"{word} nearby", word)
+    return text
+
+
 def cues_hit(cues, message: str) -> bool:
     """THE cue matcher. Deterministic and bilingual: CJK cues match the raw text, ascii cues
     the lowercased text (a CJK cue lowercases to itself, so the split only matters for ascii
@@ -164,7 +179,8 @@ def cued_dimensions(message: str) -> list:
     found = []
     for dim, cues, _tools in DIMENSION_CUES:
         words = tuple(cue for cue in cues if cue not in _ZH_NEAR_WORDS)
-        if cues_hit(words, message) or (len(words) != len(cues) and _zh_asks_what_is_near(message)):
+        read = _without_home_nearby(message) if dim == "nearby" else message
+        if cues_hit(words, read) or (len(words) != len(cues) and _zh_asks_what_is_near(message)):
             found.append(dim)
     return found
 

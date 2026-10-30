@@ -78,6 +78,8 @@ def reconcile_search_criteria(accumulated: dict, searched: dict) -> dict:
             continue
         for key in keys:
             value = searched.get(key)
+            if field == 'no_commute' and not value:
+                continue    # the tool's default: False read as "you have a commute" (V-17, D-08)
             if value is not None and value != '' and value != []:
                 result[field] = deepcopy(value)
                 break

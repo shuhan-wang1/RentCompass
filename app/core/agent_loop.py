@@ -949,6 +949,11 @@ _PROMPT_SENTENCE = re.compile(r"[?？:：]\s*$|^\s*(?:\d+[.)]|[-*•])\s")
 _SEARCH_PROMISE = re.compile(
     r"\b(?:i.ll|i\s+will|i\s+can|we\s+can)\s+(?:\w+\s+){0,3}?(?:search|run|look|find|start)\b|"
     r"\b(?:once|when|after)\s+you\s+(?:reply|answer|tell|confirm|let)\b", re.I)
+# A criterion left alone in the reply, the tail of the model's own list: "Optionally, your preferred
+# move-in date." stood before the question that asks it (D-09).
+_CRITERION_FRAGMENT = re.compile(
+    r"^\s*(?:(?:optionally|also|and|plus|finally)\b\W*)?(?:(?:your|the|a)\s+)?(?:preferred\s+|monthly\s+|target\s+)*"
+    r"(?:move[- ]?in\s+date|budget|room\s+type|commute(?:\s+destination)?|area)\W*$", re.I)
 
 
 def answer_with_clarification(text: str, question: str, *, alone: bool = False) -> str:
@@ -966,7 +971,8 @@ def answer_with_clarification(text: str, question: str, *, alone: bool = False) 
     def echoes(sentence: str) -> bool:
         if _SEARCH_FAILURE_SENTENCE.search(sentence) or _WITHDRAWN_ANSWER_SENTENCE.search(sentence):
             return True
-        prompt = bool(_PROMPT_SENTENCE.search(sentence) or _SEARCH_PROMISE.search(sentence))
+        prompt = bool(_PROMPT_SENTENCE.search(sentence) or _SEARCH_PROMISE.search(sentence)
+                      or _CRITERION_FRAGMENT.search(sentence))
         talk = bool(_SEARCH_TALK.search(sentence))
         return prompt or talk if alone else prompt and talk
 

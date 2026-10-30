@@ -1169,7 +1169,7 @@ def _cleared_criteria(accumulated: dict) -> dict:
               for key, value in _RESET_CRITERIA.items()}
     result['constraint_sources'] = {}
     for key, value in (accumulated or {}).items():
-        if key == '_last_change':
+        if key in ('_last_change', '_erased_fields'):
             result[key] = value
         elif key not in result and key != 'criteria_gate_shown':
             result[key] = ([] if isinstance(value, list) else {} if isinstance(value, dict)

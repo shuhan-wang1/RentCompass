@@ -4503,6 +4503,8 @@ def _validate_commute_response(response: str, state: dict, *, note_present: bool
                     return f"{rendered.strip()}\n\n{fixed}"
         return fallback or fixed
     redacted, new_fragments = _clean_commute_fragments(redacted)
+    if removed:
+        redacted = _without_empty_headings(redacted)
     if previous_fragments or new_fragments:
         # Restore factual route/cost/detail evidence after removing an orphaned conclusion.
         # Weather already present in its own section need not be repeated in the repair.
@@ -4531,6 +4533,23 @@ def _validate_commute_response(response: str, state: dict, *, note_present: bool
     if note_present or note in redacted or _commute_unverified_note(not zh) in redacted:
         return redacted
     return f"{redacted}\n\n{note}"
+
+
+_HEADING_LINE = re.compile(r"^\s*(?:\*\*[^*\n]{1,60}\*\*\s*:?|#{1,4}\s+[^\n]{1,60})\s*$")
+
+
+def _without_empty_headings(text: str) -> str:
+    """``text`` without a heading whose section went with the removed claim: "**Time cost**" stood
+    empty above "**Caveats**" (D-10). Only a heading with nothing under it goes."""
+    lines = str(text or "").split("\n")
+    kept: list[str] = []
+    for index, line in enumerate(lines):
+        if _HEADING_LINE.match(line):
+            following = next((other for other in lines[index + 1:] if other.strip()), None)
+            if following is None or _HEADING_LINE.match(following):
+                continue
+        kept.append(line)
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
 
 
 def _log_removed_commute_text(removed: list) -> None:

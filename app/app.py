@@ -1277,6 +1277,11 @@ def _get_session(user_id, conversation_id):
             if not sess.history:
                 sess.history = conversation_store.rehydrate_history(
                     user_id, conversation_id, MAX_HISTORY_LENGTH)
+                erased = tuple(sess.persistent_state.get('accumulated_search_criteria', {}).get(
+                    '_erased_fields') or ())
+                if erased:
+                    from rag.agent_memory import history_without_fields
+                    sess.history = history_without_fields(sess.history, erased)
             # Rehydrate the last structured search as well as text history. A browser
             # refresh must not make property follow-ups lose their target merely because
             # the in-memory cache was evicted.
@@ -3565,6 +3570,10 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
                 'constraint_history')
             if 'budget' in _erase_fields and isinstance(_changes, dict):
                 _changes.pop('max_budget', None)
+            # After a restart the history comes back from the message table, which still holds
+            # the value: the snapshot says what to take out of it (D-13).
+            _criteria = persistent_snapshot.setdefault('accumulated_search_criteria', {})
+            _criteria['_erased_fields'] = sorted({*(_criteria.get('_erased_fields') or ()), *_erase_fields})
         _lineage = conversation_store.get_branch_lineage(user_id, conversation_id)
         _mems = _am.retrieve(user_message, session_id=user_id, user_id=user_id, n=6,
                              branch_lineage=_lineage)
@@ -3949,6 +3958,10 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     # 去重。进程若在响应后退出，租约到期后另一进程会继续，不会静默丢任务。
     _td = final_state.get('tool_decision')
     _tool_used = _td.get('tool') if isinstance(_td, dict) else None
+    # The same parsers as the state node: a long paste takes seconds, so not on the event loop.
+    _withdrawn_requirements = await asyncio.to_thread(
+        _memory_withdrawn_requirements, _criteria_before_turn,
+        final_state.get('accumulated_search_criteria'), user_message)
     _queue_background_job({
         "kind": "memory_turn",
         "dedupe_key": f"turn:{request_id}:memory" if request_id else (
@@ -3972,8 +3985,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             # assistant prose): "Make that Poplar" replaces the stored area (R3-02).
             "criteria_changes": _memory_criteria_changes(
                 _criteria_before_turn, final_state.get('accumulated_search_criteria')),
-            "withdrawn_requirements": _memory_withdrawn_requirements(
-                _criteria_before_turn, final_state.get('accumulated_search_criteria'), user_message),
+            "withdrawn_requirements": _withdrawn_requirements,
             # Taken when the turn started (r6-M1): the job may run after a later turn lifted
             # the pause, so it must not re-read the conversation's flag.
             "memory_withheld": bool(_memory_turn.get('withhold')),

@@ -936,3 +936,81 @@ def test_x_01_an_identical_excluded_line_is_shown_once():
     text = render_candidate_status({"excluded": [row, dict(row), other]})
     assert text.count("3440") == 1 and text.count("3600") == 1
     assert render_candidate_status({"excluded": [row, dict(row)]}, language="zh").count("Ostro Tower") == 1
+
+
+# D-08, D-09, D-10, D-11, D-13
+def test_d_08_the_tools_default_does_not_set_no_commute():
+    from core.criteria_contract import reconcile_search_criteria
+    out = reconcile_search_criteria({"area": "Hackney"}, {"area": "Hackney", "no_commute": False, "max_budget": 2000})
+    assert out.get("no_commute") is None and out["max_budget"] == 2000
+    assert reconcile_search_criteria({"area": "Hackney"}, {"no_commute": True})["no_commute"] is True
+
+
+def test_d_09_a_stray_criterion_gives_way_to_the_question():
+    from core.agent_loop import answer_with_clarification
+    question = "Before I search, could you confirm: when would you like to move in (optional)?"
+    text = "**Weather in Bow:** 13.5C, partly cloudy.\n\nOptionally, your preferred move-in date."
+    out = answer_with_clarification(text, question)
+    assert "Optionally" not in out and "13.5C" in out and out.count(question) == 1
+
+
+def test_d_09_a_sentence_about_the_budget_stays():
+    from core.agent_loop import answer_with_clarification
+    text = "The fare is £2.80, so factor it into your budget."
+    assert "factor it into your budget" in answer_with_clarification(text, "Which area?")
+
+
+def test_d_10_an_empty_heading_goes_with_its_claim():
+    from core.candidate_validation import _without_empty_headings
+    text = "**Monthly cost**\n\n£119.90.\n\n**Time cost**\n\n**Caveats**\n\nZones are estimated."
+    assert _without_empty_headings(text) == "**Monthly cost**\n\n£119.90.\n\n**Caveats**\n\nZones are estimated."
+    assert _without_empty_headings("Answer.\n\n**Time cost**") == "Answer."
+    assert _without_empty_headings("## One\nbody\n## Two\nbody") == "## One\nbody\n## Two\nbody"
+
+
+@pytest.mark.parametrize("message", [
+    "Find a flat nearby", "find me a studio nearby", "I want to live nearby", "any flats nearby under £2000?",
+])
+def test_d_11_a_home_nearby_is_no_amenity_question(message):
+    from core.dimensions import cued_dimensions
+    assert "nearby" not in cued_dimensions(message)
+
+
+@pytest.mark.parametrize("message", ["What's nearby?", "Any supermarkets nearby?", "What is there nearby the flat?"])
+def test_d_11_asking_what_is_nearby_still_cues_it(message):
+    from core.dimensions import cued_dimensions
+    assert "nearby" in cued_dimensions(message)
+
+
+def test_d_13_a_reset_keeps_the_erased_fields():
+    out = _state_node(dict(_CAMDEN, _erased_fields=["budget"]), "Reset all my criteria and start from scratch")
+    assert out["_erased_fields"] == ["budget"]
+
+
+def test_d_13_the_prompt_never_shows_them():
+    from core.loop_prompts import render_accumulated_criteria
+    assert "_erased" not in render_accumulated_criteria(dict(_CAMDEN, _erased_fields=["budget"]))
+
+
+def test_d_13_a_rehydrated_history_loses_the_erased_value(monkeypatch):
+    import importlib
+    appmod = importlib.import_module("app")
+    uid, cid = "u_d13", "c_d13"
+    snapshot = {"schema_version": 1}
+    monkeypatch.setattr(appmod.conversation_store, "latest_snapshot", lambda *a: snapshot)
+    monkeypatch.setattr(appmod.conversation_store, "get_messages", lambda *a: [])
+    monkeypatch.setattr(appmod, "snapshot_to_session_patch", lambda snap: {
+        "accumulated_search_criteria": {"area": "Camden", "_erased_fields": ["budget"]}})
+    monkeypatch.setattr(appmod.conversation_store, "rehydrate_history", lambda *a: [
+        {"user": "My budget is £2,000.", "assistant": "Your budget of £2,000 is noted. Camden has flats."}])
+    import core.snapshot_recovery as recovery
+    monkeypatch.setattr(recovery, "recover_snapshot", lambda snap, messages: snap)
+    appmod._session_store.clear(uid, cid)
+    session = appmod._get_session(uid, cid)
+    joined = " ".join(turn["user"] + turn["assistant"] for turn in session.history)
+    assert "2,000" not in joined and "Camden" in joined
+    appmod._session_store.clear(uid, cid)
+
+
+def test_w_06_a_commute_in_minutes_next_to_a_figure_is_no_floor():
+    assert _state_node(_BUDGETED, "within 30 min 1500 budget")["max_budget"] == 1500

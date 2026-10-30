@@ -4199,6 +4199,13 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         keep_model_area = False
         try:
             from core.tools.search_properties import names_follow_up_area
+            _model_location = p.get("location")
+            if (isinstance(_model_location, str) and _model_location.strip()
+                    and names_follow_up_area(p.get("current_message") or "", _model_location)):
+                # The legacy alias reads only without an area, so a follow-up's place sent as
+                # `location` beside the standing area searched the old one (V-06).
+                p["area"] = _model_location.split(",")[0].strip()
+                p.pop("location")
             _model_area = p.get("area")
             keep_model_area = bool(
                 isinstance(_model_area, str) and _model_area.strip() and acc.get("area")

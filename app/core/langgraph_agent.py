@@ -973,7 +973,7 @@ _DEST_DAY_OR_MONTH = (
     r"\d{1,2}(?:st|nd|rd|th)?|\d{4}")
 _DEST_TRAILING_TIME = re.compile(
     r"(?:\s*[,;:–—-])?\s+(?:"
-    r"(?:right\s+|for\s+|just\s+|from\s+|as\s+of\s+)?now(?:\s+on)?|actually|nowadays|"
+    r"(?:right\s+|for\s+|just\s+|from\s+|as\s+of\s+)?now(?:\s+on)?|actually|nowadays|instead|"
     r"these\s+days|at\s+the\s+moment|at\s+present|currently|presently|any\s?more|"
     r"(?:from|starting|as\s+of|since|beginning|effective)\s+(?:(?:next|this|the|last)\s+)?"
     rf"(?:{_DEST_DAY_OR_MONTH})(?:\s+(?:of\s+)?(?:{_DEST_DAY_OR_MONTH}))?|"
@@ -984,6 +984,14 @@ _DEST_TRAILING_TIME = re.compile(
     r"(?:every|each)\s+(?:single\s+)?(?:day|weekday|morning)|daily|on\s+weekdays|"
     r"(?:monday|mon)\s*(?:to|-|–)\s*(?:friday|fri)"
     r")\s*$", re.I)
+
+
+# 「改成在金丝雀码头上班」, 「工作地点改成金丝雀码头」: the workplace moved (V-07).
+_ZH_WORKPLACE_CHANGE = re.compile(
+    r"(?:(?:工作地点|上班地点|实习地点|公司|单位|办公室)\s*(?:也)?(?:改成|改为|改到|换成|换到|搬到|变成|搬去)\s*(?:了)?\s*(?:在|去|到)?\s*"
+    r"([^，。！？,.!?;；]{2,30}?)\s*(?:附近|那边|这边)?\s*(?:上班|工作|了)?\s*(?=$|[，。！？,.!?;；])"
+    r"|(?:改成|改为|改到|换成|换到|搬到)\s*(?:了)?\s*(?:在|去|到)\s*"
+    r"([^，。！？,.!?;；]{2,30}?)\s*(?:附近|那边|这边)?\s*(?:上班|工作|实习|办公))")
 
 
 def _destination_clause(text: str) -> str:
@@ -1204,8 +1212,14 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         r'(?i:(?:my (?:office|workplace)(?:\s+(?:has\s+)?(?:moved|relocated)|\s+is\s+(?:now|moving))?'
         r'|i\s+(?:(?:actually|now|currently|also|still|really)\s+)?work(?:\s+(?:now|actually|currently))?'
         r'|commute|(?:a\s+)?(?:public[- ]transport\s+)?journey)'
-        r'\s+(?:is\s+)?(?:next to|near|at|to|in)\s+))([^.!?;\n]{2,90})',
-        _dest_source)
+        r'\s+(?:is\s+)?(?:next to|near|at|to|in)\s+)'
+        # "I will be working at Canary Wharf instead", "my new job is at Bank" (V-07). "at a
+        # bank" and "in finance" say what the job is, not where.
+        r"|(?i:(?:i(?:\s+will|['’]ll|\s+am\s+going\s+to|['’]m\s+going\s+to)\s+(?:(?:now|actually|soon)\s+)?"
+        r"(?:be\s+)?work(?:ing)?|i(?:\s+am|['’]m)\s+(?:(?:now|actually)\s+)?working"
+        r"|my\s+new\s+(?:job|office|workplace)(?:\s+is|['’]s)?)"
+        r'\s+(?:next to|near|at|in)\s+)(?!an?\s)(?=[A-Z]))([^.!?;\n]{2,90})',
+        _dest_source) or _ZH_WORKPLACE_CHANGE.search(_dest_source)
     if labelled_destination and re.search(
             r"\b(?:don.t|do not|doesn.t|never|no longer|not)\s+(?:\w+\s+){0,2}commut\w*|\bno commute\b",
             labelled_destination.string[:labelled_destination.end()], re.I):
@@ -1213,18 +1227,21 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         labelled_destination = None
     # "Forget that I work at Canary Wharf" asks to DROP the destination; it used to SET it
     # (2026-10-19 A-11). The cue must sit in the same sentence, before the destination.
+    # "Never mind LSE, I will be working at Canary Wharf": the cue has its own object.
     forget_destination = bool(labelled_destination and re.search(
-        r"\b(?:forget|disregard|never mind)\b[^.!?;\n]*$",
+        r"\b(?:forget|disregard|never mind)\b[^.!?;,\n]*$",
         _dest_source[:labelled_destination.start()], re.I))
     if forget_destination:
         def _key(value):
             return ' '.join(re.sub(r"[^a-z0-9]+", ' ', str(value or '').lower()).split())
-        forgotten = _key(re.split(r'[,;]', labelled_destination.group(1))[0])
+        forgotten = _key(re.split(r'[,;]', labelled_destination.group(labelled_destination.lastindex))[0])
         current = _key(result.get('commute_destination') or result.get('destination'))
         labelled_destination = None
         message_destination = None
         # Only the destination the user named is forgotten; another one stays.
-        if forgotten and current and (forgotten in current or current in forgotten):
+        if forgotten and current and (
+                forgotten in current or current in forgotten
+                or _key(_known_destination_address(forgotten)) == current):     # "LSE"
             result['commute_destination'] = None
             result['destination'] = None
             changed = True
@@ -1248,7 +1265,7 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
                          # one. Kept whole, the known-landmark lookup resolved it to the
                          # OLD workplace and the correction changed nothing (R1-01).
                          r'|\s*,?\s+(?:not|rather\s+than|instead\s+of)\s+',
-                         _destination_clause(labelled_destination.group(1)),
+                         _destination_clause(labelled_destination.group(labelled_destination.lastindex)),
                          maxsplit=1, flags=re.I)[0].strip(" ,")
         named = _strip_destination_time_words(named)
         if named and not re.fullmatch(r'(?:my|the|an?)\s+(?:office|workplace)', named, re.I) \
@@ -1293,7 +1310,8 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     # nonsense areas (Mars/火星/Wakanda), so those never clobber the current area.
     from core.tools.search_properties import _extract_areas, area_list_edit
     standing_areas = list(result.get('areas') or ([result['area']] if result.get('area') else []))
-    edited_areas = area_list_edit(current_message, standing_areas)
+    edited_areas = (None if _ZH_WORKPLACE_CHANGE.search(_dest_source)
+                    else area_list_edit(current_message, standing_areas))
     if edited_areas is not None:
         # "Add Islington as well." / "Drop Hackney, just Islington." / "Remove Stratford."
         # edit the standing list instead of replacing it (R1-02). Removing the last area
@@ -1329,7 +1347,10 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     contextual_work_area = (_place_key(new_area) in destination_context
                             # "my partner works in Canary Wharf" names a workplace (r18)
                             or bool(new_area and not new_areas[1:]
-                                    and names_place_as_workplace(current_message, new_area)))
+                                    and names_place_as_workplace(current_message, new_area))
+                            # 工作地点改成金丝雀码头 moved the workplace, and the home with it.
+                            or bool(new_area and labelled_destination and _place_key(new_area) in
+                                    _place_key(result.get('commute_destination'))))
     if not new_area and edited_areas is None:
         # "And near SW1A 1AA postcode?" searched the old area (R4-06): a postcode the user
         # names as where to look is the new search location.
@@ -1465,6 +1486,12 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         existing = result.setdefault('property_features', [])
         if 'pets allowed' not in existing and 'cats allowed' not in existing:
             existing.append('pets allowed')
+            changed = True
+    from core.constraint_updates import pet_soft_wish
+    if pet_need is None and pet_requirement is None and pet_soft_wish(original_message):
+        existing = result.setdefault('soft_preferences', [])
+        if 'Would like pets allowed' not in existing:
+            existing.append('Would like pets allowed')
             changed = True
     if pet_need is not None or pet_requirement is not None:
         # A requirement replaces its soft copy; a withdrawal removes it.
@@ -3739,6 +3766,7 @@ _KNOWN_DESTINATIONS = {
     'kings college': "King's College London, Strand, London WC2R 2LS",
     'kcl': "King's College London, Strand, London WC2R 2LS",
     'canary wharf': 'Canary Wharf, London E14 5AB',
+    '金丝雀码头': 'Canary Wharf, London E14 5AB',
 }
 
 

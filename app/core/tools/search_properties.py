@@ -2236,9 +2236,9 @@ _CUE_ONLY_AREAS = {
 # An explicit switch / short follow-up: "switch to X", "make that X", "how about X?", "what
 # about X?", "go back to X", "and X?", "X instead". Clause-local, read on lower-cased text.
 _FOLLOW_UP_CUE_BEFORE = re.compile(
-    r"(?:\b(?:switch(?:ing)?\s+(?:the\s+search\s+|it\s+|over\s+)?to"
-    r"|change\s+(?:it\s+|(?:the\s+|my\s+)?(?:area|search)\s+)?to"
-    r"|move\s+(?:it\s+|the\s+search\s+)?to|make\s+(?:it|that)|how\s+about|what\s+about"
+    r"(?:\b(?:switch(?:ing)?\s+(?:(?:the\s+|my\s+)?(?:search|area|location)\s+|it\s+|over\s+)?to"
+    r"|change\s+(?:it\s+|(?:the\s+|my\s+)?(?:area|search|location)\s+)?to"
+    r"|move\s+(?:it\s+|(?:the\s+|my\s+)?(?:area|search|location)\s+)?to|make\s+(?:it|that)|how\s+about|what\s+about"
     r"|go(?:ing)?\s+back\s+to|back\s+to|let'?s\s+(?:try|do)|try|search\s+in|look\s+in"
     # "ok show Hackney" / "show listings in Camden" (R3-02).
     r"|show(?:\s+me)?(?:\s+(?:flats?|places?|listings?|homes?|properties|options|results)\s+(?:in|for|around))?"
@@ -2247,6 +2247,10 @@ _FOLLOW_UP_CUE_BEFORE = re.compile(
     # kept the old area while the budget moved (R3-01). "from this area to X" is a route.
     r"|(?:^|\b(?:and|also|plus|then|set|update|put|make))\s*(?:the\s+|my\s+)?(?:search\s+)?area"
     r"(?:\s+(?:to|as))?|^\s*area\s*[:=])\s+$)")
+# "actually make it 2 bedrooms and Clapham": a correction listing the place after another slot
+# changed the bedrooms and kept the area (V-06). The place has to close the clause.
+_SLOT_THEN_PLACE = re.compile(
+    r"(?:\b\d\s*-?\s*bed(?:room)?s?(?:\s+(?:flat|apartment|house))?|\bstudio|\b\d{3,5}k?)\s+and\s+$")
 # A bare follow-up ("and Chelsea?", "Bow?") is the WHOLE clause: "Angel investors are nice"
 # names no area.
 _FOLLOW_UP_BARE_BEFORE = re.compile(r"^\s*(?:and|or|ok(?:ay)?|actually|then)?\s*$")
@@ -2293,7 +2297,8 @@ def _follow_up_cue(text: str, start: int, end: int) -> bool:
     after = text[end:end + 30]
     if _FOLLOW_UP_CUE_BEFORE.search(before) or re.match(r"\s+instead\b", after):
         return True
-    return bool(_FOLLOW_UP_BARE_BEFORE.match(before) and _FOLLOW_UP_BARE_AFTER.match(after))
+    return bool((_FOLLOW_UP_BARE_BEFORE.match(before) or _SLOT_THEN_PLACE.search(before))
+                and _FOLLOW_UP_BARE_AFTER.match(after))
 
 
 def _follow_up_switch_area(text: str) -> str | None:

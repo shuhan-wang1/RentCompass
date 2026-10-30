@@ -360,7 +360,7 @@ def housing_update_text(text: str) -> str:
         return ''
     auxiliary = re.search(r'天气|气温|票价|线路状态|\b(?:weather|temperature|fare|travelcard|line status|journey)\b', text, re.I)
     if auxiliary:
-        from core.tools.search_properties import _KNOWN_AREAS
+        from core.tools.search_properties import _CUE_ONLY_AREAS, _KNOWN_AREAS
         affirmative = []
         for clause in re.split(r'[。.!?;；\n]', text):
             if re.search(r'\b(?:don.t|do not|never)\b|不要|无需|不用|别', clause, re.I):
@@ -368,8 +368,10 @@ def housing_update_text(text: str) -> str:
             if re.search(r'\b(?:unchanged|remain|stay|only a weather|only weather)\b|不变|保持原', clause, re.I):
                 continue
             area_action = any(any(re.match(re.escape(name) + r'(?![a-z])', match.group(1), re.I)
-                                  for name in _KNOWN_AREAS)
-                for match in re.finditer(r'\b(?:search(?: in| around)?|keep|restore|switch to|change to)\s+([a-z][a-z\s\-]{0,35})', clause, re.I))
+                                  for name in (*_KNOWN_AREAS, *_CUE_ONLY_AREAS))
+                for match in re.finditer(
+                    r'\b(?:search(?: in| around)?|keep|restore|(?:switch|change|move)'
+                    r'(?:\s+(?:the\s+|my\s+)?(?:area|search|location))?\s+to)\s+([a-z][a-z\s\-]{0,35})', clause, re.I))
             explicit_slot = re.search(
                 r'\b(?:rent|budget|ceiling|bedrooms?|whole (?:flat|property)|self.contained|workplace)\b'
                 r'|\b(?:commute|commuting|office)\b.{0,65}\b(?:days?|minutes?|change|workplace)\b'
@@ -575,6 +577,10 @@ _PET_WITHDRAWAL = re.compile(
     r'|\b(?:cats?|pets?|dogs?)\b[^.!?;]{0,25}\b(?:doesn.t|does\s+not|don.t|do\s+not|no\s+longer)\s+matter'
     r'|\b(?:the\s+)?(?:cat|pet|dog)\s+(?:is|has)\s+(?:gone|rehomed|no\s+longer\s+with\s+me)\b'
     r'|\bno\s+(?:need\s+for\s+)?pets?\s+(?:needed|required|requirement)\b'
+    # "I don't need pets allowed", "No need for it to be pet friendly", "I'm not bringing a pet".
+    r"|\b(?:don.t|do\s+not|doesn.t|does\s+not|no)\s+(?:need|require)\s+(?:for\s+)?(?:it\s+to\s+be\s+)?"
+    r"(?:a\s+|any\s+|the\s+)?(?:cats?|pets?|dogs?)\b"
+    r"|\bnot\s+(?:bringing|having|taking|getting)\s+(?:a\s+|any\s+|the\s+|my\s+)?(?:cats?|pets?|dogs?)\b"
     r'|不再养|不养(?:猫|狗|宠物)了|没有(?:猫|狗|宠物)了'
     r'|(?:猫|狗|宠物)(?:的事|的要求|的条件|这个条件)?(?:不用|不需要|算了|不重要了|取消)'
     r'|(?:取消|去掉|删除|忽略)[^。；]{0,10}(?:猫|狗|宠物)'
@@ -640,6 +646,18 @@ def furnished_requirement_update(text: str) -> bool | None:
     return None
 
 
+def pet_soft_wish(text: str) -> bool:
+    """"I'd like pets allowed if possible": no filter, but listed as not checked (V-08)."""
+    for match in re.finditer(r'[^。.!?;；\n]+[。.!?;；\n]*', text or ''):
+        clause = match.group()
+        if (_SOFT_WORDING.search(clause) and re.search(
+                r'\b(?:pets?|cats?|dogs?)\s+(?:are\s+)?(?:allowed|welcome|accepted|ok(?:ay)?)\b|'
+                r'\bpet[- ]friendly\b|允许(?:养)?(?:宠物|猫|狗)|可以养|能养|可养', clause, re.I)
+                and not is_hypothetical(clause) and not re.search(r'[?？]|是否|吗|\bwhether\b', clause, re.I)):
+            return True
+    return False
+
+
 def pet_requirement_update(text: str) -> bool | None:
     """A pet-permission requirement or its withdrawal, in the user's own words.
 
@@ -663,9 +681,11 @@ def pet_requirement_update(text: str) -> bool | None:
                                r'|允许|可以养|能养|接受|可养', clause, re.I)
         if not permission:
             continue
-        hard = re.search(r'\b(?:must|needs?\s+to|has\s+to|have\s+to|required?|requires|essential|mandatory|only)\b'
-                         r'|必须|一定要|需要|要求', clause, re.I)
+        hard = re.search(r'\b(?:must|has\s+to|have\s+to|required?|requires|essential|mandatory|only)\b'
+                         r"|(?<!no\s)(?<!t\s)\bneeds?\b|必须|一定要|需要|要求", clause, re.I)
         restrictive = (re.search(r'\b(?:that|which|where)\s+(?:allows?|accepts?|permits?)\s+(?:pets?|cats?|dogs?)\b'
+                                 # "... with a garden and pets allowed" (V-08)
+                                 r'|\b(?:pets?|cats?|dogs?)\s+(?:are\s+)?(?:allowed|welcome|accepted|ok(?:ay)?)\b'
                                  r'|\bpet[- ]friendly\s+(?:flat|home|place|property|apartment|studio|house|\d|one|two)'
                                  r'|允许养|可以养|能养|可养', clause, re.I)
                        and re.search(r'\b(?:find|search|show|look(?:ing)?\s+for|want|need)\b|找|搜|要', clause, re.I))

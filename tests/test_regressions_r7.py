@@ -207,3 +207,142 @@ def test_v_13_the_critics_stock_line_never_opens_a_clarification():
     from uk_rent_agent.agent.critic import no_reliable_data_message
     for language in ("zh", "en"):
         assert answer_with_clarification(no_reliable_data_message(language), _GATE_Q) == _GATE_Q
+
+
+# V-04 ── a zh budget keeps its thousands separator
+@pytest.mark.parametrize("message,amount", [
+    ("我想在Hackney租一套两居室，预算每月£2,500以内。", 2500), ("帮我在Hackney找两居室，预算每月£1,900以内，不通勤。", 1900),
+    ("预算£2,000以内", 2000), ("预算2,500以内", 2500), ("预算2500以下", 2500), ("￡2,500以内", 2500),
+    ("每月不超过2,500", 2500), ("不高于2,500", 2500), ("最多2,500英镑", 2500), ("2,500镑左右", 2500),
+    ("£2,500封顶", 2500), ("2,500之内", 2500), ("月租低于1,800", 1800), ("低于2,000的房子", 2000),
+    ("预算2.5k", 2500), ("Find a 2-bed in Hackney under £2,500", 2500),
+])
+def test_v_04_a_zh_budget_keeps_its_thousands(message, amount):
+    from core.tools.search_properties import _extract_budget
+    assert _extract_budget(message) == (amount, "month")
+
+
+@pytest.mark.parametrize("message", ["不超过500米", "离地铁站不超过1500米", "少于300平", "押金不超过3000", "不超过30分钟"])
+def test_v_04_a_distance_a_floor_area_or_a_deposit_is_no_ceiling(message):
+    from core.tools.search_properties import _extract_budget
+    assert _extract_budget(message) == (None, None)
+
+
+# V-05 ── a trailing question does not cancel an explicit switch
+_BOW_STATE = {"area": "Camden", "areas": ["Camden"], "bedrooms": 1, "max_budget": 2000, "no_commute": True}
+
+
+@pytest.mark.parametrize("message", [
+    "Switch the area to Bow and tell me how safe it is.", "Switch the area to Bow and tell me the weather.",
+    "Change the area to Bow and tell me the weather.", "Move the search to Bow and what is the weather there?",
+    "Switch to Bow",
+])
+def test_v_05_a_trailing_question_keeps_the_switch(message):
+    assert _state_node(_BOW_STATE, message)["area"] == "Bow"
+
+
+@pytest.mark.parametrize("message", ["Is Bow safe?", "How far is Bow?", "What is the weather in Bow?"])
+def test_v_05_a_question_about_a_place_moves_nothing(message):
+    assert _state_node(_BOW_STATE, message)["area"] == "Camden"
+
+
+# V-06 ── a correction list naming a known area switches it
+_HACKNEY = {"area": "Hackney", "areas": ["Hackney"], "bedrooms": 1, "max_budget": 1800, "room_type": "whole"}
+
+
+@pytest.mark.parametrize("message,beds", [
+    ("actually make it 2 bedrooms and Clapham", 2), ("2 bedrooms and Clapham", 2),
+    ("Make it 2 bedrooms and Clapham please", 2), ("£2,000 and Clapham", 1),
+])
+def test_v_06_a_correction_list_names_the_area(message, beds):
+    out = _state_node(_HACKNEY, message)
+    assert out["area"] == "Clapham" and out["bedrooms"] == beds
+
+
+@pytest.mark.parametrize("message", [
+    "2 bedrooms and a garden", "2 bedrooms and Bow Street", "I need 2 bedrooms and Clapham Junction is nearby",
+])
+def test_v_06_anything_else_after_and_keeps_the_area(message):
+    assert _state_node(_HACKNEY, message)["area"] == "Hackney"
+
+
+def test_v_06_a_followup_place_sent_as_location_is_searched():
+    from core.agent_loop import build_fc_nodes
+    from tests.test_agent_contract_guards import _state, _tc
+    from tests.test_qa_null_injection import _ValidatingProvider, _strict_null_args
+    from langchain_core.messages import AIMessage
+    message = "actually make it 2 bedrooms and Kew"
+    state = _state(message)
+    state["accumulated_search_criteria"] = {"area": "Hackney", "areas": ["Hackney"], "room_type": "whole",
+                                            "max_budget": 1800, "no_commute": True}
+    args = _strict_null_args("search_properties", {"user_query": message, "location": "Kew, London",
+                                                   "area": "Hackney"})
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("search_properties", args, "c0")])]
+    provider = _ValidatingProvider(["search_properties"])
+    asyncio.run(build_fc_nodes(provider)["execute_tools"](state))
+    (_, params), = provider.calls
+    assert params["area"] == "Kew" and "location" not in params
+
+
+# V-07 ── a new workplace is stated in more ways than "I work at"
+_LSE = "London School of Economics, Houghton Street, London WC2A 2AE"
+_HOLBORN = {"area": "Holborn", "areas": ["Holborn"], "bedrooms": 1, "max_budget": 2600,
+            "commute_destination": _LSE, "destination": _LSE}
+
+
+@pytest.mark.parametrize("message", [
+    "Never mind LSE, I will be working at Canary Wharf instead. Recompute for the same listing",
+    "I'll be working at Canary Wharf", "I am going to work at Canary Wharf", "My new job is at Canary Wharf",
+    "I'm working at Canary Wharf now", "I now work at Canary Wharf instead", "我改成在金丝雀码头上班了",
+    "不去LSE了，改成在金丝雀码头上班", "我现在改成在Canary Wharf上班", "工作地点改成金丝雀码头",
+])
+def test_v_07_the_new_workplace_replaces_the_destination(message):
+    out = _state_node(_HOLBORN, message)
+    assert out["commute_destination"] == "Canary Wharf, London E14 5AB"
+    assert out["destination"] == out["commute_destination"] and out["area"] == "Holborn"
+
+
+@pytest.mark.parametrize("message", ["I will be working at a bank", "I am working in finance"])
+def test_v_07_what_the_job_is_names_no_destination(message):
+    assert _state_node(_HOLBORN, message)["commute_destination"] == _LSE
+
+
+def test_v_07_a_forgotten_workplace_is_still_dropped():
+    assert _state_node(_HOLBORN, "Forget that I work at LSE").get("commute_destination") is None
+
+
+# V-08 ── a stated pet requirement is recorded, verified or listed as not checked
+@pytest.mark.parametrize("message", [
+    "Find a 2 bed in Hackney under 3000 with a garden and pets allowed",
+    "Find a 2 bed in Hackney under 3000, pets allowed", "I need it to be pet friendly.",
+    "Find a pet friendly 1 bed in Camden",
+])
+def test_v_08_a_stated_pet_requirement_is_a_feature(message):
+    assert _state_node({"area": "Bow"}, message)["property_features"] == ["pets allowed"]
+
+
+def test_v_08_the_garden_stays_beside_the_pets():
+    out = _state_node({}, "Find a 2 bed in Hackney under 3000 with a garden and pets allowed")
+    assert out["soft_preferences"] == ["Would like garden"]
+
+
+def test_v_08_a_soft_wish_is_listed_as_not_checked():
+    assert _state_node({"area": "Bow"}, "I'd like pets allowed if possible")["soft_preferences"] == [
+        "Would like pets allowed"]
+
+
+@pytest.mark.parametrize("message", [
+    "Are pets allowed?", "Are pets allowed in the first one?", "No pets allowed is fine",
+    "Find a flat with no pets allowed",
+])
+def test_v_08_a_question_or_a_refusal_adds_nothing(message):
+    assert not _state_node({"area": "Bow"}, message).get("property_features")
+
+
+@pytest.mark.parametrize("message", [
+    "No wait, I'm not bringing a pet after all.", "I don't need pets allowed",
+    "No need for it to be pet friendly",
+])
+def test_v_08_a_withdrawal_removes_it(message):
+    state = {"area": "Bow", "property_features": ["pets allowed"]}
+    assert not _state_node(state, message).get("property_features")

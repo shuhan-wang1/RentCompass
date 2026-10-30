@@ -123,6 +123,16 @@ def test_u_10b_a_zh_budget_is_really_erased_in_a_turn(memory, monkeypatch):
     assert not any("1800" in doc for doc in _documents(memory))
 
 
+@pytest.mark.parametrize("message", ["删除我的预算", "忘掉我的预算", "把预算删了", "forget my budget"])
+def test_u_10b_the_ceiling_leaves_the_search_too(message):
+    assert _state_node(_CAMDEN, message)["max_budget"] is None
+
+
+@pytest.mark.parametrize("message", ["把预算改成2000，并删掉猫过敏这条", "别忘记我的预算", "删除猫过敏，保留预算"])
+def test_u_10b_a_message_that_erases_no_budget_keeps_the_ceiling(message):
+    assert _state_node(_CAMDEN, message)["max_budget"] is not None
+
+
 # U-10a ── a zh cue governs the field in its own clause; a request we cannot do is said plainly
 @pytest.mark.parametrize("message", [
     "删除我的预算", "忘掉预算", "忘掉我的预算", "把预算删了", "我的预算请删掉", "预算信息帮我删除一下",

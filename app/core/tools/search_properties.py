@@ -2445,6 +2445,12 @@ def _extract_budget_clear(text: str) -> bool:
         return True
     if any(re.search(p, t) for p in _BUDGET_CLEAR_PATTERNS):
         return True
+    if re.search(r"[\u4e00-\u9fff]", t):
+        # 「删除我的预算」 left the ceiling in the search while the reply said it would not be
+        # used again (U-10b): the erasure's own reading decides, clause rule included.
+        from rag.agent_memory import erasure_request_fields
+        if "budget" in erasure_request_fields(text):
+            return True
     for sentence in re.split(r"(?<=[.!?;])\s+|\n", t):
         if _BUDGET_REMOVAL_INSTRUCTION.search(sentence) and not (
                 sentence.rstrip().endswith("?") and _BUDGET_REMOVAL_QUESTION.search(sentence)):

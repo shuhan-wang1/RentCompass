@@ -447,6 +447,26 @@ def _extract_accessibility_requirements(message: str) -> dict[str, list[str]]:
     return {"required": required, "soft": soft}
 
 
+# A park the home should be near, in lower case: Green Park, Finsbury Park, Park Lane and Park
+# Royal are places, and "a car park" or "a retail park" is not a wish for one.
+_NEAR_A_PARK = re.compile(
+    r"\b(?:near(?:by)?|by|next\s+to|close\s+to|beside|opposite|overlooking|walk(?:ing\s+distance)?\s+"
+    r"(?:to|of|from)|access\s+to|minutes?\s+(?:from|to))\s+(?:a|the|some)\s+(?:nice\s+|green\s+|big\s+|"
+    r"good\s+|local\s+)?(?-i:park)s?\b(?!\s+(?:lane|royal|road|street|avenue|view|side|house)\b)|"
+    r"\b(?-i:parks?)\s+nearby\b|\bgreen\s+spaces?\b|"
+    r"(?:靠近|临近|邻近|挨着|近|有|要有|附近有)(?:一?个)?公园", re.I)
+_LISTING_QUESTION_EN = re.compile(r"^\s*(?:does|do|did|is|are|has|have|had)\b", re.I)
+_LISTING_QUESTION_ZH = re.compile(r"^[^找搜]*吗\s*[？?]?\s*$")
+
+
+def _asks_about_a_listing(message: str, match) -> bool:
+    """True for "Does the flat have a dishwasher?": a question, not a wish."""
+    from core.constraint_updates import clause_at
+    clause = clause_at(message, match.start(), match.end())
+    return bool((_LISTING_QUESTION_EN.search(clause) and '?' in message[match.end():match.end() + 60])
+                or _LISTING_QUESTION_ZH.search(clause))
+
+
 def extract_preferences_from_message(user_message: str, current_prefs: dict) -> dict:
     """Extract user preferences from a message. Returns updated prefs dict."""
     prefs = {k: list(v) for k, v in current_prefs.items()}
@@ -471,14 +491,30 @@ def extract_preferences_from_message(user_message: str, current_prefs: dict) -> 
             if area in user_lower:
                 _add('safety_concerns', f"User expressed safety concerns about {area.title()}")
 
+    def _record_amenity(amenity, match):
+        from core.constraint_updates import mention_is_requirement
+        if not mention_is_requirement(user_message, match.start(), match.end()):
+            return
+        clause = clause_at(user_message, match.start(), match.end())
+        hard_clause = re.sub(r"not essential|isn.t essential|not required|isn.t required|不必|可有可无", '', clause, flags=re.I)
+        if _ACCESSIBILITY_HARD_CUE_RE.search(hard_clause):
+            _add('required_amenities', amenity)
+            _add('hard_preferences', f"Must have {amenity}")
+        else:
+            _add('soft_preferences', f"Would like {amenity}")
+
     # Amenity requirements
     amenity_patterns = {
         'gym': ['gym', 'fitness', 'workout'], 'pool': ['pool', 'swimming'],
-        'parking': ['parking', 'car park'], 'laundry': ['laundry', 'washing machine'],
+        'parking': ['parking', 'car park'], 'laundry': ['laundry'],
         'balcony': ['balcony', 'terrace'], 'concierge': ['concierge', '24/7', 'reception'],
         # "Pet-friendly furnished 1 bed with a garden" kept the garden nowhere, so the
         # zero-verified status never said the garden was unchecked (S-07).
         'garden': ['garden', 'outdoor space'],
+        # ... nor "I need a washing machine" or "with a dishwasher, near a park" (U-11).
+        'washing machine': ['washing machine', 'washing-machine', 'washer dryer', 'washer-dryer',
+                            '洗衣机'],
+        'dishwasher': ['dishwasher', 'dish washer', '洗碗机'],
     }
     for amenity, keywords in amenity_patterns.items():
         for keyword in keywords:
@@ -486,6 +522,8 @@ def extract_preferences_from_message(user_message: str, current_prefs: dict) -> 
             # the answer told the user "You mentioned liking a pool" (R2-17).
             for match in re.finditer(r"(?<![A-Za-z])" + re.escape(keyword) + r"(?![A-Za-z])",
                                      user_message, re.I):
+                if _asks_about_a_listing(user_message, match):
+                    continue
                 if amenity == 'garden' and (
                         re.search(r"\b(?:covent|hatton|kensington|palmers|bounds|welwyn|"
                                   r"barbican|kew|botanic(?:al)?|hampton|community|beer)\s+$",
@@ -494,16 +532,10 @@ def extract_preferences_from_message(user_message: str, current_prefs: dict) -> 
                                     r"street|road|walk|court|house)\b",
                                     user_message[match.end():], re.I)):
                     continue      # a place or building name, not a garden wish
-                from core.constraint_updates import mention_is_requirement
-                if not mention_is_requirement(user_message, match.start(), match.end()):
-                    continue
-                clause = clause_at(user_message, match.start(), match.end())
-                hard_clause = re.sub(r"not essential|isn.t essential|not required|isn.t required|不必|可有可无", '', clause, flags=re.I)
-                if _ACCESSIBILITY_HARD_CUE_RE.search(hard_clause):
-                    _add('required_amenities', amenity)
-                    _add('hard_preferences', f"Must have {amenity}")
-                else:
-                    _add('soft_preferences', f"Would like {amenity}")
+                _record_amenity(amenity, match)
+    for match in _NEAR_A_PARK.finditer(user_message):
+        if not _asks_about_a_listing(user_message, match):
+            _record_amenity('park', match)
 
     # Accessibility gets feature-specific strength handling rather than the global
     # substring test above. A required accessible feature is recorded both as an
@@ -664,9 +696,7 @@ def retract_previous_requirement(accumulated: dict, message: str, previous_messa
     previous = str(previous_message)
 
     def _named(value) -> bool:
-        label = str(value or "")
-        label = label[len('Would like '):] if label.startswith('Would like ') else label
-        label = label.strip()
+        label = _amenity_name(value).strip()
         return bool(label) and bool(re.search(
             r"(?<![A-Za-z])" + re.escape(label) + r"(?![A-Za-z])", previous, re.I))
 
@@ -832,6 +862,11 @@ def _destination_left_behind(destination, new_areas) -> bool:
     return bool(re.search(r"\blondon\b", dest, re.I) or _LONDON_POSTCODE.search(dest))
 
 
+def _amenity_name(value) -> str:
+    """The amenity a stored preference names: "Must have dishwasher" -> "dishwasher"."""
+    return re.sub(r"^(?:Would like|Must have) ", "", str(value or ""))
+
+
 def _soft_amenity_updates(message: str, soft_preferences: list) -> list | None:
     """The soft-preference list after this message's amenity nice-to-haves, or None.
 
@@ -842,13 +877,17 @@ def _soft_amenity_updates(message: str, soft_preferences: list) -> list | None:
     "I don't need a balcony after all" removes the stored nice-to-have."""
     from core.tools.search_properties import _ACCESSIBILITY_FEATURES
     current = list(soft_preferences or [])
-    stated = extract_preferences_from_message(message or '', {'soft_preferences': []})
-    names = {str(v)[len('Would like '):] for v in current + list(stated.get('soft_preferences') or [])
-             if str(v).startswith('Would like ')} - set(_ACCESSIBILITY_FEATURES)
+    stated = extract_preferences_from_message(message or '', {'soft_preferences': [], 'hard_preferences': []})
+    wishes = list(stated.get('soft_preferences') or []) + list(stated.get('hard_preferences') or [])
+    leads = ('Would like ', 'Must have ')
+    # A need is kept beside the nice-to-haves too: nothing can check an appliance, so it is not a
+    # search filter, but the status has to list it as not checked (U-11).
+    names = {_amenity_name(v) for v in current + wishes
+             if str(v).startswith(leads)} - set(_ACCESSIBILITY_FEATURES)
     # A short preference stored as it was echoed ("garden") is withdrawn the same way: "Never
     # mind about the garden." kept it in every later summary (R2-08).
     plain = {str(v).strip() for v in current
-             if not str(v).startswith('Would like ') and _is_short_preference(v)}
+             if not str(v).startswith(leads) and _is_short_preference(v)}
     names |= plain
     withdrawn = set()
     for name in names:
@@ -857,11 +896,14 @@ def _soft_amenity_updates(message: str, soft_preferences: list) -> list | None:
                     or _AMENITY_NEGATED_BEFORE_RE.search(message[max(0, match.start() - 50):match.start()])):
                 withdrawn.add(name)
                 break
-    updated = [v for v in current if (str(v)[len('Would like '):] not in withdrawn
-                                      or not str(v).startswith('Would like '))
-               and str(v).strip() not in (withdrawn & plain)]
-    for value in stated.get('soft_preferences') or []:
-        name = value[len('Would like '):] if value.startswith('Would like ') else ''
+    needed = {_amenity_name(v) for v in wishes if str(v).startswith('Must have ')}
+    updated = [v for v in current if (_amenity_name(v) not in withdrawn
+                                      or not str(v).startswith(leads))
+               and str(v).strip() not in (withdrawn & plain)
+               # A need replaces the nice-to-have it strengthens.
+               and not (str(v).startswith('Would like ') and _amenity_name(v) in needed)]
+    for value in wishes:
+        name = _amenity_name(value)
         if name in names and name not in withdrawn and value not in updated:
             updated.append(value)
     return updated if updated != current else None

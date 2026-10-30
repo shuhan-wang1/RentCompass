@@ -641,3 +641,56 @@ def test_u_13_two_requested_times_both_stay():
     out = render_structured_evidence_fallback(
         _turn(_journey(32, basis="user_requested"), _journey(27, basis="user_requested")), language="en")
     assert "27 minutes" in out and "32 minutes" in out
+
+
+# U-11 ── an appliance or a park is recorded, so the status lists it as not checked
+@pytest.mark.parametrize("message,value", [
+    ("Find a 1-bed in Camden, I need a washing machine", "Must have washing machine"),
+    ("I need a dishwasher", "Must have dishwasher"), ("I'd like a dishwasher", "Would like dishwasher"),
+    ("Find a 1-bed in Camden with a dishwasher, near a park", "Would like dishwasher"),
+    ("Find a 1-bed in Camden with a dishwasher, near a park", "Would like park"),
+    ("near a park please", "Would like park"), ("I need to be near a park", "Must have park"),
+    ("with a washing machine", "Would like washing machine"), ("需要洗碗机", "Must have dishwasher"),
+    ("想要洗碗机", "Would like dishwasher"), ("靠近公园", "Would like park"), ("I need a balcony", "Must have balcony"),
+    ("帮我找有洗碗机的房子吗", "Would like dishwasher"),
+])
+def test_u_11_a_stated_need_or_wish_is_recorded(message, value):
+    assert value in _state_node(_CAMDEN, message)["soft_preferences"]
+
+
+@pytest.mark.parametrize("message", [
+    "Find a 1-bed near Green Park", "a flat near Hyde Park", "Park Lane flat", "Park Royal", "near Finsbury Park please",
+    "Is there a car park?", "no need for a dishwasher", "I don't need a washing machine",
+    "does it have a dishwasher?", "Does the flat have a dishwasher?", "is there a washing machine?",
+    "这套有洗碗机吗", "海德公园附近有房吗",
+])
+def test_u_11_a_place_a_question_or_a_refusal_records_nothing(message):
+    soft = _state_node(_CAMDEN, message).get("soft_preferences") or []
+    assert not [value for value in soft if "park" in value or "dishwasher" in value or "washing" in value]
+
+
+def test_u_11_the_status_lists_them_as_not_checked():
+    from core.candidate_validation import render_candidate_status, validate_candidates
+    acc = _state_node({}, "Find a 1-bed in Camden under £2500, I need a dishwasher, near a park")
+    rows = [{"address": "A St, Camden, London NW1", "area": "Camden", "price": "£2400/month",
+             "bedrooms": 1, "room_type": "whole", "url": "https://example.test/a"}]
+    text = render_candidate_status(validate_candidates(rows, acc))
+    assert "Not checked for any listing (confirm with the agent):" in text
+    assert "dishwasher" in text and "park" in text and "Must have" not in text
+
+
+def test_u_11_a_need_is_no_search_filter():
+    assert not _state_node(_CAMDEN, "I need a dishwasher").get("property_features")
+
+
+def test_u_11_a_need_replaces_the_wish_and_can_be_withdrawn():
+    acc = _state_node(_CAMDEN, "I'd like a dishwasher")
+    acc = _state_node(acc, "Actually I need a dishwasher")
+    assert acc["soft_preferences"] == ["Must have dishwasher"]
+    assert _state_node(acc, "I don't need a dishwasher after all")["soft_preferences"] == []
+
+
+def test_u_11_forget_that_requirement_takes_a_need_back():
+    acc = _state_node(_CAMDEN, "I need a dishwasher")
+    out = _state_node(acc, "Forget that requirement.", history=[{"user": "I need a dishwasher", "assistant": "ok"}])
+    assert out["soft_preferences"] == []

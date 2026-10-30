@@ -596,7 +596,7 @@ def validate_candidates(candidates: list[dict], criteria: dict | None,
     }
 
 
-_SOFT_LEAD = re.compile(r"^(?:would\s+like|prefers?|ideally|preferably)\s+", re.I)
+_SOFT_LEAD = re.compile(r"^(?:would\s+like|must\s+have|prefers?|ideally|preferably)\s+", re.I)
 
 
 def unchecked_requirements(criteria: dict | None) -> list[str]:

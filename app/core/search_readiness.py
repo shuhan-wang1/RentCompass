@@ -24,6 +24,15 @@ def is_proceed_intent(text: str) -> bool:
     return any(re.search(pattern, lowered) for pattern in PROCEED_PATTERNS_EN)
 
 
+def budget_left_open(text: str) -> bool:
+    """"any budget", "no budget limit", 预算不限: the budget question has its answer (V-03)."""
+    try:
+        from core.tools.search_properties import _extract_budget_clear
+        return bool(text) and _extract_budget_clear(text)
+    except Exception:
+        return False
+
+
 @dataclass(frozen=True)
 class SearchReadiness:
     status: str
@@ -60,7 +69,7 @@ def assess_search_readiness(
         has_budget = max_budget is not None and int(max_budget) > 0
     except (TypeError, ValueError):
         has_budget = False
-    if not has_budget:
+    if not has_budget and not budget_left_open(user_message):
         missing_soft.append("budget")
     if not str(room_type or "").strip():
         missing_soft.append("room_type")
@@ -88,8 +97,9 @@ SEARCH_READINESS_SYSTEM_RULE = (
     "call it instead of inventing a separate clarification policy. It requires one resolved "
     "residential area (a commute destination may be resolved by the tool). Budget, room type, "
     "and commute are recommended, not hard requirements: the tool may show exactly one soft "
-    "criteria gate. After that gate, after any answer to it, or when the user says continue, "
-    "call the tool with accumulated criteria and confirmed=true; never show the gate twice. "
+    "criteria gate. When the user's next message answers that gate or says continue, call the "
+    "tool with accumulated criteria and confirmed=true; never show the gate twice. In the turn "
+    "the gate appears, do not call the tool again: the system shows its question to the user. "
     "When area plus budget, room type, and commute/no_commute are present, call the tool "
     "directly and do not pre-emptively clarify about 单间 sub-types or which campus; state a "
     "reasonable interpretation and allow refinement. A clarification outside the tool is only "

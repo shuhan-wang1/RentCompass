@@ -4003,6 +4003,7 @@ async def search_properties_impl(
             return {
                 'success': False,
                 'status': 'need_clarification',
+                'retryable': False,
                 'clarification_kind': 'missing_area',
                 'question': question,
                 'missing_fields': list(hard_readiness.missing_hard),
@@ -4067,6 +4068,7 @@ async def search_properties_impl(
             return {
                 'success': False,
                 'status': 'need_clarification',
+                'retryable': False,
                 'clarification_kind': 'soft_criteria',
                 'question': _soft_gate_question(soft_missing, is_cjk, move_in_missing),
                 'missing_fields': soft_missing,

@@ -885,24 +885,58 @@ _SEARCH_RESULT_STATUSES = frozenset({"found", "no_exact_match_but_similar", "no_
 _SEARCH_FAILURE_SENTENCE = re.compile(
     r"\b(?:search|lookup|query|listing)\w*\b[^.!?。！？\n]{0,60}\b(?:failed|did\s+not\s+(?:complete|finish|work)|"
     r"didn.t\s+(?:complete|finish|work)|could\s+not|couldn.t|unavailable|errored|error)\b|"
+    r"\b(?:could\s+not|couldn.t|can.t|cannot|unable\s+to|not\s+able\s+to)\s+(?:\w+\s+){0,3}?(?:run|do|complete|"
+    r"pull\s+up|fetch|show|get|find)\b[^.!?。！？\n]{0,60}\b(?:search|listings?|results?)\b|"
+    r"\b(?:repeated|several|multiple)\s+attempts\b|\bdid(?:\s+not|n.t)\s+get\s+through\b|"
     r"\b(?:try|retry)\s+(?:again\s+)?later\b|\bplease\s+retry\b|"
     r"稍后(?:再)?(?:重试|再试|尝试)|查询失败|失败的查询|没有完成|未完成|出错|出现问题", re.I)
+# The critic's stock line for an answer it withdrew: nothing was withdrawn from a question.
+_WITHDRAWN_ANSWER_SENTENCE = re.compile(
+    r"无法获取可靠数据|不便提供估算|don.t\s+have\s+reliable\s+data\s+to\s+give\s+specific\s+figures|"
+    r"try\s+again\s+shortly", re.I)
+# The model's own wording of the question the search asked, which the user would read twice
+# (V-03): the search's criteria, a prompt for them, and what happens once they answer.
+_SEARCH_TALK = re.compile(
+    r"\b(?:search(?:es|ing)?|listings?|room\s+type|budget|commut(?:e|es|ing)|move[- ]?in|criteria|filters?|"
+    r"which\s+(?:area|city)|what\s+area)\b|搜索|房源|房型|预算|通勤|入住|筛选|区域|城市", re.I)
+_LIST_ITEM = re.compile(r"^\s*(?:\d+[.)]|[-*•])\s")
+_PROMPT_SENTENCE = re.compile(r"[?？:：]\s*$|^\s*(?:\d+[.)]|[-*•])\s")
+_SEARCH_PROMISE = re.compile(
+    r"\b(?:i.ll|i\s+will|i\s+can|we\s+can)\s+(?:\w+\s+){0,3}?(?:search|run|look|find|start)\b|"
+    r"\b(?:once|when|after)\s+you\s+(?:reply|answer|tell|confirm|let)\b", re.I)
 
 
-def answer_with_clarification(text: str, question: str) -> str:
-    """``text`` that carries the search's clarification ``question`` instead of a claim that
-    the search failed (R4-08). Other sentences (a weather answer) are kept."""
+def answer_with_clarification(text: str, question: str, *, alone: bool = False) -> str:
+    """``text`` that carries the search's clarification ``question``, once, instead of a claim
+    that the search failed (R4-08) or its own wording of the question (V-03). Other sentences
+    (a weather answer) are kept.
+
+    ``alone``: nothing but the search ran this turn, so any talk of the search or its criteria
+    in ``text`` can only be about the question; otherwise an unrelated answer may mention them."""
     body, question = str(text or ""), str(question or "").strip()
-    if not question or question in body:
+    if not question:
         return body
+    asked = question in body
+
+    def echoes(sentence: str) -> bool:
+        if _SEARCH_FAILURE_SENTENCE.search(sentence) or _WITHDRAWN_ANSWER_SENTENCE.search(sentence):
+            return True
+        prompt = bool(_PROMPT_SENTENCE.search(sentence) or _SEARCH_PROMISE.search(sentence))
+        talk = bool(_SEARCH_TALK.search(sentence))
+        return prompt or talk if alone else prompt and talk
+
     kept = []
-    for line in body.split("\n"):
-        pieces = re.split(r"(?<=[.!?。！？])\s*", line)
-        survivors = [piece for piece in pieces if piece.strip() and not _SEARCH_FAILURE_SENTENCE.search(piece)]
+    for line in (body.replace(question, "") if asked else body).split("\n"):
+        # A list item is one unit, and "14.5 C" one sentence.
+        pieces = ([line] if _LIST_ITEM.match(line)
+                  else re.split(r"(?<=[.!?])\s+|(?<=[。！？])\s*", line))
+        survivors = [piece for piece in pieces if piece.strip() and not echoes(piece)]
         if survivors or not line.strip():
             kept.append(" ".join(survivors) if not re.search(r"[\u4e00-\u9fff]", line)
                         else "".join(survivors))
     rest = re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
+    if asked and rest == body.replace(question, "").strip():
+        return body
     return f"{rest}\n\n{question}" if rest else question
 
 
@@ -2058,6 +2092,35 @@ def _emit_budget_timeout(tool: str, elapsed_s: float, budget_s: float, kind: str
     _record_budget_timeout_event(
         tool=tool, phase=kind, budget_s=budget_s,
         elapsed_ms=float(elapsed_s or 0.0) * 1000.0, outcome=outcome)
+
+
+def _soft_gate_asked(artifacts) -> bool:
+    """True once the search's soft gate has asked the user something in this turn."""
+    return any(a.get("tool") == "search_properties"
+               and (a.get("raw_data") or {}).get("clarification_kind") == "soft_criteria"
+               for a in artifacts or [])
+
+
+def _other_results(artifacts) -> bool:
+    """True when a tool other than the search or a memory write produced something this turn."""
+    return any(a.get("tool") not in ("search_properties", "remember") and _is_executed(a)
+               for a in artifacts or [])
+
+
+def _soft_gate_still_open(artifacts, args: dict, message: str) -> bool:
+    """True when a same-turn search re-call would only meet the gate it already met: the
+    model's call is no answer to a question the user has not seen (V-03). A re-call carrying
+    every recommended field the user gave in this message, which the first call left out, is
+    not stopped, and it still runs unconfirmed."""
+    if not _soft_gate_asked(artifacts):
+        return False
+    from core.search_readiness import assess_search_readiness
+    return assess_search_readiness(
+        resolved_area="resolved",       # the gate only asks after the area is resolved
+        max_budget=args.get("max_budget"), room_type=args.get("room_type"),
+        no_commute=bool(args.get("no_commute")), commute_destination=args.get("commute_destination"),
+        criteria_gate_shown=False, confirmed=False, user_message=message,
+        move_in_date=args.get("move_in_date")).status != "ready"
 
 
 def _is_executed(artifact: dict) -> bool:
@@ -4115,9 +4178,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             p["move_in_date"] = acc["move_in_date"]
         if acc.get("criteria_gate_shown"):
             p["criteria_gate_shown"] = True
-        if any(a.get("tool") == "search_properties"
-               and (a.get("raw_data") or {}).get("clarification_kind") == "soft_criteria"
-               for a in state.get("tool_artifacts") or []):
+        if _soft_gate_asked(state.get("tool_artifacts")):
             # The gate asked the user this turn, so this message left it open. The model
             # confirming it for them in a re-call ran the search unasked (U-09).
             p["confirmed"] = False
@@ -4265,7 +4326,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             payload["outcome"] = result.outcome
         return json.dumps(payload, ensure_ascii=False, default=str), tainted
 
-    async def execute_tools_node(state: AgentState) -> Command[Literal["agent"]]:
+    async def execute_tools_node(
+            state: AgentState) -> Command[Literal["agent", "format_output_fc"]]:
         messages = list(state.get("messages") or [])
         ai = messages[-1] if messages else None
         batch = list(getattr(ai, "tool_calls", None) or [])
@@ -4394,6 +4456,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             from core.strict_schema import strip_null_args
             args = strip_null_args(args)
             digest = _params_digest(name, args)
+            if name == "search_properties" and _soft_gate_still_open(artifacts, args, cur_msg):
+                plan.append((tc, digest, ("gate_open", ""), args))
+                continue
             if (name, digest) in seen:
                 plan.append((tc, digest, "skip_dup", args))
                 continue
@@ -5320,6 +5385,22 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                                        ensure_ascii=False),
                     tool_call_id=tcid, name=name))
                 continue
+            if isinstance(mode, tuple) and mode[0] == "gate_open":
+                artifacts.append(_artifact(
+                    turn, name, None, digest, success=False,
+                    error="not run: the search is waiting for the user's answer",
+                    denied=True, elapsed_ms=0))
+                messages.append(ToolMessage(
+                    content=json.dumps({
+                        "success": False, "data": None,
+                        "error": ("not run: this search is waiting for the user's answer to the "
+                                  "question it asked, which the system shows them. Nothing "
+                                  "failed. Do not call it again this turn, do not repeat the "
+                                  "question, and do not say the search failed; answer only "
+                                  "what else the user asked."),
+                    }, ensure_ascii=False),
+                    tool_call_id=tcid, name=name))
+                continue
             if isinstance(mode, tuple) and mode[0] == "deny_policy":
                 # Read refused before dispatch by core.tool_policy. Recorded exactly like the
                 # write refusals — denied=True, raw_data None — so it is a REQUESTED and not
@@ -5814,6 +5895,12 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         if specialist_dispatch:
             update["manager_task_plans"] = manager_task_plans
             update["specialist_results"] = specialist_result_payloads
+        if (plan and all(isinstance(entry[2], tuple) and entry[2][0] == "gate_open" for entry in plan)
+                and not _other_results(artifacts)):
+            # Nothing else to answer: the gate's own question ends the turn, with no model hop
+            # to report the unrun call as a failure (V-03).
+            update.update({"final_response": "", "response_type": "clarification"})
+            return Command(update=update, goto="format_output_fc")
         return Command(update=update, goto="agent")
 
     # ── format_output_fc ───────────────────────────────────────────
@@ -6053,8 +6140,11 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             # The search asked a question; the model reported it as a failed search to retry
             # later and dropped the question (R4-08). The question reaches the user, and the
             # failure sentences go.
+            _question = str(search_clarify.get("question") or "").strip()
             final_response = answer_with_clarification(
-                final_response, search_clarify.get("question", ""))
+                final_response, _question, alone=not _other_results(artifacts))
+            if final_response.strip() == _question:
+                final_response = ""     # the question alone: rendered with its panel below
         if search_clarify is not None and not final_response:
             tool_data = {
                 "missing_fields": search_clarify.get("missing_fields", []),

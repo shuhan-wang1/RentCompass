@@ -320,8 +320,7 @@ def test_u_09_the_model_cannot_confirm_the_gate_in_the_same_turn():
     args = _strict_null_args("search_properties", {"user_query": message, "confirmed": True})
     state["messages"] = [AIMessage(content="", tool_calls=[_tc("search_properties", args, "c0")])]
     asyncio.run(build_fc_nodes(provider)["execute_tools"](state))
-    (_, params), = provider.calls
-    assert not params.get("confirmed") and not params.get("criteria_gate_shown")
+    assert provider.calls == []     # V-03: the open gate is not dispatched again
 
 
 # U-05 ── the notice appears once; "Please remember that." saves the user's own statements

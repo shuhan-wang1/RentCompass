@@ -1525,7 +1525,8 @@ def _shown_listing_money(shown_listings: Any) -> list[tuple[float, str]]:
 def enforce_no_evidence_numeric_contract(response: str, *, retrieved_evidence: Any,
                                         user_message: str = "", reply_language: str = "",
                                         failed_lookups: Optional[list] = None,
-                                        shown_listings: Optional[list] = None) -> str:
+                                        shown_listings: Optional[list] = None,
+                                        stated_budgets: Optional[list] = None) -> str:
     """Fail closed on external money claims when retrieval returned no usable data.
 
     The current user message is an explicit provenance source: repeating ``£900/month``
@@ -1543,10 +1544,16 @@ def enforce_no_evidence_numeric_contract(response: str, *, retrieved_evidence: A
     conversation's ``view_results``). Their prices are tool output, not external figures:
     "Which of these is closest to a tube station?" lost its list of the four listings and
     their rents when every nearby lookup of the turn failed (r07 38299e93).
+
+    ``stated_budgets`` are the ceilings the conversation's criteria hold, which the user gave
+    in an earlier turn: a gate turn that recapped "a 1-bed in Bow under £2,000" lost its whole
+    reply (V-13).
     """
     if evidence_usable(retrieved_evidence) or not has_specific_price_claims(response):
         return response
-    user_money = _evidence_money_mentions({"user_message": user_message})
+    user_money = _evidence_money_mentions({"user_message": user_message}) + _evidence_money_mentions(
+        [{"price": f"£{amount:g}"} for amount in stated_budgets or []
+         if isinstance(amount, (int, float)) and not isinstance(amount, bool) and amount > 0])
     supported = set()
     months = months_stated(response)
     year = bool(YEAR_FRAMED.search(response or ""))

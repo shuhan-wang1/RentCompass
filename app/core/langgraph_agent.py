@@ -5897,6 +5897,8 @@ def _make_critic_node():
                 shown_listings=list(ec.get("view_results") or ec.get("last_results_full")
                                     or ec.get("recommended_registry") or [])
                 + list(ec.get("shown_alternatives") or []),   # shown, not matches (r6d)
+                stated_budgets=[(state.get("accumulated_search_criteria") or {}).get(field)
+                                for field in ("max_budget", "monthly_total_budget")],
                 user_message=ec.get("current_message") or _current_message(
                     state.get("user_query") or ""),
                 reply_language=_reply_language_from_ctx(

@@ -476,6 +476,9 @@ def extract_preferences_from_message(user_message: str, current_prefs: dict) -> 
         'gym': ['gym', 'fitness', 'workout'], 'pool': ['pool', 'swimming'],
         'parking': ['parking', 'car park'], 'laundry': ['laundry', 'washing machine'],
         'balcony': ['balcony', 'terrace'], 'concierge': ['concierge', '24/7', 'reception'],
+        # "Pet-friendly furnished 1 bed with a garden" kept the garden nowhere, so the
+        # zero-verified status never said the garden was unchecked (S-07).
+        'garden': ['garden', 'outdoor space'],
     }
     for amenity, keywords in amenity_patterns.items():
         for keyword in keywords:
@@ -483,6 +486,14 @@ def extract_preferences_from_message(user_message: str, current_prefs: dict) -> 
             # the answer told the user "You mentioned liking a pool" (R2-17).
             for match in re.finditer(r"(?<![A-Za-z])" + re.escape(keyword) + r"(?![A-Za-z])",
                                      user_message, re.I):
+                if amenity == 'garden' and (
+                        re.search(r"\b(?:covent|hatton|kensington|palmers|bounds|welwyn|"
+                                  r"barbican|kew|botanic(?:al)?|hampton|community|beer)\s+$",
+                                  user_message[:match.start()], re.I)
+                        or re.match(r"\s+(?:city|bridge|centre|center|village|suburb|square|"
+                                    r"street|road|walk|court|house)\b",
+                                    user_message[match.end():], re.I)):
+                    continue      # a place or building name, not a garden wish
                 from core.constraint_updates import mention_is_requirement
                 if not mention_is_requirement(user_message, match.start(), match.end()):
                     continue

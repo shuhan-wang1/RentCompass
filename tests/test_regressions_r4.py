@@ -703,3 +703,24 @@ def test_r4_14_a_daytime_journey_has_no_night_note(monkeypatch):
     monkeypatch.setattr(gti, "_london_now",
                         lambda: datetime(2026, 10, 30, 8, 30, tzinfo=ZoneInfo("Europe/London")))
     assert "night_service_note" not in gti._now_journey_time()
+
+
+# S-07 ── a garden wish is kept, so even the zero-verified branch says it was not checked
+def test_s_07_a_garden_wish_is_listed_as_not_checked():
+    from core.candidate_validation import render_candidate_status, validate_candidates
+    acc = _state_node({}, "Pet-friendly furnished 1 bed with a garden in Hackney under £2500")
+    assert "Would like garden" in (acc.get("soft_preferences") or [])
+    rows = [{"address": "A St, Hackney, London E8", "area": "Hackney", "price": "£2400/month",
+             "bedrooms": 1, "room_type": "whole", "url": "https://example.test/a"}]
+    text = render_candidate_status(validate_candidates(rows, acc))
+    assert "No listing is both fully eligible and verified." in text
+    assert "Not checked for any listing (confirm with the agent): garden" in text
+
+
+@pytest.mark.parametrize("message", [
+    "Find a flat near Covent Garden", "Find me something in Garden City",
+    "A garden doesn't matter, but I need a balcony.",
+])
+def test_s_07_place_names_and_dismissals_add_no_garden(message):
+    acc = _state_node({"area": "Hackney", "areas": ["Hackney"]}, message)
+    assert "Would like garden" not in (acc.get("soft_preferences") or [])

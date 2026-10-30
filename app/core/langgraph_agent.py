@@ -963,6 +963,30 @@ def _strip_destination_time_words(place: str) -> str:
     return value
 
 
+# Every slot of a search, cleared. An explicit None or [] is authoritative: the executor drops a
+# value the model re-supplies from the conversation it remembers.
+_RESET_CRITERIA = {
+    'area': None, 'areas': [], 'max_budget': None, 'budget_period': None, 'bedrooms': None,
+    'bedrooms_minimum': False, 'room_type': None, 'commute_destination': None, 'destination': None,
+    'max_travel_time': None, 'no_commute': False, 'move_in_date': None, 'office_days_per_week': None,
+    'property_features': [], 'soft_preferences': [], 'amenities_of_interest': [],
+}
+
+
+def _cleared_criteria(accumulated: dict) -> dict:
+    """The criteria after "start from scratch": every slot empty, the sources of the old values
+    gone and the soft gate available again. ``_last_change`` stays, so an undo can restore them
+    (U-06)."""
+    result = dict(_RESET_CRITERIA, constraint_sources={})
+    for key, value in (accumulated or {}).items():
+        if key == '_last_change':
+            result[key] = value
+        elif key not in result and key != 'criteria_gate_shown':
+            result[key] = ([] if isinstance(value, list) else {} if isinstance(value, dict)
+                           else False if isinstance(value, bool) else None)
+    return result
+
+
 def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
                                      apply_relative_budget: bool = True,
                                      _reaffirmed: bool = False) -> dict:
@@ -986,6 +1010,13 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     """
     if not current_message:
         return accumulated
+    if not _reaffirmed:
+        from core.constraint_updates import resets_all_criteria, without_criteria_reset
+        if resets_all_criteria(current_message):
+            accumulated = _cleared_criteria(accumulated)
+            current_message = without_criteria_reset(current_message)
+            if not re.search(r'[0-9A-Za-z\u4e00-\u9fff]{3}', current_message):
+                return accumulated
     if not _reaffirmed:
         # "Forget everything about location" / "never mind the commute" (R4-14), read on the
         # raw text: a withdrawal is exactly what scoped_update_text removes as a reference.
@@ -1926,10 +1957,16 @@ def _make_extract_preferences_node():
     def extract_preferences_node(state: AgentState) -> dict:
         from core.constraint_updates import housing_update_text
         current_msg = (state.get("extracted_context") or {}).get("current_message") or ""
-        prefs = extract_preferences_from_message(
-            housing_update_text(current_msg),
-            state["user_preferences"]
-        )
+        from core.constraint_updates import resets_all_criteria, without_criteria_reset
+        if resets_all_criteria(current_msg):
+            prefs = extract_preferences_from_message(
+                housing_update_text(without_criteria_reset(current_msg)),
+                {key: [] for key in state["user_preferences"]})
+        else:
+            prefs = extract_preferences_from_message(
+                housing_update_text(current_msg),
+                state["user_preferences"]
+            )
         update = {"user_preferences": prefs}
         # D2: apply explicit in-message budget/commute changes to the ACCUMULATED
         # criteria every turn — even when this turn does not trigger a re-search — so

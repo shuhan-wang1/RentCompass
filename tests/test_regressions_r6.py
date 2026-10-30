@@ -396,3 +396,74 @@ def test_u_05_tool_derived_content_never_replaces_a_statement_free_message():
     message = "Find me the cheapest 1-bed in Hackney. Remember that."
     params, _gate = _remember_turn(message, "Cheapest flat is 14 Sample Road at £1,180 pcm.")
     assert params is None
+
+
+# U-06 ── a reset clears the whole search; one field or a date is not a reset
+_FULL = {"area": "Camden", "areas": ["Camden"], "bedrooms": 2, "max_budget": 2500, "room_type": "whole",
+         "commute_destination": "King's Cross", "destination": "King's Cross", "max_travel_time": 30,
+         "move_in_date": "2026-11-01", "property_features": ["balcony"], "soft_preferences": ["Would like garden"],
+         "criteria_gate_shown": True,
+         "constraint_sources": {"area": {"source": "user_message", "value": "Camden", "text": "1-bed in Camden"}}}
+
+
+@pytest.mark.parametrize("message", [
+    "Reset all my criteria and start from scratch.", "Clear my filters", "start again from scratch",
+    "Reset my preferences", "重新开始", "清空条件", "Clear all my search criteria", "Start over", "Let's start again.",
+    "Reset everything", "Can you clear my filters?", "Remove all my filters", "重置搜索条件", "清空所有条件", "从头开始吧",
+    "Please reset the search", "清除筛选",
+])
+def test_u_06_a_reset_clears_every_slot(message):
+    acc = _state_node(_FULL, message)
+    assert acc["area"] is None and acc["areas"] == [] and acc["max_budget"] is None
+    assert acc["bedrooms"] is None and acc["room_type"] is None and acc["move_in_date"] is None
+    assert acc["commute_destination"] is None and acc["destination"] is None
+    assert acc["max_travel_time"] is None and not acc["no_commute"]
+    assert acc["property_features"] == [] and acc["soft_preferences"] == []
+    assert acc["constraint_sources"] == {} and "criteria_gate_shown" not in acc
+
+
+@pytest.mark.parametrize("message", [
+    "clear my budget", "start the move in May", "reset the budget", "clear the commute filter", "reset the search area",
+    "How do I reset my filters?", "Don't reset my filters", "不要重新开始", "我下个月重新开始上班", "Start again in May",
+    "删除这个条件", "Can I start the tenancy over the summer?", "Forget everything you know about me",
+])
+def test_u_06_anything_else_is_not_a_reset(message):
+    from core.constraint_updates import resets_all_criteria
+    assert not resets_all_criteria(message)
+
+
+def test_u_06_what_follows_the_reset_applies():
+    acc = _state_node(_FULL, "Start again: 2-bed in Hackney under £1,800.")
+    assert acc["area"] == "Hackney" and acc["bedrooms"] == 2 and acc["max_budget"] == 1800
+    assert acc["commute_destination"] is None and acc["property_features"] == []
+
+
+def test_u_06_the_preferences_panel_is_cleared_and_memory_is_not_read():
+    from core.langgraph_agent import _make_extract_preferences_node
+    state = {"user_preferences": {"hard_preferences": ["Must have lift"], "soft_preferences": []},
+             "accumulated_search_criteria": dict(_FULL),
+             "extracted_context": {"current_message": "Clear my filters", "history": []}}
+    update = _make_extract_preferences_node()(state)
+    assert update["user_preferences"]["hard_preferences"] == []
+
+
+def test_u_06_the_model_cannot_put_the_old_area_back():
+    from langchain_core.messages import AIMessage
+
+    from core.agent_loop import build_fc_nodes
+    from tests.test_agent_contract_guards import _state, _tc
+    from tests.test_qa_null_injection import _ValidatingProvider, _strict_null_args
+    message = "Reset all my criteria and start from scratch."
+    state = _state(message)
+    state["accumulated_search_criteria"] = _state_node(_FULL, message)
+    provider = _ValidatingProvider(["search_properties"])
+    args = _strict_null_args("search_properties", {"user_query": message, "area": "Camden", "max_budget": 2500})
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("search_properties", args, "c0")])]
+    asyncio.run(build_fc_nodes(provider)["execute_tools"](state))
+    (_, params), = provider.calls
+    assert not params.get("area") and not params.get("max_budget")
+
+
+def test_u_06_undo_brings_the_search_back():
+    reset = _state_node(_FULL, "Clear my filters")
+    assert _state_node(reset, "Undo that last change")["area"] == "Camden"

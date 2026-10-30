@@ -888,6 +888,58 @@ def without_withdrawals(text: str) -> str:
     return ''.join(out)
 
 
+# "Reset all my criteria and start from scratch." left every slot standing: the reset words
+# named no field, so nothing read them (U-06). They name the whole search, not one field: "clear
+# my budget" and "reset the search area" are not this, and long-term memory is not touched.
+_CRITERIA_NOUN = (r"(?:(?:search\s+)?(?:criteria|criterion|filters?|preferences|requirements|conditions|"
+                  r"constraints|settings)\b|search\b(?!\s+(?:area|radius|budget|location|distance)))")
+_RESET_DETERMINER = (r"(?:my|the|our|these|those|your|this)?\s*(?:current\s+|saved\s+)?")
+_RESET_ALL_CRITERIA = re.compile(
+    r"\b(?:reset|clear|wipe|scrap|erase)\s+(?:out\s+)?(?:all\s+(?:of\s+)?)?" + _RESET_DETERMINER + _CRITERIA_NOUN
+    + r"|\b(?:forget|remove|delete|drop)\s+all\s+(?:of\s+)?" + _RESET_DETERMINER + _CRITERIA_NOUN
+    + r"|\b(?:reset|clear|wipe)\s+(?:out\s+)?everything\b(?!\s+(?:about|you|i\b))"
+    r"|\b(?:start|begin)(?:ing)?\s+(?:all\s+)?(?:again|over|afresh|anew)\b"
+    r"(?:\s+from\s+(?:the\s+beginning|scratch))?(?=\s*(?:$|[.,!?;:，。！？：]|and\b|with\b|please\b))"
+    r"|\b(?:start|begin|search|do\s+(?:it|this))\s+(?:all\s+over\s+)?from\s+scratch\b"
+    r"|重新开始(?!上|工作|读|学|租约|计时)|从头(?:开始|来)|从零开始|全部重来|重来一次|重新来过?"
+    r"|(?:清空|重置|清除|清掉)(?:掉|一下)?(?:我的|所有的?|全部的?)*(?:搜索|筛选|查询|找房)?的?"
+    r"(?:条件|筛选|要求|标准|偏好|设置|搜索)"
+    r"|(?:删除|删掉|取消|去掉)(?:掉|一下)?(?:我的)?(?:所有的?|全部的?)(?:搜索|筛选|查询|找房)?的?(?:条件|筛选|要求|标准|偏好)",
+    re.I)
+_RESET_NEGATED = re.compile(
+    r"(?:\b(?:don['’]?t|do\s+not|never|not\s+to|without)\s+(?:\w+\s+){0,2}|不要|别|不用|不想|无需|不必)$", re.I)
+_RESET_QUESTION = re.compile(r"^\s*(?:how|what|why|when|where|does|do|did|should|will|is|are)\b|怎么|如何|为什么", re.I)
+
+
+def _criteria_reset_spans(text: str) -> list[tuple[int, int]]:
+    value = str(text or '')[:4000]
+    spans = []
+    for match in _RESET_ALL_CRITERIA.finditer(value):
+        clause = clause_at(value, match.start(), match.end())
+        if (is_hypothetical(clause) or _RESET_QUESTION.search(clause)
+                or _RESET_NEGATED.search(value[:match.start()])):
+            continue
+        spans.append(match.span())
+    return spans
+
+
+def resets_all_criteria(text: str) -> bool:
+    """True when this message resets the whole search ("Clear my filters", 清空条件)."""
+    return bool(_criteria_reset_spans(text))
+
+
+def without_criteria_reset(text: str) -> str:
+    """``text`` minus its reset phrases, so what follows still applies: "Start again, 2-bed in
+    Hackney." searches that."""
+    value = str(text or '')
+    out, position = [], 0
+    for start, end in _criteria_reset_spans(value):
+        out.append(value[position:start])
+        position = end
+    out.append(value[position:])
+    return ''.join(out)
+
+
 def commute_withdrawal_drops_destination(text: str) -> bool:
     """A no-commute statement withdraws the destination too, unless it only lifts the limit.
 

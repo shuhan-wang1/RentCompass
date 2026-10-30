@@ -523,3 +523,57 @@ def test_u_07_register_rejects_a_trailing_newline(client):
     response = client.post("/api/auth/register", json={
         "username": "name\n", "password": "a-long-enough-passphrase"})
     assert response.status_code == 400
+
+
+# U-08 ── a self-introduction is a name; everything else after "I'm" is not
+@pytest.mark.parametrize("message,name", [
+    ("Hi, I'm Oluwaseun Adebayo, looking for a flat", "Adebayo"), ("this is Mei Lin Zhao speaking", "Zhao"),
+    ("I'm Sarah Jones", "Jones"), ("I am Tom Baker and I need a 1-bed", "Baker"),
+    ("Sarah here, looking for flats", "Sarah"), ("我是王小明，想找房", "王小明"), ("我是欧阳娜娜，想租房", "娜娜"),
+    ("Hi I'm Sarah looking for a 1-bed in Camden", "Sarah"), ("I'm José García.", "García"),
+    ("I'm Anne-Marie O'Neill, from Leeds", "Neill"), ("I'm Sean McDonald", "McDonald"),
+])
+def test_u_08_a_self_introduction_is_not_stored(message, name):
+    from rag.agent_memory import redact_sensitive
+    text, found = redact_sensitive(message)
+    assert name not in text and "identity" in found
+
+
+def test_u_08_the_rest_of_the_clause_survives():
+    from rag.agent_memory import redact_sensitive
+    assert "1-bed in Camden" in redact_sensitive("Hi I'm Sarah looking for a 1-bed in Camden")[0]
+    assert "想找房" in redact_sensitive("我是王小明，想找房")[0]
+
+
+@pytest.mark.parametrize("message", [
+    "I'm looking for a flat", "I'm a student at UCL", "I'm moving to Camden", "I'm in Camden", "I'm Polish",
+    "I'm British", "I'm Chinese", "我是学生", "我是留学生", "我是中国人", "I'm Polish and need a flat", "I'm Muslim",
+    "I'm Looking For A Flat", "I'm In Camden", "I am A Student", "I'm Single", "I'm Camden based", "I'm from Leeds",
+    "I'm Erasmus student", "This is Camden", "This is what I want", "Anything here, please", "Nothing here",
+    "我是白领", "我是上班族", "我是程序员", "我是一名学生", "我是第一次租房", "我是高中生", "我是江苏人", "我是想找房",
+    "我是女生", "我是租客",
+])
+def test_u_08_anything_else_after_i_am_stays(message):
+    from rag.agent_memory import redact_sensitive
+    assert redact_sensitive(message) == (message, [])
+
+
+@pytest.mark.parametrize("message", [
+    "Remember I'm a student", "Please remember I'm vegan", "Remember that I'm Polish", "记住我是学生",
+])
+def test_u_08_a_save_request_about_oneself_keeps_its_behaviour(message):
+    from core.memory_contract import with_withheld_details_note
+    from rag.agent_memory import redact_sensitive
+    assert redact_sensitive(message)[0] == message
+    contract = {"requested": True, "attempted": True, "success": True, "stored_content": message}
+    assert with_withheld_details_note("Saved.", contract, message, "en") == "Saved."
+
+
+def test_u_08_a_name_in_a_save_request_waits_for_a_confirmation():
+    from core.memory_contract import with_withheld_details_note
+    from rag.agent_memory import redact_sensitive
+    message = "Please remember I'm Sarah Jones, and that I prefer quiet streets."
+    assert "Sarah" not in redact_sensitive(message)[0]
+    contract = {"requested": True, "attempted": True, "success": True,
+                "stored_content": "I prefer quiet streets"}
+    assert "I did not save the name" in with_withheld_details_note("Saved.", contract, message, "en")

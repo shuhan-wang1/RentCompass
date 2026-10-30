@@ -953,6 +953,64 @@ def erasure_request_names_other_memory(text: str) -> bool:
     return False
 
 
+# A self-introduction names the user as surely as "my name is" (U-08): "Hi, I'm <Name>, looking
+# for a flat" and 我是<姓名> were stored verbatim. Only capitalised tokens count, and "I'm Polish"
+# or "I'm Looking For A Flat" are not names: the list holds what can follow "I'm" with a capital.
+_NOT_A_NAME = (
+    # Demonyms and languages.
+    r"afghan|african|albanian|algerian|american|angolan|arab|arabic|argentine|argentinian|armenian|"
+    r"asian|australian|austrian|azerbaijani|bangladeshi|belarusian|belgian|bengali|black|bolivian|"
+    r"bosnian|brazilian|brit|british|bulgarian|burmese|cambodian|cameroonian|canadian|cantonese|"
+    r"caribbean|chilean|chinese|colombian|congolese|croatian|cuban|cypriot|czech|danish|dominican|"
+    r"dutch|ecuadorian|egyptian|emirati|english|eritrean|estonian|ethiopian|european|filipino|filipina|"
+    r"finnish|flemish|french|georgian|german|ghanaian|greek|guatemalan|haitian|hindi|hispanic|"
+    r"honduran|hungarian|icelandic|indian|indonesian|iranian|iraqi|irish|israeli|italian|ivorian|"
+    r"jamaican|japanese|jordanian|kazakh|kenyan|korean|kosovan|kurdish|kuwaiti|lao|latin|latino|latina|"
+    r"latvian|lebanese|libyan|lithuanian|luxembourgish|macedonian|malawian|malaysian|maltese|mandarin|"
+    r"mexican|moldovan|mongolian|montenegrin|moroccan|nepali|nepalese|nigerian|norwegian|omani|"
+    r"pakistani|palestinian|panamanian|paraguayan|persian|peruvian|polish|portuguese|punjabi|qatari|"
+    r"romanian|russian|rwandan|saudi|scandinavian|scottish|senegalese|serbian|sierra|singaporean|"
+    r"slovak|slovakian|slovenian|somali|spanish|sudanese|swedish|swiss|syrian|taiwanese|tajik|tamil|"
+    r"tanzanian|thai|tibetan|tunisian|turkish|turkmen|ugandan|ukrainian|urdu|uruguayan|uzbek|"
+    r"venezuelan|vietnamese|welsh|white|yemeni|zambian|zimbabwean|"
+    # Faiths.
+    r"anglican|atheist|buddhist|catholic|christian|hindu|jewish|mormon|muslim|orthodox|protestant|sikh|"
+    # Words a capitalised or title-case message puts there.
+    r"a|about|above|after|again|all|allergic|almost|already|also|always|an|around|at|available|away|"
+    r"back|based|because|before|being|below|between|both|busy|but|by|certain|close|coming|confused|"
+    r"considering|currently|definitely|desperate|disabled|divorced|done|down|due|easy|employed|engaged|"
+    r"even|ever|excited|fairly|female|fine|flexible|for|free|from|frustrated|full|gay|getting|glad|"
+    r"going|good|grateful|happy|having|hoping|here|home|hopeful|how|in|interested|into|just|keen|"
+    r"late|leaving|less|like|likely|literally|living|local|looking|lost|lucky|male|married|maybe|me|"
+    r"more|mostly|moving|much|my|near|nearby|needing|nervous|never|new|next|nice|no|non|not|now|"
+    r"of|off|ok|okay|old|on|one|only|open|or|our|out|over|part|partnered|paying|perhaps|planning|"
+    r"please|pretty|probably|prepared|quite|rather|ready|really|relocating|renting|retired|right|"
+    r"same|searching|self|seeking|separated|settling|she|short|single|so|still|straight|struggling|"
+    r"sure|sorry|staying|studying|still|such|that|the|their|then|there|thinking|this|tired|to|too|"
+    r"totally|trans|trying|two|under|unemployed|unsure|up|usually|vegan|vegetarian|very|visiting|"
+    r"waiting|wanting|well|what|when|where|who|widowed|willing|with|working|worried|your|anything|"
+    r"nothing|everything|something|anyone|someone|everyone|anybody|nobody|parking|flats?|homes?|"
+    r"houses?|rents?|prices?|transport|schools?|shops?|area|areas|stay|look|wait|stop|click|come|go|get")
+_NAME_TOKEN = (r"(?-i:[A-ZÀ-Þ](?:[a-zß-ÿ]+(?:[A-ZÀ-Þ][a-zß-ÿ]+)?|['’][A-ZÀ-Þ][a-zß-ÿ]+)"
+               r"(?:[-'’][A-ZÀ-Þ]?[a-zß-ÿ]+)*)(?![\w-]*[0-9])")
+_NAMED = rf"(?!(?:{_NOT_A_NAME})\b){_NAME_TOKEN}"
+_NAME_RUN = rf"{_NAMED}(?:\s+{_NAMED}){{0,3}}"
+# The name has to end the phrase: "I'm Erasmus student" and "I'm Camden based" describe the user.
+_NAME_ENDS = (r"(?=\s*(?:$|[,.!?;:)—–]|\s-\s|(?:and|but|from|looking|searching|hoping|trying|"
+              r"who|here|i|i'm|i’m)\b))")
+_ZH_SURNAME = ("王李张刘陈杨黄赵吴周徐孙马朱胡郭何高林罗郑梁谢宋唐许韩冯邓曹彭曾肖田董袁潘于蒋蔡余杜叶程苏魏吕"
+               "丁任沈姚卢姜崔钟谭陆汪范金石廖贾夏韦付方白邹孟熊秦邱江尹薛闫段雷侯龙史陶黎贺顾毛郝龚邵万钱严覃"
+               "武戴莫孔向汤")
+_SELF_INTRODUCTION_PATTERN = (
+    rf"(?P<cue>\b(?:i'm|i’m|i\s+am|im)\s+)(?P<name>{_NAME_RUN}){_NAME_ENDS}"
+    rf"|(?P<cue2>\bthis\s+is\s+)(?P<name2>{_NAME_RUN})(?=\s+(?:speaking|here|calling)\b)"
+    rf"|(?P<cue3>^\s*(?:(?:hi|hello|hey|hiya)\b[,!.\s]*)?)(?P<name3>{_NAME_RUN})(?=\s+here\b\s*(?:$|[,.!:;—–-]))"
+    # 我是学生 / 我是中国人 / 我是白领: the token may not end in a word for a kind of person.
+    rf"|(?P<cue4>我是)(?P<name4>(?:欧阳|司马|上官|诸葛|[{_ZH_SURNAME}])[\u4e00-\u9fff]{{1,2}}?)"
+    r"(?<![人生员师士领族者工家长女子客东友])"
+    r"(?=\s*(?:$|[，,。.！!？?；;、]|想|要|打算|正在|在找|来))")
+
+
 # ── Sensitive personal data in AUTO-memory (2026-10-19 A-09) ─────────────────
 # Told "I earn £62,000, I'm on a Skilled Worker visa, I have asthma, my phone is 07700
 # 900123", the assistant said it would not store health, immigration, income or contact
@@ -1010,8 +1068,9 @@ _SENSITIVE_CLAUSE_PATTERNS = (
         r"\b(?:my|our)\s+(?:\w+\s+)?(?:landlord|landlady|agent|neighbou?r|boss|manager|employer|"
         r"colleague|flatmate|housemate|roommate|partner|wife|husband|friend|mother|mum|mom|father|"
         r"dad|brother|sister|son|daughter|guarantor)(?:['’]s\s+(?:full\s+|first\s+|last\s+)?name\b|"
-        r"\s+is\s+(?:called|named)\b)|房东(?:叫|名叫|的名字)", re.I)),
+        r"\s+is\s+(?:called|named)\b)|房东(?:叫|名叫|的名字)|" + _SELF_INTRODUCTION_PATTERN, re.I)),
 )
+_SELF_INTRODUCTION = re.compile(_SELF_INTRODUCTION_PATTERN, re.I)
 # Anchored and bounded: unanchored, a long word or digit run was re-scanned from every
 # position looking for an "@" (O(n²) in one C call, holding the GIL — 10 s for 60k chars).
 _EMAIL_RE = re.compile(r"(?<![\w.+-])[\w.+-]{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63}){1,8}")
@@ -1245,6 +1304,13 @@ def redact_sensitive(text: str) -> tuple[str, list[str]]:
             # "Has a son, Tom, who …": the name sits in its own comma clause (R4-08).
             found.append("children")
             value = _CHILD_NAME_RE.sub(lambda m: m.group(1) + " " + _SENSITIVE_MARKER, value)
+        if _SELF_INTRODUCTION.search(value):
+            # The name goes, not its clause: "Hi I'm <Name> looking for a 1-bed" keeps the rest.
+            if "identity" not in found:
+                found.append("identity")
+            value = _SELF_INTRODUCTION.sub(
+                lambda m: (m.group("cue") or m.group("cue2") or m.group("cue3")
+                           or m.group("cue4") or "") + _SENSITIVE_MARKER, value)
         out: list[str] = []
         start = 0
         bounds = [(m.start(), m.end()) for m in _CLAUSE_BOUNDARY.finditer(value)]

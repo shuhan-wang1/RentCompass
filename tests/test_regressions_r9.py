@@ -169,3 +169,38 @@ def test_y_02_the_tool_keeps_both_places(monkeypatch, message):
                         max_budget=3000, bedrooms=1)
     assert {row.get("area") for row in result["recommendations"]} == set(areas)
     assert result["search_criteria"]["areas"] == areas
+
+
+# Y-03 ── a question about shown results moves nothing
+_HACKNEY = {"area": "Hackney", "areas": ["Hackney"], "bedrooms": 1, "max_budget": 1900, "room_type": "whole"}
+
+
+@pytest.mark.parametrize("message", [
+    "Which of the listings you showed me in Bethnal Green was the cheapest?",
+    "Which of the listings you've shown me in Bethnal Green was the cheapest?",
+    "What's the first result you showed me in Angel? Give price and street.",
+    "What was the rent of the Bethnal Green flat?", "Tell me about the listings you showed in Bow",
+    "你之前给我看的 Bethnal Green 的房源里哪个最便宜？",
+])
+def test_y_03_a_question_about_shown_results_moves_nothing(message):
+    assert _state_node(_HACKNEY, message)["areas"] == ["Hackney"]
+
+
+@pytest.mark.parametrize("message,area", [
+    ("Show me Bethnal Green again", "Bethnal Green"),
+    ("Show me Bethnal Green listings again", "Bethnal Green"),
+    ("Go back to Bethnal Green. Which was the cheapest and how far is it from Holborn?", "Bethnal Green"),
+    ("Which of the listings you showed me was the cheapest? Now search in Bethnal Green.", "Bethnal Green"),
+])
+def test_y_03_a_request_to_look_there_still_moves(message, area):
+    assert _state_node(_HACKNEY, message)["areas"] == [area]
+
+
+def test_y_03_a_need_stated_beside_the_question_stays():
+    stored = _state_node({}, "I need to commute to King's Cross, how long from the first area you showed?")
+    assert stored["destination"] == "King's Cross"
+
+
+def test_y_03_a_budget_in_a_later_sentence_still_counts():
+    stored = _state_node(_HACKNEY, "Which of the listings you showed me in Bow was cheapest? Make the budget £2,000.")
+    assert stored["max_budget"] == 2000 and stored["areas"] == ["Hackney"]

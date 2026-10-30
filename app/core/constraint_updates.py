@@ -382,9 +382,30 @@ def mention_is_requirement(text: str, start: int, end: int) -> bool:
     return True
 
 
+# "Which of the listings you showed me in Bethnal Green was the cheapest?" asks about results
+# already on the page; it moved the search area, and the next edit searched there (r06 e07e26d4).
+_SHOWN_RESULTS = re.compile(
+    r"\byou(?:['’]ve|\s+have|\s+had|\s+just|\s+already)*\s+"
+    r"(?:showed|shown|listed|found|gave|given|recommended|suggested|mentioned|sent|returned)\b"
+    r"|\b(?:shown|listed|recommended)\s+(?:earlier|before|above|previously)\b"
+    r"|你(?:刚才|刚刚|之前|前面|上次)?(?:给我|帮我|为我)?(?:看|展示|列出|找到|推荐|搜到|发)(?:过|了)?的", re.I)
+_SHOWN_RESULTS_ACTION = re.compile(
+    r"\b(?:show\s+me|go(?:ing)?\s+back|back\s+to|switch|move|search|look\s+in|again)\b"
+    # "I need to commute to King's Cross, how long from the first area you showed?" states a need.
+    r"|\bI\s+(?:need|want|work|commute)\b|回到|切换|换到|再搜|我要|我需要", re.I)
+
+
+def without_shown_results_questions(text: str) -> str:
+    """``text`` without the sentences that only ask about results already shown."""
+    sentences = re.findall(r"[^.!?;；。！？\n]+[.!?;；。！？\n]*", text or '')
+    kept = [sentence for sentence in sentences if not (
+        _SHOWN_RESULTS.search(sentence) and not _SHOWN_RESULTS_ACTION.search(sentence))]
+    return ''.join(kept) if len(kept) != len(sentences) else text
+
+
 def housing_update_text(text: str) -> str:
     """Exclude standalone ancillary requests from the housing mutation channel."""
-    text = scoped_update_text(text)
+    text = without_shown_results_questions(scoped_update_text(text))
     # Negative/preservation clauses in an ancillary question are not housing
     # instructions. Require a positive housing action before accepting its places.
     if is_criteria_consultation(text):

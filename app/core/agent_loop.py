@@ -777,6 +777,30 @@ _CARD_FORMATTERS = {
 # listing panel — neither is a plain chat answer.
 _SEARCH_RESULT_STATUSES = frozenset({"found", "no_exact_match_but_similar", "no_results"})
 
+# A sentence that reports the listing search as failed or to be retried.
+_SEARCH_FAILURE_SENTENCE = re.compile(
+    r"\b(?:search|lookup|query|listing)\w*\b[^.!?。！？\n]{0,60}\b(?:failed|did\s+not\s+(?:complete|finish|work)|"
+    r"didn.t\s+(?:complete|finish|work)|could\s+not|couldn.t|unavailable|errored|error)\b|"
+    r"\b(?:try|retry)\s+(?:again\s+)?later\b|\bplease\s+retry\b|"
+    r"稍后(?:再)?(?:重试|再试|尝试)|查询失败|失败的查询|没有完成|未完成|出错|出现问题", re.I)
+
+
+def answer_with_clarification(text: str, question: str) -> str:
+    """``text`` that carries the search's clarification ``question`` instead of a claim that
+    the search failed (R4-08). Other sentences (a weather answer) are kept."""
+    body, question = str(text or ""), str(question or "").strip()
+    if not question or question in body:
+        return body
+    kept = []
+    for line in body.split("\n"):
+        pieces = re.split(r"(?<=[.!?。！？])\s*", line)
+        survivors = [piece for piece in pieces if piece.strip() and not _SEARCH_FAILURE_SENTENCE.search(piece)]
+        if survivors or not line.strip():
+            kept.append(" ".join(survivors) if not re.search(r"[\u4e00-\u9fff]", line)
+                        else "".join(survivors))
+    rest = re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
+    return f"{rest}\n\n{question}" if rest else question
+
 
 def _asks_for_listings(message: str) -> bool:
     """True when the user's own message is about finding homes or changing search criteria."""
@@ -5904,6 +5928,12 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     "response_type": response_type, "tool_data": tool_data}
 
         # A dangling search clarification with no final answer -> surface it.
+        if search_clarify is not None and final_response and search_found is None:
+            # The search asked a question; the model reported it as a failed search to retry
+            # later and dropped the question (R4-08). The question reaches the user, and the
+            # failure sentences go.
+            final_response = answer_with_clarification(
+                final_response, search_clarify.get("question", ""))
         if search_clarify is not None and not final_response:
             tool_data = {
                 "missing_fields": search_clarify.get("missing_fields", []),

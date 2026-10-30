@@ -5748,7 +5748,10 @@ def _make_critic_node():
                 for a in artifacts
                 if _is_retrieval_tool(a.get("tool")) and (
                     a.get("success") is False
-                    or (isinstance(a.get("raw_data"), dict) and a["raw_data"].get("success") is False))]
+                    or (isinstance(a.get("raw_data"), dict) and a["raw_data"].get("success") is False))
+                # A search that asked a clarification question did not fail (R4-08).
+                and not (isinstance(a.get("raw_data"), dict)
+                         and a["raw_data"].get("status") == "need_clarification")]
             final = enforce_no_evidence_numeric_contract(
                 final,
                 failed_lookups=failed_lookups,

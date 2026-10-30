@@ -413,3 +413,50 @@ def test_r4_03_a_bare_fragment_is_rejected_at_the_write_path():
     assert memory_write_rejection("了的预算") is not None
     assert memory_write_rejection("素食") is None
     assert memory_write_rejection("我的预算每月最多1600英镑") is None
+
+
+# R4-08 ── a clarification question is asked, never reported as a failed search ──────
+_CLARIFY_Q = ("Before I search, could you confirm a couple of things: what room type you'd like "
+              "(studio / en-suite / shared)?")
+
+
+def test_r4_08_a_failure_claim_is_replaced_by_the_clarification_question():
+    from core.agent_loop import answer_with_clarification
+    text = ("The listing search did not complete, so I can't show flats yet. Please try again "
+            "later. In Angel it is 14 C with light rain.")
+    out = answer_with_clarification(text, _CLARIFY_Q)
+    assert _CLARIFY_Q in out and "try again" not in out and "did not complete" not in out
+    assert "14 C with light rain" in out
+
+
+def test_r4_08_zh_failure_wording_is_replaced_too():
+    from core.agent_loop import answer_with_clarification
+    out = answer_with_clarification("房源查询没有完成，这是失败的查询，请稍后重试。", "需要考虑通勤吗？")
+    assert out == "需要考虑通勤吗？"
+
+
+def test_r4_08_an_answer_that_already_asks_the_question_is_unchanged():
+    from core.agent_loop import answer_with_clarification
+    text = f"Sure. {_CLARIFY_Q}"
+    assert answer_with_clarification(text, _CLARIFY_Q) == text
+
+
+class _NoTools:
+    def list_specs(self):
+        return []
+
+    def get(self, name):
+        return None
+
+
+def test_r4_08_the_fc_answer_carries_the_question_of_a_clarifying_search():
+    from core.agent_loop import build_fc_nodes
+    raw = {"success": False, "status": "need_clarification", "clarification_kind": "soft_criteria",
+           "question": _CLARIFY_Q, "missing_fields": ["room_type"]}
+    state = {"tool_artifacts": [{"tool": "search_properties", "raw_data": raw, "success": False}],
+             "user_preferences": {}, "accumulated_search_criteria": {},
+             "final_response": "The listing search failed this turn. Please try again later.",
+             "response_type": "answer", "extracted_context": {}}
+    out = build_fc_nodes(_NoTools())["format_output_fc"](state)
+    assert _CLARIFY_Q in out["final_response"]
+    assert "try again later" not in out["final_response"]

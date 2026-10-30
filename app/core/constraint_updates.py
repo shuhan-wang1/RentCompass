@@ -568,6 +568,38 @@ def cat_permission_update(text: str) -> bool | None:
     return None
 
 
+# A zh withdrawal is bound to the feature it names, in either order: 「算了，不要宠物要求了」,
+# 「不需要宠物了」 and 「宠物要求算了」 kept the filter while the reply said it was dropped (W-02), and
+# 「算了，不用阳台了」 says nothing about pets. 「不要宠物」 alone can be a wish for a pet-free building, so
+# 不要 needs 了 or a word like 要求 after the feature.
+_ZH_DROP_BEFORE = re.compile(
+    r"(?P<verb>不要|不用|不需要|不必|无需|不再需要|不再要|去掉|取消|删掉|删除|移除|忽略|撤销|撤回)"
+    r"(?:有|带|养|允许|可以养|能养|靠近)*的?\s*$")
+_ZH_REQUIREMENT_WORD = r"(?:的)?(?:事|这个|这条|这项|这一条|这一项)?(?:要求|条件|筛选|需求|限制)?"
+_ZH_DROP_TAIL = re.compile(r"\s*(?:的)?(?:事|这个|这条|这项)?(?:要求|条件|筛选|需求|限制)|\s*(?:的事)?\s*(?:了|吧)")
+_ZH_DROP_AFTER = re.compile(
+    r"\s*" + _ZH_REQUIREMENT_WORD + r"(?:也|就|都)?"
+    r"(?:不要了|不用了|不需要了|不必了|算了|不重要了|无所谓|不管了|不考虑了|取消|去掉|删掉|删除|移除|撤销)")
+_ZH_QUESTION_AFTER = re.compile(r"[^，。！？；,.!?;\n]{0,14}(?:吗|么|[？?])")
+
+
+def zh_withdrawn_at(text: str, start: int, end: int) -> bool:
+    """True when the zh words around ``text[start:end]`` withdraw that feature (W-02)."""
+    if _ZH_QUESTION_AFTER.match(text, end):
+        return False
+    before = _ZH_DROP_BEFORE.search(text[max(0, start - 12):start])
+    if before and (before.group('verb') != '不要' or _ZH_DROP_TAIL.match(text, end)):
+        return True
+    return bool(_ZH_DROP_AFTER.match(text, end))
+
+
+def zh_feature_withdrawn(text: str, words) -> bool:
+    """True when ``text`` withdraws a feature named by one of the zh ``words``."""
+    value = str(text or '')
+    return any(zh_withdrawn_at(value, found.start(), found.end())
+               for word in words for found in re.finditer(re.escape(word), value))
+
+
 _PET_WORD = r'\b(?:cats?|kittens?|pets?|dogs?|pupp(?:y|ies))\b|猫|狗|宠物'
 _PET_WITHDRAWAL = re.compile(
     r'\b(?:forget|never\s*mind|ignore|drop|remove|scrap|skip|disregard|cancel)\b[^.!?;]{0,30}'
@@ -621,6 +653,8 @@ def furnished_requirement_update(text: str) -> bool | None:
         clause = match.group()
         if not re.search(r'furnish|家具|家私', clause, re.I):
             continue
+        if zh_feature_withdrawn(clause, ('家具', '家私')):
+            return False
         if re.search(r"\b(?:unfurnished|furnished)\s+(?:is\s+)?(?:fine|ok(?:ay)?)\b|"
                      r"\b(?:furnish\w*|furniture)\b[^.!?]{0,25}\b(?:doesn.t|does not|don.t|do not)\s+"
                      r"(?:matter|need|mind)|\b(?:don.t|do not|no longer)\s+(?:need|require|care about)\s+"
@@ -670,7 +704,7 @@ def pet_requirement_update(text: str) -> bool | None:
         clause = match.group()
         if not re.search(_PET_WORD, clause, re.I):
             continue
-        if _PET_WITHDRAWAL.search(clause):
+        if _PET_WITHDRAWAL.search(clause) or zh_feature_withdrawn(clause, ('宠物', '猫', '狗')):
             return False
         if is_hypothetical(clause) or re.search(
                 r'[?？]|是否|吗|\b(?:do not assume|don.t assume|unknown|whether)\b', clause, re.I):

@@ -328,7 +328,11 @@ _RETRACTION_AFTER_RE = re.compile(
     r"|(?:(?:is|are)\s+)?no longer\s+required"
     # "The garden doesn't matter any more." (R2-08)
     r"|(?:doesn.t|does\s+not|don.t|do\s+not)\s+(?:really\s+)?matter"
-    r"|(?:is|are)\s+(?:not|no longer)\s+important|isn.t\s+important|aren.t\s+important)\b",
+    r"|(?:is|are)\s+(?:not|no longer)\s+important|isn.t\s+important|aren.t\s+important"
+    # "The balcony requirement is gone" recorded "Must have balcony" (W-01).
+    r"|(?:(?:is|are|was|were|has\s+been|have\s+been)\s+(?:now\s+|already\s+)?|['’]s\s+)"
+    r"(?:gone|removed|dropped|cancell?ed|deleted|withdrawn|scrapped|off)"
+    r"|no\s+longer\s+(?:applies|apply|stands|stand|matters?))\b",
     re.I)
 _RETRACTION_TAIL_RE = re.compile(
     r"[^.!?;。！？,，]{0,40}?[,，]\s*(?:(?:it|that)(?:'s|\s+is)\s+)?"
@@ -336,17 +340,29 @@ _RETRACTION_TAIL_RE = re.compile(
     r"(?:\s+any\s?more)?\s*(?:[.!?;。！？]|$)", re.I)
 # "Never mind the gym, forget that requirement." kept the gym (R1-02): "never mind",
 # "ignore", "skip" and "cancel" retract the mention they precede just like "forget".
+# "I removed the balcony requirement earlier." and "I never asked for a balcony." state that it
+# is not wanted; both recorded it (W-01).
 _RETRACTION_BEFORE_RE = re.compile(
-    r"\b(?:forget|scrap|drop|remove|ditch|never\s*mind|ignore|disregard|skip|cancel)\s+"
-    r"(?:about\s+)?(?:the|that|my)\s+(?:\w+\s+){0,1}$",
+    r"\b(?:forget|scrap(?:ped)?|drop(?:ped)?|remove[d]?|ditch(?:ed)?|never\s*mind|ignore[d]?|disregard(?:ed)?|"
+    r"skip(?:ped)?|cancel(?:l?ed)?|delete[d]?|withdrew|retracted|took\s+(?:out|off))\s+"
+    r"(?:about\s+)?(?:the|that|my)\s+(?:\w+\s+){0,1}$"
+    r"|\b(?:never|didn.t|did\s+not)\s+(?:ask(?:ed)?\s+for|want(?:ed)?|need(?:ed)?|require[d]?|"
+    r"mention(?:ed)?|sa(?:id|y)(?:\s+(?:i|we)\s+(?:need(?:ed)?|want(?:ed)?))?)\s+"
+    r"(?:(?:a|an|the|any|my)\s+)?(?:\w+\s+){0,1}$",
     re.I)
+
+
+_NO_REQUIREMENT_BEFORE = re.compile(r"\b(?:don.t|do\s+not)\s+have\s+(?:a|an|any|the)\s+(?:\w+\s+){0,1}$", re.I)
+_REQUIREMENT_WORD_AFTER = re.compile(r"\s+(?:requirements?|preferences?|filters?|conditions?)\b", re.I)
 
 
 def _feature_retracted_here(text: str, start: int, end: int) -> bool:
     text = str(text or "")
     return bool(_RETRACTION_AFTER_RE.match(text[end:end + 60])
                 or _RETRACTION_TAIL_RE.match(text[end:end + 90])
-                or _RETRACTION_BEFORE_RE.search(text[max(0, start - 40):start]))
+                or _RETRACTION_BEFORE_RE.search(text[max(0, start - 40):start])
+                or (_NO_REQUIREMENT_BEFORE.search(text[max(0, start - 40):start])
+                    and _REQUIREMENT_WORD_AFTER.match(text[end:end + 30])))
 
 
 # The clause-level retraction vocabulary, for removing an ACCUMULATED feature (unchanged).
@@ -411,7 +427,8 @@ def _extract_accessibility_requirements(message: str) -> dict[str, list[str]]:
 
     for feature, start, end in mentions:
         from core.constraint_updates import mention_is_requirement
-        if not mention_is_requirement(source, start, end) or _feature_retracted_here(source, start, end):
+        if (not mention_is_requirement(source, start, end) or _feature_retracted_here(source, start, end)
+                or _asks_about_own_need(source, start, end)):
             continue
         left = max(source.rfind(mark, 0, start) for mark in (";", "；", ",", "，", ".", "。", "!", "！", "?", "？"))
         right_candidates = [source.find(mark, end) for mark in
@@ -455,16 +472,41 @@ _NEAR_A_PARK = re.compile(
     r"good\s+|local\s+)?(?-i:park)s?\b(?!\s+(?:lane|royal|road|street|avenue|view|side|house)\b)|"
     r"\b(?-i:parks?)\s+nearby\b|\bgreen\s+spaces?\b|"
     r"(?:靠近|临近|邻近|挨着|近|有|要有|附近有)(?:一?个)?公园", re.I)
-_LISTING_QUESTION_EN = re.compile(r"^\s*(?:does|do|did|is|are|has|have|had)\b", re.I)
-_LISTING_QUESTION_ZH = re.compile(r"^[^找搜]*吗\s*[？?]?\s*$")
+# A question opens its clause, after a linking word at most: "What is my budget now, and do I need
+# a balcony?" stored a must-have, because only the start of the clause was read, and "Must I have a
+# garden?" did too (W-01). "Can you find me a flat with a balcony?" is a request, so it stays out.
+_LISTING_QUESTION_EN = re.compile(
+    r"^\W*(?:(?:and|but|so|or|also|then|plus)\b\W*)*"
+    r"(?:(?:does|do|did|is|are|was|were|am|has|have|had)\b"
+    r"|(?:must|should|shall|need|will|would)\s+(?:i|we|it)\b"
+    r"|(?:what|which|why|how|when|where|who)(?:['’]s\b|\s+(?:do|did|does|is|are|was|were|has|have|had|happened)\b))",
+    re.I)
+_LISTING_QUESTION_ZH = re.compile(r"^[^找搜]*(?:吗\s*[？?]?\s*$|要不要|需不需要)")
+_CLAUSE_LINK = re.compile(r"[,，;；:：.!?。！？\n]|\b(?:and|but|so|or|also|then|plus)\b", re.I)
+# Whose need the question is about. "Are there flats with a lift?" searches, so it still counts.
+_OWN_NEED_IN_QUESTION = re.compile(
+    r"\b(?:i|we|my|our)\b|\b(?:required?|requirements?|needed|necessary)\b|我|需要|要求|必须", re.I)
 
 
-def _asks_about_a_listing(message: str, match) -> bool:
-    """True for "Does the flat have a dishwasher?": a question, not a wish."""
+def _asks_about_a_listing(message: str, start: int, end: int) -> bool:
+    """True for "Does the flat have a dishwasher?" or "... and do I need a balcony?": the mention
+    between ``start`` and ``end`` sits in a question, not a wish."""
     from core.constraint_updates import clause_at
-    clause = clause_at(message, match.start(), match.end())
-    return bool((_LISTING_QUESTION_EN.search(clause) and '?' in message[match.end():match.end() + 60])
+    clause = clause_at(message, start, end)
+    window = message[max(0, start - 120):start]
+    links = [found.end() for found in _CLAUSE_LINK.finditer(window)]
+    linked = window[links[-1]:] if links else window
+    return bool(((_LISTING_QUESTION_EN.search(clause) or _LISTING_QUESTION_EN.search(linked))
+                 and '?' in message[end:end + 60])
                 or _LISTING_QUESTION_ZH.search(clause))
+
+
+def _asks_about_own_need(message: str, start: int, end: int) -> bool:
+    """True for "Do I need a lift?": narrower than the above, for the features a search filters
+    on, where "Are there any step-free flats?" still asks for one."""
+    from core.constraint_updates import clause_at
+    return (_asks_about_a_listing(message, start, end)
+            and bool(_OWN_NEED_IN_QUESTION.search(clause_at(message, start, end))))
 
 
 def extract_preferences_from_message(user_message: str, current_prefs: dict) -> dict:
@@ -478,6 +520,14 @@ def extract_preferences_from_message(user_message: str, current_prefs: dict) -> 
             for key in ('hard_preferences', 'required_amenities', 'soft_preferences'):
                 if key in prefs:
                     prefs[key] = [value for value in prefs[key] if feature not in str(value).lower()]
+    # A withdrawn amenity leaves these labels too, or the legacy prompt keeps quoting it.
+    stored = [value for key in ('hard_preferences', 'soft_preferences') for value in prefs.get(key) or []]
+    kept = _soft_amenity_updates(user_message, stored) if stored else None
+    if kept is not None:
+        gone = {_amenity_name(value) for value in stored} - {_amenity_name(value) for value in kept}
+        for key in ('hard_preferences', 'soft_preferences', 'required_amenities'):
+            if key in prefs:
+                prefs[key] = [value for value in prefs[key] if _amenity_name(value) not in gone]
 
     def _add(ptype, val):
         if val and val not in prefs.get(ptype, []):
@@ -493,7 +543,8 @@ def extract_preferences_from_message(user_message: str, current_prefs: dict) -> 
 
     def _record_amenity(amenity, match):
         from core.constraint_updates import mention_is_requirement
-        if not mention_is_requirement(user_message, match.start(), match.end()):
+        if (not mention_is_requirement(user_message, match.start(), match.end())
+                or _feature_retracted_here(user_message, match.start(), match.end())):
             return
         clause = clause_at(user_message, match.start(), match.end())
         hard_clause = re.sub(r"not essential|isn.t essential|not required|isn.t required|不必|可有可无", '', clause, flags=re.I)
@@ -522,7 +573,7 @@ def extract_preferences_from_message(user_message: str, current_prefs: dict) -> 
             # the answer told the user "You mentioned liking a pool" (R2-17).
             for match in re.finditer(r"(?<![A-Za-z])" + re.escape(keyword) + r"(?![A-Za-z])",
                                      user_message, re.I):
-                if _asks_about_a_listing(user_message, match):
+                if _asks_about_a_listing(user_message, match.start(), match.end()):
                     continue
                 if amenity == 'garden' and (
                         re.search(r"\b(?:covent|hatton|kensington|palmers|bounds|welwyn|"
@@ -534,7 +585,7 @@ def extract_preferences_from_message(user_message: str, current_prefs: dict) -> 
                     continue      # a place or building name, not a garden wish
                 _record_amenity(amenity, match)
     for match in _NEAR_A_PARK.finditer(user_message):
-        if not _asks_about_a_listing(user_message, match):
+        if not _asks_about_a_listing(user_message, match.start(), match.end()):
             _record_amenity('park', match)
 
     # Accessibility gets feature-specific strength handling rather than the global
@@ -689,8 +740,11 @@ _ZH_WISH_WITHDRAWN_AFTER = re.compile(r"[^，。！？；,.!?;]{0,6}(?:不要了
 
 def _zh_wish_withdrawn(name: str, message: str) -> bool:
     """True when the message withdraws the amenity ``name`` in its Chinese word."""
+    from core.constraint_updates import _ZH_QUESTION_AFTER
     for word in _AMENITY_ZH_WORDS.get(name, ()):
         for match in re.finditer(re.escape(word), message or ''):
+            if _ZH_QUESTION_AFTER.match(message, match.end()):
+                continue        # 「阳台要求取消了吗？」 asks
             if (_ZH_WISH_WITHDRAWN_BEFORE.search(message[:match.start()])
                     or _ZH_WISH_WITHDRAWN_AFTER.match(message, match.end())):
                 return True
@@ -918,6 +972,8 @@ def _soft_amenity_updates(message: str, soft_preferences: list) -> list | None:
     withdrawn = {name for name in names if _zh_wish_withdrawn(name, message)}
     for name in names:
         for match in re.finditer(r"(?<![A-Za-z])" + re.escape(name) + r"(?![A-Za-z])", message or '', re.I):
+            if _asks_about_a_listing(message, match.start(), match.end()):
+                continue        # "Did I remove the balcony requirement?" removes nothing
             if (_feature_retracted_here(message, match.start(), match.end())
                     or _AMENITY_NEGATED_BEFORE_RE.search(message[max(0, match.start() - 50):match.start()])):
                 withdrawn.add(name)
@@ -1555,7 +1611,11 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     for feature, start, end in _accessibility_feature_mentions(current_message):
         from core.constraint_updates import clause_at
         clause = clause_at(current_message, start, end)
-        if _FEATURE_RETRACTION_RE.search(clause) or _feature_retracted_here(current_message, start, end):
+        if _asks_about_own_need(current_message, start, end):
+            continue
+        from core.constraint_updates import zh_withdrawn_at
+        if (_FEATURE_RETRACTION_RE.search(clause) or _feature_retracted_here(current_message, start, end)
+                or zh_withdrawn_at(current_message, start, end)):
             retracted.add(feature)
             for key in ('property_features', 'soft_preferences'):
                 previous = result.get(key) or []

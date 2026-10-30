@@ -271,3 +271,96 @@ def test_w_04_the_model_cannot_bring_a_disowned_destination_back():
 @pytest.mark.parametrize("message", ["My commute to Bank is 30 minutes", "commute to Bank needed"])
 def test_w_04_the_destination_ends_at_the_verb(message):
     assert _state_node(_CAMDEN, message)["commute_destination"] == "Bank"
+
+
+# W-05 ── a reference to an earlier budget resolves from this conversation, or says it cannot
+_HISTORY = {"max_budget": [2000, 2500]}
+_MOVED = dict(_CAMDEN, constraint_history=_HISTORY)
+
+
+@pytest.mark.parametrize("message", [
+    "Budget back to what it was when I started", "把预算恢复成最开始的数字", "Go back to my original budget",
+    "Back to the budget I started with", "Use the original budget", "Restore my initial budget please",
+    "预算改回最开始的", "预算回到一开始的", "用最初的预算", "Set the budget to what it was at the start",
+])
+def test_w_05_the_first_value_comes_back(message):
+    assert _state_node(_MOVED, message)["max_budget"] == 2000
+
+
+@pytest.mark.parametrize("message", [
+    "Go back to the previous budget", "back to my old budget", "Change the budget back to what it was before",
+    "预算恢复到之前的", "把预算改回原来的", "用之前的预算",
+])
+def test_w_05_the_previous_value_comes_back(message):
+    stored = dict(_CAMDEN, max_budget=2200, constraint_history={"max_budget": [2000, 2500, 2200]})
+    assert _state_node(stored, message)["max_budget"] == 2500
+
+
+@pytest.mark.parametrize("message", [
+    "What was my original budget?", "What did I say my budget was originally?", "My original budget was too low",
+    "最开始的预算是多少？", "Did I go back to the original budget?",
+])
+def test_w_05_a_question_changes_nothing(message):
+    assert _state_node(_MOVED, message)["max_budget"] == 2500
+
+
+def test_w_05_a_figure_in_the_same_message_wins():
+    assert _state_node(_MOVED, "Go back to my original budget, make it £2,300")["max_budget"] == 2300
+
+
+def test_w_05_later_relative_edits_build_on_the_restored_value():
+    out = _state_node(_state_node(_MOVED, "Budget back to what it was when I started"), "Raise the budget by £100")
+    assert out["max_budget"] == 2100
+
+
+def test_w_05_it_can_be_undone_and_is_recorded():
+    out = _state_node(_MOVED, "Budget back to what it was when I started")
+    assert out["constraint_history"]["max_budget"] == [2000, 2500, 2000]
+    assert _state_node(out, "Undo that last change")["max_budget"] == 2500
+
+
+def test_w_05_the_previous_budget_after_another_change_is_read_from_the_history():
+    stored = dict(_CAMDEN, constraint_history=_HISTORY, _last_change={"before": {"area": "Hackney", "max_budget": 2500}})
+    assert _state_node(stored, "Go back to the previous budget")["max_budget"] == 2000
+
+
+def test_w_05_the_last_change_still_answers_without_a_history():
+    stored = dict(_CAMDEN, _last_change={"before": {"max_budget": 1800}})
+    assert _state_node(stored, "Go back to the previous budget")["max_budget"] == 1800
+
+
+@pytest.mark.parametrize("message,language,expected", [
+    ("Budget back to what it was when I started", "en", "I don't have an earlier budget"),
+    ("把预算恢复成最开始的数字", "zh", "没有更早的预算记录"),
+])
+def test_w_05_an_unresolved_reference_says_so(message, language, expected):
+    from core.constraint_updates import budget_reference_note
+    out = _state_node(_CAMDEN, message)
+    assert out["max_budget"] == 2500
+    note = budget_reference_note(message, out, language)
+    assert expected in note and "2,500" in note
+
+
+def test_w_05_a_resolved_reference_needs_no_note():
+    from core.constraint_updates import budget_reference_note
+    message = "Budget back to what it was when I started"
+    assert budget_reference_note(message, _state_node(_MOVED, message)) == ""
+    assert budget_reference_note("Find a flat in Camden", _CAMDEN) == ""
+
+
+def test_w_05_the_reply_carries_the_note():
+    from core.agent_loop import build_fc_nodes
+    from tests.test_agent_contract_guards import _state
+    from tests.test_qa_null_injection import _ValidatingProvider
+    message = "Budget back to what it was when I started"
+    state = _state(message)
+    state["accumulated_search_criteria"] = _state_node(_CAMDEN, message)
+    state["final_response"] = "Your criteria are unchanged."
+    out = build_fc_nodes(_ValidatingProvider([]))["format_output_fc"](state)
+    assert out["final_response"].endswith("so it stays at £2,500.")
+
+
+def test_w_05_a_restored_budget_reaches_the_search_over_the_models_stale_value():
+    params = _search_params("Budget back to what it was when I started, find a flat in Camden",
+                            _MOVED, max_budget=2500)
+    assert params["max_budget"] == 2000

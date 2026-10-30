@@ -2203,9 +2203,6 @@ _UNDO_LAST_CHANGE = re.compile(
     r"(?:last|latest|previous|recent|most\s+recent)\s+(?:change|edit|update)s?\b|"
     r"\bundo\s+(?:that|it|this)\b|撤销(?:上一次|上次|刚才)?的?(?:修改|更改|改动)|"
     r"(?:取消|不要)(?:上一次|上次|刚才)的?(?:修改|更改|改动)", re.I)
-_PREVIOUS_BUDGET = re.compile(
-    r"\b(?:the|my)\s+(?:previous|earlier|old|prior|last)\s+budget\b|\bbudget\s+i\s+had\s+before\b|"
-    r"(?:之前|原来|上一次|上次)的预算", re.I)
 
 
 _HISTORY_FIELDS = ("max_budget", "area", "bedrooms", "room_type", "commute_destination")
@@ -2235,8 +2232,21 @@ def undo_last_change(before: dict, after: dict, message: str) -> dict:
     text = str(message or "")
     last = (before or {}).get("_last_change")
     undo = _UNDO_LAST_CHANGE.search(text)
-    previous_budget = _PREVIOUS_BUDGET.search(text)
-    if (undo or previous_budget) and isinstance(last, dict) and isinstance(last.get("before"), dict):
+    from core.constraint_updates import budget_reference, budget_reference_target
+    reference = budget_reference(text)
+    target = budget_reference_target(before, reference) if reference else None
+    if (target is not None and not undo and target != (before or {}).get("max_budget")
+            and (after or {}).get("max_budget") == (before or {}).get("max_budget")):
+        result = dict(after)
+        result["max_budget"] = target
+        sources = dict(result.get("constraint_sources") or {})
+        sources["max_budget"] = {"source": "user_undo", "value": target, "text": text[:800]}
+        result["constraint_sources"] = sources
+        result["_last_change"] = {"before": {f: (before or {}).get(f) for f in _LAST_CHANGE_FIELDS}}
+        logger.info("criteria.budget_reference_restored which=%s", reference)
+        from core.criteria_contract import synchronize_monthly_budget_alias
+        return _with_constraint_history(synchronize_monthly_budget_alias(result), before, ["max_budget"])
+    if (undo or (reference == "previous" and target is None)) and isinstance(last, dict) and isinstance(last.get("before"), dict):
         saved = last["before"]
         fields = [f for f in _LAST_CHANGE_FIELDS if f in saved] if undo else ["max_budget"]
         result = dict(after)

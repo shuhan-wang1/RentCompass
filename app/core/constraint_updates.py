@@ -468,6 +468,76 @@ def restore_saved_criteria(accumulated: dict, memories: list, message: str) -> d
     return accumulated
 
 
+# "Budget back to what it was when I started" and 把预算恢复成最开始的数字 kept the current ceiling
+# while the reply listed results as if it had moved (W-05). A reference to an earlier value resolves
+# from this conversation's own constraint_history.
+_BUDGET_FIRST = re.compile(
+    r"\b(?:original|initial|first|starting|opening)\s+(?:budget|ceiling|figure|amount|limit)\b"
+    r"|\bbudget\s+(?:i|we)\s+(?:started|began)\s+with\b"
+    r"|\bbudget\b[^.!?\n]{0,40}\b(?:what\s+it\s+was\s+)?(?:when\s+(?:i|we)\s+(?:started|began)|"
+    r"at\s+the\s+(?:start|beginning)|originally|to\s+begin\s+with|at\s+first)\b"
+    r"|\bbudget\b[^.!?\n]{0,40}\bwhat\s+(?:i|we)\s+(?:started|began)\s+with\b"
+    r"|(?:最开始|一开始|刚开始|最初|起初|当初|最早)的?(?:预算|数字|金额|价格|上限|那个)"
+    r"|预算[^，。！？,.!?]{0,12}(?:恢复|改回|回到|换回|调回|还原|退回)[成到为]?(?:最开始|一开始|刚开始|最初|起初|当初|最早)", re.I)
+_BUDGET_PREVIOUS = re.compile(
+    r"\b(?:the|my)\s+(?:previous|earlier|old|prior|last)\s+(?:budget|ceiling|figure|amount)\b"
+    r"|\bbudget\s+i\s+had\s+before\b"
+    r"|\bbudget\b[^.!?\n]{0,40}\bwhat\s+it\s+was\s+(?:before|earlier|previously)\b"
+    r"|(?:之前|原来|上一次|上次|先前|以前)的预算"
+    r"|预算[^，。！？,.!?]{0,12}(?:恢复|改回|回到|换回|调回|还原|退回)[成到为]?(?:之前|原来|上一次|上次|先前|以前)", re.I)
+_BUDGET_RESTORE_CUE = re.compile(
+    r"\b(?:back|revert\w*|restor\w*|return\w*|reset|go|use|using|put|set|change|switch\w*|apply|please|instead|again)\b"
+    r"|恢复|改回|回到|换回|调回|还原|退回|用|按", re.I)
+_ASKS_ABOUT_IT = re.compile(r"^\W*(?:what|which|when|why|how|did|do|does|is|are|was|were|has|have)\b", re.I)
+_ZH_ASKS_ABOUT_IT = re.compile(r"多少|什么|几|吗|么[？?]")
+
+
+def budget_reference(text: str) -> str | None:
+    """'first' or 'previous' when the message asks for an earlier budget, else None."""
+    value = str(text or '')[:2000]
+    for sentence in re.split(r'(?<=[!?？。！])\s*|(?<=\.)\s+(?=\D)', value):
+        which = 'first' if _BUDGET_FIRST.search(sentence) else 'previous' if _BUDGET_PREVIOUS.search(sentence) else None
+        if not which or is_hypothetical(sentence) or not _BUDGET_RESTORE_CUE.search(sentence):
+            continue
+        if (sentence.rstrip().endswith(('?', '？')) and _ASKS_ABOUT_IT.search(sentence)) or _ZH_ASKS_ABOUT_IT.search(sentence):
+            continue
+        return which
+    return None
+
+
+def budget_reference_target(criteria: dict, which: str):
+    """The earlier budget ``which`` refers to in ``criteria``'s own history, else None."""
+    values = list(((criteria or {}).get('constraint_history') or {}).get('max_budget') or [])
+    if not values:
+        return None
+    if which == 'first':
+        return values[0]
+    current = (criteria or {}).get('max_budget')
+    at = max((i for i, value in enumerate(values) if value == current), default=None)
+    if at is None:
+        return values[-1]
+    return values[at - 1] if at > 0 else None
+
+
+def budget_reference_note(message: str, criteria: dict, language: str = 'en') -> str:
+    """The sentence that goes with an earlier budget this conversation does not hold: the reply
+    must not carry on as if it had been applied."""
+    which = budget_reference(message)
+    if not which:
+        return ''
+    source = ((criteria or {}).get('constraint_sources') or {}).get('max_budget') or {}
+    if source.get('source') == 'user_undo' and source.get('text') == str(message)[:800]:
+        return ''
+    if budget_reference_target(criteria, which) is not None:
+        return ''
+    current = (criteria or {}).get('max_budget')
+    if language == 'zh':
+        return (f'这次对话里没有更早的预算记录，所以预算仍是£{current:,.0f}。' if current
+                else '这次对话里没有更早的预算记录，请告诉我要用的预算。')
+    return (f"I don't have an earlier budget in this conversation, so it stays at £{current:,.0f}." if current
+            else "I don't have an earlier budget in this conversation. What ceiling should I use?")
+
+
 def resolve_clarification_reply(message: str, messages: list) -> str:
     """Interpret only a value from this conversation's latest pending question.
 

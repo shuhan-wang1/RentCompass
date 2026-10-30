@@ -6255,6 +6255,18 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         return {"final_response": _apply_memory_contract(response),
                 "response_type": response_type, "tool_data": tool_data}
 
+    def format_output_with_notes(state: AgentState) -> dict:
+        """The formatter's answer, with the sentence an unresolved budget reference needs."""
+        out = format_output_fc_node(state)
+        ec = state.get("extracted_context") or {}
+        message = ec.get("current_message") or _current_message(state.get("user_query") or "")
+        from core.constraint_updates import budget_reference_note
+        note = budget_reference_note(message, state.get("accumulated_search_criteria") or {},
+                                     _reply_language_from_ctx(ec, message))
+        if note and isinstance(out, dict) and out.get("final_response") and out.get("response_type") != "error":
+            out = {**out, "final_response": f"{out['final_response']}\n\n{note}"}
+        return out
+
     # ── answer contract (manager_v1 only) ──────────────────────────
     def _answer_contract_payload(state: AgentState, result: dict) -> dict:
         """Deliverable 2: the manager's answer boundary, recorded as plain JSON.
@@ -6305,7 +6317,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
 
     def format_output_fc_with_contract(state: AgentState) -> dict:
         """manager_v1 wrapper: the fc formatter, plus the validated answer contract."""
-        payload = dict(format_output_fc_node(state) or {})
+        payload = dict(format_output_with_notes(state) or {})
         payload["answer_contract"] = _answer_contract_payload(state, payload)
         return payload
 
@@ -6314,7 +6326,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         "agent": agent_node,
         "execute_tools": _with_reply_language(execute_tools_node),
         "format_output_fc": (format_output_fc_with_contract if specialist_dispatch
-                             else format_output_fc_node),
+                             else format_output_with_notes),
     }
 
 

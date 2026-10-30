@@ -346,3 +346,56 @@ def test_v_08_a_question_or_a_refusal_adds_nothing(message):
 def test_v_08_a_withdrawal_removes_it(message):
     state = {"area": "Bow", "property_features": ["pets allowed"]}
     assert not _state_node(state, message).get("property_features")
+
+
+# V-09 ── 附近 is a preposition: amenities are looked up when the user asks about them
+@pytest.mark.parametrize("message", [
+    "我想在国王十字附近找一个一居室，预算每月2200镑以内", "伦敦玛丽女王大学附近有没有合租单间，预算800以内？",
+    "请记住我在国王十字附近上班", "Angel周边的studio", "牛津大学附近有房吗",
+    "找一个Angel附近的一居室预算2300以内，同时告诉我Angel的天气和治安",
+])
+def test_v_09_near_is_no_amenity_question(message):
+    from core.dimensions import cued_dimensions
+    from core.tool_policy import unasked_nearby_lookup
+    assert "nearby" not in cued_dimensions(message)
+    assert unasked_nearby_lookup({"address": "Angel"}, message)
+
+
+@pytest.mark.parametrize("message", [
+    "Angel附近有什么超市？", "这里附近有什么？", "周边环境怎么样", "附近配套如何", "附近要有超市", "what's nearby?",
+    "Any supermarkets near the first flat?", "What's near the flat?", "How close is the nearest gym?",
+    "Is there anything good around there?", "Are there shops close by?", "Find a flat near a Tesco",
+])
+def test_v_09_a_real_question_still_runs(message):
+    from core.tool_policy import unasked_nearby_lookup
+    assert not unasked_nearby_lookup({"address": "Angel"}, message)
+
+
+@pytest.mark.parametrize("message", ["Find a flat near Angel", "Any flats near Finsbury Park?",
+                                     "2-bed in Bethnal Green under £2,000"])
+def test_v_09_an_english_home_search_needs_no_lookup_either(message):
+    from core.tool_policy import unasked_nearby_lookup
+    assert unasked_nearby_lookup({"address": "Angel", "poi_type": "all"}, message)
+
+
+def test_v_09_a_type_the_model_named_runs():
+    from core.tool_policy import unasked_nearby_lookup
+    assert not unasked_nearby_lookup({"address": "Angel", "poi_type": "park"}, "Find a flat near Angel")
+
+
+def test_v_09_a_dropped_call_still_answers_the_provider():
+    from langchain_core.messages import AIMessage, ToolMessage
+
+    from core.agent_loop import build_fc_nodes
+    from tests.test_agent_contract_guards import _state, _tc
+    from tests.test_qa_null_injection import _ValidatingProvider, _strict_null_args
+    message = "我想在国王十字附近找一个一居室"
+    state = _state(message)
+    args = _strict_null_args("search_nearby_pois", {"address": "King's Cross"})
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("search_nearby_pois", args, "c0")])]
+    provider = _ValidatingProvider(["search_nearby_pois"])
+    command = asyncio.run(build_fc_nodes(provider)["execute_tools"](state))
+    assert provider.calls == []
+    replies = [m for m in command.update["messages"] if isinstance(m, ToolMessage)]
+    assert [m.tool_call_id for m in replies] == ["c0"] and command.goto == "agent"
+    assert all(a.get("denied") for a in command.update["tool_artifacts"])

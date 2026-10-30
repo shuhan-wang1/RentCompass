@@ -88,6 +88,7 @@ No imports from either arch: this module must stay importable by both without a 
 """
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 # dimension -> (cue words, tools that SATISFY the dimension).
@@ -117,6 +118,14 @@ DIMENSION_CUES = (
 
 DIMENSIONS = tuple(d for d, _c, _t in DIMENSION_CUES)
 
+# 附近 and 周边 are prepositions before they are a question: 「Angel附近的一居室」, 「请记住我在国王十字
+# 附近上班」 and 「我想在国王十字附近找房」 each dispatched an unasked amenity lookup, and its failure
+# notice landed in the rental answer (V-09). They cue the row only when the message asks what is
+# there; a named kind of place keeps its own cue.
+_ZH_NEAR_WORDS = frozenset({"附近", "周边"})
+_ZH_ASKS_WHAT_IS_NEAR = re.compile(
+    r"(?:附近|周边)[^，。！？,.!?；;]{0,8}?(?:有什么|有啥|有哪些|怎么样|如何|环境|配套|设施|方便|好吃|好玩|吃的|玩的|生活)")
+
 
 def cues_hit(cues, message: str) -> bool:
     """THE cue matcher. Deterministic and bilingual: CJK cues match the raw text, ascii cues
@@ -134,7 +143,13 @@ def cues_hit(cues, message: str) -> bool:
 
 def cued_dimensions(message: str) -> list:
     """The dimensions THIS message explicitly asks about, in DIMENSION_CUES order."""
-    return [dim for dim, cues, _tools in DIMENSION_CUES if cues_hit(cues, message)]
+    found = []
+    for dim, cues, _tools in DIMENSION_CUES:
+        words = tuple(cue for cue in cues if cue not in _ZH_NEAR_WORDS)
+        if cues_hit(words, message) or (
+                len(words) != len(cues) and _ZH_ASKS_WHAT_IS_NEAR.search(message or "")):
+            found.append(dim)
+    return found
 
 
 def cues_for(dim: str) -> tuple:

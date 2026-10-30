@@ -699,15 +699,23 @@ _FIELD_TERMS = {
 
 # Delete IMPERATIVES. Each requires a field term within a short, punctuation-free window
 # so a delete verb in one clause cannot reach a field in the next.
+# The window stops at a comma and at a word that opens the next instruction ("delete the cat
+# and update my budget"), and the field boundary is ASCII because CJK counts as \w ("delete
+# my预算" has no \b). "Don't forget my budget is £2,000" is a save request, not a delete.
+_ERASE_WINDOW = r"(?:(?!\b(?:and|but|then|update|change|set|keep|save|remember)\b)[^.!?;,\n]){{0,24}}?"
+_ERASE_FIELD = r"(?:(?<![A-Za-z])(?:{f})(?![A-Za-z])|(?:{z}))"
 _ERASE_EN_TEMPLATES = (
-    r"\b(?:forget|delete|remove|erase|discard|clear|wipe|scrub|drop)\b"
-    r"[^.!?;\n]{{0,24}}?\b(?:{f})\b",
+    r"(?<!n't\s)(?<!n’t\s)(?<!not\s)(?<!never\s)"
+    r"\b(?:forget|delete|remove|erase|discard|clear|wipe|scrub|drop)\b" + _ERASE_WINDOW + _ERASE_FIELD,
     r"\b(?:don'?t|do\s+not|stop|no\s+longer)\s+"
     r"(?:keep|keeping|save|saving|store|storing|remember|remembering|hold|holding)\b"
-    r"[^.!?;\n]{{0,24}}?\b(?:{f})\b",
+    + _ERASE_WINDOW + _ERASE_FIELD,
 )
-_ERASE_ZH = ("忘掉", "忘记", "删除", "删掉", "清除", "清掉", "不要记", "别记", "不用记",
-             "不要保存", "别保存", "取消记录")
+_ERASE_ZH = ("忘掉", "忘记", "删除", "删掉", "删了", "删去", "移除", "清除", "清掉", "不要记", "别记",
+             "不用记", "不要保存", "别保存", "取消记录")
+# Cues that already say "do not keep it": a negation in front of the others cancels them
+# (别忘记我的预算 asks the opposite of a delete).
+_ERASE_ZH_NEGATIVE = ("不要记", "别记", "不用记", "不要保存", "别保存")
 
 # The erasure must be about THIS user's own stored value. Without a first-person
 # reference ("forget my budget", "don't keep any budget for me") a delete verb next to a
@@ -720,17 +728,31 @@ _ERASE_ZH = ("忘掉", "忘记", "删除", "删掉", "清除", "清掉", "不要
 # do Camden rents average? £1800") be scrubbed as if it were their own budget. The
 # distilled layers do not need it — _states_field_value exempts semantic/reflection by
 # mtype, which is what covers a pronoun-free "budget £1400/month".
-_FIRST_PERSON = re.compile(r"\b(?:my|mine|me|i|i'?m|we|our|us)\b", re.IGNORECASE)
+_FIRST_PERSON = re.compile(r"(?<![A-Za-z0-9_])(?:my|mine|me|i|i'?m|we|our|us)(?![A-Za-z0-9_])", re.IGNORECASE)
 _FIRST_PERSON_ZH = ("我", "咱")
 
 # A record "states a value" for a field when it names the field AND carries a money-sized
 # number. Three+ digits (or a £ prefix) keeps "2 bedrooms" out of a budget scrub.
-_MONEY_RE = re.compile(r"£\s*\d[\d,]*(?:\.\d+)?|\b\d[\d,]{2,}(?:\.\d+)?\b")
+#
+# The boundaries are ASCII: Python counts CJK as \w, so \b found no figure in "1800英镑", the
+# row was "value-free" and "forget my budget" left it stored while the reply said it was gone
+# (U-10b). A figure with a unit attached ("1800pcm", "2k", "2千", 两千块, "two thousand pounds")
+# is a value too. A year, a distance or a count ("2025年", "300米") is not.
+_MONEY_RE = re.compile(
+    r"[£￡]\s*\d[\d,]*(?:\.\d+)?"
+    r"|(?<![0-9A-Za-z_])\d[\d,]{2,}(?:\.\d+)?"
+    r"(?:(?![0-9A-Za-z_])(?!\s*[年月日号米里分平路人个条间层楼天周岁])|(?=(?:pcm|pm|pw|gbp|k)\b))"
+    r"|(?<![0-9A-Za-z_.])\d{1,3}(?:\.\d+)?\s?(?:[kK](?![0-9A-Za-z_])|千)"
+    r"|[一二两三四五六七八九十][百千万][零一二两三四五六七八九十百千]*(?![米里年天分人个条间层楼])"
+    r"|\b(?:a|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|"
+    r"fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+(?:hundred|thousand|grand)\b", re.I)
 
 # field -> compiled EN delete-imperative patterns (field alternation substituted in).
 _ERASE_PATTERNS = {
     field: tuple(
-        re.compile(tpl.format(f="|".join(re.escape(t) for t in terms)), re.IGNORECASE)
+        re.compile(tpl.format(f="|".join(re.escape(t) for t in terms if t.isascii()),
+                              z="|".join(re.escape(t) for t in terms if not t.isascii())),
+                   re.IGNORECASE)
         for tpl in _ERASE_EN_TEMPLATES
     )
     for field, terms in _FIELD_TERMS.items()
@@ -771,7 +793,7 @@ _USER_POSSESSIVE = re.compile(r"\b(?:the\s+)?user['’]s\b|用户的", re.I)
 # the rest of the note is kept. A comma between digits ("£1,800") is not a clause break.
 _SENTENCE_SPLIT = re.compile(r"(?<=[!?;。！？；])\s*|(?<=\.)(?!\d)\s*")
 _CLAUSE_SPLIT = re.compile(
-    r"\s*(?:(?<!\d)[,，](?!\d)|、)\s*(?:(?:and|but|also|plus)\s+)?"
+    r"\s*(?:(?<!\d)[,，]|[,，](?!\d)|、)\s*(?:(?:and|but|also|plus)\s+)?"
     r"|\s+(?:and|but|plus|while|whereas)\s+|以及|并且|而且|另外")
 # What is left of a note once a clause is removed must still say something: a lead-in
 # ("User asked: Please remember:") or a conjunction alone is no fact.
@@ -808,6 +830,55 @@ def _without_field_clauses(text: str, field: str) -> str:
     return rest
 
 
+# zh has no word boundaries, so the cue has to govern the field inside one clause: "请把已保存
+# 的预算更新为2000英镑，并删掉我对猫过敏这条信息" asked to UPDATE the budget and it was scrubbed
+# because a cue and a term sat anywhere in the message (U-10a). Between them only the words of a
+# plain "delete my saved X" may stand, so 帮我删掉租金太高的房源 is about a listing.
+_ZH_CLAUSE_BREAK = re.compile(r"[，,。；;！？!?\n]|并且|而且|并|然后|接着|同时|另外|以及|但是|但|不过")
+_ZH_OTHER_VERB = re.compile(
+    r"更新|改成|改为|改到|换成|换为|调整|调到|调成|设为|设成|设置为|提高|降低|加到|增加到?|减到|减少|保留|留着")
+_ZH_ERASE_CANCELLED = re.compile(r"(?:不要|不用|不必|不需要|无需|别|勿|没有|没)(?:再|去|帮我|给我)?$")
+_ZH_OWN_WORDS = (r"(?:我们?|咱们?|你|已经?|之前|刚才|以前|原来|现在|当前|保存|记住|记录|存|说|设置|写|"
+                 r"的|所有|全部|那个|这个|这条|那条|关于|有关|旧|个人|每月|月度|最高|最大)*")
+_ZH_RECORD_WORDS = (r"(?:的|信息|记录|记忆|数字|金额|数据|内容|上限|限制|设置|条目|这条|这一条|这项|这一项|"
+                    r"这个|那条|那个)*")
+_ZH_FIELD_THEN_CUE = re.compile(
+    _ZH_RECORD_WORDS + r"(?:也|都|就|请|麻烦|帮我|给我|替我|你|一起|全部|可以|能)*")
+_ZH_CUE_THEN_FIELD = re.compile(_ZH_OWN_WORDS)
+_ZH_AFTER_FIELD = re.compile(
+    r"(?:[是为:：]?\s*[£￡]?\s*\d[\d,.]*\s*(?:英镑|英磅|镑|磅|元|块|[kK])?)?" + _ZH_RECORD_WORDS
+    + r"(?:(?:和|及|还有)[^，。]*)?(?:吧|了|呢|啊|呀|哦|一下|好吗|可以吗|行吗|吗|谢谢)*")
+# A budget is always the user's own; 价格 and 租金 also describe a listing.
+_ZH_OWN_FIELD_TERMS = ("预算",)
+# "delete the budget from your memory" is about this user's record too.
+_YOUR_MEMORY = re.compile(r"\byour\s+(?:long[- ]term\s+)?(?:memory|memories|notes|records)\b", re.I)
+
+
+def _zh_erase_cues(clause: str):
+    """(text before, text after) each delete cue that is not negated in this clause."""
+    for cue in _ERASE_ZH:
+        for match in re.finditer(re.escape(cue), clause):
+            before = clause[:match.start()]
+            if cue not in _ERASE_ZH_NEGATIVE and _ZH_ERASE_CANCELLED.search(before):
+                continue
+            yield before, clause[match.end():]
+
+
+def _zh_clause_erases(clause: str, terms) -> bool:
+    if _ZH_OTHER_VERB.search(clause):
+        return False
+    for before, after in _zh_erase_cues(clause):
+        for term in terms:
+            at = after.find(term)
+            if (at >= 0 and _ZH_CUE_THEN_FIELD.fullmatch(after[:at])
+                    and _ZH_AFTER_FIELD.fullmatch(after[at + len(term):])):
+                return True
+            at = before.rfind(term)
+            if at >= 0 and _ZH_FIELD_THEN_CUE.fullmatch(before[at + len(term):]):
+                return True
+    return False
+
+
 def erasure_request_fields(text: str) -> tuple:
     """Fields the user is explicitly asking us to DELETE, from their own message.
 
@@ -818,19 +889,68 @@ def erasure_request_fields(text: str) -> tuple:
     raw = (text or "").strip()
     if not raw:
         return ()
-    if not (_FIRST_PERSON.search(raw) or any(ch in raw for ch in _FIRST_PERSON_ZH)):
-        return ()
+    own = bool(_FIRST_PERSON.search(raw) or _YOUR_MEMORY.search(raw)
+               or any(ch in raw for ch in _FIRST_PERSON_ZH))
+    clauses = [c for c in _ZH_CLAUSE_BREAK.split(raw) if c]
     hits = []
     for field, terms in _FIELD_TERMS.items():
-        matched = any(pat.search(raw) for pat in _ERASE_PATTERNS[field])
+        matched = own and any(pat.search(raw) for pat in _ERASE_PATTERNS[field])
         if not matched:
-            # zh has no word boundaries: a delete cue plus a field term anywhere in the
-            # (short) message is the signal.
-            matched = (any(cue in raw for cue in _ERASE_ZH)
-                       and any(t in raw for t in terms))
+            zh_terms = terms if own else tuple(t for t in terms if t in _ZH_OWN_FIELD_TERMS)
+            matched = any(_zh_clause_erases(clause, zh_terms) for clause in clauses)
         if matched:
             hits.append(field)
     return tuple(hits)
+
+
+# Deleting one saved fact is not built (only a budget figure and the whole of a user's data can
+# be erased). "Delete the cat allergy from your memory" got "I've saved that to memory" and no
+# word about the delete (U-10a). This recognises such a request so the reply can say so. It must
+# not fire on a search retraction ("forget the garden", "remove my area filter").
+_OTHER_MEMORY_NOUNS = (
+    r"allerg\w*|workplace|employer|office|job|address|name|phone(?:\s+number)?|email|birthday|age|"
+    r"pets?|dog|cat|nationality|notes?|memory|memories|facts?|info|information|details?|records?|data")
+_ERASE_NOT_NEGATED = r"(?<!n't\s)(?<!n’t\s)(?<!not\s)(?<!never\s)"
+_OTHER_MEMORY_ERASE_EN = (
+    re.compile(_ERASE_NOT_NEGATED + r"\b(?:forget|delete|remove|erase|wipe|scrub|drop)\b[^.!?;\n]{0,60}?"
+               r"\b(?:from|in|out\s+of|off)\s+(?:your|the|my)?\s*(?:long[- ]term\s+)?"
+               r"(?:memory|memories|notes|records)\b", re.I),
+    re.compile(_ERASE_NOT_NEGATED + r"\b(?:forget|delete|erase|wipe|scrub|remove)\s+"
+               r"(?:that\s+|the\s+fact\s+that\s+|about\s+)?(?:i'm|i’m|i\s+am|i've|i’ve|i\s+have|"
+               r"i\s+own|i\s+work|i\s+study|we\s+have|we're|we’re)\b"
+               r"(?![^.!?;\n]*\b(?:need|want|looking|searching|prefer|said|asked|mentioned|told)\b)",
+               re.I),
+    re.compile(_ERASE_NOT_NEGATED + r"\b(?:forget|delete|erase|wipe|scrub|remove)\s+"
+               r"(?:my|the|that|this)\s+(?:saved\s+|stored\s+|remembered\s+)?(?:[\w'’-]+\s+){0,3}?"
+               r"(?:" + _OTHER_MEMORY_NOUNS + r")(?=\s*(?:$|[.,!?;]|and\b|from\b|please\b|too\b|as\s+well\b))",
+               re.I),
+)
+_OTHER_MEMORY_ZH_OBJECT = re.compile(
+    r"这条|这一条|那条|记忆|记录|信息|资料|过敏|我的(?:工作|公司|单位|地址|名字|姓名|电话|手机|邮箱|宠物|狗|猫)|"
+    r"我(?:有|养了?)(?:一[只条])?(?:狗|猫)")
+_OTHER_MEMORY_ZH_NOT = re.compile(r"聊天|搜索|对话|会话|历史")
+
+
+def erasure_request_names_other_memory(text: str) -> bool:
+    """True when the user asks to delete a saved memory that is not an erasable field."""
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    all_terms = tuple(t for terms in _FIELD_TERMS.values() for t in terms)
+    for sentence in re.split(r"(?<=[.!?。！？；;])\s*|\n", raw):
+        for clause in re.split(r"\s+(?:and|but|then)\s+|[,，、]", sentence, flags=re.I):
+            for pattern in _OTHER_MEMORY_ERASE_EN:
+                match = pattern.search(clause)
+                if match and not any(_mentions_field(match.group(), field) for field in _FIELD_TERMS):
+                    return True
+    for clause in _ZH_CLAUSE_BREAK.split(raw):
+        if not clause or _ZH_OTHER_VERB.search(clause) or _OTHER_MEMORY_ZH_NOT.search(clause):
+            continue
+        if any(term in clause for term in all_terms):
+            continue
+        if _OTHER_MEMORY_ZH_OBJECT.search(clause) and any(True for _pair in _zh_erase_cues(clause)):
+            return True
+    return False
 
 
 # ── Sensitive personal data in AUTO-memory (2026-10-19 A-09) ─────────────────

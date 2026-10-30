@@ -310,10 +310,14 @@ register_protected_system_text(AUTOMATIC_MEMORY_DISCLOSURE_EN, AUTOMATIC_MEMORY_
 from core.memory_gate import (MEMORY_PAUSE_FIXED_TEXTS, MEMORY_PAUSED_DISCLOSURE_EN,  # noqa: E402
                               MEMORY_PAUSED_DISCLOSURE_ZH)
 register_protected_system_text(*MEMORY_PAUSE_FIXED_TEXTS)
-from core.memory_gate import memory_erasure_texts  # noqa: E402
+from core.memory_gate import (MEMORY_SINGLE_ERASE_EN, MEMORY_SINGLE_ERASE_ZH,  # noqa: E402
+                              memory_erasure_texts)
 # The erasure acknowledgements are fixed text too (R2-03).
 register_protected_system_text(*(memory_erasure_texts({"fields": ("budget",), "complete": done}, lang)[1]
                                  for done in (True, False) for lang in ("en", "zh")))
+register_protected_system_text(*(memory_erasure_texts(
+    {"fields": ("budget",), "complete": True, "deleted": 0, "rewritten": 0}, lang)[1]
+    for lang in ("en", "zh")), MEMORY_SINGLE_ERASE_EN, MEMORY_SINGLE_ERASE_ZH)
 
 
 def disclose_automatic_memory(text: str, message: str, reply_language: str = "en",

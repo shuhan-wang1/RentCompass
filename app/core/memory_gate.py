@@ -1079,12 +1079,35 @@ MEMORY_ERASURE_KEPT_NOTE = (
     "those other facts are still stored.")
 MEMORY_ERASURE_KEPT_EN = " The other details you saved with it are still stored."
 MEMORY_ERASURE_KEPT_ZH = "和它一起保存的其他信息仍然保留。"
+# The scrub found no row with a value: "Done, I've deleted it" would be false (U-10b).
+MEMORY_ERASURE_NOTHING_NOTE = (
+    "MEMORY ERASURE THIS TURN: the user asked to delete their saved {fields}. The server found no "
+    "saved {fields} figure, so nothing was deleted. Do not say anything was deleted.")
+MEMORY_ERASURE_NOTHING_EN = "I couldn't find a saved {fields} figure to delete, so nothing was removed."
+MEMORY_ERASURE_NOTHING_ZH = "我没有找到已保存的{fields}数字，所以没有删除任何内容。"
+# One saved memory cannot be removed on its own (U-10a). The menu entry is the only route that
+# removes everything: "delete all my data" typed in chat does not run it.
+MEMORY_SINGLE_ERASE_NOTE = (
+    "MEMORY DELETION THIS TURN: a single saved memory cannot be deleted in chat, so nothing was "
+    "deleted. Do not say it was deleted, removed or forgotten.")
+MEMORY_SINGLE_ERASE_EN = (
+    "I haven't deleted that: I can't remove individual saved memories yet, so it is still stored. "
+    "To remove everything, use \"Delete my data\" in your profile menu.")
+MEMORY_SINGLE_ERASE_ZH = "这条内容没有删除：我目前还不能单独删除某一条记忆，它仍然保存着。如需全部删除，请使用个人菜单中的“删除我的数据”。"
 _ERASURE_FIELD_NAMES = {"budget": ("budget", "预算")}
 _ERASURE_DENIAL = re.compile(
     r"\b(?:can.?t|cannot|can\s+not|unable\s+to|no\s+way\s+to|not\s+able\s+to|don.?t\s+have\s+(?:a\s+)?way\s+to)"
     r"\s+(?:\w+\s+){0,3}?(?:delete|remove|erase|forget|wipe)|"
     r"\bstill\s+(?:be\s+)?(?:stored|saved|kept|on\s+file|in\s+(?:my\s+)?memory)|"
     r"无法删除|不能删除|没(?:有)?办法删除|仍(?:然)?(?:保存|存储)|还(?:保存|存储)着", re.I)
+
+
+def memory_erasure_removed_nothing(report) -> bool:
+    """True for a verified erasure that deleted and rewrote no row. A report without the row
+    counts states no such thing."""
+    report = report or {}
+    return bool(report.get("complete") and "deleted" in report
+                and not (report.get("deleted") or report.get("rewritten")))
 
 
 def memory_erasure_texts(report, reply_language: str = "en") -> tuple[str, str]:
@@ -1095,7 +1118,11 @@ def memory_erasure_texts(report, reply_language: str = "en") -> tuple[str, str]:
     zh = str(reply_language or "").lower().startswith("zh")
     label = ("和" if zh else " and ").join(_ERASURE_FIELD_NAMES[f][1 if zh else 0] for f in fields)
     note = MEMORY_ERASURE_NOTE.format(fields=" and ".join(_ERASURE_FIELD_NAMES[f][0] for f in fields))
-    if not report.get("complete"):
+    if memory_erasure_removed_nothing(report):
+        note = MEMORY_ERASURE_NOTHING_NOTE.format(
+            fields=" and ".join(_ERASURE_FIELD_NAMES[f][0] for f in fields))
+        ack = (MEMORY_ERASURE_NOTHING_ZH if zh else MEMORY_ERASURE_NOTHING_EN).format(fields=label)
+    elif not report.get("complete"):
         ack = (MEMORY_ERASURE_INCOMPLETE_ZH if zh else MEMORY_ERASURE_INCOMPLETE_EN).format(fields=label)
         note = note.replace("has ALREADY deleted", "tried to delete").replace(
             "It is no longer stored and will not be recalled in any conversation. ",
@@ -1118,15 +1145,75 @@ def acknowledge_memory_erasure(text: str, report, reply_language: str = "en") ->
     _note, ack = memory_erasure_texts(report, reply_language)
     if not ack or ack in body:
         return body
-    if report.get("complete"):
-        kept = []
-        for line in body.split("\n"):
-            pieces = re.split(r"(?<=[.!?。！？])\s+", line)
-            survivors = [piece for piece in pieces if not _ERASURE_DENIAL.search(piece)]
-            if survivors or not line.strip():
-                kept.append(" ".join(survivors))
-        body = re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
+    if report.get("complete") and not memory_erasure_removed_nothing(report):
+        body = _without_sentences(body, _ERASURE_DENIAL.search)
     return f"{ack}\n\n{body}" if body.strip() else ack
+
+
+def _sentences(line: str) -> list:
+    return re.findall(r".+?(?:[.!?]\s+|[。！？]\s*|$)", line)
+
+
+def _without_sentences(body: str, drop) -> str:
+    kept = []
+    for line in str(body or "").split("\n"):
+        survivors = [piece for piece in _sentences(line) if not drop(piece)]
+        if survivors or not line.strip():
+            kept.append("".join(survivors).rstrip())
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
+
+
+# A deletion is only ever stated by the server. "I've removed the cat allergy from memory" with
+# no erasure this turn was model prose standing as fact (U-10a). A change to the SEARCH ("I've
+# removed the garden requirement", "I've cleared your criteria") is true and stays.
+_MEMORY_DELETION_CLAIM = re.compile(
+    r"\b(?:i(?:['’]ve|\s+have)?|we(?:['’]ve|\s+have)?)\s+(?:\w+\s+){0,2}?"
+    r"(?:deleted|removed|erased|wiped|scrubbed|cleared)\b[^.!?\n]*"
+    r"\b(?:memor(?:y|ies)|notes?|records?|saved|stored|on\s+file)\b|"
+    r"\b(?:deleted|removed|erased|wiped)\s+(?:\w+\s+){0,2}?from\s+(?:my|the|your)?\s*"
+    r"(?:long[- ]term\s+)?(?:memor(?:y|ies)|notes|records)\b|"
+    r"\b(?:i['’]ve|i\s+have|it['’]s|that['’]s|(?:it|that|this)\s+has|has|have)\s+(?:now\s+)?"
+    r"(?:been\s+)?forgotten\b|"
+    r"\bno\s+longer\s+(?:stored|saved|remembered|in\s+(?:my\s+)?memory|on\s+file)\b|"
+    r"已(?:经)?(?:从[^，。！？\n]{0,12})?(?:删除|删掉|清除|移除|忘记|忘掉)|"
+    r"(?:删除|删掉|清除|忘记|忘掉)(?:了|完毕|成功)|不再(?:保存|记得|保留)", re.I)
+_SEARCH_CHANGE_WORDS = re.compile(
+    r"\b(?:criteria|criterion|filters?|requirements?|search|preferences?|constraints?)\b|"
+    r"条件|要求|筛选|搜索|偏好", re.I)
+_DELETION_STATUS_QUESTION = re.compile(
+    r"^\s*(?:did|have|has|was|were|is|are)\b[^\n]*\?\s*$|"
+    r"(?:删除|删掉|忘记|忘掉|清除)了?(?:吗|没有|没)[?？]?\s*$", re.I)
+
+
+def _is_deletion_claim(sentence: str) -> bool:
+    return bool(_MEMORY_DELETION_CLAIM.search(sentence) and not _SEARCH_CHANGE_WORDS.search(sentence))
+
+
+def settle_memory_deletion_claims(text: str, user_message: str, report,
+                                  reply_language: str = "en") -> str:
+    """``text`` with no deletion claim the turn does not back, and the fixed line for a delete
+    request it could not perform (U-10a). A sentence naming the field an erasure did remove
+    stands; asking whether an earlier deletion happened ("did you delete it?") is left alone."""
+    body = str(text or "")
+    message = str(user_message or "")
+    from rag.agent_memory import _mentions_field, erasure_request_names_other_memory
+    requested = erasure_request_names_other_memory(message)
+    if not requested and _DELETION_STATUS_QUESTION.search(message):
+        return body
+    removed = () if memory_erasure_removed_nothing(report) else tuple((report or {}).get("fields") or ())
+
+    def unlicensed(sentence):
+        return _is_deletion_claim(sentence) and not any(_mentions_field(sentence, f) for f in removed)
+    claimed = any(unlicensed(piece) for line in body.split("\n") for piece in _sentences(line))
+    if claimed:
+        body = _without_sentences(body, unlicensed)
+    if not (claimed or requested):
+        return body
+    zh = str(reply_language or "").lower().startswith("zh")
+    line = MEMORY_SINGLE_ERASE_ZH if zh else MEMORY_SINGLE_ERASE_EN
+    if line in body:
+        return body
+    return f"{body.rstrip()}\n\n{line}" if body.strip() else line
 
 
 def conversation_memory_paused_at(user_id, conversation_id) -> float | None:

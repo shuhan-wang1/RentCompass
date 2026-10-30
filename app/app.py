@@ -3563,6 +3563,10 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             _memory_erasure, _resolve_reply_language(user_message, ui_language))[0]
         if _erasure_note:
             _mem_block = _erasure_note + ("\n" + _mem_block if _mem_block else "")
+    from rag.agent_memory import erasure_request_names_other_memory
+    if erasure_request_names_other_memory(user_message):
+        from core.memory_gate import MEMORY_SINGLE_ERASE_NOTE
+        _mem_block = MEMORY_SINGLE_ERASE_NOTE + ("\n" + _mem_block if _mem_block else "")
     if _memory_turn.get('paused'):
         # Runtime data the model reads: memory is paused for the rest of this conversation.
         from core.memory_gate import MEMORY_PAUSE_NOTE
@@ -3803,6 +3807,10 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     if _memory_erasure:
         from core.memory_gate import acknowledge_memory_erasure
         response_text = acknowledge_memory_erasure(response_text, _memory_erasure, _memory_language)
+    # Only the server says a memory was deleted; a request it cannot perform is said plainly (U-10a).
+    from core.memory_gate import settle_memory_deletion_claims
+    response_text = settle_memory_deletion_claims(response_text, user_message, _memory_erasure,
+                                                  _memory_language)
     # Explicit frequency arithmetic uses this turn's observed fare, never a stored
     # price or an inferred property cost. The estimate cannot qualify a candidate.
     from core.commuting_estimate import estimate_monthly_commuting, render_monthly_commuting_estimate

@@ -1048,7 +1048,7 @@ def _known_commute_caps(state: dict) -> set[float]:
     # A user's explicitly stated ceiling is a constraint even before a criteria refresh.
     # Read only user text, never the answer whose measurements are being checked.
     for pattern in (
-        r"(?:within|under|at most|no more than|maximum of)\s*(\d+(?:\.\d+)?)\s*[-–]?\s*(?:minutes?|mins?)",
+        r"(?:within|under|at most|no more than|maximum of|max)\s*(\d+(?:\.\d+)?)\s*[-–]?\s*(?:minutes?|mins?)",
         r"(\d+(?:\.\d+)?)\s*[-–]?\s*(?:minutes?|mins?)\s*(?:commute\s+)?(?:cap|limit|maximum)",
         r"(\d+(?:\.\d+)?)\s*分钟\s*(?:以内|之内|上限|为上限)",
     ) + _COMMUTE_LIMIT_PATTERNS:

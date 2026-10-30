@@ -460,6 +460,44 @@ def with_unapplied_turn_values(validation: dict, message: str, criteria: dict,
     return dict(validation, unchecked=unchecked + [label for label in labels if label not in unchecked])
 
 
+_USED_LEAD = re.compile(
+    r"(?:用到|用了|使用了?|按照?|根据|基于)[^。\n]{0,14}(?:偏好|条件|设置|记得|保存|记住)|"
+    r"\b(?:used|applied|using|applying|based\s+(?:this\s+)?on)\b[^.\n]{0,40}\b(?:preferences?|criteria|"
+    r"saved|remembered|details)\b", re.I)
+_LIST_LINE = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s")
+_BUDGET_LINE = re.compile(r"预算|租金上限|\bbudget\b|\bmax(?:imum)?\s+rent\b|£\s*\d", re.I)
+_BEDROOM_LINE = re.compile(r"居室|卧室|户型|\bbedrooms?\b|\b\d\s*-?\s*bed\b", re.I)
+
+
+def without_unapplied_used_claims(text: str, artifacts) -> str:
+    """``text`` without the items of a "what I used" list that the turn's search did not use.
+
+    Told to use what it remembered, a reply listed the saved budget and bedrooms as "used"
+    while the search carried neither (V-22). Only such a list is touched: the saved values are
+    not applied here, and the note on the unused budget still follows."""
+    criteria = next((raw.get("search_criteria") or raw.get("known_criteria") for raw in (
+        (a.get("raw_data") if isinstance(a, dict) and a.get("tool") == "search_properties" else None)
+        for a in artifacts or []) if isinstance(raw, dict)), None)
+    if not isinstance(criteria, dict):
+        return str(text or "")
+    unused = []
+    if criteria.get("max_budget") in (None, "", 0):
+        unused.append(_BUDGET_LINE)
+    if not isinstance(criteria.get("bedrooms"), int):
+        unused.append(_BEDROOM_LINE)
+    kept, listing = [], False
+    for line in str(text or "").split("\n"):
+        if _USED_LEAD.search(line):
+            listing = True
+        elif listing and _LIST_LINE.match(line):
+            if any(pattern.search(line) for pattern in unused):
+                continue
+        elif line.strip():
+            listing = False
+        kept.append(line)
+    return "\n".join(kept)
+
+
 def searched_without_budget(artifacts) -> bool:
     """True when this turn ran a listing search whose criteria carried no budget."""
     for artifact in artifacts or []:
@@ -4242,6 +4280,12 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             p['areas'] = [acc['area']]
         if cd and not acc.get('no_commute'):
             p['commute_destination'] = cd
+        # 「温莎附近有房吗」 cleared the area, and the old commute destination then chose where to
+        # search: a place nobody could read has to come back as a question (V-21).
+        from core.tools.search_properties import unresolved_zh_search_place
+        if not p.get('area') and unresolved_zh_search_place(p.get("current_message") or ""):
+            for key in ('commute_destination', 'location', 'areas'):
+                p.pop(key, None)
         # A destination / location the user withdrew is not re-supplied by the model from the
         # conversation it remembers (R4-14); one this message names again stays.
         from core.constraint_updates import drop_withdrawn_places
@@ -6141,7 +6185,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             # After the critic, whose regeneration drops anything appended before it: a
             # budgetless search names the saved budget it did not use (R3-03).
             response = acknowledge_remembered_budget(
-                response, state.get("memory_context") or "", acc.get("max_budget"), language,
+                without_unapplied_used_claims(response, artifacts) if state.get("memory_context")
+                else response, state.get("memory_context") or "", acc.get("max_budget"), language,
                 searched_without_budget=searched_without_budget(artifacts))
             # Structured cards (safety/POI/commute) also present this turn ride along in tool_data.
             _merge_cards(artifacts, tool_data)

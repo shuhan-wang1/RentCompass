@@ -654,3 +654,84 @@ def test_v_18_the_route_is_planned_from_those_coordinates(monkeypatch):
 def test_v_18_a_display_address_gives_its_zone(address, zone):
     from core.tools.calculate_commute_cost import _get_zone_from_address
     assert _get_zone_from_address(address) == zone
+
+
+# V-19 ── a limit the user stated earlier is theirs, not an unverified claim
+def test_v_19_an_earlier_limit_is_a_known_cap():
+    from core.candidate_validation import _known_commute_caps
+    state = {"extracted_context": {"current_message": "Summarise my final criteria.",
+                                   "history": [{"user": "I commute to Holborn, max 30 minutes.", "assistant": "ok"}]}}
+    assert 30.0 in _known_commute_caps(state)
+
+
+# V-21 ── an unresolved place ends in a question, not a search elsewhere
+def test_v_21_the_old_destination_does_not_choose_the_search():
+    from langchain_core.messages import AIMessage
+
+    from core.agent_loop import build_fc_nodes
+    from tests.test_agent_contract_guards import _state, _tc
+    from tests.test_qa_null_injection import _ValidatingProvider, _strict_null_args
+    message = "温莎附近有房吗"
+    state = _state(message)
+    state["accumulated_search_criteria"] = {
+        "area": None, "areas": [], "max_budget": 1800, "room_type": "whole", "bedrooms": 1,
+        "commute_destination": "Imperial College London, South Kensington, London SW7 2AZ"}
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("search_properties", _strict_null_args(
+        "search_properties", {"user_query": message, "confirmed": True}), "c0")])]
+    provider = _ValidatingProvider(["search_properties"])
+    asyncio.run(build_fc_nodes(provider)["execute_tools"](state))
+    (_, params), = provider.calls
+    assert not params.get("commute_destination") and not params.get("area") and not params.get("location")
+
+
+def test_v_21_the_tool_then_asks_where():
+    from core.tools.search_properties import search_properties_impl
+    out = asyncio.run(search_properties_impl(user_query="温莎附近有房吗", current_message="温莎附近有房吗",
+                                             max_budget=1800, room_type="whole", confirmed=True))
+    assert out["status"] == "need_clarification" and out["clarification_kind"] == "missing_area"
+
+
+def test_v_21_a_destination_this_message_names_still_stands():
+    from core.tools.search_properties import unresolved_zh_search_place
+    assert unresolved_zh_search_place("帮我在Hackney找房，通勤到帝国理工") is None
+
+
+# V-22 ── a saved value the search did not carry is not listed as used
+_USED_REPLY = ("我这次用到的偏好（都来自你之前告诉我的内容）：\n- 区域：Hackney\n- 预算：每月 £2,500 以内\n- 户型：两居室公寓\n"
+               "- 软性偏好：不喜欢吵闹的地方\n\n符合的只有两套。")
+
+
+def _search_with(**criteria):
+    return [{"tool": "search_properties", "success": True,
+             "raw_data": {"success": True, "status": "found", "search_criteria": criteria}}]
+
+
+def test_v_22_the_used_list_drops_what_the_search_lacked():
+    from core.agent_loop import without_unapplied_used_claims
+    out = without_unapplied_used_claims(_USED_REPLY, _search_with(area="Hackney"))
+    assert "£2,500" not in out and "两居室" not in out and "- 区域：Hackney" in out and "符合的只有两套" in out
+
+
+def test_v_22_what_the_search_used_stays():
+    from core.agent_loop import without_unapplied_used_claims
+    assert without_unapplied_used_claims(
+        _USED_REPLY, _search_with(area="Hackney", max_budget=2500, bedrooms=2)) == _USED_REPLY
+
+
+def test_v_22_a_list_of_listings_is_not_a_used_list():
+    from core.agent_loop import without_unapplied_used_claims
+    text = "Two homes fit:\n- Kenworthy Road: £2500, 2 bed\n- Kingsland Road: £2200, 2 bed"
+    assert without_unapplied_used_claims(text, _search_with(area="Hackney")) == text
+
+
+# V-23, V-24 ── prompt rules
+def test_v_23_the_remember_tool_says_no_gender_from_a_name():
+    from core import loop_prompts
+    from core.tools.memory_tools import remember_tool
+    assert "never infer a gender" in remember_tool.description
+    assert "a first name says nothing about gender" in loop_prompts.behaviour_rules()
+
+
+def test_v_24_listings_keep_the_card_order():
+    from core import loop_prompts
+    assert "never re-sort them in the text" in loop_prompts.behaviour_rules()

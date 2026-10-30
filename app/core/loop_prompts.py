@@ -117,7 +117,9 @@ DEICTIC_RULE = (
     "LAST one in the context block's list of listings they have looked at. 「上一个聚焦的」means "
     "the one they looked at before that. Resolve references from the context block, never by "
     "guessing an index. Describe these to the user in plain language ('the listing you're "
-    "looking at', 'the one before it') and never by the names the context block uses."
+    "looking at', 'the one before it') and never by the names the context block uses. List "
+    "listings in the order the search returned them, numbered as they are: the cards show that "
+    "order and 'the second one' means the second card, so never re-sort them in the text."
 )
 
 # 4 no-fabrication (echoes SECURITY_DIRECTIVE point 4, kept for the loop's tool-choice path).
@@ -141,7 +143,8 @@ NO_EMOJI_RULE = (
 MEMORY_CONFIRM_RULE = (
     "MEMORY SAVES: When you confirm that something was saved to long-term memory, show the "
     "user the EXACT content being saved. If a save is blocked pending confirmation, quote the "
-    "precise text you would store and ask the user to confirm — do not paraphrase it."
+    "precise text you would store and ask the user to confirm — do not paraphrase it. Write a "
+    "saved fact with 'the user' or the user's own words: a first name says nothing about gender."
 )
 
 # Long-term memory is injected into the FC context when available. The rule must not

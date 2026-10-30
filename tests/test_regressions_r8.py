@@ -744,3 +744,43 @@ def test_w_09_a_reflection_is_never_a_saved_value():
     from core.constraint_updates import restore_saved_criteria
     rows = [{"id": "r1", "text": "fixed budget of around £2,300/month", "mtype": "reflection"}]
     assert restore_saved_criteria({}, rows, "Use my saved budget") == {}
+
+
+# D-03 ── saying the user's own limit back is no commute claim, and what is removed is logged
+def _commute_state(message):
+    return {"extracted_context": {"current_message": message, "reply_language": "en", "history": []},
+            "user_query": message, "tool_artifacts": [],
+            "accumulated_search_criteria": {"commute_destination": "Holborn", "max_travel_time": 30}}
+
+
+@pytest.mark.parametrize("reply", [
+    "Got it: you commute to Holborn with a 30-minute maximum. Tell me an area and budget and I'll search.",
+    "Noted. Your commute is to Holborn, 30 minutes at most, so I'll keep that in mind.",
+    "Noted. I'll look for places within 30 minutes of Holborn.",
+    "Understood, a commute to Holborn of up to 30 minutes is fine.",
+])
+def test_d_03_the_users_own_limit_stays_and_needs_no_note(reply):
+    from core.candidate_validation import validate_commute_response
+    assert validate_commute_response(reply, _commute_state("I commute to Holborn, max 30 minutes.")) == reply
+
+
+@pytest.mark.parametrize("reply", [
+    "Holborn is well connected. Areas within 30 minutes include Camden and Islington.",
+    "Camden is 30 minutes from Holborn.", "It takes you 30 minutes to reach Holborn.",
+    "Got it: you commute to Holborn, about 25 minutes from Camden.",
+])
+def test_d_03_a_claim_about_a_journey_still_goes(reply):
+    from core.candidate_validation import validate_commute_response
+    out = validate_commute_response(reply, _commute_state("I commute to Holborn, max 30 minutes."))
+    assert "could not be verified" in out and "minutes" not in out.split("Note:")[0]
+
+
+def test_d_03_what_went_is_in_the_log_through_the_redactors(caplog):
+    import logging
+
+    from core.candidate_validation import _log_removed_commute_text
+    with caplog.at_level(logging.INFO, logger="core.candidate_validation"):
+        _log_removed_commute_text(["Camden is 12 minutes away, call me on 07700900123", "x" * 500])
+    line = caplog.text
+    assert "commute.claims_removed count=2" in line and "12 minutes" in line
+    assert "07700900123" not in line and "x" * 161 not in line

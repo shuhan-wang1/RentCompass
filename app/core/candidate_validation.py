@@ -12,6 +12,8 @@ from __future__ import annotations
 import asyncio
 import bisect
 import functools
+import json
+import logging
 import math
 import os
 import re
@@ -19,6 +21,8 @@ import time
 from typing import Any
 
 from core.tenancy_reference import monthly_from_weekly
+
+logger = logging.getLogger(__name__)
 
 
 _NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
@@ -2113,6 +2117,27 @@ def _restates_user_limit(fragment: str, bindings: list, user_destinations: list 
     return named is None or not (named.get("labels") or named.get("members"))
 
 
+# The reply saying the user's own limit back to them: "Got it: you commute to Holborn with a
+# 30-minute maximum." was removed as an unverified commute claim, and the note then stood on a turn
+# that made no claim (D-03). The subject is the user or the search to come, never a place.
+_LIMIT_ACKNOWLEDGED = re.compile(
+    r"^\W*(?:(?:got\s+it|noted|understood|ok(?:ay)?|sure|thanks|great|perfect|right)\b\W*)*(?:so\s+)?"
+    r"(?:you(?:['’]re|\s+are)?\b|your\b|i['’]ll\b|i\s+will\b|i\s+can\b|we['’]ll\b|with\s+(?:a|your)\b|"
+    r"(?:a\s+|the\s+)?commute\b|\d{1,3}\s*-?\s*(?:minutes?|mins?)\s+(?:at\s+most|max(?:imum)?)\b)", re.I)
+
+
+def _acknowledges_user_limit(fragment: str, caps: set, bindings: list) -> bool:
+    """True for a clause that only repeats the user's own limit (see ``_LIMIT_ACKNOWLEDGED``)."""
+    values = _minute_claim_values(fragment)
+    if not values or any(value not in caps for value in values) or not _LIMIT_ACKNOWLEDGED.match(fragment):
+        return False
+    if re.search(r"takes?|took|measured|returned|actually|verified|meets?|satisf(?:y|ies)|exceeds?|fits?|"
+                 r"\b(?:is|are)\s+(?:\w+\s+)?(?:inside|within|under|over|below|above)\b", fragment, re.I):
+        return False        # "the commute is well inside your 30 minute limit" is a verdict
+    named = _line_binding(fragment, bindings)
+    return named is None or not (named.get("labels") or named.get("members"))
+
+
 def _user_commute_destinations(state: dict) -> list:
     criteria = state.get("accumulated_search_criteria") or {}
     labels: list = []
@@ -3078,6 +3103,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                     fragment, caps, context=preference_line or bool(
                         _LIMIT_LABEL.search(heading_now[0]) or _LIMIT_LABEL.search(fragment))
                     or _restates_user_limit(fragment, bindings, user_destinations)):
+                return True
+            if not pool and _acknowledges_user_limit(fragment, caps, bindings):
                 return True
             if _quotes_source_text(fragment, source_texts):
                 return True
@@ -4498,10 +4525,27 @@ def _validate_commute_response(response: str, state: dict, *, note_present: bool
         # visible commute claim was withdrawn by THIS pass, so no note claims one was (R1-10,
         # R3-01).
         return redacted
+    _log_removed_commute_text(removed)
     note = _commute_unverified_note(zh)
     if note_present or note in redacted or _commute_unverified_note(not zh) in redacted:
         return redacted
     return f"{redacted}\n\n{note}"
+
+
+def _log_removed_commute_text(removed: list) -> None:
+    """What the note stands for, in the local app log: the note fires only when a sentence went,
+    and the sentence was in no evidence (D-03). Model prose, through the same redactors as memory,
+    cut short. Never raises."""
+    try:
+        from rag.agent_memory import redact_secrets, redact_sensitive
+        samples = []
+        for fragment in removed[:3]:
+            text = redact_secrets(redact_sensitive(str(fragment))[0])[0]
+            samples.append(" ".join(text.split())[:160])
+        logger.info("commute.claims_removed count=%d samples=%s", len(removed),
+                    json.dumps(samples, ensure_ascii=False))
+    except Exception as exc:
+        logger.info("commute.claims_removed logging skipped type=%s", type(exc).__name__)
 
 
 def _listing_source_texts(state: dict) -> list[str]:

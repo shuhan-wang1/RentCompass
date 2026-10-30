@@ -683,3 +683,64 @@ def test_w_08_an_edit_takes_the_edited_turn_and_those_after_it(monkeypatch):
     assert calls == [("u1", "c1", ["t2", "t3"])]
     appmod._retire_memory_of_edited_turns("u1", "c1", "gone")
     assert len(calls) == 1
+
+
+# W-09 ── an explicit reference to saved data uses it
+def _saved(*texts):
+    return [{"id": f"m{i}", "text": text, "mtype": "semantic", "created_at": f"2026-10-{20 + i}T10:00:00"}
+            for i, text in enumerate(texts)]
+
+
+@pytest.mark.parametrize("message", [
+    "Find me a flat in Bow using my saved budget and preferences.", "Use my saved budget",
+    "Find a flat in Bow with my saved budget", "Apply my saved preferences", "用我保存的预算找房", "按我记住的预算找",
+])
+def test_w_09_the_reference_is_read(message):
+    from core.constraint_updates import references_saved_criteria
+    assert references_saved_criteria(message)
+
+
+def test_w_09_a_plain_budget_row_is_used():
+    from core.constraint_updates import restore_saved_criteria
+    message = "Find me a flat in Bow using my saved budget and preferences."
+    out = restore_saved_criteria({}, _saved("max budget £2,000"), message)
+    assert out["max_budget"] == 2000 and out["area"] == "Bow"
+    assert out["constraint_sources"]["max_budget"]["source"] == "saved_preference"
+    assert out["constraint_sources"]["max_budget"]["memory_id"] == "m0"
+
+
+def test_w_09_each_field_comes_from_the_newest_row_that_states_it():
+    from core.constraint_updates import restore_saved_criteria
+    rows = _saved("max budget £1,800", "max budget £2,000", "The user wants a 1-bed flat")
+    out = restore_saved_criteria({}, rows, "Find a flat in Bow using my saved preferences")
+    assert out["max_budget"] == 2000 and out["bedrooms"] == 1
+    assert out["constraint_sources"]["max_budget"]["memory_id"] == "m1"
+
+
+def test_w_09_the_saved_budget_takes_the_budget_only():
+    from core.constraint_updates import restore_saved_criteria
+    rows = _saved("max budget £2,000", "The user wants a 1-bed flat in Camden")
+    out = restore_saved_criteria({}, rows, "Find a flat in Bow with my saved budget")
+    assert out["max_budget"] == 2000 and out["area"] == "Bow" and not out.get("bedrooms")
+
+
+def test_w_09_a_default_in_one_row_still_wins_whole():
+    from core.constraint_updates import restore_saved_criteria
+    rows = _saved("max budget £1,500", "Default: 2-bed flat, budget £2,600")
+    out = restore_saved_criteria({}, rows, "Apply my saved preferences")
+    assert out["max_budget"] == 2600 and out["bedrooms"] == 2
+
+
+@pytest.mark.parametrize("message", [
+    "What's my saved budget?", "Show my saved budget", "Find a flat in Bow", "Forget my saved budget",
+])
+def test_w_09_no_reference_to_use_it_changes_nothing(message):
+    from core.constraint_updates import restore_saved_criteria
+    stored = {"area": "Camden"}
+    assert restore_saved_criteria(stored, _saved("max budget £2,000"), message) is stored
+
+
+def test_w_09_a_reflection_is_never_a_saved_value():
+    from core.constraint_updates import restore_saved_criteria
+    rows = [{"id": "r1", "text": "fixed budget of around £2,300/month", "mtype": "reflection"}]
+    assert restore_saved_criteria({}, rows, "Use my saved budget") == {}

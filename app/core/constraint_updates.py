@@ -454,20 +454,41 @@ def explicit_feature_requirement_text(text: str) -> str:
     return ' '.join(selected)
 
 
+_SAVED_VALUE = (r"(?:saved|stored|remembered|usual)\s+(?:search\s+|default\s+|rent\s+)?"
+                r"(?:budget|ceiling|criteria|preferences|requirements|settings|filters?|details)")
+
+
 def references_saved_criteria(text: str) -> bool:
     return bool(re.search(
-        r'(?:按|用|恢复|复述|记得)[^。！？]{0,35}(?:长期|默认|保存|偏好)|长期默认|saved (?:search |default )?(?:criteria|preferences)|'
-        r'(?:use|apply|restore|recall|repeat)[^.!?]{0,35}(?:defaults|remembered|preferences)', text or '', re.I))
+        r'(?:按|用|恢复|复述|记得)[^。！？]{0,35}(?:长期|默认|保存|偏好|记住|存的)|长期默认|'
+        r'saved (?:search |default )?(?:criteria|preferences)|'
+        r'(?:use|apply|restore|recall|repeat)[^.!?]{0,35}(?:defaults|remembered|preferences)|'
+        # "Find me a flat in Bow using my saved budget and preferences." (W-09).
+        r'\b' + _SAVED_VALUE + r'\b', text or '', re.I))
+
+
+# What a saved value is taken for. "show" only with a home noun: "Show my saved budget" is a recall.
+_RESTORE_CUE = re.compile(
+    r'搜|找|恢复|使用|按|用|\b(?:use|using|apply|applying|restore|find|search|look\s+for|with|'
+    r'show\s+(?:me\s+)?(?:flats?|homes?|listings?|properties|places|options))\b', re.I)
+_ONLY_THE_BUDGET = re.compile(r'\b(?:saved|stored|remembered|usual)\s+(?:rent\s+)?(?:budget|ceiling)\b|保存的预算|记住的预算', re.I)
+_SAVED_OTHER_THAN_BUDGET = re.compile(r'\b(?:preferences|criteria|requirements|settings|filters?|details|defaults)\b|偏好|条件|默认', re.I)
+_SAVED_FIELDS = {'area', 'areas', 'max_budget', 'budget_period', 'room_type', 'bedrooms',
+                 'bedrooms_minimum', 'commute_destination', 'destination', 'no_commute',
+                 'max_travel_time', 'property_features', 'soft_preferences', 'move_in_date',
+                 'monthly_total_budget', 'office_days_per_week'}
+_BUDGET_FIELDS = {'max_budget', 'budget_period', 'monthly_total_budget'}
 
 
 def restore_saved_criteria(accumulated: dict, memories: list, message: str) -> dict:
     """Use only this authenticated user's retrieved memory, on an explicit request.
 
     Prompt recollection alone does not enforce filters. Project the selected semantic
-    preference into the same structured state the search executor validates.
+    preference into the same structured state the search executor validates. A saved default
+    in one row wins as a whole; otherwise each field comes from the newest row that states it,
+    so a plain "max budget £2,000" counts (W-09). "my saved budget" takes the budget only.
     """
-    if not references_saved_criteria(message) or not re.search(
-            r'搜|找|恢复|使用|按|\b(?:use|apply|restore|find|search|show)\b', message, re.I):
+    if not references_saved_criteria(message) or not _RESTORE_CUE.search(message):
         return accumulated
     from core.langgraph_agent import _apply_explicit_criteria_updates
     # A reflection is the assistant's inference ("fixed budget of around £2,300/month"),
@@ -476,27 +497,34 @@ def restore_saved_criteria(accumulated: dict, memories: list, message: str) -> d
                         key=lambda m: str(m.get('created_at') or ''), reverse=True)
     candidates.sort(key=lambda m: (m.get('mtype') != 'semantic',
         not bool(re.search(r'默认|长期|\bdefaults?\b|saved preferences', str(m.get('text') or ''), re.I))))
+    budget_only = bool(_ONLY_THE_BUDGET.search(message) and not _SAVED_OTHER_THAN_BUDGET.search(message))
+    merged, owners = {}, {}
+
+    def _restored(fields: dict, owner_of) -> dict:
+        restored = dict(accumulated)
+        restored.update(fields)
+        restored['constraint_sources'] = {
+            **(accumulated.get('constraint_sources') or {}),
+            **{k: {'source': 'saved_preference', 'memory_id': owner_of(k), 'value': v}
+               for k, v in fields.items()},
+        }
+        return _apply_explicit_criteria_updates(restored, message)
+
     for memory in candidates:
         text = str(memory.get('text') or '')
         parsed = _apply_explicit_criteria_updates({}, text)
-        fields = {k: v for k, v in parsed.items() if k in {
-            'area', 'areas', 'max_budget', 'budget_period', 'room_type', 'bedrooms',
-            'bedrooms_minimum', 'commute_destination', 'destination', 'no_commute',
-            'max_travel_time', 'property_features', 'soft_preferences', 'move_in_date',
-            'monthly_total_budget', 'office_days_per_week'}}
+        fields = {k: v for k, v in parsed.items() if k in _SAVED_FIELDS}
         if fields.get('max_travel_time'):
             fields.setdefault('no_commute', False)
-        if sum(k in fields for k in ('room_type', 'bedrooms')) + bool(
-                fields.get('max_budget') or fields.get('monthly_total_budget')) >= 2:
-            restored = dict(accumulated)
-            restored.update(fields)
-            restored['constraint_sources'] = {
-                **(accumulated.get('constraint_sources') or {}),
-                **{k: {'source': 'saved_preference', 'memory_id': memory.get('id'), 'value': v}
-                   for k, v in fields.items()},
-            }
-            return _apply_explicit_criteria_updates(restored, message)
-    return accumulated
+        if not budget_only and any(k in fields for k in ('room_type', 'bedrooms')) and bool(
+                fields.get('max_budget') or fields.get('monthly_total_budget')):
+            return _restored(fields, lambda _key: memory.get('id'))
+        if memory.get('mtype') != 'semantic':
+            continue
+        for key, value in fields.items():
+            if key not in merged and value not in (None, [], '') and (not budget_only or key in _BUDGET_FIELDS):
+                merged[key], owners[key] = value, memory.get('id')
+    return _restored(merged, owners.get) if merged else accumulated
 
 
 # "Budget back to what it was when I started" and 把预算恢复成最开始的数字 kept the current ceiling

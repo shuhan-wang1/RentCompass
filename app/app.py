@@ -3569,9 +3569,12 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         _mems = _am.retrieve(user_message, session_id=user_id, user_id=user_id, n=6,
                              branch_lineage=_lineage)
         from core.constraint_updates import references_saved_criteria
-        if references_saved_criteria(user_message):
+        _saved_reference = references_saved_criteria(user_message)
+        if _saved_reference:
             _semantic_defaults = _am.semantic_records(user_id=user_id)
-        if _asks_what_is_remembered(user_message):
+        # An explicit reference to saved data reads all of it too: with six relevant rows the
+        # reply said 2 of 14 saved facts existed and asked for a budget that was stored (W-09).
+        if _asks_what_is_remembered(user_message) or _saved_reference:
             # "What do you remember about me?" is answered from EVERY saved fact, not the six
             # most relevant mixed records: a recall of 12 saved facts merged, dropped and
             # miscounted them, and filled the gap with inferences (R2-20). A cap of 20 then

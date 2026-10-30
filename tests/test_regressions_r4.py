@@ -489,3 +489,22 @@ def test_r4_09_the_episodic_log_keeps_no_code_word(r4_memory):
                                "street. My secret code word is PINEAPPLE-77.", "Saved.",
                                session_id="s1", user_id=user)
     assert "PINEAPPLE" not in "\n".join(_docs(store, user))
+
+
+# S-03 ── "Do I have any allergies on file?" lists every saved fact ──────────────────
+@pytest.mark.parametrize("message", [
+    "Do I have any allergies on file?", "What do you have on me?", "Do you have my budget?",
+    "What's on file for me?", "我有没有过敏的记录？",
+])
+def test_s_03_an_on_file_question_is_a_recall_question(message):
+    import app as appmod
+    assert appmod._asks_what_is_remembered(message)
+
+
+@pytest.mark.parametrize("message", [
+    "Do you have flats in my area?", "Do you have any 2-bed flats?",
+    "What's on file for the listing?", "Is the flat on file with the council?",
+])
+def test_s_03_other_questions_are_not_recall_questions(message):
+    import app as appmod
+    assert not appmod._asks_what_is_remembered(message)

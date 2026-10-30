@@ -3192,7 +3192,14 @@ def _spawn_rolling_summary_update(user_id, conversation_id, dropped_turns,
 _REMEMBERED_QUESTION = re.compile(
     r"\b(?:what|anything|everything|which)\b[^.?!]{0,40}\b(?:remember|saved|stored|kept|know)\b"
     r"[^.?!]{0,25}\b(?:about\s+me|me|my)\b|\bdo\s+you\s+(?:remember|store|keep|save)\b|"
-    r"记得.{0,12}我|记住了.{0,8}(?:什么|哪些)|(?:保存|存储|存)了.{0,10}(?:什么|哪些|我)", re.I)
+    r"记得.{0,12}我|记住了.{0,8}(?:什么|哪些)|(?:保存|存储|存)了.{0,10}(?:什么|哪些|我)|"
+    # "Do I have any allergies on file?" was answered from six relevance-ranked rows that missed
+    # the saved cat allergy, and the reply said allergies are not stored (S-03).
+    r"\b(?:do|have|did)\s+(?:i|you)\b[^.?!]{0,40}\bon\s+(?:file|record)\b|"
+    r"\bon\s+(?:file|record)\s+(?:for|about)\s+me\b|"
+    r"\b(?:do|have)\s+you\s+(?:got|have)\s+(?:my\b|anything\s+(?:about|on)\s+me\b)|"
+    r"\b(?:what|anything)\b[^.?!]{0,20}\b(?:have|got)\s+(?:on|about)\s+me\b|"
+    r"有没有.{0,12}(?:记录|保存|存)|(?:记录|档案)(?:里|中)", re.I)
 
 
 # How many saved facts a recall question puts in the memory block (R4-13). Wide on purpose: the

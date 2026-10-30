@@ -694,3 +694,94 @@ def test_u_11_forget_that_requirement_takes_a_need_back():
     acc = _state_node(_CAMDEN, "I need a dishwasher")
     out = _state_node(acc, "Forget that requirement.", history=[{"user": "I need a dishwasher", "assistant": "ok"}])
     assert out["soft_preferences"] == []
+
+
+# U-12 ── a curated London area is looked for in London first; any other name as before
+class _FakeNominatim:
+    """Answers like Nominatim: a bounded search finds the London place, an open one the first GB hit."""
+
+    def __init__(self, london=True):
+        self.calls, self.london = [], london
+
+    def __call__(self, url, params=None, **kwargs):
+        from types import SimpleNamespace
+        self.calls.append(dict(params or {}))
+        if (params or {}).get("bounded"):
+            rows = [{"lat": "51.527", "lon": "-0.024", "display_name": "Bow, Tower Hamlets, London"}] if self.london else []
+        else:
+            rows = [{"lat": "50.80", "lon": "-3.82", "display_name": "Bow, Devon"}]
+        return SimpleNamespace(status_code=200, json=lambda: rows)
+
+
+@pytest.fixture
+def geocoder(monkeypatch):
+    from core import maps_service
+    monkeypatch.setattr(maps_service, "_read_versioned_cache", lambda key, **kw: ("miss", None))
+    monkeypatch.setattr(maps_service, "_write_versioned_cache", lambda *a, **kw: None)
+    return maps_service
+
+
+@pytest.mark.parametrize("address", ["Bow", "Bow, London", "Richmond, London", "Richmond", "Bow, Greater London, UK"])
+def test_u_12_a_curated_london_area_is_looked_for_in_london(geocoder, monkeypatch, address):
+    fake = _FakeNominatim()
+    monkeypatch.setattr(geocoder.requests, "get", fake)
+    result = geocoder._free_geocode(address)
+    assert fake.calls[0]["bounded"] == 1 and fake.calls[0]["viewbox"] and len(fake.calls) == 1
+    assert 51 < result["lat"] < 52
+
+
+@pytest.mark.parametrize("address", ["Bow, Devon", "Richmond, North Yorkshire", "Exeter", "12 Sample Road, Bow"])
+def test_u_12_any_other_name_behaves_as_before(geocoder, monkeypatch, address):
+    fake = _FakeNominatim()
+    monkeypatch.setattr(geocoder.requests, "get", fake)
+    geocoder._free_geocode(address)
+    assert len(fake.calls) == 1 and "bounded" not in fake.calls[0] and "viewbox" not in fake.calls[0]
+
+
+def test_u_12_nothing_in_london_falls_back_to_the_open_search(geocoder, monkeypatch):
+    fake = _FakeNominatim(london=False)
+    monkeypatch.setattr(geocoder.requests, "get", fake)
+    assert geocoder._free_geocode("Bow")["resolved_name"] == "Bow, Devon" and len(fake.calls) == 2
+
+
+def test_u_12_a_cached_result_outside_london_is_not_reused(geocoder, monkeypatch):
+    monkeypatch.setattr(geocoder, "_read_versioned_cache",
+                        lambda key, **kw: ("fresh", {"lat": 50.80, "lng": -3.82, "resolved_name": "Bow, Devon"}))
+    monkeypatch.setattr(geocoder.requests, "get", _FakeNominatim())
+    assert "London" in geocoder._free_geocode("Bow")["resolved_name"]
+
+
+def _open_meteo(monkeypatch, places):
+    from types import SimpleNamespace
+
+    from core.tools import get_weather as weather
+    seen = []
+
+    def fake(url, params=None, **kwargs):
+        seen.append((url, dict(params or {})))
+        if "geocoding" in url:
+            return SimpleNamespace(status_code=200, json=lambda: {"results": places})
+        return SimpleNamespace(status_code=200, raise_for_status=lambda: None, json=lambda: {
+            "current": {"temperature_2m": 11, "relative_humidity_2m": 70, "apparent_temperature": 10,
+                        "precipitation": 0, "weather_code": 1, "wind_speed_10m": 9},
+            "hourly": {"time": [], "uv_index": []}})
+    monkeypatch.setattr(weather.requests, "get", fake)
+    return weather, seen
+
+
+_BOW_DEVON = {"name": "Bow", "latitude": 50.80, "longitude": -3.82, "country_code": "GB", "admin1": "England", "admin2": "Devon"}
+_BOW_LONDON = {"name": "Bow", "latitude": 51.527, "longitude": -0.024, "country_code": "GB", "admin1": "England",
+               "admin2": "Greater London"}
+
+
+def test_u_12_get_weather_bow_is_the_london_one(monkeypatch):
+    weather, seen = _open_meteo(monkeypatch, [_BOW_DEVON, _BOW_LONDON])
+    weather.get_weather_impl("Bow")
+    assert [params["latitude"] for url, params in seen if "forecast" in url] == [51.527]
+
+
+def test_u_12_get_weather_of_another_town_takes_the_first_uk_place(monkeypatch):
+    place = dict(_BOW_DEVON, name="Exeter", latitude=50.72, admin2="Devon")
+    weather, seen = _open_meteo(monkeypatch, [place])
+    weather.get_weather_impl("Exeter")
+    assert [params["latitude"] for url, params in seen if "forecast" in url] == [50.72]

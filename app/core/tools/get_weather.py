@@ -184,7 +184,10 @@ def get_weather_impl(
             # matches a bare place NAME, so the qualifiers have to be taken off and used
             # to choose among the GB candidates instead.
             name, hints, explicit_foreign = _split_place_query(location)
-            chosen = None
+            chosen = results = None
+            # A bare curated London area means London: "Bow" was Bow, Devon (U-12).
+            from core.maps_service import curated_london_name
+            london_first = not hints and not explicit_foreign and curated_london_name(name)
             # GB first; a qualifier that no GB candidate carries ("Stratford, Texas") or an
             # explicit foreign country is then looked up worldwide, still by bare name.
             for uk_only in ((False,) if explicit_foreign else ((True, False) if hints else (True,))):
@@ -195,10 +198,11 @@ def get_weather_impl(
                     timeout=http_timeout(2),
                 )
                 results = (g.json() or {}).get("results") if g.status_code == 200 else None
-                chosen = _choose_place(results or [], hints, uk_only=uk_only)
+                chosen = _choose_place(results or [], ["london"] if london_first else hints,
+                                       uk_only=uk_only)
                 if chosen is not None:
                     break
-            if chosen is None and "london" in hints:
+            if chosen is None and ("london" in hints or london_first):
                 # A London street or district the name search does not know ("Highgate West
                 # Hill, London N6", "Newham, London") goes to the address geocoder, as the
                 # bare-Stratford branch does; the answer must still fall inside London (R1-09).
@@ -208,6 +212,8 @@ def get_weather_impl(
                 if geo and _in_london({"latitude": geo.get("lat"), "longitude": geo.get("lng")}):
                     chosen = {"latitude": geo["lat"], "longitude": geo["lng"],
                               "name": name, "admin2": "London", "country_code": "GB"}
+            if chosen is None and london_first:
+                chosen = _choose_place(results or [], [], uk_only=True)
             if chosen is None:
                 return {"success": False, "requested_location": location,
                         "error": f"Could not resolve {location} to a UK place for weather.",

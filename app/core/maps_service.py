@@ -405,6 +405,32 @@ def _normalize_address_for_routing(address: str) -> str:
     
     return address
 
+# "Bow" resolved to Bow, Devon and "Richmond, London" missed too: Nominatim was asked for the
+# first GB match with no preference (U-12). A name the product curates as a London area is looked
+# for inside Greater London first; any other name is geocoded as before.
+_GREATER_LONDON_VIEWBOX = "-0.56,51.72,0.34,51.25"      # west, north, east, south
+_LONDON_QUALIFIER = re.compile(
+    r"\s*,?\s*(?:greater\s+)?london(?:\s*,\s*(?:uk|united\s+kingdom|england|gb))?\s*$"
+    r"|\s*,\s*(?:uk|united\s+kingdom|england|gb)\s*$", re.I)
+
+
+def curated_london_name(address: str) -> bool:
+    """True when ``address`` is a curated London area, bare or as "<area>, London"."""
+    name = _LONDON_QUALIFIER.sub("", str(address or "").strip())
+    key = re.sub(r"[’']", "", name).strip().lower()
+    if not key:
+        return False
+    from core.tools.search_properties import LONDON_AREAS
+    return key in LONDON_AREAS and key != "london"
+
+
+def _inside_greater_london(geo: dict) -> bool:
+    try:
+        return 51.25 <= float(geo.get("lat")) <= 51.72 and -0.56 <= float(geo.get("lng")) <= 0.34
+    except (TypeError, ValueError):
+        return False
+
+
 def _free_geocode(address: str, *, deadline: Optional[float] = None) -> dict | None:
     """Free geocoder: Postcodes.io for UK postcodes, else OSM Nominatim.
 
@@ -437,7 +463,9 @@ def _free_geocode(address: str, *, deadline: Optional[float] = None) -> dict | N
         ttl_seconds=GEOCODE_CACHE_TTL_SECONDS,
         version=_GEOCODE_CACHE_VERSION,
     )
-    if cache_status == "fresh" and cached is not None:
+    london_name = curated_london_name(address)
+    # A curated London name cached from before the bias, outside London, is not reused.
+    if cache_status == "fresh" and cached is not None and (not london_name or _inside_greater_london(cached)):
         return cached
 
     result = None
@@ -462,14 +490,15 @@ def _free_geocode(address: str, *, deadline: Optional[float] = None) -> dict | N
     # 2) Fall back to Nominatim (free, no key)
     if result is None:
         try:
-            r = requests.get(
-                "https://nominatim.openstreetmap.org/search",
-                params={'q': address, 'format': 'json', 'countrycodes': 'gb',
-                        'limit': 1, 'addressdetails': 1},
-                headers=_OSM_HEADERS, timeout=request_timeout(10),
-            )
-            if r.status_code == 200:
-                arr = r.json()
+            bounds = {'viewbox': _GREATER_LONDON_VIEWBOX, 'bounded': 1}
+            for bias in ([bounds, {}] if london_name else [{}]):
+                r = requests.get(
+                    "https://nominatim.openstreetmap.org/search",
+                    params={'q': address, 'format': 'json', 'countrycodes': 'gb',
+                            'limit': 1, 'addressdetails': 1, **bias},
+                    headers=_OSM_HEADERS, timeout=request_timeout(10),
+                )
+                arr = r.json() if r.status_code == 200 else None
                 if arr:
                     top = arr[0]
                     result = {'lat': float(top['lat']), 'lng': float(top['lon']),
@@ -479,6 +508,7 @@ def _free_geocode(address: str, *, deadline: Optional[float] = None) -> dict | N
                               'match_type': (top.get('addresstype') or top.get('type')
                                              or top.get('class')),
                               'place_rank': top.get('place_rank')}
+                    break
         except Exception as e:
             print(f"  [geocode] Nominatim error exception_type={type(e).__name__}")
 

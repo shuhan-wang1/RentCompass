@@ -3199,7 +3199,17 @@ _REMEMBERED_QUESTION = re.compile(
     r"\bon\s+(?:file|record)\s+(?:for|about)\s+me\b|"
     r"\b(?:do|have)\s+you\s+(?:got|have)\s+(?:my\b|anything\s+(?:about|on)\s+me\b)|"
     r"\b(?:what|anything)\b[^.?!]{0,20}\b(?:have|got)\s+(?:on|about)\s+me\b|"
-    r"有没有.{0,12}(?:记录|保存|存)|(?:记录|档案)(?:里|中)", re.I)
+    r"有没有.{0,12}(?:记录|保存|存)|(?:记录|档案)(?:里|中)|"
+    # "Where do I work?" and 「我的工作地点和过敏情况你还记得吗？」 denied a saved workplace: a
+    # question about the user's own facts is answered from every saved fact (T-03, U-04).
+    r"\bwhere\s+do\s+i\s+(?:work|study)\b|"
+    r"\bwhat(?:'s|’s|\s+is|\s+are|\s+was|\s+were)\s+my\s+(?:budget|workplace|office|job|work|"
+    r"employer|commute|allerg\w*|pets?|preferences?|requirements?|needs|deal[\s-]?breakers?|"
+    r"name|move[\s-]?in\s+date|saved\s+\w+)\b|"
+    r"\b(?:list|show|tell\s+me|give\s+me)\b[^.?!]{0,20}\b(?:everything|all)\b"
+    r"(?:\s+(?:the\s+)?(?:facts?|things|details|memories|info\w*|preferences))?\s+(?:that\s+)?"
+    r"(?:you(?:'ve|’ve|\s+have)?\s+)?(?:saved|stored|remember\w*|know|kept)\b|"
+    r"还?记得.{0,12}吗|记不记得|我的.{1,12}(?:是什么|是多少|在哪)", re.I)
 
 
 # How many saved facts a recall question puts in the memory block (R4-13). Wide on purpose: the

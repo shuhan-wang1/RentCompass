@@ -195,3 +195,60 @@ def test_u_03_a_comparison_keeps_the_criteria(message):
 
 def test_u_03_a_search_request_with_a_comparison_still_switches():
     assert _state_node(_CAMDEN, "Switch to Hackney and compare it with Camden")["area"] == "Hackney"
+
+
+# U-04 / T-03 ── a question about the user's own facts gets every saved fact ─────────
+@pytest.mark.parametrize("message", [
+    "Where do I work?", "你好，我的工作地点和过敏情况你还记得吗？", "What's my budget?",
+    "List everything you saved", "List everything you've saved about me", "我的预算是多少？",
+    "Do you remember my commute?", "What are my requirements?",
+])
+def test_u_04_a_question_about_my_own_facts_is_a_recall_question(message):
+    import app as appmod
+    assert appmod._asks_what_is_remembered(message)
+
+
+@pytest.mark.parametrize("message", [
+    "Find flats near where I work", "What is the rent?", "Show me all the flats you know in Camden",
+    "我的预算够吗",
+])
+def test_u_04_other_questions_are_not_recall_questions(message):
+    import app as appmod
+    assert not appmod._asks_what_is_remembered(message)
+
+
+_U04_FACTS = [f"User needs bicycle storage" if i == 0 else f"User saved preference number {i}"
+              for i in range(15)]
+
+
+class _CrowdedMemory:
+    """15 saved facts; relevance ranking returns reflections and request-log rows first."""
+
+    def retrieve(self, query, session_id="default", user_id=None, n=6, branch_lineage=None):
+        rows = [{"id": f"r{i}", "text": f"The user seems to value option {i}", "mtype": "reflection"}
+                for i in range(4)]
+        rows += [{"id": f"e{i}", "text": f"User asked: flats in area {i}", "mtype": "episodic"}
+                 for i in range(4)]
+        rows.insert(2, {"id": "s3", "text": _U04_FACTS[3], "mtype": "semantic"})
+        return rows[:n]
+
+    def semantic_records(self, *, user_id=None):
+        return [{"id": f"s{i}", "text": text, "mtype": "semantic", "created_at": f"2026-10-{i + 10:02d}"}
+                for i, text in enumerate(_U04_FACTS)][::-1]
+
+    def format_for_prompt(self, mems, **_k):
+        return "\n".join(m["text"] for m in mems)
+
+
+def test_u_04_recall_puts_saved_facts_ahead_of_inferences_and_the_log(monkeypatch):
+    import core.tools.memory_tools as mt
+    monkeypatch.setattr(mt, "_mem", lambda: _CrowdedMemory())
+    result = mt.recall_memory_impl("Do I need bicycle storage?", user_id="user-u04", n=6)
+    texts = [m["text"] for m in result["memories"]]
+    assert result["count"] == 6 and texts[0] == _U04_FACTS[3]
+    assert "User needs bicycle storage" in texts
+    assert all(m["mtype"] == "semantic" for m in result["memories"])
+    assert "15 saved facts in total" in result["completeness"]
+    # "list everything" with a wide n gets all 15 saved facts.
+    result = mt.recall_memory_impl("list everything you saved", user_id="user-u04", n=25)
+    assert set(_U04_FACTS) <= {m["text"] for m in result["memories"]}

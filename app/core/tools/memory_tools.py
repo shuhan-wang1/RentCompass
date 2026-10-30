@@ -4,6 +4,8 @@ sub-agent/tool, via MCP) can read & write it. This is the "memory-as-tools" patt
 Letta/LangMem. The underlying store (rag.agent_memory) is shared on disk across the web
 process and the MCP subprocess.
 """
+import re
+
 from core.tool_system import Tool
 
 
@@ -28,13 +30,14 @@ def recall_memory_impl(query: str, n: int = 6,
     # A reflection reaches the model labelled as a tentative inference, and one whose wording
     # escalates or attributes is not returned (R4-12).
     history = getattr(store, "user_stated_history", None)
-    mems = presentable_memories(store.retrieve(query, session_id=session_id, user_id=user_id,
-                                               n=int(n)),
-                                history=(lambda: history(user_id)) if history else None)
+    retrieved = store.retrieve(query, session_id=session_id, user_id=user_id, n=int(n))
     try:
-        saved_total = len(store.semantic_records(user_id=user_id))
+        saved = store.semantic_records(user_id=user_id)
+        saved_total = len(saved)
     except Exception:
-        saved_total = None
+        saved, saved_total = [], None
+    mems = presentable_memories(_saved_facts_first(query, retrieved, saved, int(n)),
+                                history=(lambda: history(user_id)) if history else None)
     return {
         "success": True,
         "count": len(mems),
@@ -48,6 +51,37 @@ def recall_memory_impl(query: str, n: int = 6,
                             if saved_total is not None else "")
                          + "; never say this is everything stored"),
     }
+
+
+def _query_terms(query: str) -> set:
+    text = str(query or "").lower()
+    terms = {word for word in re.findall(r"[a-z]{4,}", text)
+             if word not in {"what", "about", "remember", "saved", "stored", "user", "that", "with",
+                             "have", "does", "this", "your", "from", "know", "everything"}}
+    cjk = "".join(re.findall(r"[\u4e00-\u9fff]", text))
+    return terms | {cjk[i:i + 2] for i in range(len(cjk) - 1)}
+
+
+def _saved_facts_first(query: str, retrieved: list, saved: list, n: int) -> list:
+    """The ``n`` records a recall returns, the user's own saved facts ahead of the rest.
+
+    With ~15 saved facts the relevance ranking filled the slots with reflections and request-log
+    rows, and the reply said "you never told me you need bicycle storage" while that fact was
+    saved (U-04). Every saved fact outranks an inference or a log row: the ranked saved facts
+    first, then the other saved facts (those the query names first), then the rest."""
+    terms = _query_terms(query)
+
+    def named(record) -> bool:
+        text = str(record.get("text") or "").lower()
+        return any(term in text for term in terms)
+
+    ranked_ids = {m.get("id") for m in retrieved if m.get("id")}
+    facts = [m for m in retrieved if m.get("mtype") == "semantic"]
+    others = [m for m in retrieved if m.get("mtype") != "semantic"]
+    unranked = [m for m in saved if m.get("id") not in ranked_ids]
+    ordered = (facts + [m for m in unranked if named(m)] + [m for m in unranked if not named(m)]
+               + others)
+    return ordered[:max(1, n)]
 
 
 def _turn_guard_flagged() -> bool:

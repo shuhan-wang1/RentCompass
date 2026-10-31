@@ -3591,6 +3591,8 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             # (R4-13): the block now carries all of them up to a wide bound, and says how many
             # of how many it lists.
             _mems, _saved_total = _with_all_saved_facts(_am, user_id, _mems)
+        from rag.agent_memory import with_pending_changes
+        _mems = with_pending_changes(_mems, conversation_store.pending_memory_changes(user_id))
         _mem_block = (_am.format_for_prompt(_mems, user_id=user_id) if _saved_total is None
                       else _am.format_for_prompt(_mems, saved_total=_saved_total,
                                                  user_id=user_id))
@@ -3613,6 +3615,12 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         _mem_block = (_am.format_for_prompt(_mems[:6], user_id=user_id) if _saved_total is None
                       else _am.format_for_prompt(_mems, saved_total=_saved_total,
                                                  user_id=user_id))
+
+    if _saved_total is not None and _mem_block:
+        from rag.agent_memory import stated_budget_note
+        _budget_note = stated_budget_note(_mems, persistent_snapshot['accumulated_search_criteria'])
+        if _budget_note:
+            _mem_block = _budget_note + "\n" + _mem_block
 
     if _memory_erasure:
         from core.memory_gate import memory_erasure_texts

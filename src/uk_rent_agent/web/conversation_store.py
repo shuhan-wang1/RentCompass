@@ -1648,6 +1648,27 @@ class ConversationStore:
                 raise
         return True
 
+    def pending_memory_changes(self, user_id: str) -> list[dict]:
+        """The criteria changes of this user's memory jobs that have not stored yet, oldest
+        first. Bounded: a recall reads this on every turn."""
+        with self._lock:
+            rows = self._conn.execute(
+                """SELECT payload_json FROM background_jobs
+                   WHERE user_id=? AND kind='memory_turn' AND status IN ('pending','running')
+                     AND result_json IS NULL
+                   ORDER BY id DESC LIMIT 50""",
+                (user_id,),
+            ).fetchall()
+        changes = []
+        for row in reversed(rows):
+            try:
+                change = json.loads(row["payload_json"]).get("criteria_changes")
+            except (TypeError, ValueError, AttributeError):
+                continue
+            if isinstance(change, dict) and change:
+                changes.append(change)
+        return changes
+
     def background_job_counts(self) -> dict[str, int]:
         with self._lock:
             rows = self._conn.execute(

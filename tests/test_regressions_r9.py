@@ -1,6 +1,8 @@
 """Regression tests (Y-xx, E-xx ids in each test name)."""
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from core.listing_identity import bind_listing_links
@@ -300,3 +302,97 @@ def test_y_05_zh_a_new_destination_keeps_the_area(message, destination):
 @pytest.mark.parametrize("message,area", [("换成 Hackney", "Hackney"), ("改成 Hackney 吧", "Hackney"), ("换到 Hackney 呢", "Hackney")])
 def test_y_05_zh_an_area_switch_stays_one(message, area):
     assert _state_node(_ISLINGTON, message)["areas"] == [area]
+
+
+# Y-06 ── a recall reads what the queued memory jobs will write, and the stated budget wins
+@pytest.fixture
+def memory(tmp_path, monkeypatch):
+    from rag import agent_memory as am_mod
+    monkeypatch.setattr(am_mod, "call_ollama", lambda *a, **k: '{"facts": []}')
+    return am_mod.AgentMemory(db_path=str(tmp_path / "mem"))
+
+
+def _auto_row(memory, text, *, conversation="c1", turn="t1"):
+    memory._turn_local.conversation_id, memory._turn_local.turn_id = conversation, turn
+    try:
+        return memory.add(text, "semantic", "u1", "u1", importance=7, extra_meta=memory._auto_row_meta())
+    finally:
+        memory._turn_local.conversation_id = memory._turn_local.turn_id = None
+
+
+def _saved_texts(memory):
+    return sorted(record["text"] for record in memory.semantic_records(user_id="u1"))
+
+
+_UP = {"budget": {"from": 1800, "to": 2200}}
+_DOWN = {"budget": {"from": 2200, "to": 1800}}
+
+
+def test_y_06_the_row_comes_back_to_a_figure_it_held_before(memory):
+    _auto_row(memory, "The user's budget is £1,800 a month.")
+    assert memory._supersede_slot_facts(_UP, "u1") == 1
+    assert _saved_texts(memory) == ["The user's budget is £2,200 a month."]
+    assert memory._supersede_slot_facts(_DOWN, "u1") == 1
+    assert _saved_texts(memory) == ["The user's budget is £1,800 a month."]
+
+
+@pytest.mark.parametrize("row,pending", [
+    ("The user's budget is £2,200 a month.", [_DOWN]),
+    ("The user's budget is £1,800 a month.", [_UP, _DOWN]),
+    ("The user's budget is £1,800 a month.", [_DOWN]),
+])
+def test_y_06_a_recall_reads_what_the_queued_jobs_will_write(memory, row, pending):
+    from rag.agent_memory import with_pending_changes
+    _auto_row(memory, row)
+    rows = with_pending_changes(memory.semantic_records(user_id="u1"), pending)
+    assert [record["text"] for record in rows] == ["The user's budget is £1,800 a month."]
+    assert _saved_texts(memory) == [row]         # the job still does the writing
+
+
+def test_y_06_an_explicit_row_is_not_rewritten(memory):
+    from rag.agent_memory import with_pending_changes
+    memory.add("The user's budget is £2,200 a month.", "semantic", "u1", "u1", importance=7,
+               extra_meta={"source": "explicit_remember"})
+    rows = with_pending_changes(memory.semantic_records(user_id="u1"), [_DOWN])
+    assert [record["text"] for record in rows] == ["The user's budget is £2,200 a month."]
+
+
+def test_y_06_retrieve_says_where_a_row_came_from(memory):
+    from rag.agent_memory import with_pending_changes
+    _auto_row(memory, "The user's budget is £2,200 a month.")
+    rows = with_pending_changes(memory.retrieve("budget", session_id="u1", user_id="u1"), [_DOWN])
+    assert "The user's budget is £1,800 a month." in [record["text"] for record in rows]
+
+
+def test_y_06_the_store_lists_only_jobs_not_yet_stored(tmp_path):
+    from uk_rent_agent.web.conversation_store import ConversationStore
+    store = ConversationStore(str(tmp_path / "c.sqlite3"))
+    conn = store._conn
+    def job(status, change, result=None, user="u1", kind="memory_turn"):
+        conn.execute(
+            """INSERT INTO background_jobs (user_id, conversation_id, turn_id, kind, dedupe_key, payload_json,
+               result_json, status, available_at, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (user, "c", "t", kind, f"k{conn.total_changes}", json.dumps({"criteria_changes": change}),
+             result, status, "2026", "2026", "2026"))
+    job("done", {"area": {"from": ["A"], "to": ["B"]}})
+    job("pending", _UP)
+    job("running", {"bedrooms": {"from": 1, "to": 2}}, result='{"stored": true}')
+    job("running", _DOWN)
+    job("pending", _UP, user="u2")
+    job("pending", _UP, kind="rolling_summary")
+    job("pending", {})
+    conn.commit()
+    assert store.pending_memory_changes("u1") == [_UP, _DOWN]
+
+
+@pytest.mark.parametrize("rows,criteria,expected", [
+    ([{"mtype": "semantic", "text": "The user's budget is £2,200 a month."}], {"max_budget": 1800}, True),
+    ([{"mtype": "semantic", "text": "The user's budget is £1,800 a month."}], {"max_budget": 1800}, False),
+    ([{"mtype": "semantic", "text": "The user's budget is £2,200 a month."}], {}, False),
+    ([{"mtype": "semantic", "text": "The user has a cat."}], {"max_budget": 1800}, False),
+    ([{"mtype": "reflection", "text": "The budget may be £2,200."}], {"max_budget": 1800}, False),
+])
+def test_y_06_the_stated_budget_beats_a_saved_figure_in_a_recall(rows, criteria, expected):
+    from rag.agent_memory import stated_budget_note
+    note = stated_budget_note(rows, criteria)
+    assert ("£1,800" in note) is expected

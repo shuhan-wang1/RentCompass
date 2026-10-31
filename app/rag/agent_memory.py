@@ -502,6 +502,45 @@ def _criteria_row(text: str) -> bool:
     return bool(_CRITERIA_FACT.search(value)) and not _THIRD_PARTY.search(value)
 
 
+def with_pending_changes(mems: list, pending: list) -> list:
+    """``mems`` as they will read once the memory jobs already queued for this user have run.
+
+    A job runs after its turn has answered, so a recall right after "back to Hackney, £1,800"
+    read the £2,200 of an earlier turn and called the right figure a guess to ignore (r06
+    4d5bbafe); the row reached £1,800 about a minute later. This changes what the turn reads, not
+    what is stored: the jobs still write the rows. Auto-extracted rows about the user's own
+    search only, as for ``_supersede_slot_facts``."""
+    changes = [clean for clean in map(_sanitize_changes, pending or []) if clean]
+    if not changes:
+        return mems
+    out = []
+    for record in mems or []:
+        text = record.get("text")
+        if (record.get("mtype") == "semantic" and record.get("source") == SOURCE_AUTO
+                and _criteria_row(text)):
+            for change in changes:
+                text = _superseded_text(text, change) or text
+            record = dict(record, text=text)
+        out.append(record)
+    return out
+
+
+def stated_budget_note(mems: list, criteria: dict | None) -> str:
+    """A line for a recall's memory block when a saved fact gives another budget than this
+    conversation's criteria: the budget the user stated last is the current one."""
+    budget = (criteria or {}).get("max_budget")
+    if not budget:
+        return ""
+    for record in mems or []:
+        text = str(record.get("text") or "")
+        if record.get("mtype") == "semantic" and _BUDGET_WORD.search(text) and (
+                _row_bounds(text).get("money") not in (None, budget)):
+            return (f"The budget stated most recently in this conversation is £{budget:,.0f} a month. "
+                    "A saved fact that gives another figure is older: asked for the current budget, "
+                    "give this one and say the saved figure differs.")
+    return ""
+
+
 def _money_pattern(amount) -> re.Pattern | None:
     try:
         value = int(round(float(amount)))
@@ -2615,7 +2654,8 @@ class AgentMemory:
             if not isinstance(metadata, dict) or metadata.get('user_id') != uid or metadata.get('mtype') != 'semantic':
                 continue
             records.append({'id': record_id, 'text': document, 'mtype': 'semantic',
-                            'created_at': metadata.get('created_at')})
+                            'created_at': metadata.get('created_at'),
+                            **({'source': metadata['source']} if metadata.get('source') else {})})
         return sorted(records, key=lambda m: str(m.get('created_at') or ''), reverse=True)
 
     def retrieve(self, query, session_id="default", user_id=None, n=6,
@@ -2670,7 +2710,8 @@ class AgentMemory:
         self._touch([t[1] for t in top])
         return [{"id": t[1], "text": t[2], "mtype": t[3].get("mtype"),
                  "importance": t[3].get("importance"), "score": round(t[0], 3),
-                 "created_at": t[3].get('created_at')} for t in top]
+                 "created_at": t[3].get('created_at'),
+                 **({"source": t[3]["source"]} if t[3].get("source") else {})} for t in top]
 
     def _touch(self, ids):
         if not ids:

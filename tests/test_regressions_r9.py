@@ -616,3 +616,43 @@ def test_e_02_a_budget_the_conversation_holds_is_not_replaced():
 def test_e_02_the_reply_does_not_claim_a_budget_was_set(reply, left):
     from core.constraint_updates import without_budget_set_claim
     assert without_budget_set_claim(reply) == left
+
+
+# E-03 ── "Please update what you remember" asks to save what the message states
+_UPDATE = "Correction: I no longer have a dog, and my budget is now £1,700. Please update what you remember."
+
+
+def test_e_03_an_update_request_meets_the_gate():
+    from core import memory_gate as gate
+    assert gate.user_authorizes_memory(_UPDATE) and not gate.is_pure_recall_question(_UPDATE)
+    assert gate.remember_points_back(_UPDATE)
+    clause = gate.explicit_remember_clause(_UPDATE)
+    assert "no longer have a dog" in clause and "£1,700" in clause
+    assert gate.write_authorization(_UPDATE, clause)
+
+
+@pytest.mark.parametrize("message", [
+    "What do you remember?", "Do you update what you remember?", "Can you update your notes?",
+    "Update what you remember?", "What did you save?",
+])
+def test_e_03_a_question_stays_no_save(message):
+    from core import memory_gate as gate
+    assert not gate.user_authorizes_memory(message)
+
+
+def test_e_03_the_executor_saves_the_users_own_words():
+    import asyncio
+
+    from langchain_core.messages import AIMessage
+
+    from core.agent_loop import build_fc_nodes
+    from tests.test_agent_contract_guards import _state, _tc
+    from tests.test_qa_null_injection import _ValidatingProvider
+    state = _state(_UPDATE)
+    state["user_id"] = "u1"
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc(
+        "remember", {"content": "The user no longer has a dog, so pet-friendly accommodation is not a requirement."}, "c0")])]
+    provider = _ValidatingProvider(["remember"])
+    asyncio.run(build_fc_nodes(provider)["execute_tools"](state))
+    (_, params), = provider.calls
+    assert "no longer have a dog" in params["content"] and "pet-friendly" not in params["content"]

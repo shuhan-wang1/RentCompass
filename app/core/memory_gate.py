@@ -76,6 +76,13 @@ _AUTHORIZE_ZH = (
     "存一下", "保存这个", "保存一下", "别忘了", "别忘记", "不要忘记", "标记一下",
 )
 
+# "Please update what you remember." asks to save what the message states; the recall veto read
+# "what you remember" and every `remember` call was denied (r05 f763fcd0, d273c450, ae967d07).
+_UPDATE_MEMORY = re.compile(
+    r"\b(?:please\s+)?update\s+(?:what\s+you(?:['’]ve|\s+have)?\s+(?:remember(?:ed)?|saved|stored|got)|"
+    r"(?:your|my)\s+(?:memory|memories|notes|records?)|(?:my|the)\s+saved\s+\w+)\b"
+    r"|(?:请|帮我)?更新(?:一下)?(?:你)?(?:记住的|的记忆|记忆|保存的)", re.IGNORECASE)
+
 # Recall QUESTIONS — the user is asking what we already know, NOT asking to save.
 # These veto authorization even when a positive substring incidentally matches
 # (e.g. "do you remember my budget"). They are ALSO the recall-cue family that
@@ -232,6 +239,8 @@ def user_authorizes_memory(current_message: str) -> bool:
     text = user_request_text(current_message).strip()
     if not text:
         return False
+    if _UPDATE_MEMORY.search(text) and "?" not in text and "？" not in text:
+        return True
     # "I remember my old budget" is a statement about the user's own recollection,
     # not an imperative to persist anything. Keep an explicit later imperative available.
     if re.match(r"^(?:i|we)\s+remember\b", text, re.IGNORECASE):
@@ -270,6 +279,8 @@ def _has_store_intent(text: str) -> bool:
     false positive is filtered out, every other authorize cue counts.
     """
     if any(phrase in text for phrase in _AUTHORIZE_ZH):
+        return True
+    if _UPDATE_MEMORY.search(text) and "?" not in text and "？" not in text:
         return True
     if _REMEMBER_AS_QUESTION.search(text):
         return False
@@ -471,7 +482,7 @@ _REFERENCE_WORDS = re.compile(r"(?:that|this|it|these|those|all(?:\s+of)?\s+(?:t
 
 def _referenced_statements(text: str) -> list:
     """The user's statements before a "remember that." cue in ``text``, each a sentence."""
-    match = _REMEMBER_REFERENCE.search(text)
+    match = _REMEMBER_REFERENCE.search(text) or _UPDATE_MEMORY.search(text)
     if match is None:
         return []
     out = []
@@ -550,7 +561,8 @@ def _named_remember_clause(text: str) -> str:
 # (R3-14). Declarative first-person sentences right after the clause continue the same list
 # of facts; the first question or request ends it.
 _CONTINUING_STATEMENT = re.compile(
-    r"^\s*(?:(?:and|also|plus)\s+)?(?:my|i|i'm|i’m|i've|i’ve|i\s+am|we|we're|our)\b"
+    r"^\s*(?:(?:correction|update|actually|sorry)\s*[:,]?\s+)?(?:(?:and|also|plus)\s+)?"
+    r"(?:my|i|i'm|i’m|i've|i’ve|i\s+am|we|we're|our)\b"
     r"|^\s*(?:而且|另外|还有|也)?我", re.I)
 _REQUEST_IN_SENTENCE = re.compile(
     r"\b(?:find|search|show|look\s+for|tell\s+me|check|compare|can\s+you|could\s+you|would\s+you|"

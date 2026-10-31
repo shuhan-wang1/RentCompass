@@ -886,8 +886,9 @@ _RENT_BOUND = re.compile(
     r"\b(?:under|below|beneath|less\s+than|no\s+more\s+than|not\s+more\s+than|at\s+most|up\s+to|"
     r"max(?:imum)?(?:\s+of)?)\s*(?:" + _BOUND_FIGURE + r")" + _BOUND_UNIT +
     r"|(?<![\w.,£￡])(?:" + _BOUND_FIGURE + r")" + _BOUND_UNIT + r"\s*(?:max(?:imum)?|tops|at\s+most|or\s+(?:less|under))\b"
-    r"|(?:不超过|不高于|不到|低于|少于|小于|最多|至多|顶多|最高)\s*(?:每月|每周|月租|租金)?\s*(?:" + _ZH_BOUND_FIGURE + r")"
-    r"|(?:" + _ZH_BOUND_FIGURE + r")\s*(?:以内|以下|之内|封顶)", re.I)
+    r"|(?:(?:每月|每周|月租|周租|租金|房租)\s*)?(?:不超过|不高于|不到|低于|少于|小于|最多|至多|顶多|最高)\s*"
+    r"(?:每月|每周|月租|租金)?\s*(?:" + _ZH_BOUND_FIGURE + r")"
+    r"|(?:(?:每月|每周|月租|周租|租金|房租)\s*)?(?:" + _ZH_BOUND_FIGURE + r")\s*(?:以内|以下|之内|封顶)", re.I)
 _HOME_WORD = re.compile(
     r"\b(?:flats?|studios?|rooms?|houses?|homes?|apartments?|maisonettes?|places?|propert(?:y|ies)|"
     r"bedsits?|bedrooms?|beds?|listings?)\b|\d\s*-?\s*beds?\b|"
@@ -922,7 +923,9 @@ def _without_rent_bounds(text: str) -> str:
     for start, end in reversed(_rent_bounds(value)):
         value = value[:start] + value[end:]
     value = re.sub(r"[ \t]{2,}", " ", value)
-    return re.sub(r"\s+([,.!?;，。！？；])", r"\1", value).strip(" ,，")
+    value = re.sub(r"\s+([,.!?;，。！？；])", r"\1", value)
+    value = re.sub(r"[,，]+\s*(?=[,，.!?;。！？；])", "", value)
+    return value.strip(" ,，")
 
 
 def _states_field_value(text: str, field: str, mtype: str = "") -> bool:

@@ -202,6 +202,11 @@ def test_g_03_a_real_subset_still_filters(text):
     ("User asked: 1-bed, 1500 max", "User asked: 1-bed"),
     ("User asked: 在Hackney找一居室，1850镑以内", "User asked: 在Hackney找一居室"),
     ("User asked: 帮我找房，不超过两千镑", "User asked: 帮我找房"),
+    ("User asked: 帮我找个两居室，月租不超过2200，通勤去金丝雀码头", "User asked: 帮我找个两居室，通勤去金丝雀码头"),
+    ("User asked: 伊斯灵顿两居室，月租2500以内，不需要通勤", "User asked: 伊斯灵顿两居室，不需要通勤"),
+    ("User asked: I need an unfurnished flat in Islington, max £2,500, no pets.",
+     "User asked: I need an unfurnished flat in Islington, no pets."),
+    ("User asked: I want a 2-bed in Stratford, max £2,300. No commute.", "User asked: I want a 2-bed in Stratford. No commute."),
     ("The user seems focused on 1-beds under £1,850 in Hackney.", "The user seems focused on 1-beds in Hackney."),
 ])
 def test_g_04_a_rent_bound_is_found_and_only_it_goes(row, rest):

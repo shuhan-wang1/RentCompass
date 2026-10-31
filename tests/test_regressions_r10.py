@@ -795,3 +795,47 @@ def test_g_11_the_row_goes_and_the_other_facts_stay(tmp_path, monkeypatch):
     assert memory.retire_withdrawn_requirements(uid, ["ground-floor"]) == 1
     documents = memory.col.get(where={"user_id": uid}).get("documents")
     assert sorted(documents) == ["I live on the ground floor now.", "The user wants a flat in Camden."]
+
+
+# G-13 ── compare across cities
+def _compare(monkeypatch, generate, stats, **kwargs):
+    import asyncio
+    from core.tools import compare_or_rank_areas as cra
+    monkeypatch.setattr(cra, "generate_candidate_areas", generate)
+    monkeypatch.setattr(cra.area_stats, "aggregate", lambda slugs, budget=None: {
+        slug: stats.get(slug) or cra.area_stats._empty() for slug in slugs})
+    return asyncio.run(cra.compare_or_rank_areas_impl(reply_language="en", **kwargs))
+
+
+_STATS = {"manchester": {"sample_size": 53, "min": 700, "max": 2500, "median": 1350, "freshness_days": 98,
+                         "budget_match_rate": None},
+          "edinburgh": {"sample_size": 29, "min": 800, "max": 2600, "median": 1500, "freshness_days": 98,
+                        "budget_match_rate": None}}
+
+
+@pytest.mark.parametrize("names", [["Manchester", "Edinburgh"], ["Edinburgh", "Manchester"]])
+def test_g_13_two_cities_are_both_evaluated(monkeypatch, names):
+    seeds = []
+
+    async def generate(seed, *, city=None, candidate_names=None, **kwargs):
+        seeds.append(seed)
+        # What the city guard does with a seed: only that seed's own city survives.
+        return [{"name": name, "slug": name.lower(), "commute_minutes": None}
+                for name in candidate_names or [] if name == seed]
+    out = _compare(monkeypatch, generate, _STATS, candidate_areas=names, priorities=["value"])
+    assert sorted(area["name"] for area in out["areas"]) == ["Edinburgh", "Manchester"]
+    assert seeds == names
+
+
+def test_g_13_a_city_with_no_neighbourhood_list_is_read_from_the_cache(monkeypatch):
+    async def generate(seed, **kwargs):
+        return []
+    out = _compare(monkeypatch, generate, _STATS, city="Edinburgh", priorities=["value"])
+    assert out["status"] == "ok" and [area["slug"] for area in out["areas"]] == ["edinburgh"]
+    assert any("city as a whole" in note for note in out["explanation_notes"])
+
+
+def test_g_13_a_city_nothing_is_held_for_stays_no_data(monkeypatch):
+    async def generate(seed, **kwargs):
+        return []
+    assert _compare(monkeypatch, generate, {}, city="Inverness", priorities=["value"])["status"] == "no_data"

@@ -132,16 +132,30 @@ async def _resolve_candidates(city, destination, max_commute, candidate_areas) -
     if candidate_areas:
         names = [str(a) for a in candidate_areas if str(a or "").strip()]
     try:
-        raw = await generate_candidate_areas(
-            seed,
-            city=city,
-            max_commute_time=max_commute,
-            candidate_names=names,
-            no_commute_mode=(destination is None),
-        )
+        if names and len(names) > 1 and not city and not destination:
+            # With no city or destination each name is its own seed: seeded on the first, the
+            # city guard dropped Edinburgh from "Manchester vs Edinburgh" (G-13).
+            batches = await asyncio.gather(*[
+                generate_candidate_areas(name, city=None, max_commute_time=max_commute,
+                                         candidate_names=[name], no_commute_mode=True)
+                for name in names])
+            raw = [item for batch in batches for item in batch or []]
+        else:
+            raw = await generate_candidate_areas(
+                seed,
+                city=city,
+                max_commute_time=max_commute,
+                candidate_names=names,
+                no_commute_mode=(destination is None),
+            )
     except Exception as exc:  # never let candidate generation 500 the tool
         print(f"  [compare_or_rank_areas] candidate generation failed; error_type={type(exc).__name__}")
         raw = []
+    if not raw and city and not destination and not names:
+        # No neighbourhood list came back, but the cache may hold the city itself: Edinburgh's
+        # 29 rows read as no_data when the web lookup was down (G-13).
+        raw = [{"name": city, "slug": re.sub(r"[^a-z0-9]+", "-", city.lower()).strip("-"),
+                "commute_minutes": None, "city_level": True}]
     out: list = []
     seen: set = set()
     for it in raw or []:
@@ -153,6 +167,7 @@ async def _resolve_candidates(city, destination, max_commute, candidate_areas) -
             "name": it.get("name") or slug,
             "slug": slug,
             "commute_minutes": it.get("commute_minutes"),
+            **({"city_level": True} if it.get("city_level") else {}),
         })
     return out
 
@@ -387,6 +402,12 @@ async def compare_or_rank_areas_impl(
             "after any area scored on both, and commute_minutes is null." % ", ".join(unrouted),
             "以下区域无法计算到目的地的通勤时间：%s（目的地无法定位或路线服务不可用）。它们仅按租金评分，"
             "排在同时有租金和通勤评分的区域之后，commute_minutes 为空。" % "、".join(unrouted),
+        ))
+    if any(c.get("city_level") for c in candidates):
+        notes.append(_L(
+            is_zh,
+            "No list of neighbourhoods was available, so this covers the city as a whole.",
+            "没有可用的片区列表，以下是全市的数据。",
         ))
     if low_sample_names:
         notes.append(_L(

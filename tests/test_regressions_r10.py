@@ -351,3 +351,135 @@ def test_g_05_a_found_result_carries_the_sample(monkeypatch):
     assert out["status"] == "found", out
     assert out["coverage"]["rows_held"] == 12
     assert "bounded sample of 12 listings held for Camden" in out["summary"]
+
+
+# G-06 ── a reset takes the cleared values out of what the model reads
+_OLD_TURNS = [
+    {"user": "Find me a 1-bed in Hackney under £2,200", "assistant": "Here are 1-bed flats under £2,200."},
+    {"user": "What about a studio?", "assistant": "Studios run from £1,400."},
+]
+
+
+def test_g_06_the_history_starts_at_the_reset():
+    from core.constraint_updates import history_after_reset
+    assert history_after_reset(_OLD_TURNS, "Can we start from scratch with Hackney?") == []
+    assert history_after_reset(_OLD_TURNS, "Find a flat nearby") == _OLD_TURNS
+    reset = {"user": "Can we start from scratch with Hackney?", "assistant": "Sure."}
+    later = {"user": "Find a flat nearby", "assistant": "Here is one."}
+    assert history_after_reset(_OLD_TURNS + [reset, later], "And a garden?") == [reset, later]
+
+
+def test_g_06_a_question_about_resetting_keeps_the_history():
+    from core.constraint_updates import history_after_reset
+    assert history_after_reset(_OLD_TURNS, "How do I reset my filters?") == _OLD_TURNS
+
+
+def test_g_06_a_rehydrated_history_starts_at_the_reset(monkeypatch):
+    import importlib
+    appmod = importlib.import_module("app")
+    uid, cid = "u_g06", "c_g06"
+    monkeypatch.setattr(appmod.conversation_store, "latest_snapshot", lambda *a: None)
+    monkeypatch.setattr(appmod.conversation_store, "get_messages", lambda *a: [])
+    monkeypatch.setattr(appmod.conversation_store, "rehydrate_history", lambda *a: [
+        *_OLD_TURNS, {"user": "Start over", "assistant": "Sure, where next?"}])
+    appmod._session_store.clear(uid, cid)
+    session = appmod._get_session(uid, cid)
+    assert [turn["user"] for turn in session.history] == ["Start over"]
+    appmod._session_store.clear(uid, cid)
+
+
+def test_g_06_the_memory_block_loses_only_what_this_conversation_derived():
+    from rag.agent_memory import SOURCE_AUTO, without_rows_of_conversation
+    rows = [
+        {"id": 1, "mtype": "episodic", "text": "User asked: 1-bed under £2,200", "from_conversation": "c1"},
+        {"id": 2, "mtype": "semantic", "source": SOURCE_AUTO, "text": "budget under £2,200", "from_conversation": "c1"},
+        {"id": 3, "mtype": "reflection", "text": "The user may want a 1-bed", "from_conversation": "c1"},
+        {"id": 4, "mtype": "semantic", "source": "user_remember", "text": "I have a cat", "from_conversation": "c1"},
+        {"id": 5, "mtype": "semantic", "source": SOURCE_AUTO, "text": "Prefers Hackney", "from_conversation": "c2"},
+        {"id": 6, "mtype": "reflection", "text": "An old inference"},
+    ]
+    assert [row["id"] for row in without_rows_of_conversation(rows, "c1")] == [4, 5, 6]
+
+
+def _turn_up_to_the_graph(monkeypatch, tmp_path, message, *, session_history, summary=""):
+    """Run the handler up to the graph and return what it hands the model."""
+    import asyncio
+    import importlib
+    appmod = importlib.import_module("app")
+    seen = {}
+
+    class _Stop(Exception):
+        pass
+
+    def _capture(**kwargs):
+        seen.update(kwargs)
+        raise _Stop()
+
+    uid, cid = "u_g06_turn", "c_g06_turn"
+    monkeypatch.setattr(appmod, "create_initial_state", _capture)
+    monkeypatch.setattr(appmod, "_ensure_agent_runtime", lambda: object())
+    monkeypatch.setattr(appmod.conversation_store, "latest_snapshot", lambda *a: None)
+    monkeypatch.setattr(appmod.conversation_store, "get_messages", lambda *a: [])
+    appmod._session_store.clear(uid, cid)
+    session = appmod._session_store.get(uid, cid)
+    session.rehydrated = True
+    session.history = list(session_history)
+    session.persistent_state.setdefault("extracted_context", {})["rolling_summary"] = summary
+    with pytest.raises(_Stop):
+        asyncio.run(appmod.handle_with_react_agent(message, {}, False, user_id=uid, conversation_id=cid))
+    after = list(session.history), dict(session.persistent_state.get("extracted_context") or {})
+    appmod._session_store.clear(uid, cid)
+    return seen, after
+
+
+def test_g_06_a_reset_turn_hands_the_model_no_old_turn_and_no_summary(monkeypatch, tmp_path):
+    seen, (history, context) = _turn_up_to_the_graph(
+        monkeypatch, tmp_path, "Can we start from scratch with Hackney?", session_history=_OLD_TURNS,
+        summary="Hard criteria: 1-bed under £2,200")
+    assert seen["extracted_context"]["history"] == []
+    assert "2,200" not in seen["user_query"]
+    assert history == [] and not context.get("rolling_summary")
+
+
+def test_g_06_any_other_turn_keeps_its_history(monkeypatch, tmp_path):
+    seen, (history, context) = _turn_up_to_the_graph(
+        monkeypatch, tmp_path, "What about Camden?", session_history=_OLD_TURNS, summary="Hard criteria: x")
+    assert seen["extracted_context"]["history"] == _OLD_TURNS
+    assert history == _OLD_TURNS and context["rolling_summary"] == "Hard criteria: x"
+
+
+# G-12 ── a new reflection records its turn, and an edit of that turn takes it back
+def test_g_12_a_reflection_goes_with_its_turn(tmp_path, monkeypatch):
+    import rag.agent_memory as am
+    monkeypatch.setenv("AGENT_MEMORY_DB_PATH", str(tmp_path / "memory"))
+    memory = am.AgentMemory()
+    uid = "g12-user"
+    for index in range(5):
+        memory.add(f"User asked: note {index}", "episodic", "s", uid, role="user", importance=9)
+    monkeypatch.setattr(am, "call_ollama", lambda *a, **k: json.dumps(
+        {"insights": ["The user may be weighing a £1,500 maximum against a garden."]}))
+    memory.maybe_reflect("s", uid, conversation_id="c1", turn_id="t1")
+    rows = memory.col.get(where={"$and": [{"user_id": uid}, {"mtype": "reflection"}]})
+    assert len(rows["ids"]) == 1 and rows["metadatas"][0]["origin_turn_id"] == "t1"
+    memory.col.add(documents=["The user may like an old thing."], ids=["old_reflection"],
+                   metadatas=[{"mtype": "reflection", "user_id": uid, "hash": "x"}])
+    assert memory.retire_turn_rows(uid, "c2", ["t1"]) == 0      # another conversation's turn
+    assert memory.retire_turn_rows(uid, "c1", ["t1"]) == 1
+    rows = memory.col.get(where={"$and": [{"user_id": uid}, {"mtype": "reflection"}]})
+    assert rows["ids"] == ["old_reflection"]        # a row with no provenance stays
+
+
+def test_g_12_an_edit_during_the_reflection_writes_nothing(tmp_path, monkeypatch):
+    import rag.agent_memory as am
+    monkeypatch.setenv("AGENT_MEMORY_DB_PATH", str(tmp_path / "memory"))
+    memory = am.AgentMemory()
+    uid = "g12-late"
+    for index in range(5):
+        memory.add(f"User asked: note {index}", "episodic", "s", uid, role="user", importance=9)
+
+    def _edit_lands_now(*a, **k):
+        memory.retire_turn_rows(uid, "c1", ["t1"])
+        return json.dumps({"insights": ["The user may want a garden."]})
+    monkeypatch.setattr(am, "call_ollama", _edit_lands_now)
+    memory.maybe_reflect("s", uid, conversation_id="c1", turn_id="t1")
+    assert not memory.col.get(where={"$and": [{"user_id": uid}, {"mtype": "reflection"}]})["ids"]

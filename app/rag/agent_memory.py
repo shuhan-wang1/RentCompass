@@ -989,6 +989,20 @@ def _without_field_clauses(text: str, field: str) -> str:
     return rest
 
 
+def _row_conversation(meta: dict):
+    """The conversation a row was derived from, when it records one."""
+    return meta.get("conversation_id") or meta.get("origin_conversation_id")
+
+
+def without_rows_of_conversation(memories: list, conversation_id) -> list:
+    """``memories`` without what was derived automatically from one conversation. After "start
+    from scratch" those rows say what the search was before (G-06). An explicitly saved fact stays,
+    and so does anything from another conversation."""
+    return [memory for memory in memories or []
+            if memory.get("from_conversation") != conversation_id
+            or (memory.get("mtype") == "semantic" and memory.get("source") != SOURCE_AUTO)]
+
+
 def history_without_fields(history: list, fields: tuple) -> list:
     """``history`` turns with what they say about the erased ``fields`` removed. The reply is
     no longer cut at 500 characters, so a recap's tail can hold a value the user just erased."""
@@ -2406,9 +2420,9 @@ class AgentMemory:
         return retired
 
     def retire_turn_rows(self, user_id, conversation_id, turn_ids) -> int:
-        """Remove the auto-extracted rows that came from turns an edit took out (W-08). A row with
-        no provenance stays, and an explicit "please remember" row is never touched. A job of
-        such a turn that runs later keeps no facts either."""
+        """Remove the auto-extracted rows and reflections that came from turns an edit took out
+        (W-08, G-12). A row with no provenance stays, and an explicit "please remember" row is
+        never touched. A job of such a turn that runs later keeps no facts either."""
         uid = _valid_user_id(user_id)
         turns = {str(turn) for turn in turn_ids or () if turn}
         if uid is None or not conversation_id or not turns:
@@ -2418,6 +2432,7 @@ class AgentMemory:
         try:
             rows = self.col.get(where={"$and": [{"user_id": uid}, {"mtype": "semantic"}]})
             log = self.col.get(where={"$and": [{"user_id": uid}, {"mtype": "episodic"}]})
+            inferred = self.col.get(where={"$and": [{"user_id": uid}, {"mtype": "reflection"}]})
         except Exception:
             return 0
         doomed = []
@@ -2434,6 +2449,11 @@ class AgentMemory:
         for index, oid in enumerate(log.get("ids") or []):
             meta = (metas[index] if index < len(metas) else None) or {}
             if meta.get("conversation_id") == str(conversation_id) and meta.get("turn_id") in turns:
+                doomed.append(oid)
+        metas = inferred.get("metadatas") or []
+        for index, oid in enumerate(inferred.get("ids") or []):
+            meta = (metas[index] if index < len(metas) else None) or {}
+            if meta.get("origin_conversation_id") == str(conversation_id) and meta.get("origin_turn_id") in turns:
                 doomed.append(oid)
         if doomed:
             with self._lock:
@@ -2577,7 +2597,8 @@ class AgentMemory:
             if not opted_out:
                 # A withheld turn triggers no reflection: nothing new is inferred about a user
                 # while they asked not to be remembered (r6-M1).
-                self.maybe_reflect(session_id, user_id)
+                self.maybe_reflect(session_id, user_id, conversation_id=conversation_id,
+                                   turn_id=turn_id)
             return True
         except Exception as e:
             print(f"[memory] remember_turn error_type={type(e).__name__}")
@@ -2619,7 +2640,10 @@ class AgentMemory:
 
         spawn_observed_thread(self.remember_turn, args=args, kwargs=kwargs)
 
-    def maybe_reflect(self, session_id, user_id):
+    def maybe_reflect(self, session_id, user_id, conversation_id=None, turn_id=None):
+        """Write what this turn's memories suggest. A new reflection records the conversation and
+        turn that made it, so an edit of that turn takes it back; the reflections of a turn have
+        no other provenance (G-12). Rows from before this carry none and stay."""
         user_id = _valid_user_id(user_id)
         if user_id is None:
             return
@@ -2672,7 +2696,10 @@ class AgentMemory:
                 f"{corpus}\n\nJSON: "
             )
             data = _extract_json(call_ollama(prompt, timeout=60) or "") or {}
+            if self._turn_was_retired(user_id, turn_id):
+                return      # the edit landed while the model was writing
             rejected = 0
+            origin = {"origin_conversation_id": conversation_id, "origin_turn_id": turn_id}
             for ins in (data.get("insights") or [])[:3]:
                 if (isinstance(ins, str) and ins.strip() and not contains_sensitive(ins)
                         and not _SENSITIVE_INFERENCE_RE.search(ins)):
@@ -2680,7 +2707,7 @@ class AgentMemory:
                         rejected += 1
                         continue
                     self.add(neutral_user_pronouns(ins.strip(), user_words), "reflection",
-                             session_id, user_id, importance=8)
+                             session_id, user_id, importance=8, extra_meta=origin)
             if rejected:
                 print(f"[memory] reflect rejected_wording={rejected}")
         except Exception as e:
@@ -2792,7 +2819,9 @@ class AgentMemory:
         return [{"id": t[1], "text": t[2], "mtype": t[3].get("mtype"),
                  "importance": t[3].get("importance"), "score": round(t[0], 3),
                  "created_at": t[3].get('created_at'),
-                 **({"source": t[3]["source"]} if t[3].get("source") else {})} for t in top]
+                 **({"source": t[3]["source"]} if t[3].get("source") else {}),
+                 **({"from_conversation": _row_conversation(t[3])} if _row_conversation(t[3]) else {})}
+                for t in top]
 
     def _touch(self, ids):
         if not ids:

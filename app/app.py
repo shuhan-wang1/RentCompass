@@ -1275,8 +1275,9 @@ def _get_session(user_id, conversation_id):
             )
         try:
             if not sess.history:
-                sess.history = conversation_store.rehydrate_history(
-                    user_id, conversation_id, MAX_HISTORY_LENGTH)
+                from core.constraint_updates import history_after_reset
+                sess.history = history_after_reset(conversation_store.rehydrate_history(
+                    user_id, conversation_id, MAX_HISTORY_LENGTH))
                 erased = tuple(sess.persistent_state.get('accumulated_search_criteria', {}).get(
                     '_erased_fields') or ())
                 if erased:
@@ -3417,8 +3418,19 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     # call in phase 2. We work off deep-copied snapshots so the graph mutating its
     # inputs can never corrupt the shared cached state mid-flight.
     turn_lock = _session_store.turn_lock(user_id, conversation_id)
+    from core.constraint_updates import history_after_reset, resets_all_criteria
+    _reset_in_conversation = resets_all_criteria(user_message) or any(
+        message.get('role') == 'user' and resets_all_criteria(message.get('content') or '')
+        for message in _conversation_messages)
     with turn_lock:
         _sess = _get_session(user_id, conversation_id)
+        if resets_all_criteria(user_message):
+            # The old search leaves what the model reads, not only the state: a summary of the
+            # turns before is the same text (F-01).
+            _sess.history = history_after_reset(_sess.history, user_message)
+            _reset_context = _sess.persistent_state.get('extracted_context') or {}
+            _reset_context.pop('rolling_summary', None)
+            _reset_context.pop('rolling_summary_through_turn_id', None)
         persistent_snapshot = copy.deepcopy(_sess.persistent_state)
         history_snapshot = list(_sess.history)
         # 🆕 Ask-AI 聚焦解析要对照"完整推荐列表"，它挂在 session 对象上（_sess.last_results，
@@ -3599,8 +3611,11 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             # (R4-13): the block now carries all of them up to a wide bound, and says how many
             # of how many it lists.
             _mems, _saved_total = _with_all_saved_facts(_am, user_id, _mems)
-        from rag.agent_memory import with_pending_changes
+        from rag.agent_memory import with_pending_changes, without_rows_of_conversation
         _mems = with_pending_changes(_mems, conversation_store.pending_memory_changes(user_id))
+        if _reset_in_conversation and _saved_total is None:
+            # A recall still reads everything: "what do you remember?" has its own answer.
+            _mems = without_rows_of_conversation(_mems, conversation_id)
         _mem_block = (_am.format_for_prompt(_mems, user_id=user_id) if _saved_total is None
                       else _am.format_for_prompt(_mems, saved_total=_saved_total,
                                                  user_id=user_id))

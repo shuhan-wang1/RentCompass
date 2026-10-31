@@ -1203,6 +1203,20 @@ def resets_all_criteria(text: str) -> bool:
     return bool(_criteria_reset_spans(text))
 
 
+def history_after_reset(history: list, message: str = '') -> list:
+    """What the model may still read of ``history``: nothing from before the last reset. "Can we
+    start from scratch with Hackney?" left a clean state, and the old turns gave the model "the
+    filters I sent (1-bed, under £2,200)" to write about and a user_query to fill in, past two
+    instructions not to (D-04, F-01). The reset turn itself stays: it states what comes next."""
+    turns = list(history or [])
+    if resets_all_criteria(message):
+        return []
+    for index in range(len(turns) - 1, -1, -1):
+        if isinstance(turns[index], dict) and resets_all_criteria(turns[index].get('user') or ''):
+            return turns[index:]
+    return turns
+
+
 # What opens the rest of a reset: "start from scratch with Hackney" names a place, which only
 # the words after a cue reveal once the reset is gone (V-02). "with a 2-bed" is no place.
 _RESET_PLACE_LEAD = re.compile(r"\s*(?:with|from|using)\s+(?!(?:a|an|the|my|our|\d+)\b)", re.I)

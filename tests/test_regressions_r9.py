@@ -744,3 +744,24 @@ def test_y_08_a_reflection_on_a_requirement_only_the_removed_turns_stated_goes(m
     _edit_app(monkeypatch, memory, messages, turns)("u1", "c1", "t2")
     assert sorted(memory.col.get(where={"mtype": "reflection"})["documents"]) == [
         "The user seems focused on Hackney.", "The user wants a balcony, which seems to matter."]
+
+
+# Y-09 ── a reference to an earlier search is no narrowing of the current list
+_SHOWN = [{"address": "Elia Street, Angel, London, N1", "price": "£2250/month", "bedrooms": 1},
+          {"address": "City Road, London, EC1V", "price": "£2150/month", "bedrooms": 2}]
+
+
+@pytest.mark.parametrize("message", [
+    "What was the cheapest result in your first search?", "Which was the cheapest in the earlier results?",
+    "What was the cheapest of the previous search?", "第一次搜索里最便宜的是哪个？", "上次的结果按价格排序是什么",
+    "Which of the listings you showed me was the cheapest?",
+])
+def test_y_09_an_earlier_search_goes_to_the_model(message):
+    from core.refine_results import parse_refinement
+    assert parse_refinement(message, _SHOWN) is None
+
+
+@pytest.mark.parametrize("message", ["Sort by cheapest first", "Sort by price", "Drop anything over £2200"])
+def test_y_09_the_current_list_still_refines(message):
+    from core.refine_results import parse_refinement
+    assert parse_refinement(message, _SHOWN) is not None

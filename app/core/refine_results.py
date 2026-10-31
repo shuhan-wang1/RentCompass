@@ -412,6 +412,13 @@ def _ceiling_covers_shown_set(text: str, previous: List[dict], max_price: Option
         return False
 
 
+_EARLIER_SEARCH = re.compile(
+    r"\bfirst\s+(?:search|results|listings|batch|round|set)\b"
+    r"|\b(?:earlier|previous|original|initial)\s+(?:search|results?|listings?|batch|round|set)\b"
+    r"|\b(?:search|results?|listings?)\s+(?:you\s+)?(?:\w+\s+)?(?:earlier|before)\b"
+    r"|(?:第一次|首次|上一次|上次|之前|前面|最开始|一开始|刚才|先前)的?(?:搜索|搜的|结果|那批|那次|找的|查的|搜到)", re.I)
+
+
 def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, Any]]:
     """Parse ``message`` into a refinement spec, or None when it is not a pure narrowing.
 
@@ -435,6 +442,11 @@ def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, A
     if re.search(r'\b(?:compare|comparison|measurements?|written\s+(?:cat\s+)?permission|'
                  r'actual\s+details|what\s+.*(?:confirm|unknown)|details\s+for)\b|'
                  r'比较|对比|尺寸|书面许可|房源详情|实际确认', text, re.I):
+        return None
+    # "What was the cheapest result in your first search?" asks about another set: re-sorting the
+    # current one left it unanswered (r06 1e81a113). The model answers from history or says it can't.
+    from core.constraint_updates import without_shown_results_questions
+    if _EARLIER_SEARCH.search(text) or not without_shown_results_questions(text).strip():
         return None
     # "Tell me more about Arbutus Street in Haggerston" asks about one listing; filtering
     # the shown set by its area label would answer a question nobody asked (r6d).

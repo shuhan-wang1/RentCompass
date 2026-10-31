@@ -864,6 +864,59 @@ def _mentions_field(text: str, field: str) -> bool:
     return any(term in value for term in _FIELD_TERMS.get(field, ()))
 
 
+# "User asked: Find me a 1-bed in Hackney under £1,850, no commute" says no budget word, so "forget
+# my budget" left the row, the reply said the figure would not come back, and a later conversation
+# recited it (G-04). A bound on a home's rent IS the budget, however it is worded. Fares, a listing's
+# price and anything said of another person are not.
+_BOUND_FIGURE = (r"(?:(?:[£￡]\s?)?(?:\d{1,2},?\d{3}|\d{3})(?:\.\d+)?(?!\d|,\d)|(?:[£￡]\s?)?\d{1,2}(?:\.\d+)?k\b)"
+                 r"(?!\s*(?:m\b|km\b|metres?|meters?|miles?|mins?|minutes?|sq|ft\b|feet|米|公里|分钟))")
+_BOUND_UNIT = (r"(?:\s*(?:pcm|pm|pw|pcw|p/m|p/w|per\s+(?:month|week)|a\s+(?:month|week)|/\s*(?:month|week|mo|wk)|"
+               r"monthly|weekly))?")
+_ZH_BOUND_FIGURE = (r"(?:[£￡]\s?)?\d{3,}(?:\.\d+)?\s*(?:英镑|镑|磅|块|元)?"
+                    r"|[一二两三四五六七八九十][千万百][零一二两三四五六七八九十百千]*\s*(?:英镑|镑|磅|块|元)?")
+_RENT_BOUND = re.compile(
+    r"\b(?:under|below|beneath|less\s+than|no\s+more\s+than|not\s+more\s+than|at\s+most|up\s+to|"
+    r"max(?:imum)?(?:\s+of)?)\s*(?:" + _BOUND_FIGURE + r")" + _BOUND_UNIT +
+    r"|(?<![\w.,£￡])(?:" + _BOUND_FIGURE + r")" + _BOUND_UNIT + r"\s*(?:max(?:imum)?|tops|at\s+most|or\s+(?:less|under))\b"
+    r"|(?:不超过|不高于|不到|低于|少于|小于|最多|至多|顶多|最高)\s*(?:每月|每周|月租|租金)?\s*(?:" + _ZH_BOUND_FIGURE + r")"
+    r"|(?:" + _ZH_BOUND_FIGURE + r")\s*(?:以内|以下|之内|封顶)", re.I)
+_HOME_WORD = re.compile(
+    r"\b(?:flats?|studios?|rooms?|houses?|homes?|apartments?|maisonettes?|places?|propert(?:y|ies)|"
+    r"bedsits?|bedrooms?|beds?|listings?)\b|\d\s*-?\s*beds?\b|"
+    r"房|公寓|单间|一居|两居|二居|三居|卧室|一室|两室|整租|合租", re.I)
+_NOT_A_RENT = re.compile(
+    r"\b(?:fares?|travel\s*cards?|oyster|transport|deposits?|council\s+tax|bills?|broadband|salary|"
+    r"incomes?|earn\w*|gyms?)\b|交通|押金|车票|月票|工资|收入", re.I)
+_BOUND_WINDOW = 24
+_LOG_LEAD = re.compile(r"^\s*User asked:\s*", re.I)
+
+
+def _rent_bounds(text: str) -> list:
+    """The spans of ``text`` that bound the user's rent, sentence by sentence."""
+    value = str(text or "")
+    if _THIRD_PARTY.search(value):
+        return []
+    spans = []
+    for match in _RENT_BOUND.finditer(value):
+        around = value[max(0, match.start() - _BOUND_WINDOW):match.end() + _BOUND_WINDOW]
+        if not _NOT_A_RENT.search(around):
+            spans.append(match.span())
+    if not spans or _HOME_WORD.search(value):
+        return spans
+    # "under £1,850 please" answers the question it was asked: no noun, and little else in the row.
+    rest = _LOG_LEAD.sub("", _RENT_BOUND.sub(" ", value))
+    return spans if len(re.findall(r"[^\W\d_]+", rest)) <= 3 else []
+
+
+def _without_rent_bounds(text: str) -> str:
+    """``text`` with its rent bounds cut, the rest of the sentence kept."""
+    value = str(text or "")
+    for start, end in reversed(_rent_bounds(value)):
+        value = value[:start] + value[end:]
+    value = re.sub(r"[ \t]{2,}", " ", value)
+    return re.sub(r"\s+([,.!?;，。！？；])", r"\1", value).strip(" ,，")
+
+
 def _states_field_value(text: str, field: str, mtype: str = "") -> bool:
     """True when ``text`` is a statement of THIS user's value for ``field``.
 
@@ -871,7 +924,10 @@ def _states_field_value(text: str, field: str, mtype: str = "") -> bool:
     OR a distilled layer (semantic/reflection records are about the user by
     construction — "budget £1400/month" carries no pronoun). (c) is what keeps a market
     fact the user merely asked about ("Camden rents average £1800") out of the scrub.
+    A bound on the rent of a home is the budget without any of that (G-04).
     """
+    if field == "budget" and _rent_bounds(text):
+        return True
     if not _mentions_field(text, field):
         return False
     if not _MONEY_RE.search(text or ""):
@@ -907,10 +963,13 @@ def _without_field_clauses(text: str, field: str) -> str:
 
     Returns "" when nothing but lead-in words would be left, so the caller deletes the row
     instead of keeping an empty shell. The value cannot survive: every clause with a
-    money-sized number goes, whether or not it repeats the field's name.
+    money-sized number goes, whether or not it repeats the field's name. A rent bound goes on its
+    own first, so "Find a 1-bed in Hackney under £1,850" keeps what it asked for (G-04).
     """
     out = []
     cjk = bool(re.search(r"[\u4e00-\u9fff]", text or ""))
+    if field == "budget":
+        text = _without_rent_bounds(text)
     for sentence in _SENTENCE_SPLIT.split(str(text or "")):
         if not sentence.strip():
             continue

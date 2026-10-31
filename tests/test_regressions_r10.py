@@ -190,3 +190,85 @@ def test_g_03_a_real_subset_still_filters(text):
     from core.refine_results import parse_refinement
     spec = parse_refinement(text, _POPLAR_IN_BOW)
     assert spec and spec["filters"][0]["kind"] == "area"
+
+
+# G-04 ── a rent bound is the budget however it is worded
+@pytest.mark.parametrize("row,rest", [
+    ("User asked: Find me a 1-bed in Hackney under £1,850, no commute",
+     "User asked: Find me a 1-bed in Hackney, no commute"),
+    ("User asked: Find a flat, max £1,850 a month", "User asked: Find a flat"),
+    ("User asked: cheap studio up to £1.5k", "User asked: cheap studio"),
+    ("User asked: 1-bed, 1500 max", "User asked: 1-bed"),
+    ("User asked: 在Hackney找一居室，1850镑以内", "User asked: 在Hackney找一居室"),
+    ("User asked: 帮我找房，不超过两千镑", "User asked: 帮我找房"),
+    ("The user seems focused on 1-beds under £1,850 in Hackney.", "The user seems focused on 1-beds in Hackney."),
+])
+def test_g_04_a_rent_bound_is_found_and_only_it_goes(row, rest):
+    from rag.agent_memory import _states_field_value, _without_field_clauses
+    assert _states_field_value(row, "budget", "episodic")
+    assert _states_field_value(row, "budget", "reflection")
+    assert _without_field_clauses(row, "budget") == rest
+
+
+def test_g_04_a_bare_bound_answers_its_question():
+    from rag.agent_memory import _states_field_value, _without_field_clauses
+    assert _states_field_value("User asked: under £1,850 please", "budget", "episodic")
+    assert _without_field_clauses("User asked: under £1,850 please", "budget") == ""
+
+
+@pytest.mark.parametrize("row", [
+    "User asked: Is there a travelcard under £150?",
+    "User asked: What is the fare, under £200?",
+    "User asked: flat with a deposit under £2,000",
+    "User asked: The flat is listed at £1,850",
+    "User asked: my friend wants a flat under £2,000",
+    "User asked: find me a 1-bed within 800 metres of the station",
+    "User asked: find a 2-bed up to 30 minutes from Bank",
+    "User asked: houses under 500m from the park",
+    "User asked: what do Camden rents average? £1800",
+])
+def test_g_04_other_figures_are_no_budget(row):
+    from rag.agent_memory import _states_field_value
+    assert not _states_field_value(row, "budget", "episodic")
+
+
+def test_g_04_forget_scrubs_the_search_log(tmp_path, monkeypatch):
+    from rag.agent_memory import AgentMemory
+    monkeypatch.setenv("AGENT_MEMORY_DB_PATH", str(tmp_path / "memory"))
+    memory = AgentMemory()
+    uid = "g04-user"
+    memory.add("User asked: Find me a 1-bed in Hackney under £1,850, no commute", "episodic", uid, uid, role="user")
+    memory.add("User asked: Is there a travelcard under £150?", "episodic", uid, uid, role="user")
+    memory.add("The user keeps looking at 1-beds under £1,850.", "reflection", uid, uid)
+    report = memory.forget_fact(uid, ("budget",))
+    assert report["complete"]
+    documents = memory.col.get(where={"user_id": uid}).get("documents")
+    assert sorted(documents) == ["The user keeps looking at 1-beds.",
+                                 "User asked: Find me a 1-bed in Hackney, no commute",
+                                 "User asked: Is there a travelcard under £150?"]
+
+
+_ERASED = {"fields": ("budget",), "complete": True, "deleted": 1, "rewritten": 0}
+
+
+@pytest.mark.parametrize("body,kept", [
+    ("Done. I've deleted your saved budget from long-term memory, so it won't be recalled in any "
+     "future conversation.\n\nI still have two other things on file.", "I still have two other things on file."),
+    ("Done. Your saved budget figures have been deleted from long-term memory, in every place they "
+     "were stored. They will not be recalled in any future conversation.\n\nAnything else?", "Anything else?"),
+    ("I've deleted your old budget and set £2,600 as the new one.", "I've deleted your old budget and set £2,600 as the new one."),
+])
+def test_g_04_the_reply_says_the_deletion_once(body, kept):
+    from core.memory_gate import MEMORY_ERASED_ACK_EN, acknowledge_memory_erasure
+    text = acknowledge_memory_erasure(body, _ERASED, "en")
+    assert text.startswith(MEMORY_ERASED_ACK_EN.format(fields="budget"))
+    assert text.endswith(kept)
+    assert "long-term memory" not in text and "future conversation" not in text
+
+
+def test_g_04_the_zh_reply_says_the_deletion_once():
+    from core.memory_gate import acknowledge_memory_erasure
+    body = ("已经处理好了：你保存过的所有预算数据，我已经从长期记忆中全部删除，不会再被调取，之后的对话里也不会再用到。\n\n"
+            "目前仍保留的内容有两条。")
+    text = acknowledge_memory_erasure(body, _ERASED, "zh")
+    assert text.count("删除") == 1 and text.endswith("目前仍保留的内容有两条。")

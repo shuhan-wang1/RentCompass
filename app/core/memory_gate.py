@@ -1237,6 +1237,26 @@ _ERASURE_DENIAL = re.compile(
     r"无法删除|不能删除|没(?:有)?办法删除|仍(?:然)?(?:保存|存储)|还(?:保存|存储)着", re.I)
 
 
+# The model reads the erasure note and says it again beside the fixed acknowledgement: "Done: I've
+# deleted ... \n\nDone. I've deleted ..." (A-F7, 3/3). What repeats it goes; a figure stays, because
+# "... and set £2,600" says something the acknowledgement does not.
+_ERASURE_ECHO = re.compile(
+    r"\b(?:won.?t|will\s+not|can.?t|cannot)\s+(?:\w+\s+){0,2}?(?:be\s+)?(?:recalled|come\s+back|resurface)\b|"
+    r"不会再(?:被)?(?:调取|使用|用到|提起|出现)", re.I)
+_BARE_DONE = re.compile(r"^\W*(?:done|ok(?:ay)?|sure|all\s+done|understood|好的|已经?处理好了|完成了?)\W*$", re.I)
+
+
+def _repeats_erasure(sentence: str, fields) -> bool:
+    try:
+        from rag.agent_memory import _MONEY_RE, _mentions_field
+    except Exception:
+        return False
+    if _MONEY_RE.search(sentence):
+        return False
+    return bool((_is_deletion_claim(sentence) and any(_mentions_field(sentence, f) for f in fields))
+                or _ERASURE_ECHO.search(sentence) or _BARE_DONE.match(sentence))
+
+
 def memory_erasure_removed_nothing(report) -> bool:
     """True for a verified erasure that deleted and rewrote no row. A report without the row
     counts states no such thing."""
@@ -1285,7 +1305,9 @@ def acknowledge_memory_erasure(text: str, report, reply_language: str = "en", *,
     if not ack or ack in body:
         return body
     if report.get("complete") and not memory_erasure_removed_nothing(report):
-        body = _without_sentences(body, _ERASURE_DENIAL.search)
+        fields = report.get("fields") or ()
+        body = _without_sentences(body, lambda piece: _ERASURE_DENIAL.search(piece)
+                                  or _repeats_erasure(piece, fields))
     return f"{ack}\n\n{body}" if body.strip() else ack
 
 

@@ -656,3 +656,25 @@ def test_e_03_the_executor_saves_the_users_own_words():
     asyncio.run(build_fc_nodes(provider)["execute_tools"](state))
     (_, params), = provider.calls
     assert "no longer have a dog" in params["content"] and "pet-friendly" not in params["content"]
+
+
+# E-06 ── a bearer header passes no redactor (dummy values only)
+@pytest.mark.parametrize("text,value", [
+    ("Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJkdW1teSJ9.ZHVtbXktc2ln", "eyJhbGci"),  # gitleaks:allow
+    ("Bearer eyJhbGciOiJIUzI1NiJ9", "eyJhbGci"), ("my header is Bearer eyJhbGciOiJub25lIn0.e30.", "eyJhbGci"),
+    ("Authorization: Bearer dummy0token0value0000", "dummy0token"), ("bearer dummy0token0value0000", "dummy0token"),
+    ("Authorization: Basic ZHVtbXk6ZHVtbXkwMDAw", "ZHVtbXk6"), ("Authorization: dummy0token0value0000", "dummy0token"),
+])
+def test_e_06_a_bearer_header_is_replaced(text, value):
+    from rag.agent_memory import redact_secrets, redact_sensitive
+    assert value not in redact_secrets(text)[0] and "credentials" in redact_secrets(text)[1]
+    assert value not in redact_sensitive(text)[0]
+
+
+@pytest.mark.parametrize("text", [
+    "The bearer of the lease is my partner", "Please remember the bearer of this letter",
+    "Authorization: from my landlord is pending", "eye contact matters", "I want a 2-bed in Hackney",
+])
+def test_e_06_ordinary_words_stay(text):
+    from rag.agent_memory import redact_secrets
+    assert redact_secrets(text) == (text, [])

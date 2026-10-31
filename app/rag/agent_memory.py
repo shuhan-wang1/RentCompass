@@ -1253,7 +1253,11 @@ _SECRET_PATTERNS = tuple((name, re.compile(pattern, re.I)) for name, pattern in 
     ("credentials", r"(?<![A-Za-z0-9_-])(?P<v>(?:sk|pk|rk)-(?:[a-z]{2,8}-)?[A-Za-z0-9_-]{16,}"
                     r"|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[abpr]-[A-Za-z0-9-]{16,}"
                     r"|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}"
-                    r"|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,})(?![A-Za-z0-9_-])"),
+                    r"|eyJ[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]+){0,2})(?![A-Za-z0-9_-])"),
+    # "Authorization: Bearer abc123…", the header as pasted. A digit and a length tell a token from
+    # "the bearer of the lease".
+    ("credentials", r"(?<![A-Za-z0-9])(?:authorization\s*[:=]\s*(?:bearer|basic|token)?|bearer)\s*"
+                    r"(?=[^\s,;]*\d)(?P<v>[A-Za-z0-9._~+/=-]{12,})"),
     # A value with a digit, or a long one: "my API key is stored elsewhere" states none.
     ("credentials", r"(?<![A-Za-z0-9])(?:api[_ -]?key|secret[_ -]?key|access[_ -]?token|auth[_ -]?token|"
                     r"bearer\s+token|private[_ -]?key)(?![A-Za-z0-9])"

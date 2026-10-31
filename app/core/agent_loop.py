@@ -4558,6 +4558,12 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     requested_radius = _user_radius_m(cm)
                     if requested_radius is not None:
                         args['radius'] = requested_radius
+            elif name == "check_safety":
+                # The listing's own point, as for the nearby search in the same turn: the
+                # address geocoded about 2 km from the listing (r06 dd3d3669, e0d08fc3).
+                from core.property_scope import has_property_reference
+                if not has_property_reference(cur_msg, ec):
+                    args = _inject_poi_coords(args, state)
             elif name in ("recall_memory", "remember"):
                 # PRIVACY (mirror legacy execute_tool_node): namespace from state, and
                 # fail closed on a missing user_id rather than falling into the shared

@@ -765,3 +765,41 @@ def test_y_09_an_earlier_search_goes_to_the_model(message):
 def test_y_09_the_current_list_still_refines(message):
     from core.refine_results import parse_refinement
     assert parse_refinement(message, _SHOWN) is not None
+
+
+# Y-10 ── the safety lookup gets the listing's own coordinates, as the nearby search does
+def _dispatched(tool, args, context):
+    import asyncio
+
+    from langchain_core.messages import AIMessage
+
+    from core.agent_loop import build_fc_nodes
+    from tests.test_agent_contract_guards import _state, _tc
+    from tests.test_qa_null_injection import _ValidatingProvider, _strict_null_args
+    state = _state("Is it safe?")
+    state["extracted_context"] = {**(state.get("extracted_context") or {}), **context}
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc(tool, _strict_null_args(tool, args), "c0")])]
+    provider = _ValidatingProvider([tool])
+    asyncio.run(build_fc_nodes(provider)["execute_tools"](state))
+    (_, params), = provider.calls
+    return params
+
+
+_ROW = {"address": "Caledonian Road, London", "geo_location": "51.533095,-0.119493",
+        "url": "https://www.onthemarket.com/details/1/"}
+
+
+def test_y_10_a_listings_safety_check_uses_its_coordinates():
+    params = _dispatched("check_safety", {"address": "Caledonian Road, London"}, {"last_results_full": [_ROW], "view_results": [_ROW]})
+    assert (params["latitude"], params["longitude"]) == (51.533095, -0.119493)
+
+
+def test_y_10_another_place_is_not_given_a_listings_coordinates():
+    params = _dispatched("check_safety", {"address": "Camden"}, {"last_results_full": [_ROW], "view_results": [_ROW]})
+    assert not params.get("latitude") and not params.get("longitude")
+
+
+def test_y_10_the_models_coordinates_stay():
+    params = _dispatched("check_safety", {"address": "Caledonian Road, London", "latitude": 51.5, "longitude": -0.1},
+                         {"last_results_full": [_ROW], "view_results": [_ROW]})
+    assert (params["latitude"], params["longitude"]) == (51.5, -0.1)

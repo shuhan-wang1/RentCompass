@@ -2430,7 +2430,7 @@ _NEAR_FOLLOW_UP = re.compile(
     r"\s*(?:(?:and|or|ok(?:ay)?|then|so|actually|now)\s+)*(?:(?:what|how)\s+about\s+)?(?:somewhere\s+)?", re.I)
 
 
-def institution_home_area(text: str) -> str | None:
+def institution_home_area(text: str, *, follow_up_only: bool = False) -> str | None:
     """The area around a curated university a home search asks to be near, else None: "Find a
     flat near UCL ..." after a Manchester search kept Manchester and showed commutes of 1023
     minutes, where a new conversation searched Bloomsbury (W-04). A short follow-up asks the
@@ -2439,8 +2439,9 @@ def institution_home_area(text: str) -> str | None:
     from core.scraping.on_demand import UNIVERSITY_KEYS, _match_location
     source = str(text or "")[:2000]
     for match in _NEAR_INSTITUTION.finditer(source):
-        if (not _HOME_SEARCH_WORD.search(clause_at(source, match.start(), match.end()))
-                and not _NEAR_FOLLOW_UP.fullmatch(re.split(r"[.!?;\n]", source[:match.start()])[-1])):
+        follow_up = bool(_NEAR_FOLLOW_UP.fullmatch(re.split(r"[.!?;\n]", source[:match.start()])[-1]))
+        if not follow_up and (follow_up_only or not _HOME_SEARCH_WORD.search(
+                clause_at(source, match.start(), match.end()))):
             continue
         slug, _city, key, kind = _match_location(match.group("name"))
         if kind == "landmark" and key in UNIVERSITY_KEYS:

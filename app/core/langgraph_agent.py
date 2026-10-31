@@ -1380,9 +1380,9 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     from core.tools.search_properties import institution_home_area
     disowned = commute_disowned(current_message)
     if disowned or (result.get('no_commute') and not labelled_destination
-                    and institution_home_area(current_message)):
-        # "commute to UCL not needed" names the place to refuse it (W-04). A home near a
-        # university is no commute to it either, for someone who said they have none (r06).
+                    and institution_home_area(current_message, follow_up_only=True)):
+        # "commute to UCL not needed" names the place to refuse it (W-04). "What about near
+        # UCL?" asks where to live, and someone who said they have no commute still has none.
         disowned = True
         labelled_destination = message_destination = None
     # "Forget that I work at Canary Wharf" asks to DROP the destination; it used to SET it

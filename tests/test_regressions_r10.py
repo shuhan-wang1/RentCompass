@@ -80,3 +80,90 @@ def test_g_01_a_plain_can_stretch_is_the_new_ceiling(text, expected):
 def test_g_01_a_weekly_delta_is_converted(text):
     from core.search_readiness import detect_relative_budget_delta
     assert detect_relative_budget_delta(text) == pytest.approx(216.67, abs=0.01)
+
+
+# G-02 ── a withdrawal with a replacement in one message
+_STRATFORD = {"area": "Stratford", "areas": ["Stratford"], "bedrooms": 1, "max_budget": 2000,
+              "no_commute": True, "room_type": "whole", "budget_period": "month"}
+
+
+@pytest.mark.parametrize("text", [
+    "Actually I changed my mind, forget Stratford, use Poplar",
+    "Forget about Stratford and search Poplar",
+    "Never mind Stratford, Poplar please",
+    "Never mind Stratford, how about Poplar?",
+    "Scrap Stratford, use Poplar instead",
+    "Forget Stratford. Use Poplar.",
+    "Use Poplar, forget Stratford",
+    "Ignore Stratford, use Poplar",
+    "Disregard Stratford, search Poplar.",
+    "忘掉Stratford，用Poplar",
+    "不要Stratford了，搜Poplar",
+])
+def test_g_02_the_replacement_takes_over(text):
+    from core.langgraph_agent import _apply_explicit_criteria_updates as apply
+    after = apply(dict(_STRATFORD), text)
+    assert (after["area"], after["areas"]) == ("Poplar", ["Poplar"])
+    assert after["max_budget"] == 2000
+
+
+@pytest.mark.parametrize("text", [
+    "Remove Stratford", "Never mind Stratford", "Scrap Stratford",
+    "Remove Stratford, Canary Wharf is too far",
+    "Remove Stratford and Hackney",
+])
+def test_g_02_a_removal_with_no_replacement_leaves_no_area(text):
+    from core.langgraph_agent import _apply_explicit_criteria_updates as apply
+    after = apply(dict(_STRATFORD), text)
+    assert (after["area"], after["areas"]) == (None, [])
+
+
+def test_g_02_one_of_two_areas_is_replaced():
+    from core.tools.search_properties import area_list_edit
+    assert area_list_edit("Forget Stratford, use Poplar", ["Stratford", "Hackney"]) == ["Hackney", "Poplar"]
+    assert area_list_edit("Forget Stratford, use Poplar", ["Poplar"]) == ["Poplar"]     # idempotent
+
+
+@pytest.mark.parametrize("text", ["Search Poplar", "Try Poplar", "Poplar please"])
+def test_g_02_a_place_without_a_removal_is_no_list_edit(text):
+    from core.tools.search_properties import area_list_edit
+    assert area_list_edit(text, ["Stratford"]) is None
+
+
+def test_g_02_a_budget_named_to_be_replaced_is_no_reference_to_it():
+    from core.constraint_updates import budget_reference
+    assert budget_reference("Forget my old budget, use £2,300 instead") is None
+    assert budget_reference("Go back to my old budget") == "previous"
+    assert budget_reference("Use the original budget") == "first"
+
+
+def test_g_02_the_new_budget_holds_through_the_state_node():
+    """The erasure pops the budget's history first: "previous" then had no target and undid the
+    turn, so view_state held no budget while the search and the reply used £2,300."""
+    before = {"area": "Bow", "areas": ["Bow"], "bedrooms": 1, "max_budget": 1700, "budget_period": "month",
+              "constraint_history": {"area": ["Bow"], "bedrooms": [1]},
+              "_last_change": {"before": {"area": None, "areas": None, "bedrooms": None, "max_budget": None}}}
+    after = _state_node(before, "Forget my old budget, use £2,300 instead")
+    assert after["max_budget"] == 2300
+    assert after["constraint_sources"]["max_budget"]["source"] == "user_message"
+
+
+def test_g_02_an_erased_budget_stays_out_of_the_records():
+    before = {"area": "Bow", "areas": ["Bow"], "max_budget": 1700, "budget_period": "month",
+              "_erased_fields": ["budget"], "constraint_history": {"area": ["Bow"]},
+              "_last_change": {"before": {"area": None, "areas": None, "max_budget": None}}}
+    after = _state_node(before, "Forget my old budget, use £2,300 instead")
+    assert after["constraint_history"]["max_budget"] == [2300]
+    assert after["_last_change"]["before"]["max_budget"] is None
+    # A later change keeps its own history as usual.
+    later = _state_node(after, "Actually make it £2,500")
+    assert later["constraint_history"]["max_budget"] == [2300, 2500]
+    assert later["_last_change"]["before"]["max_budget"] == 2300
+
+
+def test_g_02_a_figure_beside_a_previous_budget_wins():
+    from core.langgraph_agent import undo_last_change
+    before = {"max_budget": 1700, "_last_change": {"before": {"max_budget": 1500}}}
+    after = {"max_budget": 1900}
+    assert undo_last_change(before, after, "Back to my previous budget, £1,900")["max_budget"] == 1900
+    assert undo_last_change(before, dict(before), "Back to my previous budget")["max_budget"] == 1500

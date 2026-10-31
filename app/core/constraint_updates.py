@@ -169,10 +169,13 @@ def replaces_destination(text: str, name: str) -> bool:
 _WITHDRAW_VERB = re.compile(r'\b(?:discard|disregard|ignore|withdraw)\b|作废|撤销|丢弃', re.I)
 # A comma between thousands ("£3,500") does not end a part.
 _PART_BOUNDARY = re.compile(r',(?!\d{3}(?!\d))|，|\s+[-–—]\s+|\s+but\s+', re.I)
+# "Ignore Stratford, use Poplar" states its replacement in words (G-02).
+_REPLACEMENT_CUE = re.compile(r"^\s*(?:and\s+|then\s+|please\s+|just\s+)*(?:use|search|try|look\s+in|go\s+with)\b", re.I)
 
 
 def _replacement_after_withdrawal(match) -> str:
-    """What a withdrawn clause still states after the withdrawal: a new money figure.
+    """What a withdrawn clause still states after the withdrawal: a new money figure or a
+    replacement in words.
 
     "Actually ignore my saved rent maximum, I can pay up to £3,500 this time" and "Ignore the
     budget I mentioned before, now it's £3,500 max" dropped the whole sentence, so the search
@@ -184,8 +187,9 @@ def _replacement_after_withdrawal(match) -> str:
     first = next((i for i, part in enumerate(parts) if _WITHDRAW_VERB.search(part)), None)
     if first is None:
         return ''
-    kept = [part.strip() for part in parts[first + 1:]
-            if _MONEY_FIGURE.search(part) and not _WITHDRAW_VERB.search(part)]
+    kept = [re.sub(r'^use\b(?=\s+[^£\d])', 'search', part.strip(), flags=re.I) for part in parts[first + 1:]
+            if (_MONEY_FIGURE.search(part) or _REPLACEMENT_CUE.search(part))
+            and not _WITHDRAW_VERB.search(part)]
     if not kept:
         return ''
     end = clause.rstrip()[-1:] if clause.rstrip()[-1:] in '。.!?;；' else ''
@@ -580,6 +584,13 @@ _BUDGET_PREVIOUS = re.compile(
 _BUDGET_RESTORE_CUE = re.compile(
     r"\b(?:back|revert\w*|restor\w*|return\w*|reset|go|use|using|put|set|change|switch\w*|apply|please|instead|again)\b"
     r"|恢复|改回|回到|换回|调回|还原|退回|用|按", re.I)
+# "Forget my old budget, use £2,300 instead" names the old budget to get rid of it. Read as a
+# reference to it, the turn restored the empty slot from before the old budget (G-02).
+_BUDGET_DISOWNED = re.compile(
+    r"\b(?:forget(?:\s+about)?|ignore|disregard|scrap|ditch|drop|delete|remove|lose|never\s*mind(?:\s+about)?)\s+"
+    r"(?:the|my)\s+(?:previous|earlier|old|prior|last|original|initial|first|starting|opening)\s+"
+    r"(?:budget|ceiling|figure|amount|limit)\b"
+    r"|(?:忘掉|忘记|删除|删掉|去掉|不要)(?:我的)?(?:之前|原来|上一次|上次|先前|以前|最开始|一开始|最初)的预算", re.I)
 _ASKS_ABOUT_IT = re.compile(r"^\W*(?:what|which|when|why|how|did|do|does|is|are|was|were|has|have)\b", re.I)
 _ZH_ASKS_ABOUT_IT = re.compile(r"多少|什么|几|吗|么[？?]")
 
@@ -589,7 +600,8 @@ def budget_reference(text: str) -> str | None:
     value = str(text or '')[:2000]
     for sentence in re.split(r'(?<=[!?？。！])\s*|(?<=\.)\s+(?=\D)', value):
         which = 'first' if _BUDGET_FIRST.search(sentence) else 'previous' if _BUDGET_PREVIOUS.search(sentence) else None
-        if not which or is_hypothetical(sentence) or not _BUDGET_RESTORE_CUE.search(sentence):
+        if (not which or is_hypothetical(sentence) or not _BUDGET_RESTORE_CUE.search(sentence)
+                or _BUDGET_DISOWNED.search(sentence)):
             continue
         if (sentence.rstrip().endswith(('?', '？')) and _ASKS_ABOUT_IT.search(sentence)) or _ZH_ASKS_ABOUT_IT.search(sentence):
             continue

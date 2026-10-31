@@ -2259,10 +2259,18 @@ _HISTORY_FIELDS = ("max_budget", "area", "bedrooms", "room_type", "commute_desti
 _HISTORY_VALUES = 6
 
 
+def _budget_just_erased(before: dict) -> bool:
+    """True when ``before`` still holds a budget the user erased this turn: the erasure takes the
+    budget's history, and a budget stated in this conversation always has one (G-02)."""
+    return ("budget" in ((before or {}).get("_erased_fields") or ())
+            and not ((before or {}).get("constraint_history") or {}).get("max_budget"))
+
+
 def _with_constraint_history(after: dict, before: dict, changed) -> dict:
     """``after`` with each changed field's values recorded, oldest first (V-12). A cleared value
     leaves no trace: the user took it back, and it may have been an erasure."""
     history = {field: list(values) for field, values in (after.get("constraint_history") or {}).items()}
+    erased = _budget_just_erased(before)
     for field in _HISTORY_FIELDS:
         if field not in changed:
             continue
@@ -2270,7 +2278,7 @@ def _with_constraint_history(after: dict, before: dict, changed) -> dict:
         if value is None:
             history.pop(field, None)
             continue
-        values = history.setdefault(field, [] if old is None else [old])
+        values = history.setdefault(field, [] if old is None or (erased and field == "max_budget") else [old])
         if not values or values[-1] != value:
             values.append(value)
         del values[:-_HISTORY_VALUES]
@@ -2296,7 +2304,9 @@ def undo_last_change(before: dict, after: dict, message: str) -> dict:
         logger.info("criteria.budget_reference_restored which=%s", reference)
         from core.criteria_contract import synchronize_monthly_budget_alias
         return _with_constraint_history(synchronize_monthly_budget_alias(result), before, ["max_budget"])
-    if (undo or (reference == "previous" and target is None)) and isinstance(last, dict) and isinstance(last.get("before"), dict):
+    previous_budget = (reference == "previous" and target is None
+                       and (after or {}).get("max_budget") == (before or {}).get("max_budget"))
+    if (undo or previous_budget) and isinstance(last, dict) and isinstance(last.get("before"), dict):
         saved = last["before"]
         fields = [f for f in _LAST_CHANGE_FIELDS if f in saved] if undo else ["max_budget"]
         result = dict(after)
@@ -2317,6 +2327,8 @@ def undo_last_change(before: dict, after: dict, message: str) -> dict:
         return after
     result = dict(after)
     result["_last_change"] = {"before": {f: (before or {}).get(f) for f in _LAST_CHANGE_FIELDS}}
+    if _budget_just_erased(before):
+        result["_last_change"]["before"]["max_budget"] = None
     return _with_constraint_history(result, before, changed)
 
 

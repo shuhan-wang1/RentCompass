@@ -1808,11 +1808,12 @@ _AREA_ADD_AFTER = re.compile(r"\s*(?:(?:as\s+well|too)\b|也?(?:加上|加进来
 _AREA_INCLUDE_BEFORE = re.compile(r"\binclude\s+$", re.I)
 _AREA_INCLUDE_AFTER = re.compile(r"\s*(?:too|as\s+well|in\s+(?:the|my)\s+search)\b", re.I)
 _AREA_REMOVE_BEFORE = re.compile(
-    r"(?:\b(?:remove|drop|exclude|delete|skip|forget(?:\s+about)?|take(?:\s+out)?|cross\s+off|no\s+more"
+    r"(?:\b(?:remove|drop|exclude|delete|skip|forget(?:\s+about)?|never\s*mind(?:\s+about)?|scrap|ditch|"
+    r"take(?:\s+out)?|cross\s+off|no\s+more"
     r"|no\s+longer\s+(?:want|consider|search(?:\s+in)?)|without|not"
     # "Also check Angel instead of Camden" replaces Camden (R3-13).
     r"|instead\s+of|rather\s+than)"
-    r"|(?:去掉|删除|删掉|移除|排除|不要|不看|不考虑|不再考虑|取消))\s*(?:the\s+)?$", re.I)
+    r"|(?:去掉|删除|删掉|移除|排除|不要|不看|不考虑|不再考虑|取消|忘掉|忘记|别管))\s*(?:the\s+)?$", re.I)
 _AREA_REMOVE_AFTER = re.compile(
     r"\s*(?:(?:out|off)\b(?!\s+of\s+(?:the\s+)?(?:question|budget))|from\s+(?:the|my)\s+(?:search|list|areas?)\b"
     r"|(?:也)?(?:去掉|删掉|删除|移除|排除|不要了|不看了))", re.I)
@@ -1824,6 +1825,16 @@ _AREA_ONLY_BEFORE = re.compile(
     r"|move\s+(?:it\s+|the\s+search\s+)?to|go(?:ing)?\s+back\s+to|back\s+to)"
     r"|(?:只看|只要|只搜(?:索)?|只在|仅看|仅在|只考虑|换成|改成|改为|切换到|回到))\s*$", re.I)
 _AREA_ONLY_AFTER = re.compile(r"\s*(?:only\b|就好|就行|就可以)", re.I)
+# The place that takes over from a removed one: "forget Stratford, use Poplar", "Forget about
+# Stratford and search Poplar", "Never mind Stratford, Poplar please". The removal alone left no
+# area at all, while the reply said the search had moved (G-02). These mean nothing without a
+# removal in the message, and a bare place has to fill its part: "Remove Stratford, Canary Wharf
+# is too far" names no replacement.
+_AREA_SUCCESSOR_BEFORE = re.compile(
+    r"(?:\b(?:use|using|search(?:ing)?|try|look(?:ing)?|go\s+(?:with|for)|make\s+it|how\s+about)"
+    r"(?:\s+(?:in|at|around|near))?|(?:用|搜(?:索)?|看(?:看)?|找(?:找)?))\s*$", re.I)
+_AREA_BARE_SUCCESSOR_BEFORE = re.compile(r"\s*(?:(?:then|now|please|maybe)\s+)?", re.I)
+_AREA_BARE_SUCCESSOR_AFTER = re.compile(r"\s*(?:(?:please|instead|now|then|thanks|thank\s+you)\b\s*)*$", re.I)
 _AREA_NAMED_ADD = re.compile(
     r"\b(?i:add)\s+((?:[A-Z][a-z’'\-]+)(?:\s+[A-Z][a-z’'\-]+){0,2})\s+"
     r"(?:as\s+(?:a|an(?:other)?|my)\s+(?:second\s+|third\s+|new\s+|extra\s+|additional\s+)?(?:search\s+)?area"
@@ -1870,7 +1881,7 @@ def area_list_edit(text: str, current: list | None) -> list[str] | None:
         names.setdefault(re.sub(r"[’']", '', area.lower()), area)
     alternatives = '|'.join(re.escape(n) for n in sorted(names, key=len, reverse=True))
     place = re.compile(rf"(?<![a-z])(?:{alternatives})(?![a-z])", re.I)
-    adds, removes, only, replaced = [], [], [], []
+    adds, removes, only, replaced, successors = [], [], [], [], []
     for clause_match in re.finditer(r"[^.;!?\n。；！？]+", source):
         clause = clause_match.group()
         if is_hypothetical(clause) or re.search(r"\b(?:don.t|do not|never|shouldn.t)\s+(?:\w+\s+){0,2}"
@@ -1896,6 +1907,11 @@ def area_list_edit(text: str, current: list | None) -> list[str] | None:
             elif (_AREA_ADD_BEFORE.search(before, pos) or _AREA_ADD_AFTER.match(after)
                   or (_AREA_INCLUDE_BEFORE.search(before, pos) and _AREA_INCLUDE_AFTER.match(after))):
                 adds.append(canonical)
+            elif (_AREA_SUCCESSOR_BEFORE.search(before, pos)
+                  or ((at < 0 or clause[separator_ends[at] - 1] in ',，')
+                      and _AREA_BARE_SUCCESSOR_BEFORE.fullmatch(before)
+                      and _AREA_BARE_SUCCESSOR_AFTER.match(re.split(r'[,，]', after)[0]))):
+                successors.append(canonical)
         for named in _AREA_NAMED_ADD.finditer(clause):
             # "Add Angel as a second area": a place outside the curated table, named with
             # explicit area wording. The curated table deliberately omits Angel/Bow/Kew.
@@ -1910,6 +1926,8 @@ def area_list_edit(text: str, current: list | None) -> list[str] | None:
         # "Search Angel instead of Camden" is a switch for the caller's own logic, not a
         # removal that leaves no area.
         removes = [area for area in removes if area not in replaced]
+    if removes:
+        adds = adds + successors
     # With no standing list, a removal alone edits nothing ("在Camden找，不要伦敦其他地方"
     # negates the wider city on a first turn; it must not read as "no area").
     if not (adds or only or (removes and current)):

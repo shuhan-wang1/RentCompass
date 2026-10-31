@@ -571,3 +571,48 @@ def test_e_01_a_journey_claim_with_no_evidence_still_goes(draft, gone):
     from core.candidate_validation import validate_commute_response
     assert gone not in validate_commute_response(draft, _commute_state(route=None, rows=[
         {"address": "Camden Road, London, N7", "travel_time": "~38 min to Bank (estimated, unverified)", "travel_time_source": "estimate"}], criteria={"commute_destination": "Bank"}))
+
+
+# E-02 ── an earlier budget in a new conversation has one outcome
+_START = "Budget back to what it was when I started"
+
+
+def test_e_02_one_saved_budget_is_used():
+    from core.constraint_updates import budget_reference_note, restore_saved_budget
+    rows = [{"id": "a", "mtype": "semantic", "text": "The user's budget is £2,000 a month."},
+            {"id": "b", "mtype": "semantic", "text": "The user has a cat."},
+            {"id": "c", "mtype": "reflection", "text": "The user's budget may be £2,300."}]
+    restored = restore_saved_budget({}, rows, _START)
+    assert restored["max_budget"] == 2000
+    assert restored["constraint_sources"]["max_budget"] == {"source": "saved_preference", "memory_id": "a", "value": 2000}
+    assert budget_reference_note(_START, restored) == ""
+
+
+@pytest.mark.parametrize("rows", [
+    [], [{"id": "a", "mtype": "semantic", "text": "The user has a cat."}],
+    [{"id": "a", "mtype": "semantic", "text": "The user's budget is £2,000 a month."},
+     {"id": "b", "mtype": "semantic", "text": "The user's budget is £2,500 a month."}],
+])
+def test_e_02_otherwise_nothing_is_set_and_the_sentence_says_so(rows):
+    from core.constraint_updates import budget_reference_note, restore_saved_budget
+    assert restore_saved_budget({}, rows, _START) == {}
+    assert "don't have an earlier budget" in budget_reference_note(_START, {})
+
+
+def test_e_02_a_budget_the_conversation_holds_is_not_replaced():
+    from core.constraint_updates import restore_saved_budget
+    rows = [{"id": "a", "mtype": "semantic", "text": "The user's budget is £2,000 a month."}]
+    for held in ({"max_budget": 1800}, {"max_budget": 2500, "constraint_history": {"max_budget": [1800, 2500]}}):
+        assert restore_saved_budget(held, rows, _START) == held
+    assert restore_saved_budget({}, rows, "Find a 1-bed in Bow") == {}
+
+
+@pytest.mark.parametrize("reply,left", [
+    ("I've set your budget back to £2,000 a month, searching in Bow. Here are the listings.", "Here are the listings."),
+    ("Your budget is back at £2,000. Here are the listings.", "Here are the listings."),
+    ("已把预算恢复成 £2,000。下面是房源。", "下面是房源。"),
+    ("Here are the listings.", "Here are the listings."), ("Rents in Bow start under your budget.", "Rents in Bow start under your budget."),
+])
+def test_e_02_the_reply_does_not_claim_a_budget_was_set(reply, left):
+    from core.constraint_updates import without_budget_set_claim
+    assert without_budget_set_claim(reply) == left

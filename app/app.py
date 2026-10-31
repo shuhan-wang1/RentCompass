@@ -3613,6 +3613,14 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     persistent_snapshot['accumulated_search_criteria'] = restore_saved_criteria(
         persistent_snapshot.get('accumulated_search_criteria') or {},
         _semantic_defaults or _mems, user_message)
+    from core.constraint_updates import budget_reference, restore_saved_budget
+    if budget_reference(user_message):
+        try:
+            persistent_snapshot['accumulated_search_criteria'] = restore_saved_budget(
+                persistent_snapshot['accumulated_search_criteria'],
+                _am.semantic_records(user_id=user_id), user_message)
+        except Exception as _e:
+            print(f"[Memory] saved budget skipped; error_type={type(_e).__name__}")
     selected_memory_ids = {source.get('memory_id') for source in (
         persistent_snapshot['accumulated_search_criteria'].get('constraint_sources') or {}).values()
         if isinstance(source, dict) and source.get('source') == 'saved_preference'}

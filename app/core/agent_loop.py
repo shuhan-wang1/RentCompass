@@ -6330,11 +6330,12 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         out = format_output_fc_node(state)
         ec = state.get("extracted_context") or {}
         message = ec.get("current_message") or _current_message(state.get("user_query") or "")
-        from core.constraint_updates import budget_reference_note
+        from core.constraint_updates import budget_reference_note, without_budget_set_claim
         note = budget_reference_note(message, state.get("accumulated_search_criteria") or {},
                                      _reply_language_from_ctx(ec, message))
         if note and isinstance(out, dict) and out.get("final_response") and out.get("response_type") != "error":
-            out = {**out, "final_response": f"{out['final_response']}\n\n{note}"}
+            # One outcome: the sentence, and no claim beside it that the budget was set.
+            out = {**out, "final_response": f"{without_budget_set_claim(out['final_response'])}\n\n{note}".strip()}
         return out
 
     # ── answer contract (manager_v1 only) ──────────────────────────

@@ -602,6 +602,35 @@ def budget_reference_target(criteria: dict, which: str):
     return values[at - 1] if at > 0 else None
 
 
+def restore_saved_budget(accumulated: dict, memories: list, message: str) -> dict:
+    """The one budget this user saved, for an earlier budget a new conversation does not hold.
+
+    "Budget back to what it was when I started" in a fresh conversation searched with no budget,
+    and the reply said it had set £2,000, that £2,000 was not applied, and that it had no earlier
+    budget (r05 8a4045f5). With exactly one saved figure the request has one meaning. With none or
+    several, nothing is set and ``budget_reference_note`` says so."""
+    which = budget_reference(message)
+    if (not which or (accumulated or {}).get('max_budget') is not None
+            or budget_reference_target(accumulated, which) is not None):
+        return accumulated
+    from core.langgraph_agent import _apply_explicit_criteria_updates
+    figures = {}
+    for memory in memories or []:
+        if memory.get('mtype') != 'semantic':
+            continue
+        budget = _apply_explicit_criteria_updates({}, str(memory.get('text') or '')).get('max_budget')
+        if budget:
+            figures.setdefault(budget, memory.get('id'))
+    if len(figures) != 1:
+        return accumulated
+    ((budget, owner),) = figures.items()
+    restored = dict(accumulated or {}, max_budget=budget, budget_period='month')
+    restored['constraint_sources'] = {
+        **((accumulated or {}).get('constraint_sources') or {}),
+        'max_budget': {'source': 'saved_preference', 'memory_id': owner, 'value': budget}}
+    return restored
+
+
 def budget_reference_note(message: str, criteria: dict, language: str = 'en') -> str:
     """The sentence that goes with an earlier budget this conversation does not hold: the reply
     must not carry on as if it had been applied."""
@@ -611,6 +640,8 @@ def budget_reference_note(message: str, criteria: dict, language: str = 'en') ->
     source = ((criteria or {}).get('constraint_sources') or {}).get('max_budget') or {}
     if source.get('source') == 'user_undo' and source.get('text') == str(message)[:800]:
         return ''
+    if source.get('source') == 'saved_preference':
+        return ''
     if budget_reference_target(criteria, which) is not None:
         return ''
     current = (criteria or {}).get('max_budget')
@@ -619,6 +650,17 @@ def budget_reference_note(message: str, criteria: dict, language: str = 'en') ->
                 else '这次对话里没有更早的预算记录，请告诉我要用的预算。')
     return (f"I don't have an earlier budget in this conversation, so it stays at £{current:,.0f}." if current
             else "I don't have an earlier budget in this conversation. What ceiling should I use?")
+
+
+_BUDGET_SET_CLAIM = re.compile(
+    r"[^.!?。！？\n]*(?:\b(?:set|put|moved?|changed?|reset|restored?|reverted?|returned)\b[^.!?\n]{0,30}\bbudget\b"
+    r"[^.!?\n]{0,24}\b(?:back|to\s+£)|\bbudget\b[^.!?\n]{0,12}\b(?:is|now)\s+back\b"
+    r"|(?:已|已经|帮你)?把?预算[^。！？\n]{0,10}(?:恢复|改回|调回|设回|设为|改为))[^.!?。！？\n]*[.!?。！？]?\s*", re.I)
+
+
+def without_budget_set_claim(text: str) -> str:
+    """``text`` without a sentence saying a budget was set back, for a turn that set none."""
+    return _BUDGET_SET_CLAIM.sub('', str(text or '')).strip()
 
 
 def resolve_clarification_reply(message: str, messages: list) -> str:

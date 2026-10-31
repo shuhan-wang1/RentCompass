@@ -272,3 +272,82 @@ def test_g_04_the_zh_reply_says_the_deletion_once():
             "目前仍保留的内容有两条。")
     text = acknowledge_memory_erasure(body, _ERASED, "zh")
     assert text.count("删除") == 1 and text.endswith("目前仍保留的内容有两条。")
+
+
+# G-05 ── a bounded sample says it is one
+def _held_sample(rows=(), sample_size=30, cheapest=2900, exhaustive=False):
+    return {"rows": list(rows), "meta": {
+        "requested_city": "london", "source": "hit", "source_status": "cached", "stale": False,
+        "retrieval_complete": True, "count": len(rows), "sample_size": sample_size,
+        "sample_cheapest": cheapest,
+        "coverage": {"scope": "bounded_area_sample", "exhaustive": exhaustive}}}
+
+
+def _search(monkeypatch, result, **kwargs):
+    import asyncio
+    from core.scraping import on_demand
+    from core.tools.search_properties import search_properties_impl
+    monkeypatch.setattr(on_demand, "classify_place", lambda name: {
+        "kind": "area", "slug": str(name).lower(), "city": "london", "address": None, "source": "landmark"})
+    monkeypatch.setattr(on_demand, "get_listings", lambda *a, **k: result)
+    return asyncio.run(search_properties_impl(**kwargs))
+
+
+def test_g_05_an_empty_band_says_the_sample_held_rows(monkeypatch):
+    out = _search(monkeypatch, _held_sample(), area="Islington", areas=["Islington"], bedrooms=2,
+                  max_budget=2500, no_commute=True, room_type="whole", confirmed=True,
+                  current_message="Find a 2-bed flat in Islington under £2500 per month, no commute")
+    assert out["status"] == "no_results"
+    assert out["retrieval_outcome"] == "no_matching_candidates"
+    assert out["area_status"] == {"Islington": "results"}
+    assert out["coverage"] == {"scope": "bounded_area_sample", "exhaustive": False, "rows_held": 30}
+    assert "No usable source candidates" not in out["message"]
+    assert "I hold 30 listings for this area in a bounded sample" in out["message"]
+    assert "£2,900/month" in out["message"]
+
+
+def test_g_05_nothing_held_stays_nothing_retrieved(monkeypatch):
+    out = _search(monkeypatch, _held_sample(sample_size=0, cheapest=None), area="Islington",
+                  areas=["Islington"], bedrooms=2, max_budget=2500, no_commute=True, room_type="whole",
+                  confirmed=True, current_message="Find a 2-bed flat in Islington under £2500 per month, no commute")
+    assert out["retrieval_outcome"] == "no_source_candidates"
+    assert out["area_status"] == {"Islington": "empty"}
+    assert "No usable source candidates" in out["message"]
+
+
+def test_g_05_the_empty_sample_note_is_bilingual():
+    from core.tools.search_properties import _empty_sample_note
+    en = _empty_sample_note(30, 2900, 2, False)
+    assert "2 fit the price and size but lie outside the search radius" in en
+    assert "does not establish that the market is empty" in en
+    zh = _empty_sample_note(30, 2900, 2, True)
+    assert "30 套" in zh and "2 套" in zh and "£2,900/月" in zh
+
+
+def test_g_05_sample_facts_count_the_whole_sample():
+    from core.scraping.on_demand import _sample_facts
+    rows = [{"Address": "a", "URL": "u", "Price": "£3,100 pcm", "Room_Type_Category": "2 bed Flat"},
+            {"Address": "b", "URL": "v", "Price": "£2,900 pcm", "Room_Type_Category": "2 bed Flat"},
+            {"Address": "c", "URL": "w", "Price": "£900 pcm", "Room_Type_Category": "Studio"}]
+    assert _sample_facts(rows, 2, 2) == {"sample_size": 3, "sample_cheapest": 2900}
+    assert _sample_facts([], 2, 2) == {"sample_size": 0, "sample_cheapest": None}
+
+
+def test_g_05_found_says_it_is_a_sample():
+    from core.tools.search_properties import _sample_note
+    assert _sample_note(12, ["Camden"], False) == (
+        "These come from a bounded sample of 12 listings held for Camden, not every listing on the market.")
+    assert "Camden、Hackney" in _sample_note(30, ["Camden", "Hackney"], True)
+
+
+def test_g_05_a_found_result_carries_the_sample(monkeypatch):
+    monkeypatch.setenv("DESC_ENRICH_ENABLED", "0")
+    row = {"Address": "1 Camden Road, London NW1", "Price": "£1500/month", "Price_Numeric": 1500,
+           "URL": "https://www.onthemarket.com/details/1/", "Room_Type_Category": "1 bed flat",
+           "geo_location": "51.5390,-0.1426", "Description": "A flat"}
+    out = _search(monkeypatch, _held_sample([row], sample_size=12, cheapest=1500), area="Camden",
+                  areas=["Camden"], bedrooms=1, max_budget=2000, no_commute=True, confirmed=True,
+                  reply_language="en", current_message="Show me every listing in Camden")
+    assert out["status"] == "found", out
+    assert out["coverage"]["rows_held"] == 12
+    assert "bounded sample of 12 listings held for Camden" in out["summary"]

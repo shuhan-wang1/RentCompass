@@ -2975,6 +2975,28 @@ def _price_stats(results):
     return prices[0], median, prices[-1]
 
 
+def _sample_note(held: int, areas: list, is_cjk: bool) -> str:
+    """"Show me every listing in Camden" got "that is everything for the area" from 12 rows of a
+    bounded sample (G-05). The search says what it read."""
+    names = ('、' if is_cjk else ', ').join(str(area) for area in areas)
+    if is_cjk:
+        return f"这些结果来自为 {names} 保存的 {held} 套样本，并非市场上的全部房源。"
+    return f"These come from a bounded sample of {held} listings held for {names}, not every listing on the market."
+
+
+def _empty_sample_note(held: int, cheapest, outside: int, is_cjk: bool) -> str:
+    """What an empty band has to say about a sample that held rows (G-05): they were read and none
+    fit, which is not "nothing was retrieved"."""
+    if is_cjk:
+        away = f"（其中 {outside} 套符合价格和房型，但不在搜索范围内）" if outside else ""
+        floor = f"样本里这个户型最便宜的是 £{cheapest:,.0f}/月。" if cheapest else ""
+        return f"我为这个区域保存了 {held} 套房源，这只是有限样本，其中没有符合条件的{away}。{floor}这不代表市场上没有房源。"
+    away = f" ({outside} fit the price and size but lie outside the search radius)" if outside else ""
+    floor = f" The cheapest of the requested size in that sample is £{cheapest:,.0f}/month." if cheapest else ""
+    return (f"I hold {held} listings for this area in a bounded sample, and none of them fit{away}.{floor} "
+            "This does not establish that the market is empty.")
+
+
 def _found_summary(results, n_perfect: int, n_soft: int, max_budget, max_commute_time,
                    area: str, commute_target: str = None, room_type: str = None,
                    is_cjk: bool = False, move_in_date: str = None,
@@ -4572,7 +4594,9 @@ async def search_properties_impl(
 
         # Per-area served-row counts (pre-filter) drive the crisp per-area status contract:
         # 'results' (complete, had listings) | 'empty' (complete, genuinely none) | 'incomplete'.
+        # Rows the sample held outside this band still count: the area had listings (G-05).
         _area_rowcount = {_a: len(_res_by_area.get(_a, {}).get('rows', []) or [])
+                          or int((_res_by_area.get(_a, {}).get('meta') or {}).get('sample_size') or 0)
                           for _a in search_areas}
         _source_failure = source_failure_summary(_res_by_area, language='zh' if is_cjk else 'en')
         _area_status = {
@@ -4602,6 +4626,9 @@ async def search_properties_impl(
         }
         possibly_outdated = bool(listing_meta.get('stale'))
         data_source = 'OnTheMarket' + (' (cached)' if (_all_cached and not _any_scraped) else '')
+        _sample_held = sum(int(m.get('sample_size') or 0) for m in _metas)
+        _sample_prices = [m['sample_cheapest'] for m in _metas if m.get('sample_cheapest')]
+        _bounded_sample = any((m.get('coverage') or {}).get('exhaustive') is False for m in _metas)
         print(f"   ✅ 实时房源 {listing_meta.get('count', 0)} 个 "
               f"(areas={len(search_areas)}, cached={_all_cached})")
 
@@ -4696,16 +4723,23 @@ async def search_properties_impl(
             out['partial_note'] = _partial_note(incomplete_areas, is_cjk) if incomplete_areas else ""
             out['cache_stats'] = {"hits": cache_hits, "misses": cache_misses}
             out['area_status'] = dict(_area_status)
+            if _bounded_sample:
+                out['coverage'] = {'scope': 'bounded_area_sample', 'exhaustive': False,
+                                   'rows_held': _sample_held}
             out.update(_source_failure)
             out['retrieval_outcome'] = (
                 'source_unavailable' if _source_failure and not live_rows else
                 'stale_fallback' if _source_failure and live_rows else
                 'incomplete' if incomplete_areas else
-                'no_matching_candidates' if payload.get('status') == 'no_results' and live_rows else
+                'no_matching_candidates' if payload.get('status') == 'no_results' and (live_rows or _sample_held) else
                 'no_source_candidates' if payload.get('status') == 'no_results' else 'candidates_returned')
             if _source_failure:
                 out['message'] = _source_failure['source_message']
                 out['partial_note'] = _source_failure['source_message']
+            elif payload.get('status') == 'no_results' and not incomplete_areas and _sample_held:
+                note = _empty_sample_note(_sample_held, min(_sample_prices, default=None),
+                                          len(geo_rejected), is_cjk)
+                out['message'] = f"{out.get('message') or ''} {note}".strip()
             elif payload.get('status') == 'no_results' and not incomplete_areas:
                 note = ('未获得可用候选数据，不能据此判断市场上没有房源。' if not live_rows else
                         '本次候选中没有满足当前筛选的房源；这不代表市场上没有房源。') if is_cjk else (
@@ -5519,6 +5553,8 @@ async def search_properties_impl(
                                   max_commute_time if commute_filter_enabled else None,
                                   search_area, commute_target, room_type, is_cjk,
                                   move_in_date, area_counts=_area_counts)
+        if _bounded_sample and _sample_held:
+            _summary += " " + _sample_note(_sample_held, search_areas, is_cjk)
         if possibly_outdated:
             _summary += (" （部分为近期缓存房源，实时刷新暂不可用，可能已过期。）" if is_cjk
                          else " (Showing recent cached listings — a live refresh wasn't "

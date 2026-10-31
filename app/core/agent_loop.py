@@ -756,7 +756,7 @@ _TOOLMSG_CAP_DEFAULT = 4000
 # two areas "come out level" or that it lacked a commute time the cards showed (R4-06).
 # Every listing keeps its identity and decision fields; optional fields go first.
 _SEARCH_LEAD_KEYS = ("status", "message", "summary", "suggestion", "partial", "partial_note",
-                     "incomplete_areas", "total_found", "total_matches", "search_criteria",
+                     "incomplete_areas", "coverage", "total_found", "total_matches", "search_criteria",
                      "known_criteria")
 _SEARCH_LIST_KEYS = ("recommendations", "over_budget_alternatives", "similar_properties",
                      "unverified_candidates", "excluded_candidates", "candidate_states")

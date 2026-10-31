@@ -1449,6 +1449,14 @@ def _filter_band(rows: list[dict], min_beds: int, max_beds: int,
     return out
 
 
+def _sample_facts(rows: list[dict], min_beds: int, max_beds: int) -> dict:
+    """What a held sample says beyond the band: how many rows it holds, and the cheapest of the
+    requested size, so an empty band can say both (G-05)."""
+    prices = [price for price in (_row_price(r) for r in rows or [] if _in_band(r, min_beds, max_beds, 0, 10**9))
+              if price is not None]
+    return {"sample_size": len(rows or []), "sample_cheapest": min(prices) if prices else None}
+
+
 class _ScrapeOutcome(tuple):
     """Keep the historical two-value unpacking contract and attach safe evidence."""
 
@@ -1609,7 +1617,7 @@ def _get_listings_unlocked(
         meta.update(source="hit", source_status="cached", retrieval_complete=True,
                     coverage=saved_evidence.get("coverage") or meta["coverage"],
                     fetched_at=_fetched, cache_age_seconds=max(0, round(time.time() - _fetched, 2)),
-                    count=len(filtered),
+                    count=len(filtered), **_sample_facts(rows, min_bedrooms, max_bedrooms),
                     elapsed_s=round(time.time() - t0, 2))
         if not filtered:
             meta["message"] = "No matching listings were found in the cached area sample; this does not establish that the area has no matches."
@@ -1648,7 +1656,7 @@ def _get_listings_unlocked(
             meta.update(source="scraped", source_status="ok", retrieval_complete=True,
                         coverage=getattr(outcome, "coverage", None) or meta["coverage"],
                         fetched_at=time.time(), cache_age_seconds=0,
-                        count=len(filtered),
+                        count=len(filtered), **_sample_facts(canonical_rows, min_bedrooms, max_bedrooms),
                         elapsed_s=round(time.time() - t0, 2))
             if not filtered:
                 meta["message"] = "No matching listings were found in the retrieved area sample; this does not establish that the area has no matches."

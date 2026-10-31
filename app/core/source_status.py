@@ -85,7 +85,7 @@ def _known_area(area) -> bool:
 RETRIEVAL_FIELDS = (
     'source_status', 'source_errors', 'source_message', 'retrieval_complete',
     'retrieval_outcome', 'partial', 'partial_note', 'incomplete_areas', 'area_status',
-    'data_source', 'possibly_outdated',
+    'data_source', 'possibly_outdated', 'coverage',
 )
 
 

@@ -283,9 +283,13 @@ class PrivacyErasureInProgress(RuntimeError):
 TITLE_MAX_CHARS = 200
 
 
+# A title with U+202E shows reversed in the sidebar: bidi controls have no place in a label.
+_BIDI_CONTROLS = re.compile("[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]")
+
+
 def _bounded_title(value, fallback: str, suffix: str = "") -> str:
     """``value`` bounded; else ``fallback`` + ``suffix`` with the suffix always kept."""
-    text = " ".join(str(value or "").split())
+    text = " ".join(_BIDI_CONTROLS.sub("", str(value or "")).split())
     if text:
         return text[:TITLE_MAX_CHARS].rstrip()
     room = max(0, TITLE_MAX_CHARS - len(suffix))
@@ -460,8 +464,9 @@ def _now_iso() -> str:
 HISTORY_REPLY_CHARS = 4000
 _EVIDENCE_LINE = re.compile(
     r"^\s*(?:[-*•]\s+)?(?:\*\*)?\s*(?:Returned listing details|Reported features|Availability|"
-    r"(?:Property |Listing )?description|Agent|Contact|"
-    r"返回的房源详情|房源所列配置|可入住信息|房源描述|中介|联系方式)\s*(?:\*\*)?\s*[:：]", re.I)
+    r"(?:Property |Listing )?description|Listing (?:text|copy|wording|says)|Advert(?:isement)?(?: text)?|"
+    r"Agent|Contact|"
+    r"返回的房源详情|房源所列配置|可入住信息|房源描述|房源原文|房源文字|中介|联系方式)\s*(?:\*\*)?\s*[:：]", re.I)
 _CONTACT_DETAIL = re.compile(
     r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z0-9.-]+|(?<![\d£.])(?:\+44\s?(?:\(0\)\s?)?|0)\d(?:[ -]?\d){8,10}(?!\d)")
 

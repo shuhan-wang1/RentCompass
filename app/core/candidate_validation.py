@@ -1959,6 +1959,24 @@ _DURATION_BAND = re.compile(r"(\d{1,3})\s*[-–]\s*(\d{1,3})\s*min", re.I)
 _BAND_QUOTE = re.compile(r"(?<![\d.])(\d{1,3})\s*(?:-|–|to|至|到)\s*(\d{1,3})\s*-?\s*(?:minutes?|mins?\b|分钟)", re.I)
 
 
+# The fare tools' coverage notes, for a zh reply: the English one sat inside it (r06 4298c21d).
+_ZH_COVERAGE_NOTES = {
+    "Postcode-derived zones are approximate, not verified station or itinerary coverage. Out-of-zone "
+    "services and supplements require separate fare evidence.":
+        "按邮编估算的分区只是近似值，并未核实具体车站或路线的覆盖范围；分区以外的服务和附加费需另行核实票价。",
+    "No zonal price is assigned when either address has an unknown zone.":
+        "任一地址的分区未知时，不会给出分区票价。",
+    "These prices apply only to the explicitly selected TfL zones. They do not verify that an address, "
+    "station or whole route is covered; out-of-zone stations such as Watford Junction require a "
+    "separately verified fare/extension.":
+        "这些价格只适用于明确选定的 TfL 分区，并不代表地址、车站或整条路线都在覆盖范围内；"
+        "Watford Junction 等分区外车站需另行核实票价或延伸票。",
+    "This is a price for the specified or approximately inferred zones, not verified coverage of the "
+    "named stations or full journey. Out-of-zone stations require separately verified extensions/fares.":
+        "这是指定或大致推断分区的价格，并未核实所述车站或全程的覆盖范围；分区外车站需另行核实延伸票或票价。",
+}
+
+
 def _quotes_duration_band(fragment: str, pool: list) -> bool:
     """Every minute figure in ``fragment`` is the band a measured route of this turn came in."""
     bands = {c["band"] for c in pool if c.get("band")}
@@ -4157,7 +4175,7 @@ def render_structured_evidence_fallback(state: dict, *, language: str | None = N
                     f"返回的建议月交通费估算：£{cost['monthly_cost']:.2f}/月，并非已核实的实际支出。")
             if cost.get("coverage_verified") is False:
                 add("Route fare-zone coverage remains unverified. " + plain(cost.get("coverage_note")),
-                    "该行程所需票价分区仍未核实。" + plain(cost.get("coverage_note")))
+                    "该行程所需票价分区仍未核实。" + _ZH_COVERAGE_NOTES.get(plain(cost.get("coverage_note")), ""))
     from core.commuting_estimate import estimate_monthly_commuting, render_monthly_commuting_estimate
     message = (state.get('extracted_context') or {}).get('current_message') or state.get('user_query') or ''
     for artifact in reversed(state.get('tool_artifacts') or []):

@@ -443,6 +443,8 @@ _CRITERIA_FACT = re.compile(
 
 # What a withdrawn requirement looks like in a stored sentence, by the labels of
 # core.langgraph_agent.requirements_withdrawn (W-08).
+_GROUND_FLOOR = re.compile(r"\bground[- ]floor\b|一楼|底层", re.I)
+_TOP_FLOOR = re.compile(r"\b(?:top|upper)[- ]floor\b|顶层", re.I)
 _REQUIREMENT_TOPICS = {
     "balcony": re.compile(r"\b(?:balcon(?:y|ies)|terraces?)\b|阳台|露台", re.I),
     "garden": re.compile(r"\b(?:gardens?|outdoor\s+space)\b|花园|院子", re.I),
@@ -459,6 +461,12 @@ _REQUIREMENT_TOPICS = {
     "lift": re.compile(r"\b(?:lifts?|elevators?)\b|电梯", re.I),
     "step-free": re.compile(r"\bstep[- ]free\b|\blevel\s+access\b|无台阶", re.I),
     "wheelchair-accessible": re.compile(r"\bwheelchair\b|轮椅", re.I),
+    # "I no longer need a ground-floor flat" left the row, and a recall said yes (G-11).
+    "ground floor": _GROUND_FLOOR,
+    "ground-floor": _GROUND_FLOOR,
+    "top floor": _TOP_FLOOR,
+    "top-floor": _TOP_FLOOR,
+    "bike storage": re.compile(r"\b(?:bike|bicycle|cycle)\s+(?:storage|store|shed)\b|自行车", re.I),
 }
 _REQUIREMENT_VERB = re.compile(
     r"\b(?:wants?|wanted|needs?|needed|requires?|required|requirements?|must|looking\s+for|seek\w*|"

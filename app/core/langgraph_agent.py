@@ -998,7 +998,8 @@ _WITHDRAWABLE_FEATURES = {"pets allowed": "pets", "cats allowed": "pets", "furni
                           "lift": "lift", "step-free": "step-free",
                           "wheelchair-accessible": "wheelchair-accessible"}
 _WITHDRAWABLE_AMENITIES = ("balcony", "garden", "parking", "gym", "pool", "laundry", "concierge",
-                           "washing machine", "dishwasher", "park")
+                           "washing machine", "dishwasher", "park", "ground floor", "ground-floor",
+                           "top floor", "top-floor", "bike storage")
 
 
 def requirements_withdrawn(before: dict, after: dict, message: str) -> list:

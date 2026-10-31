@@ -315,7 +315,11 @@ def is_criteria_consultation(text: str) -> bool:
     if re.search(r'\b(?:save|favourite|favorite)\b|收藏', text, re.I) and re.search(r'\bfavou?rites?\b|收藏', text, re.I) and not re.search(
             r'\b(?:find|search|set|change|raise|lower|remove|drop|switch|restore)\b|改为|改回|更新|找房|搜索', text, re.I):
         return True
-    update = re.search(r'\b(?:set|change|raise|lower|remove|drop|find|search|show|available)\b|改为|改回|更新|取消|删除|移除|找房|搜索', text, re.I)
+    # "Is there any housing near SW7 2AZ under £900?" asks for a search: as a read-only question it
+    # kept neither the budget nor the area, and the gate asked for the budget it had just read (G-10).
+    update = re.search(r'\b(?:set|change|raise|lower|remove|drop|find|search|show|available)\b|改为|改回|更新|取消|删除|移除|找房|搜索'
+                       r'|^\s*is\s+there\s+(?:any|anything)\b[^.!?]{0,24}\b(?:housing|accommodation|flats?|homes?|rooms?|'
+                       r'studios?|apartments?)\b', text, re.I)
     if re.search(r'\b(?:details?|furniture|furnished|bills|availability|tenancy|epc)\b|房源详情|家具|账单', text, re.I) and re.search(
             r'^\s*(?:please|can |could |what|tell |explain|get |check |verify|for the)|请|这套|这个房源|告诉|查询|[?？]', text, re.I) and not re.search(
             r'\b(?:find|search|set|change|raise|lower|remove|drop|switch|restore)\b|改为|改回|更新|取消|删除|移除|找房|搜索', text, re.I):

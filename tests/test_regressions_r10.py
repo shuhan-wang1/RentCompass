@@ -744,3 +744,54 @@ def test_g_09_a_bare_switch_is_a_workplace_only_for_someone_with_a_commute():
     assert moves_area_only("Switch to Canary Wharf", True)
     assert not moves_area_only("Switch to Canary Wharf", False)
     assert moves_area_only("Change the area to Canary Wharf", False)
+
+
+# G-10 ── a search asked as a question keeps what it states
+@pytest.mark.parametrize("text,area", [
+    ("Is there any housing near SW7 2AZ under £900 for a room?", "SW7 2AZ"),
+    ("Is there any housing near Camden under £900 for a room?", "Camden"),
+    ("Is there any flat near E14 5AB under £900?", "E14 5AB"),
+])
+def test_g_10_the_budget_and_area_of_a_question_are_kept(text, area):
+    from core.langgraph_agent import _apply_explicit_criteria_updates as apply
+    after = apply({}, text)
+    assert after["max_budget"] == 900 and after["area"] == area
+
+
+@pytest.mark.parametrize("text", ["Is the £900 one furnished?", "Is there parking at the second one?",
+                                  "Does the flat have a lift?", "Is £2,100 a month reasonable?"])
+def test_g_10_a_real_question_stays_read_only(text):
+    from core.constraint_updates import is_criteria_consultation
+    assert is_criteria_consultation(text)
+
+
+# G-11 ── a withdrawn floor level leaves memory like any other withdrawn requirement
+@pytest.mark.parametrize("text,label", [
+    ("Good news, my knee has healed so I no longer need a ground-floor flat. Please forget that requirement.", "ground-floor"),
+    ("I don't need a ground floor flat after all", "ground floor"),
+    ("Remove the top-floor requirement", "top-floor"),
+    ("Forget the bike storage", "bike storage"),
+])
+def test_g_11_a_withdrawn_floor_level_is_a_withdrawn_requirement(text, label):
+    from core.langgraph_agent import requirements_withdrawn
+    assert label in requirements_withdrawn({}, {}, text)
+
+
+@pytest.mark.parametrize("text", ["I need a ground-floor flat", "Is the first one on the ground floor?"])
+def test_g_11_naming_it_withdraws_nothing(text):
+    from core.langgraph_agent import requirements_withdrawn
+    assert requirements_withdrawn({}, {}, text) == []
+
+
+def test_g_11_the_row_goes_and_the_other_facts_stay(tmp_path, monkeypatch):
+    from rag.agent_memory import AgentMemory, SOURCE_AUTO
+    monkeypatch.setenv("AGENT_MEMORY_DB_PATH", str(tmp_path / "memory"))
+    memory = AgentMemory()
+    uid = "g11-user"
+    memory.add("The user needs a ground-floor flat with a lift-free entrance because of their knee.",
+               "semantic", uid, uid, extra_meta={"source": SOURCE_AUTO})
+    memory.add("The user wants a flat in Camden.", "semantic", uid, uid, extra_meta={"source": SOURCE_AUTO})
+    memory.add("I live on the ground floor now.", "semantic", uid, uid, extra_meta={"source": SOURCE_AUTO})
+    assert memory.retire_withdrawn_requirements(uid, ["ground-floor"]) == 1
+    documents = memory.col.get(where={"user_id": uid}).get("documents")
+    assert sorted(documents) == ["I live on the ground floor now.", "The user wants a flat in Camden."]

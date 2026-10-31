@@ -167,3 +167,26 @@ def test_g_02_a_figure_beside_a_previous_budget_wins():
     after = {"max_budget": 1900}
     assert undo_last_change(before, after, "Back to my previous budget, £1,900")["max_budget"] == 1900
     assert undo_last_change(before, dict(before), "Back to my previous budget")["max_budget"] == 1500
+
+
+# G-03 ── a change verb moves the search, it does not filter the cards
+_POPLAR_IN_BOW = [
+    {"address": "Aegean Court, Poplar, E3", "price": "£1,800 pcm", "area": "bow", "bedrooms": 1, "url": "https://x/1"},
+    {"address": "Bow Road, London E3", "price": "£1,700 pcm", "area": "bow", "bedrooms": 1, "url": "https://x/2"},
+]
+
+
+@pytest.mark.parametrize("text", [
+    "Change the area to Poplar", "Switch to Poplar", "Move the search to Poplar", "Go back to Poplar",
+    "Make it Poplar", "换到Poplar", "改成Poplar",
+])
+def test_g_03_a_change_of_area_is_no_subset(text):
+    from core.refine_results import parse_refinement
+    assert parse_refinement(text, _POPLAR_IN_BOW) is None
+
+
+@pytest.mark.parametrize("text", ["Only the ones in Poplar", "Just the ones in Poplar"])
+def test_g_03_a_real_subset_still_filters(text):
+    from core.refine_results import parse_refinement
+    spec = parse_refinement(text, _POPLAR_IN_BOW)
+    assert spec and spec["filters"][0]["kind"] == "area"

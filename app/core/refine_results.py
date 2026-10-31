@@ -146,6 +146,14 @@ _WIDEN_RE = re.compile(
     r'提高预算|预算(?:提高|涨到|加到|放宽)|放宽预算',
     re.IGNORECASE)
 
+# "Change the area to Poplar" moves the search. A shown listing with Poplar in its address made it
+# a subset of the cards, so nothing was searched and the reply said no listing fit (G-03). A subset
+# says so: "only the ones in Poplar", "just Poplar".
+_AREA_CHANGE_RE = re.compile(
+    r'\b(?:change|switch|swap|move|shift)\b[^.!?;]{0,30}?\bto\b|\b(?:go(?:ing)?\s+)?back\s+to\b|\bmake\s+it\b|'
+    r'换到|换成|改到|改成|改为|切换到|回到', re.IGNORECASE)
+_AREA_SUBSET_WORD_RE = re.compile(r'\b(?:only|just|ones?|those|these)\b|只|仅|其中|这些', re.IGNORECASE)
+
 # ── price ──────────────────────────────────────────────────────────
 _AMOUNT = r'£?\s?(\d[\d,]{2,6})'
 _DROP_VERB = (r'(?:drop|remove|exclude|filter\s+out|get\s+rid\s+of|ditch|lose|cut|'
@@ -499,6 +507,7 @@ def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, A
         return None
 
     filters: List[Dict[str, Any]] = []
+    moves_area = bool(_AREA_CHANGE_RE.search(text) and not _AREA_SUBSET_WORD_RE.search(text))
 
     # A named area is a SUBSET filter when the shown set already covers it, and a
     # change-of-area (fresh search) when it does not.
@@ -518,7 +527,7 @@ def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, A
             hits = [label for label in labels if re.search(r'\b' + re.escape(label) + r'\b', text, re.I)]
             if hits and any(label not in max(hits, key=len) for label in hits):
                 return None
-        if not any(named_area.lower() in _record_areas(r) for r in previous):
+        if moves_area or not any(named_area.lower() in _record_areas(r) for r in previous):
             return None
         filters.append({'kind': 'area', 'value': named_area})
     else:
@@ -526,6 +535,8 @@ def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, A
         # a bare subset phrasing ("only the Camden ones") is caught by matching the shown
         # set's OWN area labels, which by construction cannot be a change of area.
         subset_area, exclude_area = _parse_area_subset(text, previous)
+        if subset_area and moves_area:
+            return None
         if subset_area:
             filters.append({'kind': 'area', 'value': subset_area})
         elif exclude_area:

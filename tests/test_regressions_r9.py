@@ -870,3 +870,29 @@ def test_b_f8_a_coverage_note_comes_in_the_language_of_the_reply():
 def test_c_f6_a_title_carries_no_bidi_control(value, title):
     from uk_rent_agent.web.conversation_store import _bounded_title
     assert _bounded_title(value.encode("ascii").decode("unicode_escape"), "New chat") == title
+
+
+# Three rules that read too much
+@pytest.mark.parametrize("draft,gone", [
+    ("Let me confirm the commute to Bank is within your limit.", "within your limit"),
+    ("The commute to Bank is within your limit, as measured by the TfL Journey Planner.", "within your limit"),
+])
+def test_review_a_verdict_is_no_advice_and_no_provenance(draft, gone):
+    from core.candidate_validation import validate_commute_response
+    assert gone not in validate_commute_response(draft, _commute_state(rows=[], route=dict(_MEASURED, from_address="Elsewhere", to_address="Other Place"), criteria={"commute_destination": "Bank"}))
+
+
+def test_review_a_band_is_no_verdict():
+    from core.candidate_validation import validate_commute_response
+    draft = "The commute exceeds your limit at 20-45 minutes."
+    assert "exceeds" not in validate_commute_response(draft, _commute_state(rows=[], route=_MEASURED, criteria={"max_travel_time": 60, "commute_destination": "Bank"}))
+
+
+@pytest.mark.parametrize("message", ["Near UCL there's a bakery I like.", "Near UCL, is there a gym?"])
+def test_review_a_sentence_that_goes_on_is_no_follow_up(message):
+    assert _state_node(_CAMDEN, message)["area"] == "Camden"
+
+
+@pytest.mark.parametrize("message,area", [("Near UCL?", "Bloomsbury"), ("What about near UCL instead?", "Bloomsbury")])
+def test_review_a_bare_follow_up_still_moves(message, area):
+    assert _state_node(_CAMDEN, message)["area"] == area

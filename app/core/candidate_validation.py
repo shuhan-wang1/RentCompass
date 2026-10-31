@@ -1448,7 +1448,7 @@ _ADVICE_CLAUSE = re.compile(
     # "and I'll search for listings that fit", "Tell me your commute and ...", "Allow a longer
     # commute": what happens next, or what the user could change. Nothing is said of a journey.
     r"|(?:i['’]ll|i\s+will|i\s+can|we['’]ll)\s+(?:then\s+)?(?:search|look|check|find|run|try|show)\b"
-    r"|(?:please\s+)?(?:tell|let)\s+me\b"
+    r"|(?:please\s+)?tell\s+me\b|let\s+me\s+know\b"
     r"|(?:allow|accept|consider|try|widen|relax|raise|extend|increase)\s+(?:a|an|your|the)\b"
     # 可以看看 Hackney 周边通勤相近但租金更低的区域 (r05 876e3d1c).
     r"|(?:你)?(?:也)?(?:可以|不妨|建议)(?:再)?(?:看看|考虑|试试|放宽))", re.I)
@@ -3020,6 +3020,7 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
 
 
 # "All times below are measured by the TfL Journey Planner": it says where figures came from.
+_TIMES_POINTED_AT = re.compile(r"\b(?:times?|figures?)\s+(?:below|above)\b", re.I)
 _ROUTE_PROVENANCE = re.compile(r"\bmeasured\s+(?:by|with|on|using|from)\s+(?:the\s+)?TfL\b|实测.{0,6}TfL", re.I)
 
 
@@ -3186,9 +3187,11 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 return True
             if _quotes_source_text(fragment, source_texts):
                 return True
-            if _quotes_duration_band(fragment, pool):
+            named_part = _TIMES_POINTED_AT.sub(" ", fragment)       # "All times below ..."
+            verdict = bool(_PASS_VERDICT.search(named_part) or _FAIL_VERDICT.search(named_part))
+            if not verdict and _quotes_duration_band(fragment, pool):
                 return True
-            if (_ROUTE_PROVENANCE.search(fragment) and not _minute_claim_values(fragment)
+            if (not verdict and _ROUTE_PROVENANCE.search(fragment) and not _minute_claim_values(fragment)
                     and pool and all(c.get("minutes") is not None for c in pool)):
                 return True     # every figure of the turn is a measurement, so this is true of them
             effective = _binding if _binding is not None else binding

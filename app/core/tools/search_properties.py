@@ -2428,6 +2428,7 @@ _HOME_SEARCH_WORD = re.compile(
     r"propert(?:y|ies)|find|search|look(?:ing)?\s+for|rent|live|living)\b", re.I)
 _NEAR_FOLLOW_UP = re.compile(
     r"\s*(?:(?:and|or|ok(?:ay)?|then|so|actually|now)\s+)*(?:(?:what|how)\s+about\s+)?(?:somewhere\s+)?", re.I)
+_NEAR_FOLLOW_UP_END = re.compile(r"\s*(?:instead|please|then|too|as\s+well)?\s*(?:[?.!]+(?:\s|$)|$)", re.I)
 
 
 def institution_home_area(text: str, *, follow_up_only: bool = False) -> str | None:
@@ -2439,7 +2440,9 @@ def institution_home_area(text: str, *, follow_up_only: bool = False) -> str | N
     from core.scraping.on_demand import UNIVERSITY_KEYS, _match_location
     source = str(text or "")[:2000]
     for match in _NEAR_INSTITUTION.finditer(source):
-        follow_up = bool(_NEAR_FOLLOW_UP.fullmatch(re.split(r"[.!?;\n]", source[:match.start()])[-1]))
+        # The whole sentence is the place: "Near UCL there's a bakery I like" asks for nothing.
+        follow_up = bool(_NEAR_FOLLOW_UP.fullmatch(re.split(r"[.!?;\n]", source[:match.start()])[-1])
+                         and _NEAR_FOLLOW_UP_END.match(source, match.end()))
         if not follow_up and (follow_up_only or not _HOME_SEARCH_WORD.search(
                 clause_at(source, match.start(), match.end()))):
             continue

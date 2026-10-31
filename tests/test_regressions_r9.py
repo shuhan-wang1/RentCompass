@@ -427,3 +427,147 @@ def test_y_07_inferences_never_crowd_out_saved_facts(memory):
     block = memory.format_for_prompt(rows, saved_total=total)
     assert "all 17 saved facts are listed" in block
     assert block.count("[FACT]") == 17 and block.rindex("[FACT]") < block.index("[INFERENCE]")
+
+
+# E-01 ── a supported figure stays, and what the validator exists for still holds
+def _listing_rows():
+    return [
+        {"address": "Goswell Road, Angel, Islington, London, EC1V", "travel_time": "18 min to Liverpool Street", "travel_time_source": "routing"},
+        {"address": "Goswell Road, Angel, London, EC1V", "travel_time": "20 min to Liverpool Street", "travel_time_source": "routing"},
+        {"address": "Carrara Tower, Bollinder Place, EC1V", "travel_time": "~18 min to Liverpool Street (estimated, unverified)", "travel_time_source": "estimate"},
+        {"address": "City Road, London, EC1V", "travel_time": "13 min to Liverpool Street", "travel_time_source": "routing"},
+        {"address": "Islington on the Green, Angel, London, N1", "travel_time": "~23 min to Liverpool Street (estimated, unverified)", "travel_time_source": "estimate"},
+        {"address": "Islington on the Green, Angel, London, N1", "travel_time": "~22 min to Liverpool Street (estimated, unverified)", "travel_time_source": "estimate"},
+    ]
+
+
+def _commute_state(rows=None, route=None, message="Find a flat in Angel", language="en", criteria=None):
+    from core.candidate_validation import validate_search_payload
+    payload = {"recommendations": rows if rows is not None else _listing_rows(),
+               "search_criteria": criteria if criteria is not None else {"area": "Angel", "commute_destination": "Liverpool Street"}}
+    artifacts = [{"tool": "search_properties", "raw_data": payload, "success": True}]
+    if route:
+        artifacts.append({"tool": "calculate_commute", "raw_data": route, "success": True})
+    return {"tool_artifacts": artifacts, "candidate_validation": validate_search_payload(payload).get("candidate_validation") or {},
+            "accumulated_search_criteria": payload["search_criteria"],
+            "extracted_context": {"current_message": message, "reply_language": language}}
+
+
+_ANGEL_ROUTE = {"from_address": "Angel", "to_address": "Liverpool Street", "duration_minutes": 15,
+                "basis": "tfl_journey_plan", "route_source": "tfl_journey_plan", "route_legs": [],
+                "duration_category": "Short (<20 min)", "mode": "transit"}
+
+
+def _keeps(draft, state):
+    from core.candidate_validation import validate_commute_response
+    return validate_commute_response(draft, state) == draft
+
+
+@pytest.mark.parametrize("draft", [
+    "1. Goswell Road, Angel, Islington, London, EC1V: £2800/month, 18 min to Liverpool Street",
+    "2. Goswell Road, Angel, London, EC1V: £2800/month, 20 min to Liverpool Street",
+    "Goswell Road, Angel, London, EC1V: £2800/month, 20 min (routed)",
+    "- City Road, London, EC1V: £2150/month, 13 min (TfL route)",
+    "- Carrara Tower, Bollinder Place, EC1V: £3400/month, ~18 min (estimated, unverified)",
+    "- Islington on the Green, Angel, London, N1: £3050/month, ~23 min (estimated, unverified)",
+    "- Islington on the Green, Angel, London, N1: £3000/month, ~22 min (estimated, unverified)",
+])
+def test_e_01_a_listings_own_figure_with_its_own_label_stays(draft):
+    assert _keeps(draft, _commute_state(route=_ANGEL_ROUTE))
+
+
+@pytest.mark.parametrize("draft,gone", [
+    ("- Carrara Tower, Bollinder Place, EC1V: £3400/month, 18 min (routed)", "18 min"),          # an estimate read as routed
+    ("- Carrara Tower, Bollinder Place, EC1V: £3400/month, 18 min to Liverpool Street", "18 min"),
+    ("- City Road, London, EC1V: £2150/month, 18 min to Liverpool Street", "18 min"),            # another listing's figure
+    ("- Goswell Road, Angel, Islington, London, EC1V: £2800/month, 20 min to Liverpool Street", "20 min"),
+    ("- Goswell Road, Angel, London, EC1V: £2800/month, 18 min to Liverpool Street", "18 min"),
+    ("- Goswell Road, Angel, London, EC1V: £2800/month, 15 min to Liverpool Street", "15 min"),  # the area's route
+    ("Goswell Road: £2800/month, 20 min", "20 min"),                                             # two flats, two figures
+    ("- Carrara Tower, Bollinder Place, EC1V is within your 30 minute limit at ~18 min (estimated)", "within"),
+])
+def test_e_01_the_rules_of_the_validator_hold(draft, gone):
+    from core.candidate_validation import validate_commute_response
+    assert gone not in validate_commute_response(draft, _commute_state(route=_ANGEL_ROUTE, criteria={
+        "area": "Angel", "commute_destination": "Liverpool Street", "max_commute_time": 30}))
+
+
+_MEASURED = {"from_address": "Camden Road, Islington, N7", "to_address": "Bank", "duration_minutes": 36, "basis": "tfl_journey_plan",
+             "route_source": "tfl_journey_plan", "mode": "transit", "duration_category": "Medium (20-45 min)",
+             "route_legs": [{"mode": "walking", "lines": [], "duration_minutes": 4, "from": "Camden Road", "to": "Chambers Road"},
+                            {"mode": "bus", "lines": ["21"], "duration_minutes": 28, "from": "Chambers Road", "to": "Bank Station"},
+                            {"mode": "walking", "lines": [], "duration_minutes": 4, "from": "Bank Station", "to": "1 Lombard Street, London"}]}
+
+
+@pytest.mark.parametrize("draft", [
+    "The commute to Bank is about 36 minutes. That falls in the medium range of 20 to 45 minutes.",
+    "The commute to Bank is about 36 minutes, medium (20-45 minutes).",
+    "The commute to Bank is about 36 minutes, planned for around 21:43 on 30 October.",
+    "All times below are measured by the TfL Journey Planner (fastest itinerary it returned).",
+    "- Walk to 1 Lombard Street, London — 4 min",
+    "It is a 4 min walk, 28 min bus, 4 min walk.",
+])
+def test_e_01_a_grounded_transport_answer_gets_no_note(draft):
+    assert _keeps(draft, _commute_state(rows=[], route=_MEASURED, criteria={}))
+
+
+def test_e_01_a_band_is_no_other_figure():
+    from core.candidate_validation import validate_commute_response
+    out = validate_commute_response("The commute to Bank takes 20 to 40 minutes.", _commute_state(rows=[], route=_MEASURED, criteria={}))
+    assert "20 to 40" not in out
+
+
+def test_e_01_an_estimate_is_not_called_measured():
+    from core.candidate_validation import validate_commute_response
+    state = _commute_state(route=None)
+    draft = "All times below are measured by the TfL Journey Planner (fastest itinerary it returned)."
+    assert "measured" not in validate_commute_response(draft, state)
+
+
+_ZH_ROUTE = {"from_address": "Stratford", "to_address": "Canary Wharf", "duration_minutes": 15, "basis": "tfl_journey_plan",
+             "route_source": "tfl_journey_plan", "mode": "transit",
+             "route_legs": [{"mode": "tube", "lines": ["Jubilee"], "duration_minutes": 9, "from": "Stratford Underground Station", "to": "Canary Wharf Underground Station"},
+                            {"mode": "walking", "lines": [], "duration_minutes": 6, "from": "Canary Wharf Underground Station", "to": "Heron Quays"}]}
+
+
+def test_e_01_a_named_legs_own_figure_stays_and_a_whole_trip_claim_does_not():
+    from core.candidate_validation import validate_commute_response
+    state = _commute_state(rows=[], route=_ZH_ROUTE, criteria={}, language="zh")
+    leg = "路线：先乘 Jubilee 线从 Stratford 地铁站到 Canary Wharf 地铁站（约 9 分钟），再步行约 6 分钟。"
+    assert validate_commute_response(leg, state) == leg
+    assert "9 分钟" not in validate_commute_response("从 Stratford 到 Canary Wharf 全程 9 分钟。", state)
+
+
+def test_e_01_the_gap_between_a_routes_two_itineraries_stays():
+    from core.candidate_validation import validate_commute_response
+    route = {"from": "Heathrow", "to": "King's Cross", "query_type": "journey", "duration_minutes": 42, "basis": "tfl_journey_plan",
+             "cheapest_journey": {"duration_minutes": 47, "basis": "tfl_journey_plan"}, "route_legs": []}
+    state = _commute_state(rows=[], criteria={}, language="zh")
+    state["tool_artifacts"] = [{"tool": "get_transport_info", "raw_data": route, "success": True}]
+    draft = "最快的方案全程约 42 分钟，最便宜的方案全程约 47 分钟，两者只差 5 分钟。"
+    assert validate_commute_response(draft, state) == draft
+    assert "4 分钟" not in validate_commute_response("两者只差 4 分钟。", state)
+
+
+@pytest.mark.parametrize("draft,language", [
+    ("Tell me your budget and I'll search for listings that fit your commute.", "en"),
+    ("If you're moving to Inverness for a different reason and no longer need the London commute, tell me.", "en"),
+    ("Allow a longer commute.", "en"), ("可以看看 Hackney 周边通勤相近但租金更低的区域。", "zh"),
+    ("在 Islington 按你的条件（一居室、整套住宅、预算 £2,200/月、通勤去 Bank）找到 1 套符合预算的房源。", "zh"),
+    ("符合你的条件（Hackney、整套一居室、月租 2200 镑以内、不需要通勤）的房源有两套。", "zh"),
+    ("No listing met your search (under £2,500 a month and within 30 minutes of Bank).", "en"),
+])
+def test_e_01_a_sentence_that_claims_no_journey_stays(draft, language):
+    criteria = {"max_travel_time": 30, "max_commute_time": 30, "commute_destination": "Bank"}
+    assert _keeps(draft, _commute_state(rows=[], route=_MEASURED, language=language, criteria=criteria))
+
+
+@pytest.mark.parametrize("draft,gone", [
+    ("The commute to Bank is shorter than from Camden, which is why it fits.", "shorter"),
+    ("Camden Road is the fastest at 14 min", "14 min"),
+    ("I quoted about 30 minutes earlier, so treat the commute as roughly 35 to 40 minutes.", "35 to 40"),
+])
+def test_e_01_a_journey_claim_with_no_evidence_still_goes(draft, gone):
+    from core.candidate_validation import validate_commute_response
+    assert gone not in validate_commute_response(draft, _commute_state(route=None, rows=[
+        {"address": "Camden Road, London, N7", "travel_time": "~38 min to Bank (estimated, unverified)", "travel_time_source": "estimate"}], criteria={"commute_destination": "Bank"}))

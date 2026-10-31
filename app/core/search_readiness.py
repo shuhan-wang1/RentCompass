@@ -214,8 +214,8 @@ _MONEY_EVIDENCE = re.compile(
     re.IGNORECASE)
 
 # A weekly delta is normalised to monthly, because the accumulated ceiling is monthly.
-_WEEKLY_MARKER = re.compile(r"\b(?:a|per)\s*week\b|\bweekly\b|\bpw\b|/\s*w\b|每周|一周|/周",
-                            re.IGNORECASE)
+_WEEKLY_MARKER = re.compile(r"\b(?:a|per)\s*w(?:ee)?k\b|\bweekly\b|(?<![a-z])pc?w(?![a-z])|\bp\.(?:c\.)?w\b|"
+                            r"/\s*w(?:k|eek)?\b|每周|一周|/周", re.IGNORECASE)
 
 
 def detect_relative_budget_delta(text: str) -> float | None:

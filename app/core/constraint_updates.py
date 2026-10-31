@@ -106,8 +106,17 @@ _STRETCH_CLAUSE_SPLIT = re.compile(
 _MONEY_FIGURE = re.compile(r"£\s?\d|\d\s?(?:k\b|pcm|p/m|per\s+month|a\s+month|pw|per\s+week|镑|英镑)|\d{3,}", re.I)
 
 
+# "Actually I can stretch to £480pw." moves the ceiling: a plain "can", the message's only figure and
+# no condition, so there is nothing for it to stretch beside and no case for keeping the old one.
+_FIRM_STRETCH = re.compile(r"\b(?:i|we)\s+can\s+(?:now\s+)?stretch\s+(?:up\s+)?to\s+£?\s?\d", re.I)
+
+
 def _stretch_clauses(text: str) -> list[str]:
-    return [part.strip() for part in _STRETCH_CLAUSE_SPLIT.split(str(text or '')[:4000])
+    value = str(text or '')[:4000]
+    if (_FIRM_STRETCH.search(value) and len(_STRETCH_CUE.findall(value)) == 1
+            and len(re.findall(r"£\s?\d|(?<![\d,.])\d{3,}", value)) == 1):
+        return []
+    return [part.strip() for part in _STRETCH_CLAUSE_SPLIT.split(value)
             if part and _STRETCH_CUE.search(part) and _MONEY_FIGURE.search(part)]
 
 

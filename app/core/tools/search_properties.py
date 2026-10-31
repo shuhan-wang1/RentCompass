@@ -714,6 +714,15 @@ def _bare_budget_edit(t: str):
     return None
 
 
+# "p.w." and "p.c.m." end in the full stop that closes the period search of _budget_period_near, so
+# the marker fell outside the amount's own sentence.
+_DOTTED_PERIOD = re.compile(r'(?<![a-z.])p\.\s?(?:c\.\s?(?P<unit>[mw])|(?P<week>w))\b\.?')
+
+
+def _undotted_periods(t: str) -> str:
+    return _DOTTED_PERIOD.sub(lambda m: f"pc{m.group('unit')}" if m.group('unit') else 'pw', t)
+
+
 def _extract_budget(text: str):
     """Pull an explicit monthly/weekly budget out of the *current* user message.
     Returns (amount:number, period:'week'|'month') or (None, None). Deterministic regex
@@ -725,7 +734,7 @@ def _extract_budget(text: str):
     # (stress A-08); the state node keeps it as a soft note instead.
     from core.constraint_updates import without_conditional_stretch
     t = zh_money_digits(_plain_figures(without_conditional_stretch(scoped_update_text(text)).lower()))
-    t = _expand_thousands(t)
+    t = _undotted_periods(_expand_thousands(t))
     t = _BUDGET_FLOOR.sub(lambda match: ' ' * len(match.group()), t)
     t = _BUDGET_RANGE.sub(_range_ceiling, t)
     # "budget -500" became a £500 ceiling and was quoted back as the user's budget (R3-16):
@@ -839,7 +848,7 @@ def _extract_budget(text: str):
     m = re.search(r'£\s?(\d{3,5}(?:\.\d{1,2})?)(?!\d|\.\d)', t)
     # 2) amount followed by a budget unit: "1800 pcm", "1800 per month", "1800 a week"
     if not m:
-        m = re.search(r'(?<![a-z\d.])(\d{3,5}(?:\.\d{1,2})?)\s*(?:pcm|pm|pw|/\s*(?:month|week|wk)|per\s+(?:month|week)|a\s+(?:month|week)|pounds?)\b', t)
+        m = re.search(r'(?<![a-z\d.])(\d{3,5}(?:\.\d{1,2})?)\s*(?:pcm|pm|pw|pcw|p/w|weekly|/\s*(?:month|week|wk)|per\s+(?:month|week|wk)|a\s+(?:month|week|wk)|pounds?)\b', t)
     # 3) budget keyword + amount: "budget is now 1800", "budget of 1800", "max budget 1800"
     if not m:
         m = re.search(r'budget\b[^£\d]{0,20}£?\s?(\d{3,5}(?:\.\d{1,2})?)(?!\d|\.\d)', t)
@@ -872,8 +881,13 @@ def _extract_budget(text: str):
 # The `/wk` branch deliberately has no leading \b: there is no word boundary between a
 # space and a slash, so the old `\b(?:...|/\s*w(?:k|eek)?|...)` could never match "350 /wk"
 # either. Same line, same defect, both languages.
+#
+# "pw" and "pcw" have no \b either: a digit is a word character, so "£450pw" read as £450 a MONTH
+# and the re-extraction then overrode the model's correct conversion (G-01). "weekly" alone is an
+# adverb ("the gym weekly"), so it has to touch the figure or name the rent.
 _WEEKLY_MARKER = re.compile(
-    r'\bpw\b|\bper\s+week\b|\ba\s+week\b|/\s*w(?:k|eek)?\b'
+    r'(?<![a-z])pc?w(?![a-z])|\bper\s+w(?:ee)?k\b|\ba\s+w(?:ee)?k\b|/\s*w(?:k|eek)?\b'
+    r'|\d\s*(?:max(?:imum)?\s+)?weekly\b|\bweekly\s+(?:rent|budget|max(?:imum)?|limit|cap|ceiling)\b'
     r'|每\s*[个個]?\s*(?:周|週|星期)|[周週]\s*租|按\s*[周週]|/\s*[周週]'
 )
 _MONTHLY_MARKER = re.compile(
@@ -899,7 +913,7 @@ def _budget_period_near(text: str, lo: int, hi: int) -> str:
         for mk in pattern.finditer(text):
             if mk.start() < left or mk.end() > right:
                 continue
-            if pattern is _WEEKLY_MARKER and re.search(r'\b(?:days?|times?|trips?)\s*$|[天次]\s*$', text[max(left, mk.start()-12):mk.start()]):
+            if pattern is _WEEKLY_MARKER and re.search(r'\b(?:days?|times?|trips?|once|twice)\s*$|[天次]\s*$', text[max(left, mk.start()-12):mk.start()]):
                 continue
             if mk.end() <= lo:
                 best = min(best, lo - mk.end())      # marker before the amount

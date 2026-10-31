@@ -4348,7 +4348,9 @@ async def search_properties_impl(
             no_commute=no_commute,
             commute_destination=commute_target,
             criteria_gate_shown=criteria_gate_shown,
-            confirmed=confirmed,
+            # A comparison asks about the areas, so the criteria of one search can wait (B-F7).
+            confirmed=confirmed or (compares_areas_only(msg_for_extraction)
+                                    and len(comparison_areas(msg_for_extraction)) > 1),
             user_message=msg_for_extraction,
             move_in_date=move_in_date,
         )

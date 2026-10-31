@@ -993,3 +993,17 @@ def test_b_f8_coordinates_with_a_source_stay(state):
     from core.agent_loop import _without_invented_coords
     args = {"address": "x", "latitude": 51.5251, "longitude": -0.078}
     assert _without_invented_coords(args, state) == args
+
+
+# B-F7 ── a comparison of two areas does not wait for the criteria of one search
+def test_b_f7_a_comparison_passes_the_soft_gate(monkeypatch):
+    out = _search(monkeypatch, _held_sample(sample_size=20, cheapest=1300), area="Manchester",
+                  areas=["Manchester", "Edinburgh"], max_budget=1200, reply_language="en",
+                  current_message="Compare Manchester and Edinburgh for rent, I have a £1200 budget")
+    assert out["status"] == "no_results" and out.get("clarification_kind") is None
+
+
+def test_b_f7_one_area_still_meets_the_gate(monkeypatch):
+    out = _search(monkeypatch, _held_sample(), area="Manchester", areas=["Manchester"], max_budget=1200,
+                  reply_language="en", current_message="Find a flat in Manchester under £1200")
+    assert out["status"] == "need_clarification"

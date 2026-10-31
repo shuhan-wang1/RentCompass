@@ -3433,9 +3433,8 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
                 _reset_context.pop(_key, None)
         persistent_snapshot = copy.deepcopy(_sess.persistent_state)
         history_snapshot = list(_sess.history)
-        if not resets_all_criteria(user_message):
-            from core.criteria_recovery import with_cancelled_turns
-            history_snapshot = with_cancelled_turns(history_snapshot, _conversation_messages)
+        from core.criteria_recovery import cancelled_turns
+        _cancelled_turns = [] if resets_all_criteria(user_message) else cancelled_turns(_conversation_messages)
         # 🆕 Ask-AI 聚焦解析要对照"完整推荐列表"，它挂在 session 对象上（_sess.last_results，
         # extracted_context 里只留 6 条）。在同一把锁内浅拷贝，避免跨慢速 LLM 调用再次加锁。
         last_results_snapshot = list(_sess.last_results or [])
@@ -3586,6 +3585,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             # earlier turns, and the record of how the criteria changed (V-11, V-12).
             from rag.agent_memory import history_without_fields
             history_snapshot = history_without_fields(history_snapshot, _erase_fields)
+            _cancelled_turns = history_without_fields(_cancelled_turns, _erase_fields)
             with turn_lock:
                 _session = _get_session(user_id, conversation_id)
                 _session.history = history_without_fields(_session.history, _erase_fields)
@@ -3676,7 +3676,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     _uses_fc_runtime = uses_fc_runtime(AGENT_ARCH)
     query_with_history = assemble_context(
         user_message=user_message,
-        history=history_snapshot,
+        history=history_snapshot + _cancelled_turns,
         memory_block="" if _uses_fc_runtime else _mem_block,
         has_property_context=has_property_context,
         rolling_summary=(persistent_snapshot.get('extracted_context') or {}).get('rolling_summary'),
@@ -3691,6 +3691,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     # 忽略该键；fc_loop 的 assemble_messages 用它构造 user/assistant 消息对，否则 fc 模型
     # 拿不到任何对话历史。放在这里（早于建图）保证两条路径都可用。
     extracted_context['history'] = history_snapshot
+    extracted_context['cancelled_turns'] = _cancelled_turns
     # 🆕 回复语言（产品规则）：本条消息含中文→'zh'；否则 UI=en→'en'；否则 'zh'。用 pristine
     # user_message（早于记忆/历史前缀），图 agent 读取该键并转发给 search 工具，使 /api/alex
     # 与 "search anyway" 路径不再中英混杂。

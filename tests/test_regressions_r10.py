@@ -889,18 +889,17 @@ _CANCELLED_THREAD = [
 
 
 def test_g_15_the_model_reads_the_cancelled_turn():
-    from core.criteria_recovery import CANCELLED_TURN_NOTE, with_cancelled_turns
-    history = [{"user": "Find a 1-bed in Bow under £2,200, no commute.", "assistant": "Here are three flats."}]
-    assert with_cancelled_turns(history, _CANCELLED_THREAD) == history + [
+    from core.criteria_recovery import CANCELLED_TURN_NOTE, cancelled_turns
+    assert cancelled_turns(_CANCELLED_THREAD) == [
         {"user": "Switch to Hackney instead, same budget.", "assistant": CANCELLED_TURN_NOTE}]
 
 
 def test_g_15_an_answer_after_it_or_a_failure_changes_the_view():
-    from core.criteria_recovery import with_cancelled_turns
+    from core.criteria_recovery import cancelled_turns
     answered = _CANCELLED_THREAD[:4] + [{"role": "user", "content": "x"}, {"role": "assistant", "content": "y"}]
-    assert with_cancelled_turns([], answered) == []
+    assert cancelled_turns(answered) == []
     failed = [dict(_CANCELLED_THREAD[3], content="The model service is unavailable.")]
-    assert with_cancelled_turns([], _CANCELLED_THREAD[:3] + failed) == []
+    assert cancelled_turns(_CANCELLED_THREAD[:3] + failed) == []
 
 
 def test_g_15_its_criteria_stay_unapplied():
@@ -936,9 +935,10 @@ def test_g_15_a_turn_after_a_cancellation_hands_it_to_the_model(monkeypatch, tmp
         with pytest.raises(_Stop):
             asyncio.run(appmod.handle_with_react_agent(_CANCELLED_THREAD[-1]["content"], {}, False,
                                                        user_id=uid, conversation_id=cid))
-        turns = seen["extracted_context"]["history"]
-        assert turns[-1] == {"user": "Switch to Hackney instead, same budget.", "assistant": CANCELLED_TURN_NOTE}
-        assert len(session.history) == 1      # the view only: the hot history stays as it was
+        context = seen["extracted_context"]
+        assert context["cancelled_turns"] == [
+            {"user": "Switch to Hackney instead, same budget.", "assistant": CANCELLED_TURN_NOTE}]
+        assert len(context["history"]) == 1 and len(session.history) == 1     # the state's view is unchanged
     finally:
         appmod._session_store.clear("u_g15", "c_g15")
         monkeypatch.setattr(appmod.conversation_store, "get_messages", real)

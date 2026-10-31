@@ -1549,7 +1549,7 @@ def _build_messages(state: AgentState) -> list:
         from core.context_assembler import assemble_messages  # contract C
         messages = assemble_messages(
             user_message=user_message,
-            history=ec.get("history") or [],
+            history=[*(ec.get("history") or []), *(ec.get("cancelled_turns") or [])],
             memory_block=state.get("memory_context") or "",
             rolling_summary=(ec.get("rolling_summary")
                              or state.get("rolling_summary") or ""),

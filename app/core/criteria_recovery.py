@@ -370,21 +370,22 @@ def repair_criteria_sources(accumulated: dict, messages: list[dict]) -> dict:
 CANCELLED_TURN_NOTE = "(This request was cancelled before it ran: nothing was searched or changed.)"
 
 
-def with_cancelled_turns(history: list, messages: list[dict]) -> list:
-    """``history`` plus the turns cancelled since the last delivered answer, for the model to read."""
+def cancelled_turns(messages: list[dict]) -> list:
+    """The turns cancelled since the last delivered answer, for the model to read. They are kept
+    apart from the history, which the state reads for "go back" and the last requirement: a turn
+    that never ran states nothing there."""
     from uk_rent_agent.web.conversation_store import CANCELLED_TURN_TEXTS
     items = [m for m in messages or [] if isinstance(m, dict)]
     start = 0
     for index, message in enumerate(items):
         if message.get("role") == "assistant" and message.get("response_type") != "error":
             start = index + 1
-    cancelled = [{"user": items[index].get("content"), "assistant": CANCELLED_TURN_NOTE}
-                 for index in range(start, len(items) - 1)
-                 if items[index].get("role") == "user" and items[index + 1].get("role") == "assistant"
-                 and items[index + 1].get("response_type") == "error"
-                 and str(items[index + 1].get("content") or "").strip() in CANCELLED_TURN_TEXTS
-                 and str(items[index].get("content") or "").strip()]
-    return list(history or []) + cancelled
+    return [{"user": items[index].get("content"), "assistant": CANCELLED_TURN_NOTE}
+            for index in range(start, len(items) - 1)
+            if items[index].get("role") == "user" and items[index + 1].get("role") == "assistant"
+            and items[index + 1].get("response_type") == "error"
+            and str(items[index + 1].get("content") or "").strip() in CANCELLED_TURN_TEXTS
+            and str(items[index].get("content") or "").strip()]
 
 
 def criteria_with_undelivered_turns(accumulated: dict, messages: list[dict]) -> dict:

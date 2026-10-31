@@ -4259,6 +4259,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             p["area"] = acc["area"]
         if not switched and not p.get("areas") and acc.get("areas"):
             p["areas"] = acc["areas"]
+        from core.constraint_updates import is_destination_text
+        if p.get("commute_destination") and not is_destination_text(p["commute_destination"]):
+            p.pop("commute_destination")        # a request is no place to commute to (G-08)
         cd = acc.get("commute_destination") or acc.get("destination")
         if not p.get("commute_destination") and cd and not acc.get("no_commute"):
             p["commute_destination"] = cd

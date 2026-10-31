@@ -651,3 +651,96 @@ def test_g_07_the_log_carries_the_draft_sentence(caplog):
         _log_removed_commute_text(["Commute to Bank takes 25 minutes"], draft)
     message = next(r.getMessage() for r in caplog.records if "claims_removed" in r.getMessage())
     assert "sentences=" in message and "Commute to Bank takes 25 minutes, sadly." in message
+
+
+# G-08 ── an explicit reference to "my budget" applies it
+_ONE_SAVED = [{"id": "a", "mtype": "semantic", "text": "The user's budget is £1,800 a month.", "created_at": "2026-10-30"},
+              {"id": "b", "mtype": "semantic", "text": "The user prefers Hackney.", "created_at": "2026-10-30"},
+              {"id": "c", "mtype": "reflection", "text": "The user's budget may be £2,300.", "created_at": "2026-10-30"}]
+_TWO_SAVED = _ONE_SAVED + [{"id": "d", "mtype": "semantic", "text": "The user's budget is £2,500 a month.",
+                            "created_at": "2026-10-31"}]
+
+
+@pytest.mark.parametrize("text", [
+    "Find 1-bed flats in Bow, use my default budget. No commute.",
+    "Find me a 1-bed under my budget",
+    "Search a 1-bed in Islington for me, applying my budget",
+    "Search Bow and stick to my budget",
+    "Find a flat within my budget",
+    "Search 1-bed in Angel with my default budget, no commute needed",
+    "Use the budget you have saved for me and search 1-bed in Hackney",
+])
+def test_g_08_the_one_saved_budget_is_applied(text):
+    from core.constraint_updates import references_saved_criteria, restore_saved_criteria
+    assert references_saved_criteria(text)
+    restored = restore_saved_criteria({}, _ONE_SAVED, text)
+    assert restored["max_budget"] == 1800
+    assert restored["constraint_sources"]["max_budget"]["source"] == "saved_preference"
+    assert "commute_destination" not in restored
+
+
+def test_g_08_the_conversations_budget_is_my_budget():
+    from core.constraint_updates import restore_saved_criteria
+    assert restore_saved_criteria({"max_budget": 2100}, _ONE_SAVED, "Find me a 1-bed under my budget")["max_budget"] == 2100
+
+
+def test_g_08_two_saved_budgets_set_nothing():
+    from core.constraint_updates import restore_saved_criteria
+    assert restore_saved_criteria({}, _TWO_SAVED, "Find me a 1-bed under my budget") == {}
+
+
+@pytest.mark.parametrize("text", [
+    "What is my budget?", "Raise my budget to £2,000", "Change the budget to £1,800", "my budget is £2,000",
+    "Is it under my budget?", "Forget my budget", "Find a flat within my budget of £2,000",
+])
+def test_g_08_no_reference(text):
+    from core.constraint_updates import references_saved_criteria
+    assert not references_saved_criteria(text)
+
+
+def test_g_08_a_saved_workplace_comes_with_it_when_named():
+    from core.constraint_updates import restore_saved_criteria
+    rows = _ONE_SAVED + [{"id": "e", "mtype": "semantic", "text": "My office is at King's Cross.", "created_at": "2026-10-30"}]
+    restored = restore_saved_criteria({}, rows, "Use the budget you have saved for me and search Hackney, my workplace is saved too")
+    assert restored["max_budget"] == 1800 and "King" in restored["commute_destination"]
+
+
+@pytest.mark.parametrize("text", ["find a 1-bed flat in Angel", "a 1-bed in Bow", "search Camden", "looking for a studio"])
+def test_g_08_a_request_is_no_destination(text):
+    from core.constraint_updates import is_destination_text
+    assert not is_destination_text(text)
+
+
+@pytest.mark.parametrize("text", ["King's Cross", "Bank", "Flat Iron Square", "The Shard", "Canary Wharf, London E14 5AB"])
+def test_g_08_a_place_is_a_destination(text):
+    from core.constraint_updates import is_destination_text
+    assert is_destination_text(text)
+
+
+def test_g_08_the_rest_of_the_sentence_is_not_stored():
+    from core.langgraph_agent import _apply_explicit_criteria_updates as apply
+    after = apply({"area": "Bow", "areas": ["Bow"]}, "Use my saved budget and commute to find a 1-bed flat in Angel")
+    assert not after.get("commute_destination") and after["area"] == "Angel"
+
+
+# G-09 ── an area named as an area flips nothing
+@pytest.mark.parametrize("text", ["Change the area to Canary Wharf", "Switch to Canary Wharf", "Change the search area to Canary Wharf"])
+def test_g_09_an_area_change_keeps_no_commute(text):
+    from core.langgraph_agent import _apply_explicit_criteria_updates as apply
+    after = apply(dict(_STRATFORD), text)
+    assert after["area"] == "Canary Wharf" and after["no_commute"] is True
+    assert not after.get("commute_destination")
+
+
+@pytest.mark.parametrize("text", ["I work at Canary Wharf now", "My office is in Canary Wharf"])
+def test_g_09_a_workplace_still_counts(text):
+    from core.langgraph_agent import _apply_explicit_criteria_updates as apply
+    after = apply(dict(_STRATFORD), text)
+    assert after["no_commute"] is False and "Canary Wharf" in after["commute_destination"]
+
+
+def test_g_09_a_bare_switch_is_a_workplace_only_for_someone_with_a_commute():
+    from core.constraint_updates import moves_area_only
+    assert moves_area_only("Switch to Canary Wharf", True)
+    assert not moves_area_only("Switch to Canary Wharf", False)
+    assert moves_area_only("Change the area to Canary Wharf", False)

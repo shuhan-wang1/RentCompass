@@ -141,6 +141,31 @@ def conditional_stretch_notes(text: str) -> list[str]:
 # A place the user only mentions does not replace a commute destination already set:
 # "…, and I study part-time at Birkbeck." (a "nothing to search" background turn) replaced
 # the Canary Wharf workplace with Malet Street (stress A-08). A destination change says so.
+# "Use my saved budget and commute to find a 1-bed flat in Angel" stored the rest of the sentence as
+# the destination, and every commute lookup failed to geocode it (G-08). A place does not open with
+# a verb or name a home.
+_NOT_A_DESTINATION = re.compile(
+    r"^\W*(?i:find(?:ing)?|search(?:ing)?|look(?:ing)?|get|see|show|use|using|rent|renting|live|living|buy)\b"
+    r"|\b(?:flats?|apartments?|studios?|bedrooms?|rooms?|houses?|homes?)\b|\b\d\s*-?\s*bed\b")
+
+
+_AREA_NAMED_CHANGE = re.compile(
+    r"\b(?:change|switch|move|set|update)\b[^.!?;]{0,24}\b(?:area|location|search)\b[^.!?;]{0,12}\bto\b"
+    r"|(?:区域|地区|位置)(?:改成|改为|换成|换到)", re.I)
+_SWITCH_ONLY = re.compile(r"^\W*(?:(?:ok(?:ay)?|actually|no|sorry)\W+)*(?:switch|change|move|go)\s+(?:it\s+)?(?:back\s+)?to\b", re.I)
+
+
+def moves_area_only(text: str, no_commute: bool = False) -> bool:
+    """True when the message moves where to live and says nothing of work. "Switch to Canary Wharf"
+    reads so only for someone who has said they do not commute."""
+    return bool(_AREA_NAMED_CHANGE.search(text or '') or (no_commute and _SWITCH_ONLY.search(text or '')))
+
+
+def is_destination_text(text) -> bool:
+    """False for a clause or a request stored in the place of a destination."""
+    return not _NOT_A_DESTINATION.search(str(text or ''))
+
+
 _DESTINATION_CHANGE_CUE = re.compile(
     r"\b(?:commut\w*|work\w*|office|workplace|job|destination|travel\w*\s+to|get(?:ting)?\s+to|"
     r"near|nearby|close\s+to|around|walking\s+distance|instead|now|actually|chang\w*|switch\w*|"
@@ -495,7 +520,29 @@ _SAVED_VALUE = (r"(?:saved|stored|remembered|usual)\s+(?:search\s+|default\s+|re
                 r"(?:budget|ceiling|criteria|preferences|requirements|settings|filters?|details)")
 
 
+# The user's budget, named as what to search by, without the word "saved": "use my default budget",
+# "Find me a 1-bed under my budget", "applying my budget", "stick to my budget", "Use the budget you
+# have saved for me" applied nothing while the reply talked of a budget (G-08, F-03).
+_OWN_BUDGET_REFERENCE = re.compile(
+    r"\b(?:use|using|apply|applying|with|under|within|stick(?:ing)?\s+to|keep(?:ing)?\s+to|respect(?:ing)?)\s+"
+    r"(?:my|the)\s+(?:(?:default|normal|usual|current|set)\s+)?budget\b"
+    r"(?!\s+(?:is|was|of|to|at|by|could|can|for|£|\d))"
+    r"|\b(?:use|using|apply|applying)\s+(?:the\s+|my\s+)?budget\s+(?:that\s+)?(?:you(?:\s+have|['’]ve)?|i(?:\s+have|['’]ve)?)\s+"
+    r"(?:saved|stored|got|gave|told)\b", re.I)
+
+
+def references_own_budget(text: str) -> bool:
+    """True for that reference outside a question about something: "Is it under my budget?"."""
+    for sentence in re.split(r'(?<=[.!?。！？])\s*', str(text or '')[:2000]):
+        if (_OWN_BUDGET_REFERENCE.search(sentence)
+                and not (sentence.rstrip().endswith(('?', '？')) and _ASKS_ABOUT_IT.search(sentence))):
+            return True
+    return False
+
+
 def references_saved_criteria(text: str) -> bool:
+    if references_own_budget(text):
+        return True
     return bool(re.search(
         r'(?:按|用|恢复|复述|记得)[^。！？]{0,35}(?:长期|默认|保存|偏好|记住|存的)|长期默认|'
         r'saved (?:search |default )?(?:criteria|preferences)|'
@@ -506,10 +553,12 @@ def references_saved_criteria(text: str) -> bool:
 
 # What a saved value is taken for. "show" only with a home noun: "Show my saved budget" is a recall.
 _RESTORE_CUE = re.compile(
-    r'搜|找|恢复|使用|按|用|\b(?:use|using|apply|applying|restore|find|search|look\s+for|with|'
+    r'搜|找|恢复|使用|按|用|\b(?:use|using|apply|applying|restore|find|search|look\s+for|with|stick|keep|'
     r'show\s+(?:me\s+)?(?:flats?|homes?|listings?|properties|places|options))\b', re.I)
 _ONLY_THE_BUDGET = re.compile(r'\b(?:saved|stored|remembered|usual)\s+(?:rent\s+)?(?:budget|ceiling)\b|保存的预算|记住的预算', re.I)
 _SAVED_OTHER_THAN_BUDGET = re.compile(r'\b(?:preferences|criteria|requirements|settings|filters?|details|defaults)\b|偏好|条件|默认', re.I)
+_SAVED_COMMUTE_TOO = re.compile(r'\b(?:commute|workplace|office)\b', re.I)
+_COMMUTE_FIELDS = {'commute_destination', 'destination', 'no_commute', 'max_travel_time'}
 _SAVED_FIELDS = {'area', 'areas', 'max_budget', 'budget_period', 'room_type', 'bedrooms',
                  'bedrooms_minimum', 'commute_destination', 'destination', 'no_commute',
                  'max_travel_time', 'property_features', 'soft_preferences', 'move_in_date',
@@ -534,7 +583,18 @@ def restore_saved_criteria(accumulated: dict, memories: list, message: str) -> d
                         key=lambda m: str(m.get('created_at') or ''), reverse=True)
     candidates.sort(key=lambda m: (m.get('mtype') != 'semantic',
         not bool(re.search(r'默认|长期|\bdefaults?\b|saved preferences', str(m.get('text') or ''), re.I))))
-    budget_only = bool(_ONLY_THE_BUDGET.search(message) and not _SAVED_OTHER_THAN_BUDGET.search(message))
+    own_budget = references_own_budget(message)
+    budget_only = bool((_ONLY_THE_BUDGET.search(message) or own_budget)
+                       and not _SAVED_OTHER_THAN_BUDGET.search(message))
+    wanted = (_BUDGET_FIELDS | _COMMUTE_FIELDS if budget_only and _SAVED_COMMUTE_TOO.search(message)
+              else _BUDGET_FIELDS)
+    if own_budget and budget_only:
+        # "my budget" is the one this conversation holds; a saved figure fills in only when it
+        # has one meaning, the rule of restore_saved_budget (E-02).
+        figures = {_apply_explicit_criteria_updates({}, str(m.get('text') or '')).get('max_budget')
+                   for m in candidates if m.get('mtype') == 'semantic'} - {None}
+        if (accumulated or {}).get('max_budget') is not None or len(figures) != 1:
+            return accumulated
     merged, owners = {}, {}
 
     def _restored(fields: dict, owner_of) -> dict:
@@ -559,7 +619,7 @@ def restore_saved_criteria(accumulated: dict, memories: list, message: str) -> d
         if memory.get('mtype') != 'semantic':
             continue
         for key, value in fields.items():
-            if key not in merged and value not in (None, [], '') and (not budget_only or key in _BUDGET_FIELDS):
+            if key not in merged and value not in (None, [], '') and (not budget_only or key in wanted):
                 merged[key], owners[key] = value, memory.get('id')
     return _restored(merged, owners.get) if merged else accumulated
 

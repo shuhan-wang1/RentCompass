@@ -803,3 +803,34 @@ def test_y_10_the_models_coordinates_stay():
     params = _dispatched("check_safety", {"address": "Caledonian Road, London", "latitude": 51.5, "longitude": -0.1},
                          {"last_results_full": [_ROW], "view_results": [_ROW]})
     assert (params["latitude"], params["longitude"]) == (51.5, -0.1)
+
+
+# Y-12 ── a save that only names something stores nothing and says so
+@pytest.mark.parametrize("content", [
+    "my name", "My name.", "that", "this", "it", "these", "all of that", "everything", "我的名字", "这个", "“my name”",
+])
+def test_y_12_a_reference_is_no_fact(content):
+    from core.memory_gate import memory_write_rejection
+    assert memory_write_rejection(content) == "rejected_reference_only"
+
+
+@pytest.mark.parametrize("content", [
+    "My budget is £2,000", "I have a cat", "my name is on the lease", "That I need a lift", "The user needs a garden",
+])
+def test_y_12_a_fact_is_not_touched(content):
+    from core.memory_gate import memory_write_rejection
+    assert memory_write_rejection(content) is None
+
+
+def test_y_12_the_row_is_not_written_and_the_reply_says_so(memory, monkeypatch):
+    from core import memory_contract as contract
+    from core.tools import memory_tools
+    monkeypatch.setattr(memory_tools, "_mem", lambda: memory)
+    monkeypatch.setattr(memory_tools, "_turn_guard_flagged", lambda: False)
+    result = memory_tools.remember_impl("my name", session_id="u1", user_id="u1")
+    assert result["success"] is False and result["stored"] is None
+    assert memory.semantic_records(user_id="u1") == []
+    found = contract.memory_contract_from_artifacts([{"tool": "remember", "raw_data": result, "success": True}])
+    reply = contract.compose_memory_contract_response("I've saved that to memory.", found, language="en")
+    assert reply == "I didn't save that to memory: it doesn't say what to keep."
+    assert "didn't save" in contract.memory_notice(found, "en") and "没有保存" in contract.memory_notice(found, "zh")

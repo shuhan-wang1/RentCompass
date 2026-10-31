@@ -147,6 +147,9 @@ def memory_notice(contract: dict | None, language: str = "") -> str:
                 else "I didn't save that to memory: I never store passwords, PINs, payment card "
                      "details or ID numbers such as passport, National Insurance or driving "
                      "licence numbers.")
+    if (contract or {}).get("policy_refused") and contract.get("policy_decision") == "rejected_reference_only":
+        return ("这次没有保存到记忆：这句话没有说明要记住的具体内容。" if zh
+                else "I didn't save that to memory: it doesn't say what to keep.")
     if (contract or {}).get("policy_refused"):
         return ("这次没有保存到记忆：我只保存关于你的长期信息（偏好、预算、限制条件），不保存指令。" if zh
                 else "I didn't save that to memory: I only save durable facts about you "
@@ -166,6 +169,8 @@ _FIXED_NOTICES = tuple(sorted({
         {"requested": True, "attempted": False},
         {"requested": True, "attempted": True, "policy_refused": True,
          "policy_decision": "rejected_secret"},
+        {"requested": True, "attempted": True, "policy_refused": True,
+         "policy_decision": "rejected_reference_only"},
         {"requested": True, "attempted": True, "policy_refused": True},
         {"requested": True, "attempted": True},
     )}, key=len, reverse=True))

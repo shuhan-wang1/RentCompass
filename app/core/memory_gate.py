@@ -737,6 +737,7 @@ DECISION_REJECTED_GUARD_FLAGGED = "rejected_guard_flagged"
 
 
 DECISION_REJECTED_QUESTION = "rejected_question_not_fact"
+DECISION_REJECTED_REFERENCE = "rejected_reference_only"
 
 #: ...and for a write that carries a password, a payment card detail or a government id
 #: number. Those are never stored, whoever asked (R1-05).
@@ -778,7 +779,23 @@ def memory_write_rejection(content, *, guard_flagged: bool = False) -> str | Non
         return DECISION_REJECTED_INSTRUCTION_SHAPED
     if content_is_question_fragment(content) or content_is_bare_fragment(content):
         return DECISION_REJECTED_QUESTION
+    if content_is_reference_only(content):
+        return DECISION_REJECTED_REFERENCE
     return None
+
+
+# "Please remember my name." stored the words "my name" and the reply quoted them as saved (r06
+# 7734974d). The content points at something; it states nothing.
+_REFERENCE_ONLY = re.compile(
+    r"^(?:(?:(?:my|our|the|your)\s+)?(?:name|names|details|info(?:rmation)?|preferences?|criteria|"
+    r"requirements?|budget|address|email|phone(?:\s+number)?|number|age|job|work|office|workplace|"
+    r"area|commute|pets?)|that|this|it|these|those|all(?:\s+of)?\s+(?:that|this|these|those)|everything|"
+    r"我的(?:名字|姓名|预算|信息|资料|要求|条件|地址|电话)|这个|这些|那个|那些|这点|这一点)$", re.I)
+
+
+def content_is_reference_only(content) -> bool:
+    """True when a candidate memory only names something: "my name", "that", 「我的名字」."""
+    return bool(_REFERENCE_ONLY.match(str(content or "").strip().strip("\"'“”「」.。!！ ")))
 
 
 def content_is_bare_fragment(content) -> bool:

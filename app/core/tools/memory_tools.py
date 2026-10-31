@@ -158,6 +158,8 @@ def remember_impl(content: str, kind: str = "semantic",
             "error": (("That was a question, not a fact to save, so nothing was stored. Answer "
                        "it from the saved facts you were given.")
                       if rejection == "rejected_question_not_fact" else
+                      ("That only names something and states no fact, so nothing was stored. Do "
+                       "not say it was saved.") if rejection == "rejected_reference_only" else
                       # Refused whole rather than saved with a hole in it: the model never
                       # quotes the secret back as "saved text" (R1-05).
                       ("I never save passwords, PINs, payment card details or ID numbers "

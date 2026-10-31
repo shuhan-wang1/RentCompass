@@ -483,3 +483,171 @@ def test_g_12_an_edit_during_the_reflection_writes_nothing(tmp_path, monkeypatch
     monkeypatch.setattr(am, "call_ollama", _edit_lands_now)
     memory.maybe_reflect("s", uid, conversation_id="c1", turn_id="t1")
     assert not memory.col.get(where={"$and": [{"user_id": uid}, {"mtype": "reflection"}]})["ids"]
+
+
+# G-07 ── the validator keeps what is true and logs the sentence around what it removes
+def _commute_state(*routes, search=None, criteria=None, current="x", language="en", earlier=()):
+    artifacts = [{"tool": "calculate_commute", "success": True, "raw_data": dict(route)} for route in routes]
+    if search:
+        artifacts.append({"tool": "search_properties", "success": True, "raw_data": search})
+    state = {"tool_artifacts": artifacts,
+             "extracted_context": {"current_message": current, "reply_language": language,
+                                   "earlier_routes": list(earlier)},
+             "accumulated_search_criteria": criteria or {}}
+    return state
+
+
+def _route(origin, destination, minutes, **extra):
+    return {"success": True, "from_address": origin, "to_address": destination, "mode": "transit",
+            "duration_minutes": minutes, "route_source": "TfL Journey Planner",
+            "route_summary": f"Tube to {destination} ({minutes} min)", **extra}
+
+
+def _search_row(address, destination, minutes):
+    return {"address": address, "price": "£1800/month", "travel_time": f"{minutes} min to {destination}",
+            "travel_time_source": "routing", "url": f"https://www.onthemarket.com/details/{minutes}/"}
+
+
+_KING_SQUARE = "King Square, London, EC1V"
+_THIRTY_TO_KX = {"commute_destination": "King's Cross", "max_travel_time": 30, "area": "Islington"}
+
+
+def _validated(draft, state):
+    from core.candidate_validation import validate_commute_response
+    return validate_commute_response(draft, state)
+
+
+def test_g_07_a_listing_and_its_own_route_are_one_measurement():
+    state = _commute_state(_route(_KING_SQUARE, "King's Cross", 32),
+                           search={"status": "found", "recommendations": [_search_row(_KING_SQUARE, "King's Cross", 32)]},
+                           criteria=_THIRTY_TO_KX)
+    draft = (f"The closest is {_KING_SQUARE} at £1,800, but the journey to King's Cross is 32 minutes, "
+             "which is 2 minutes over your limit.")
+    assert _validated(draft, state) == draft
+
+
+def test_g_07_within_budget_is_no_commute_verdict():
+    state = _commute_state(_route(_KING_SQUARE, "King's Cross", 32),
+                           search={"status": "found", "recommendations": [_search_row(_KING_SQUARE, "King's Cross", 32)]},
+                           criteria=_THIRTY_TO_KX)
+    draft = f"{_KING_SQUARE} is within budget but the commute is 32 minutes."
+    assert _validated(draft, state) == draft
+
+
+def test_g_07_a_wrong_figure_for_that_listing_still_goes():
+    state = _commute_state(_route(_KING_SQUARE, "King's Cross", 32),
+                           search={"status": "found", "recommendations": [_search_row(_KING_SQUARE, "King's Cross", 32)]},
+                           criteria=_THIRTY_TO_KX)
+    assert "25 minutes" not in _validated(f"{_KING_SQUARE}: the journey to King's Cross is 25 minutes.", state)
+
+
+@pytest.mark.parametrize("draft", [
+    "It does not confirm that a particular station or journey falls within Zones 1-4.",
+    "This route is outside the area our journey tool covers (it only has TfL data).",
+    "The journey planner only covers Greater London, and this route is outside that area.",
+    "Newport is outside the area the TfL Journey Planner covers.",
+    "I can still check commute times within London.",
+])
+def test_g_07_what_the_tool_covers_is_no_journey(draft):
+    assert _validated(draft, _commute_state()) == draft
+
+
+def test_g_07_a_verdict_on_a_commute_still_counts():
+    from core.candidate_validation import _asserts_commute
+    assert _asserts_commute("the commute is within your limit")
+    assert _asserts_commute("this journey is outside your limit")
+
+
+@pytest.mark.parametrize("draft,kept", [
+    ("I searched for a 1-bed, including a commute of 30 minutes or less to King's Cross.", True),
+    ("(1-bed whole flat, under £1,900 a month, commute to King's Cross under 30 minutes)", True),
+    ("（Islington、1 房整套、月租 £2,200 以内、通勤 30 分钟内）", True),
+    ("None are within 30 minutes of King's Cross.", True),
+    ("Nothing came back within 30 minutes of King's Cross.", True),
+    # Another destination, or another figure, is not the user's limit.
+    ("(1-bed whole flat, commute to Bank under 30 minutes)", False),
+    ("None are within 20 minutes of King's Cross.", False),
+])
+def test_g_07_the_users_own_limit_said_back(draft, kept):
+    state = _commute_state(criteria=_THIRTY_TO_KX)
+    state["accumulated_search_criteria"]["no_commute"] = False
+    assert (_validated(draft, state) == draft) is kept
+
+
+def test_g_07_nothing_inside_the_limit_has_to_hold():
+    state = _commute_state(_route(_KING_SQUARE, "King's Cross", 28), criteria=_THIRTY_TO_KX)
+    assert "None are within" not in _validated("None are within 30 minutes of King's Cross.", state)
+
+
+def test_g_07_a_wish_for_something_nearby_is_no_commute():
+    state = _commute_state(current="What do you remember about me?")
+    draft = "1. You prefer a quiet street.\n2. You would like a gym within 10 minutes.\n3. You have a cat."
+    assert _validated(draft, state) == draft
+    # In an answer about a commute the rule does not read a journey as an amenity.
+    assert "gym within 10 minutes" not in _validated("The commute is a gym within 10 minutes.", _commute_state())
+
+
+def test_g_07_the_tenant_of_a_destination_can_be_left_out():
+    row = _search_row("Queensbridge Road, London E2", "Google King's Cross", 29)
+    state = _commute_state(search={"status": "found", "recommendations": [row]},
+                           criteria={"commute_destination": "Google King's Cross", "area": "Hackney"})
+    draft = "| Queensbridge Road, London E2 | £2,100 | 29 min to King's Cross |"
+    assert _validated(draft, state) == draft
+    assert "to Cross" not in _validated("Queensbridge Road, London E2: 29 min to Cross", state)
+
+
+def test_g_07_an_estimate_said_as_an_estimate_under_a_line_that_names_nothing():
+    row = {"address": "Highgate West Hill, London, N6", "price": "£1950/month",
+           "travel_time": "~39 min to Bank (estimated, unverified)", "travel_time_source": "estimate",
+           "url": "https://www.onthemarket.com/details/39/"}
+    state = _commute_state(_route("Camden", "Bank", 29), criteria={"commute_destination": "Bank", "area": "Camden"},
+                           search={"status": "found", "recommendations": [row]})
+    draft = "Commute to Bank is an estimated ~39 minutes (derived from straight-line distance, not a verified journey plan)."
+    assert "~39 minutes" in _validated(draft, state)
+    # Said as a measurement it goes, and it never licenses another listing.
+    assert "39 minutes" not in _validated("The commute to Bank takes 39 minutes.", state)
+
+
+def test_g_07_a_route_of_an_earlier_turn_stays_quotable():
+    from core.candidate_validation import earlier_routes
+    first = [{"tool": "calculate_commute", "success": True, "raw_data": _route("Jacob House, London, E8", "Bank", 40)}]
+    kept = earlier_routes(None, first)
+    state = _commute_state(earlier=kept, criteria={"commute_destination": "Bank"})
+    draft = "Jacob House, London, E8: 40 min to Bank."
+    assert _validated(draft, state) == draft
+    assert "40 min" not in _validated("Jacob House, London, E8: 40 min to Bank.", _commute_state())
+
+
+def test_g_07_this_turn_measures_over_an_earlier_route():
+    from core.candidate_validation import earlier_routes
+    kept = earlier_routes(None, [{"tool": "calculate_commute", "success": True,
+                                  "raw_data": _route("Jacob House, London, E8", "Bank", 40)}])
+    state = _commute_state(_route("Jacob House, London, E8", "Bank", 31), earlier=kept)
+    assert "40 min" not in _validated("Jacob House, London, E8: 40 min to Bank.", state)
+    assert _validated("Jacob House, London, E8: 31 min to Bank.", state).startswith("Jacob House, London, E8: 31 min")
+
+
+def test_g_07_earlier_routes_keep_the_newest_and_no_failure():
+    from core.candidate_validation import earlier_routes
+    calls = [{"tool": "calculate_commute", "success": True, "raw_data": _route(f"Place {n}", "Bank", 20 + n)}
+             for n in range(12)]
+    calls.append({"tool": "calculate_commute", "success": False, "raw_data": {"success": False}})
+    calls.append({"tool": "search_properties", "success": True, "raw_data": {}})
+    kept = earlier_routes(None, calls)
+    assert len(kept) == 8 and kept[-1]["raw_data"]["from_address"] == "Place 11"
+
+
+def test_g_07_a_removed_item_leaves_the_list_counting_straight():
+    from core.candidate_validation import _renumbered_list
+    assert _renumbered_list("1. a\n2. b\n4. c\n\n5. d\n- x\n7. e") == "1. a\n2. b\n3. c\n\n4. d\n- x\n7. e"
+    assert _renumbered_list("Top 3:\n3. a\n4. b") == "Top 3:\n3. a\n4. b"
+
+
+def test_g_07_the_log_carries_the_draft_sentence(caplog):
+    import logging
+    from core.candidate_validation import _log_removed_commute_text
+    draft = "It is a nice flat. Commute to Bank takes 25 minutes, sadly. Rent is fine."
+    with caplog.at_level(logging.INFO):
+        _log_removed_commute_text(["Commute to Bank takes 25 minutes"], draft)
+    message = next(r.getMessage() for r in caplog.records if "claims_removed" in r.getMessage())
+    assert "sentences=" in message and "Commute to Bank takes 25 minutes, sadly." in message

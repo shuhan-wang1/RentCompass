@@ -1368,8 +1368,18 @@ _PROXIMITY_PHRASE = re.compile(
     re.I)
 
 
+# What a journey tool covers is no journey: "It does not confirm that a station or journey falls
+# within Zones 1-4", "This route is outside the area our journey tool covers", "I can check commute
+# times within London" lost the tool's own note, 11 times in 45 tool turns (B-F4).
+_COVERAGE_PHRASE = re.compile(
+    r"\b(?:within|inside|outside|beyond)\s+(?:(?:travel|fare|tfl)\s+)?(?:zones?\s*\d|(?:greater\s+)?london\b|"
+    r"(?:the\s+|that\s+|this\s+|its\s+|our\s+|their\s+)(?:\w+\s+)?(?:area|region|coverage|network)\b)",
+    re.I)
+
+
 def _without_money_or_weather(text: str) -> str:
     text = _MONEY_OR_WEATHER_SPAN.sub(" ", str(text or ""))
+    text = _COVERAGE_PHRASE.sub(" ", text)
     return _PROXIMITY_PHRASE.sub(" ", _POSITIONAL_REFERENCE.sub(" ", text))
 
 
@@ -1994,7 +2004,9 @@ def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
     _bind_search_travel_times(bindings, state.get("tool_artifacts") or [],
                               shown_rows=_shown_listing_rows(state))
     routes = []
-    for artifact in state.get("tool_artifacts") or []:
+    current = list(state.get("tool_artifacts") or [])
+    earlier = list((state.get("extracted_context") or {}).get("earlier_routes") or [])
+    for position, artifact in enumerate(current + earlier):
         if not _usable_artifact(artifact):
             continue
         raw = artifact["raw_data"]
@@ -2033,6 +2045,15 @@ def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
         binding = {"labels": _place_labels(raw.get("from_address") or raw.get("from")),
                    "destinations": _place_labels(raw.get("to_address") or raw.get("to")),
                    "minutes": value, "mode": _arithmetic.route_mode(raw.get("mode"))}
+        if position >= len(current):
+            # A journey an earlier turn measured is still true when this one quotes it: "40 min
+            # (TfL journey plan)" went from a comparison table because that route was not in this
+            # turn's state (F-02). This turn's own measurement of the pair wins.
+            if any(set(map(_norm, prior["labels"])) & set(map(_norm, binding["labels"]))
+                   and set(map(_norm, prior["destinations"])) & set(map(_norm, binding["destinations"]))
+                   for prior in routes):
+                continue
+            binding["earlier"] = True
         band = _DURATION_BAND.search(str(journey.get("duration_category") or "")) if value is not None else None
         if band:
             binding["band"] = (float(band.group(1)), float(band.group(2)))
@@ -2111,11 +2132,12 @@ def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
         if not any(route == binding for binding in bindings):
             bindings.append(route)
 
+    fresh = [r for r in routes if not r.get("earlier")]
     distinct = {(tuple(map(_norm, r["labels"])), tuple(map(_norm, r["destinations"])),
-                 r["minutes"]) for r in routes}
+                 r["minutes"]) for r in fresh}
     # Two tools may name the same station slightly differently. A default is allowed only
     # for a genuinely single origin/destination/measurement, or the legacy nameless result.
-    default = routes[0] if len(distinct) == 1 and not routes[0].get("remeasured") else None
+    default = fresh[0] if len(distinct) == 1 and not fresh[0].get("remeasured") else None
     if default is not None and (state.get("candidate_validation") or {}).get("statuses"):
         current = str((state.get("extracted_context") or {}).get("current_message")
                       or state.get("user_query") or "").lower()
@@ -2128,6 +2150,19 @@ def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
         if not same_listing and (names_listing or not names_route):
             default = None
     return bindings, default
+
+
+_EARLIER_ROUTES_KEPT = 8
+_ROUTE_TOOLS = {"calculate_commute", "calculate_commute_cost", "get_transport_info"}
+
+
+def earlier_routes(previous: list | None, artifacts: list | None) -> list:
+    """The journeys the last turns measured, for a later turn that quotes one again. Tool output,
+    never model prose, and only the newest few."""
+    fresh = [{"tool": artifact.get("tool"), "success": True, "raw_data": artifact.get("raw_data")}
+             for artifact in artifacts or []
+             if isinstance(artifact, dict) and artifact.get("tool") in _ROUTE_TOOLS and _usable_artifact(artifact)]
+    return (list(previous or []) + fresh)[-_EARLIER_ROUTES_KEPT:]
 
 
 _THE_LISTING = re.compile(r"\b(?:the|this|that)\s+(?:flat|listing|property|apartment|home|house|studio)\b", re.I)
@@ -2156,20 +2191,36 @@ _SAVING_HEADER = re.compile(
 _BARE_LIMIT = re.compile(
     # "(under £2,500 a month and within 30 minutes of Bank station)": both of the user's limits.
     r"^\s*(?:(?:up\s+to|under|below|max(?:imum)?(?:\s+of)?)\s+£[\d,]+(?:\s*(?:a|per)\s+month|/\s*month|\s*pcm)?\s+(?:and|with)\s+)?"
-    r"(?:and\s+|with\s+|plus\s+)?(?:a\s+commute\s+(?:of\s+)?)?(?:within|under|up\s+to|inside|no\s+more\s+than|"
-    r"at\s+most|max(?:imum)?(?:\s+of)?)\s+(?:about\s+)?\d{1,3}\s*(?:minutes?|mins?)(?:['’]?\s+(?:commute|travel))?"
+    r"(?:and\s+|with\s+|plus\s+|including\s+)?(?:a\s+commute\s+(?:of\s+)?|commute\s+)?(?:(?:within|under|up\s+to|inside|no\s+more\s+than|"
+    r"at\s+most|max(?:imum)?(?:\s+of)?)\s+(?:about\s+)?\d{1,3}\s*(?:minutes?|mins?)|"
+    # "including a commute of 30 minutes or less to King's Cross" (G-07).
+    r"\d{1,3}\s*(?:minutes?|mins?)\s+or\s+(?:less|under|fewer))(?:['’]?\s+(?:commute|travel))?"
     r"(?:\s+(?:of|to|from)\s+(?P<place>[^.,;!?]+?))?\s*$", re.I)
 _WORKPLACE_WORDS = re.compile(r"^(?:(?:your\s+|the\s+)?(?:work|office|workplace|job|campus|university|school))$", re.I)
+
+
+# The same limit as one item of a bracketed recap: "(1-bed whole flat, under £1,900 a month, commute
+# to King's Cross under 30 minutes)", "（Islington、1 房整套、月租 £2,200 以内、通勤 30 分钟内）" (F-02).
+_RECAP_LIMIT = re.compile(
+    r"^\s*commute\s+(?:to\s+(?P<place>[^.,;!?]+?)\s+)?(?:under|within|up\s+to|max(?:imum)?(?:\s+of)?)\s+"
+    r"\d{1,3}\s*(?:minutes?|mins?)(?:\s+to\s+(?P<after>[^.,;!?]+?))?\s*$"
+    r"|^\s*通勤\s*(?:到?[^\d，、。]{0,20}?)?\s*\d{1,3}\s*分钟\s*(?:以内|之内|内)\s*$", re.I)
 
 
 def _restates_user_limit(fragment: str, bindings: list, user_destinations: list | None) -> bool:
     """A clause that is ONLY the user's limit, to the user's own destination (or "work"), with no
     listing, area or route as its subject. ``_preference_commute_reference`` still requires the
     figure to be the user's cap and still rejects "this flat … within …"."""
-    match = _BARE_LIMIT.match(str(fragment or "").strip(" ()（）"))
+    text = str(fragment or "").strip(" ()（）")
+    match = _BARE_LIMIT.match(text)
+    if not match and re.match(r"\s*[(（]", str(fragment or "")):
+        items = [item for item in re.split(r"[,，、]", text) if item.strip()]
+        match = _RECAP_LIMIT.match(items[-1]) if len(items) > 1 else None
+        if match and any(_MINUTE_TOKEN.search(item) for item in items[:-1]):
+            match = None
     if not match:
         return False
-    place = (match.group("place") or "").strip()
+    place = (match.groupdict().get("place") or match.groupdict().get("after") or "").strip()
     if place and not _WORKPLACE_WORDS.match(place) and not any(
             _label_key(label) and _label_key(label) == _label_key(place) for label in user_destinations or []):
         return False      # "within 25 minutes of Bank" when the user works at Old Street
@@ -2275,10 +2326,14 @@ def _line_binding(line: str, bindings: list[dict], default: dict | None = None) 
         return listing_hits[0]
     if len(set(independent)) > 1:
         return {"labels": [], "minutes": None, "destinations": [], "members": named_bindings}
-    if ambiguous and all(b.get("listing") for b in tied) and len(
+    if ambiguous and len(
             {(b.get("minutes"), tuple(b.get("alt_minutes") or ()), tuple(b.get("estimate") or ()),
-              tuple(map(_norm, b.get("destinations") or []))) for b in tied}) == 1:
-        return tied[0]      # two flats on one street with one figure: it is true of either
+              tuple(map(_norm, b.get("destinations") or [])), b.get("mode") or "transit")
+             for b in tied}) == 1:
+        # Two flats on one street with one figure: it is true of either. So is a listing and the
+        # route the turn measured from it: "King Square ... 32 minutes" read as ambiguous and the
+        # measured figure went, on every line about a listing the tool had timed (G-07).
+        return next((b for b in tied if b.get("legs")), tied[0])
     if ambiguous:
         # The same place measured by bike and by public transport is two journeys, told apart
         # by the mode the line names; a line naming none is about the public-transport one (r6b).
@@ -2331,6 +2386,11 @@ def _names_route_place(target_text: str, binding: dict, scope: str) -> bool:
     """
     hay = _label_key(target_text)
     if any(_key_in(_label_key(label), hay) for label in binding.get("destinations") or []):
+        return True
+    # The place without its tenant: "29 min to King's Cross" on a route to "Google King's Cross"
+    # (G-07). Two words at least, so "to London" is not a route to "Canary Wharf, London".
+    if len(hay.split()) >= 2 and any(_label_key(label).endswith(f" {hay}")
+                                     for label in binding.get("destinations") or []):
         return True
     if re.search(r"\bline\b|\bdlr\b|\boverground\b|\bthameslink\b", hay) and any(
             _key_in(_label_key(mode), hay) for leg in binding.get("legs") or []
@@ -2867,6 +2927,41 @@ def _shared_by_every_route(fragment: str, pool: list) -> bool:
 _BARE_ASIDE = re.compile(r"[(（][^()（）]{0,24}[)）]")
 
 
+# "None are within 30 minutes of King's Cross", "Nothing came back within 30 minutes": a search that
+# found no listing inside the user's limit, said in the limit's own words (G-07).
+_NOTHING_INSIDE_LIMIT = re.compile(
+    r"^\W*(?:(?:but|and|so|sadly|unfortunately)\W+)*(?:none|nothing|no\s+(?:listing|flat|home|property|result|"
+    r"option|match)s?|i\s+(?:found|have|see)\s+no\b)", re.I)
+
+
+def _no_listing_inside_limit(fragment: str, caps: set, pool: list) -> bool | None:
+    """That statement's truth: no route of the turn is within the limit quoted. None for any other
+    clause."""
+    values = _minute_claim_values(fragment)
+    if not (values and _NOTHING_INSIDE_LIMIT.match(fragment)
+            and all(any(abs(value - cap) < 1e-9 for cap in caps) for value in values)):
+        return None
+    return not any(c.get("minutes") is not None and c["minutes"] <= min(values) + 1e-9 for c in pool)
+
+
+# A wish for something nearby is no commute: "You would like a gym within 10 minutes" went from a
+# recall of saved facts, and the list lost its number 3 (A-F8).
+_AMENITY_TIME = re.compile(
+    r"\b(?:gyms?|supermarkets?|shops?|parks?|cafes?|caf\u00e9s?|pubs?|restaurants?|schools?|nurser(?:y|ies)|"
+    r"gps?|pharmac(?:y|ies)|librar(?:y|ies)|pools?|playgrounds?|green\s+spaces?)\s+"
+    r"(?:(?:that\s+is|is|are)\s+)?(?:within|under|in|less\s+than)\s+(?:about\s+)?\d{1,3}\s*(?:minutes?|mins?)\b|"
+    r"\b(?:within|under|less\s+than)\s+(?:about\s+)?\d{1,3}\s*(?:minutes?|mins?)['’]?\s+"
+    r"(?:(?:walk|walking\s+distance)\s+)?(?:of|from|to)\s+(?:a|an|the|some)\s+"
+    r"(?:gym|supermarket|shop|park|cafe|pub|restaurant|school|nursery|gp|pharmacy|library|pool|playground)\b", re.I)
+_WISH_WORD = re.compile(
+    r"\b(?:would\s+like|wants?|wish(?:es)?|prefers?|needs?|looking\s+for|hop(?:e|ing)\s+for|saved|noted)\b|想要|希望|偏好", re.I)
+
+
+def _amenity_wish(fragment: str, preference_line: bool) -> bool:
+    return bool(_AMENITY_TIME.search(fragment) and not _COMMUTE_WORD.search(fragment)
+                and (preference_line or _WISH_WORD.search(fragment)))
+
+
 def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
                         context: str = "", heading: str = "",
                         itinerary: frozenset | set = frozenset(),
@@ -2994,7 +3089,8 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
         # quoting THAT as an estimate is still honest.
         return _estimate_is_quoted_as_estimate(fragment, binding, caps, context, sentence_marked)
 
-    pointed = _POSITIONAL_REFERENCE.sub(" ", fragment)     # "the figure above" is no verdict
+    # "the figure above" is no verdict, and nor is "within budget" beside a journey time.
+    pointed = _MONEY_OR_WEATHER_SPAN.sub(" ", _POSITIONAL_REFERENCE.sub(" ", fragment))
     asserts_pass = bool(_PASS_VERDICT.search(pointed))
     asserts_fail = bool(_FAIL_VERDICT.search(pointed))
     if asserts_pass and asserts_fail:
@@ -3185,6 +3281,11 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 return True
             if not pool and _acknowledges_user_limit(fragment, caps, bindings):
                 return True
+            nothing_inside = _no_listing_inside_limit(fragment, caps, pool)
+            if nothing_inside is not None:
+                return nothing_inside
+            if _amenity_wish(fragment, preference_line):
+                return True
             if _quotes_source_text(fragment, source_texts):
                 return True
             named_part = _TIMES_POINTED_AT.sub(" ", fragment)       # "All times below ..."
@@ -3284,6 +3385,13 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 return bool(measured_routes) and all(
                     _bound_is_evidenced(fragment, figure) is True for c in measured_routes
                     for figure in [c["minutes"], *(c.get("place_alternatives") or [])])
+            if ((effective is None or effective is default_binding) and values and any(
+                    _estimate_is_quoted_as_estimate(fragment, c, caps, context, sentence_marked)
+                    for c in pool if c.get("estimate"))):
+                # "Commute to Bank is an estimated ~39 minutes (derived from straight-line
+                # distance)" under a listing the line does not name, beside one measured route of
+                # the area: said as an estimate, of a listing the search estimated (F-02).
+                return True
             if effective is not None:
                 return False
             if _per_period_line(line, fragment):
@@ -4621,7 +4729,8 @@ def _validate_commute_response(response: str, state: dict, *, note_present: bool
         # visible commute claim was withdrawn by THIS pass, so no note claims one was (R1-10,
         # R3-01).
         return redacted
-    _log_removed_commute_text(removed)
+    _log_removed_commute_text(removed, original)
+    redacted = _renumbered_list(redacted)
     note = _commute_unverified_note(zh)
     if note_present or note in redacted or _commute_unverified_note(not zh) in redacted:
         return redacted
@@ -4645,18 +4754,54 @@ def _without_empty_headings(text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
 
 
-def _log_removed_commute_text(removed: list) -> None:
+_NUMBERED_ITEM = re.compile(r"^(\s*)(\d{1,3})([.)]\s)")
+
+
+def _renumbered_list(text: str) -> str:
+    """``text`` with its numbered lists counting straight: a removed item left "1, 2, 4" (A-F8)."""
+    out, expected = [], None
+    for line in str(text or "").split("\n"):
+        item = _NUMBERED_ITEM.match(line)
+        if item:
+            number = int(item.group(2))
+            if expected is not None and number > expected:
+                line = f"{item.group(1)}{expected}{item.group(3)}{line[item.end():]}"
+                number = expected
+            expected = number + 1
+        elif line.strip() and not line.startswith((" ", "\t")):
+            expected = None
+        out.append(line)
+    return "\n".join(out)
+
+
+def _draft_sentence(draft: str, fragment: str) -> str:
+    """The sentence of the model's draft that held ``fragment``, or ""."""
+    needle = str(fragment or "").strip()
+    at = draft.find(needle) if needle else -1
+    if at < 0:
+        return ""
+    opening = max((m.end() for m in re.finditer(r"[.!?。！？\n](?=\s|$)|\n", draft[max(0, at - 240):at])), default=0)
+    start = max(0, at - 240) + opening
+    closing = re.search(r"[.!?。！？](?=\s|$)|\n", draft[at + len(needle):at + len(needle) + 240])
+    return draft[start:at + len(needle) + (closing.end() if closing else 240)]
+
+
+def _log_removed_commute_text(removed: list, draft: str = "") -> None:
     """What the note stands for, in the local app log: the note fires only when a sentence went,
-    and the sentence was in no evidence (D-03). Model prose, through the same redactors as memory,
-    cut short. Never raises."""
+    and the sentence was in no evidence (D-03). Each sample comes with the draft sentence around
+    it, because a fragment alone cannot be judged (G-07). Model prose, through the same redactors
+    as memory, cut short. Never raises."""
     try:
         from rag.agent_memory import redact_secrets, redact_sensitive
-        samples = []
-        for fragment in removed[:3]:
-            text = redact_secrets(redact_sensitive(str(fragment))[0])[0]
-            samples.append(" ".join(text.split())[:160])
-        logger.info("commute.claims_removed count=%d samples=%s", len(removed),
-                    json.dumps(samples, ensure_ascii=False))
+
+        def _clean(value: str, limit: int) -> str:
+            return " ".join(redact_secrets(redact_sensitive(str(value))[0])[0].split())[:limit]
+        samples = [_clean(fragment, 160) for fragment in removed[:6]]
+        sentences = list(dict.fromkeys(_clean(_draft_sentence(draft, fragment), 320)
+                                       for fragment in removed[:6]))
+        logger.info("commute.claims_removed count=%d samples=%s sentences=%s", len(removed),
+                    json.dumps(samples, ensure_ascii=False),
+                    json.dumps([s for s in sentences if s], ensure_ascii=False))
     except Exception as exc:
         logger.info("commute.claims_removed logging skipped type=%s", type(exc).__name__)
 

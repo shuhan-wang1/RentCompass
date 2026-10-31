@@ -226,7 +226,10 @@ def test_the_recorded_listing_line_keeps_its_budget_sentence_and_spacing():
     money), and the " — " that carried the only blank went with it."""
     case = CORPUS["r18_1787af1e"]
     assert TIMES_SQUARE in case["raw_draft"]
-    out = validate_commute_response(case["raw_draft"], case["state"])
+    # The recorded 18 minutes is the turn's own measurement of that pair and stays since G-07, so
+    # the journey clause that has to go carries a figure no route supports.
+    draft = case["raw_draft"].replace("about 18 minutes", "about 25 minutes")
+    out = validate_commute_response(draft, case["state"])
     assert ("- **Times Square, London** — 1-bed apartment, £2,250/month. That is £250 over your ceiling, so it "
             "is not within budget — I'm mentioning it only so you know what the market looks like at this size "
             "and commute.") in out
@@ -237,6 +240,7 @@ def test_the_recorded_listing_line_keeps_its_budget_sentence_and_spacing():
 def test_a_withdrawn_middle_sentence_leaves_exactly_one_space(middle):
     case = CORPUS["r18_1787af1e"]
     text = case["raw_draft"].replace("That is £250 over your ceiling, so it is not within budget — ", middle)
+    text = text.replace("about 18 minutes", "about 25 minutes")      # see above
     out = validate_commute_response(text, case["state"])
     assert "40 minutes" not in out
     assert "£2,250/month. I'm mentioning it only so you know" in out

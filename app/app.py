@@ -3429,8 +3429,8 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             # turns before is the same text (F-01).
             _sess.history = history_after_reset(_sess.history, user_message)
             _reset_context = _sess.persistent_state.get('extracted_context') or {}
-            _reset_context.pop('rolling_summary', None)
-            _reset_context.pop('rolling_summary_through_turn_id', None)
+            for _key in ('rolling_summary', 'rolling_summary_through_turn_id', 'earlier_routes'):
+                _reset_context.pop(_key, None)
         persistent_snapshot = copy.deepcopy(_sess.persistent_state)
         history_snapshot = list(_sess.history)
         # 🆕 Ask-AI 聚焦解析要对照"完整推荐列表"，它挂在 session 对象上（_sess.last_results，
@@ -3991,6 +3991,13 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
                             if isinstance(tool_data, dict) and 'recommendations' in tool_data
                             else _UNSET),
     )
+
+    # The journeys this turn measured stay quotable on the next ones (F-02).
+    from core.candidate_validation import earlier_routes
+    with turn_lock:
+        _get_session(user_id, conversation_id).persistent_state.setdefault('extracted_context', {})[
+            'earlier_routes'] = earlier_routes(extracted_context.get('earlier_routes'),
+                                               final_state.get('tool_artifacts'))
 
     # ── 长期记忆：随 turn 原子提交到 durable outbox，响应路径不做 LLM/SQLite 写入 ──
     # 记忆按 user_id 命名空间共享（跨会话）；worker 使用 idempotency_key 做 at-least-once

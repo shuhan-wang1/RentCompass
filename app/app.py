@@ -4848,8 +4848,17 @@ def _retire_memory_of_edited_turns(user_id, cid, turn_id) -> None:
         if started is None:
             return
         removed = [t.get("id") for t in turns if str(t.get("started_at") or "") >= str(started)]
-        from rag.agent_memory import get_agent_memory
-        get_agent_memory().retire_turn_rows(user_id, cid, removed)
+        from rag.agent_memory import get_agent_memory, requirement_labels
+        memory = get_agent_memory()
+        memory.retire_turn_rows(user_id, cid, removed)
+        # A reflection has no provenance, so it goes by topic, as for a withdrawal: a requirement
+        # only the removed turns stated.
+        said = [m for m in conversation_store.get_messages(user_id, cid) if m.get("role") == "user"]
+        taken_out = {label for m in said if m.get("turn_id") in removed
+                     for label in requirement_labels(m.get("content"))}
+        still_said = {label for m in said if m.get("turn_id") not in removed
+                      for label in requirement_labels(m.get("content"))}
+        memory.retire_withdrawn_requirements(user_id, sorted(taken_out - still_said))
     except Exception as exc:
         print(f"[memory] edited turn retirement skipped; error_type={type(exc).__name__}")
 

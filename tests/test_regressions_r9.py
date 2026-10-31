@@ -678,3 +678,69 @@ def test_e_06_a_bearer_header_is_replaced(text, value):
 def test_e_06_ordinary_words_stay(text):
     from rag.agent_memory import redact_secrets
     assert redact_secrets(text) == (text, [])
+
+
+# Y-08 ── an edit takes the turn's log, what was extracted from it late, and its reflections
+def _turn_log(memory, text, *, conversation="c1", turn="t1"):
+    return memory.add(f"User asked: {text}", "episodic", "u1", "u1", role="user", importance=3,
+                      extra_meta={"conversation_id": conversation, "turn_id": turn})
+
+
+def test_y_08_the_log_of_the_removed_turn_goes(memory):
+    _turn_log(memory, "must have a garden", turn="t2")
+    _turn_log(memory, "find a flat", turn="t1")
+    _turn_log(memory, "must have a pool", conversation="c2", turn="t2")
+    memory.retire_turn_rows("u1", "c1", ["t2"])
+    rows = memory.col.get(where={"mtype": "episodic"})
+    assert sorted((m["conversation_id"], m["turn_id"]) for m in rows["metadatas"]) == [("c1", "t1"), ("c2", "t2")]
+
+
+def test_y_08_a_job_running_when_the_edit_arrives_leaves_nothing(memory, monkeypatch):
+    from rag import agent_memory as am_mod
+
+    def extractor(prompt, **_):
+        if "extract durable facts" in prompt:
+            memory.retire_turn_rows("u1", "c1", ["t2"])     # the edit lands during extraction
+            return '{"facts": ["The user needs a garden."]}'
+        return '{"ops": [{"event": "ADD", "id": null, "text": "The user needs a garden."}]}'
+
+    monkeypatch.setattr(am_mod, "call_ollama", extractor)
+    monkeypatch.setattr(memory, "maybe_reflect", lambda *a, **k: None)
+    assert memory.remember_turn("I need a garden too, please find something suitable", "ok", session_id="u1", user_id="u1",
+                                conversation_id="c1", turn_id="t2", idempotency_key="turn:t2") is True
+    assert memory.col.get(where={"$and": [{"user_id": "u1"}, {"mtype": "semantic"}]})["ids"] == []
+    assert memory.col.get(where={"$and": [{"user_id": "u1"}, {"mtype": "episodic"}]})["ids"] == []
+
+
+def test_y_08_a_job_after_the_edit_keeps_no_log(memory):
+    memory.retire_turn_rows("u1", "c1", ["t2"])
+    memory.remember_turn("I need a garden too", "ok", session_id="u1", user_id="u1", conversation_id="c1",
+                         turn_id="t2", idempotency_key="turn:t2")
+    assert memory.col.get(where={"$and": [{"user_id": "u1"}, {"mtype": "episodic"}]})["ids"] == []
+
+
+def _edit_app(monkeypatch, memory, messages, turns):
+    import app as appmod
+    monkeypatch.setattr(appmod, "conversation_store", type("S", (), {
+        "list_turns": lambda self, user, cid: turns, "get_messages": lambda self, user, cid: messages})())
+    from rag import agent_memory as am_mod
+    monkeypatch.setattr(am_mod, "get_agent_memory", lambda: memory)
+    return appmod._retire_memory_of_edited_turns
+
+
+def _reflection(memory, text):
+    return memory.add(text, "reflection", "u1", "u1", importance=5)
+
+
+def test_y_08_a_reflection_on_a_requirement_only_the_removed_turns_stated_goes(memory, monkeypatch):
+    _reflection(memory, "The user needs a garden, so outdoor space probably matters.")
+    _reflection(memory, "The user wants a balcony, which seems to matter.")
+    _reflection(memory, "The user seems focused on Hackney.")
+    turns = [{"id": "t1", "started_at": "1"}, {"id": "t2", "started_at": "2"}, {"id": "t3", "started_at": "3"}]
+    messages = [{"role": "user", "turn_id": "t1", "content": "I want a balcony in Hackney"},
+                {"role": "assistant", "turn_id": "t1", "content": "garden"},
+                {"role": "user", "turn_id": "t2", "content": "I need a garden"},
+                {"role": "user", "turn_id": "t3", "content": "and a balcony please"}]
+    _edit_app(monkeypatch, memory, messages, turns)("u1", "c1", "t2")
+    assert sorted(memory.col.get(where={"mtype": "reflection"})["documents"]) == [
+        "The user seems focused on Hackney.", "The user wants a balcony, which seems to matter."]

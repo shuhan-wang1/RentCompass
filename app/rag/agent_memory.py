@@ -476,6 +476,11 @@ def _states_requirement(text: str, topic: re.Pattern) -> bool:
                for clause in _ROW_CLAUSES.split(str(text or "")))
 
 
+def requirement_labels(text: str) -> set:
+    """The requirement topics ``text`` mentions."""
+    return {label for label, topic in _REQUIREMENT_TOPICS.items() if topic.search(str(text or ""))}
+
+
 def _without_requirement(text: str, topics: list) -> str:
     """``text`` with only its other facts, or '' when nothing else is left in it."""
     clauses = [clause for clause in _ROW_CLAUSES.split(str(text or "")) if clause.strip()]
@@ -2353,6 +2358,7 @@ class AgentMemory:
             self._retired_turns.setdefault(uid, set()).update(turns)
         try:
             rows = self.col.get(where={"$and": [{"user_id": uid}, {"mtype": "semantic"}]})
+            log = self.col.get(where={"$and": [{"user_id": uid}, {"mtype": "episodic"}]})
         except Exception:
             return 0
         doomed = []
@@ -2363,6 +2369,12 @@ class AgentMemory:
                 continue
             if meta.get("origin_conversation_id") == str(conversation_id) and (
                     meta.get("origin_turn_id") in turns or meta.get("updated_turn_id") in turns):
+                doomed.append(oid)
+        # The "User asked: ..." log of those turns carries its own conversation and turn (r06).
+        metas = log.get("metadatas") or []
+        for index, oid in enumerate(log.get("ids") or []):
+            meta = (metas[index] if index < len(metas) else None) or {}
+            if meta.get("conversation_id") == str(conversation_id) and meta.get("turn_id") in turns:
                 doomed.append(oid)
         if doomed:
             with self._lock:
@@ -2459,12 +2471,13 @@ class AgentMemory:
             }
             # Static importance for the auto-episodic turn log: never rate a raw
             # query log with an LLM call (see _AUTO_EPISODIC_IMPORTANCE).
-            self.add(
-                ep, "episodic", session_id, user_id, role="user",
-                importance=_AUTO_EPISODIC_IMPORTANCE,
-                idempotency_key=idempotency_key,
-                extra_meta=episodic_meta,
-            )
+            if not self._turn_was_retired(user_id, turn_id):
+                self.add(
+                    ep, "episodic", session_id, user_id, role="user",
+                    importance=_AUTO_EPISODIC_IMPORTANCE,
+                    idempotency_key=idempotency_key,
+                    extra_meta=episodic_meta,
+                )
             # Opportunistically bound the per-user episodic layer.
             self._enforce_episodic_cap(user_id)
             # Triviality gate: skip the LLM extract+consolidate for greetings/acks/
@@ -2494,6 +2507,11 @@ class AgentMemory:
                     else:
                         self._consolidate(self._extract_facts(user_msg, ""), session_id, user_id,
                                           user_msg=user_msg)
+                # An edit can take the turn out while its extraction is running: the check above
+                # had passed, and "The user needs a garden." was written 9 seconds after the edit
+                # that removed it (r06 258a8e5f).
+                if self._turn_was_retired(user_id, turn_id):
+                    self.retire_turn_rows(user_id, conversation_id, [turn_id])
             finally:
                 self._turn_local.turn_id = None
                 self._turn_local.conversation_id = None

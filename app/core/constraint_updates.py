@@ -303,6 +303,16 @@ def explicit_criteria_revision(text: str) -> bool:
     return False
 
 
+_ASKS_FOR_HOMES = re.compile(
+    r"^\s*is\s+there\s+(?:any|anything)\b[^.!?]{0,24}\b(?:housing|accommodation|flats?|homes?|rooms?|studios?|"
+    r"apartments?)\b", re.I)
+
+
+def asks_for_homes(text: str) -> bool:
+    """A search phrased as a question: "Is there any housing near SW7 2AZ under £900?"."""
+    return bool(_ASKS_FOR_HOMES.search(text or ''))
+
+
 def is_criteria_consultation(text: str) -> bool:
     """An explicit read-only request must also bypass cached-result refinement."""
     if re.search(r"(?:don.t|do not|please don.t) change (?:my |the )?(?:search )?(?:criteria|filters)"
@@ -317,9 +327,8 @@ def is_criteria_consultation(text: str) -> bool:
         return True
     # "Is there any housing near SW7 2AZ under £900?" asks for a search: as a read-only question it
     # kept neither the budget nor the area, and the gate asked for the budget it had just read (G-10).
-    update = re.search(r'\b(?:set|change|raise|lower|remove|drop|find|search|show|available)\b|改为|改回|更新|取消|删除|移除|找房|搜索'
-                       r'|^\s*is\s+there\s+(?:any|anything)\b[^.!?]{0,24}\b(?:housing|accommodation|flats?|homes?|rooms?|'
-                       r'studios?|apartments?)\b', text, re.I)
+    update = (re.search(r'\b(?:set|change|raise|lower|remove|drop|find|search|show|available)\b|改为|改回|更新|取消|删除|移除|找房|搜索',
+                        text, re.I) or asks_for_homes(text))
     if re.search(r'\b(?:details?|furniture|furnished|bills|availability|tenancy|epc)\b|房源详情|家具|账单', text, re.I) and re.search(
             r'^\s*(?:please|can |could |what|tell |explain|get |check |verify|for the)|请|这套|这个房源|告诉|查询|[?？]', text, re.I) and not re.search(
             r'\b(?:find|search|set|change|raise|lower|remove|drop|switch|restore)\b|改为|改回|更新|取消|删除|移除|找房|搜索', text, re.I):

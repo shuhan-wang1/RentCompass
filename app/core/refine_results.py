@@ -440,8 +440,8 @@ def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, A
     if not text:
         return None
 
-    from core.constraint_updates import is_criteria_consultation, is_hypothetical
-    if is_criteria_consultation(text) or is_hypothetical(text):
+    from core.constraint_updates import asks_for_homes, is_criteria_consultation, is_hypothetical
+    if is_criteria_consultation(text) or is_hypothetical(text) or asks_for_homes(text):
         return None
 
     # A comparison/details request must reach the tools even when it repeats a

@@ -1926,7 +1926,9 @@ def area_list_edit(text: str, current: list | None) -> list[str] | None:
         # "Search Angel instead of Camden" is a switch for the caller's own logic, not a
         # removal that leaves no area.
         removes = [area for area in removes if area not in replaced]
-    if removes:
+    if removes and successors and not ({_key(a) for a in removes} & {_key(a) for a in current}):
+        only = only or successors       # the place to forget was not in the list: only the new one counts
+    elif removes:
         adds = adds + successors
     # With no standing list, a removal alone edits nothing ("在Camden找，不要伦敦其他地方"
     # negates the wider city on a first turn; it must not read as "no area").

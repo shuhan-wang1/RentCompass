@@ -122,6 +122,7 @@ def test_g_02_one_of_two_areas_is_replaced():
     from core.tools.search_properties import area_list_edit
     assert area_list_edit("Forget Stratford, use Poplar", ["Stratford", "Hackney"]) == ["Hackney", "Poplar"]
     assert area_list_edit("Forget Stratford, use Poplar", ["Poplar"]) == ["Poplar"]     # idempotent
+    assert area_list_edit("Forget Stratford, use Poplar", ["Camden"]) == ["Poplar"]     # it was not in the list
 
 
 @pytest.mark.parametrize("text", ["Search Poplar", "Try Poplar", "Poplar please"])
@@ -756,6 +757,11 @@ def test_g_10_the_budget_and_area_of_a_question_are_kept(text, area):
     from core.langgraph_agent import _apply_explicit_criteria_updates as apply
     after = apply({}, text)
     assert after["max_budget"] == 900 and after["area"] == area
+
+
+def test_g_10_a_search_asked_as_a_question_does_not_filter_the_cards():
+    from core.refine_results import parse_refinement
+    assert parse_refinement("Is there any room near E1 6PX under £900 a month?", _POPLAR_IN_BOW) is None
 
 
 @pytest.mark.parametrize("text", ["Is the £900 one furnished?", "Is there parking at the second one?",

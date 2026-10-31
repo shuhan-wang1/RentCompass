@@ -6,7 +6,7 @@ Tool 4: Get Weather Tool
 import requests
 import re
 import time
-from datetime import date as calendar_date, datetime
+from datetime import date as calendar_date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from core.tool_system import Tool
 from typing import Optional
@@ -109,6 +109,9 @@ def _choose_place(results: list, hints: list[str], *, uk_only: bool):
         if all(_matches(candidate, hint) for hint in hints):
             return candidate
     return None
+
+
+_FORECAST_DAYS = 16        # Open-Meteo's forecast window, today included
 
 
 def get_weather_impl(
@@ -238,6 +241,17 @@ def get_weather_impl(
         else:
             params.update(current=variables, hourly='uv_index')
         w = requests.get("https://api.open-meteo.com/v1/forecast", params=params, timeout=http_timeout())
+        if forecast and getattr(w, 'status_code', 200) == 400:
+            # The provider refuses a date outside its window, and that read as "try again" (G-14).
+            today = datetime.now(ZoneInfo('Europe/London')).date()
+            last = today + timedelta(days=_FORECAST_DAYS - 1)
+            if not today <= calendar_date.fromisoformat(target_date) <= last:
+                return {'success': False, 'error_code': 'forecast_out_of_range', 'retryable': False,
+                        'error': (f'No forecast exists for {target_date}: forecasts run from today, '
+                                  f'{today.isoformat()}, to {last.isoformat()}. Trying again will not help.'),
+                        'error_zh': (f'{target_date} 没有天气预报：预报范围是今天（{today.isoformat()}）到 '
+                                     f'{last.isoformat()}，重试也不会有结果。'),
+                        'forecast_window': {'first': today.isoformat(), 'last': last.isoformat()}}
         w.raise_for_status()
         data = w.json()
         hourly = data.get('hourly') or {}
@@ -325,7 +339,8 @@ def get_weather_impl(
 
     except Exception as exc:
         print(f"   ❌ 天气获取出错 exception_type={type(exc).__name__}")
-        return {"success": False, "error": "天气查询失败", "retryable": True}
+        return {"success": False, "error": "The weather lookup failed.", "error_zh": "天气查询失败",
+                "retryable": True}
 
 
 # 创建工具实例

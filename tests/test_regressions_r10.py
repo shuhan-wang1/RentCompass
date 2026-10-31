@@ -839,3 +839,40 @@ def test_g_13_a_city_nothing_is_held_for_stays_no_data(monkeypatch):
     async def generate(seed, **kwargs):
         return []
     assert _compare(monkeypatch, generate, {}, city="Inverness", priorities=["value"])["status"] == "no_data"
+
+
+# G-14 ── a date outside the forecast window is no failure to retry
+class _Response:
+    def __init__(self, status_code, payload=None):
+        self.status_code, self.payload = status_code, payload or {}
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError("HTTP error")
+
+    def json(self):
+        return self.payload
+
+
+def _weather(monkeypatch, target_date, status=400):
+    from core.tools import get_weather as tool
+    monkeypatch.setattr(tool.requests, "get", lambda *a, **k: _Response(status))
+    return tool.get_weather_impl("London", latitude=51.5, longitude=-0.1, target_date=target_date, target_time="12:00")
+
+
+@pytest.mark.parametrize("offset", [55, -300])
+def test_g_14_a_date_outside_the_window_says_so(monkeypatch, offset):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    today = datetime.now(ZoneInfo("Europe/London")).date()
+    out = _weather(monkeypatch, (today + timedelta(days=offset)).isoformat())
+    assert out["success"] is False and out["retryable"] is False
+    assert out["error_code"] == "forecast_out_of_range"
+    assert "Trying again will not help" in out["error"] and "重试" in out["error_zh"]
+    assert out["forecast_window"]["first"] == today.isoformat()
+
+
+def test_g_14_a_refusal_inside_the_window_is_a_failure_to_retry(monkeypatch):
+    from datetime import date, timedelta
+    out = _weather(monkeypatch, (date.today() + timedelta(days=3)).isoformat())
+    assert out["retryable"] is True and out["error"] == "The weather lookup failed."

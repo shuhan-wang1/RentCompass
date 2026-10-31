@@ -942,3 +942,43 @@ def test_g_15_a_turn_after_a_cancellation_hands_it_to_the_model(monkeypatch, tmp
     finally:
         appmod._session_store.clear("u_g15", "c_g15")
         monkeypatch.setattr(appmod.conversation_store, "get_messages", real)
+
+
+# P3 ── F-04, B-F8
+@pytest.mark.parametrize("text,note", [
+    ("Find a studio or a 1-bed in Camden", "Also open to a 1-bed"),
+    ("a studio or a 1-bed flat", "Also open to a 1-bed flat"),
+    ("1-bed or studio in Hackney", "Also open to a 1-bed"),
+    ("Find a studio in Camden", ""),
+])
+def test_f_04_the_other_half_of_the_alternative_stays(text, note):
+    from core.constraint_updates import studio_alternative_note
+    assert studio_alternative_note(text) == note
+
+
+def test_f_04_the_note_reaches_the_criteria():
+    after = _state_node({"area": "Camden", "areas": ["Camden"], "bedrooms": 2, "room_type": "whole"}, "a studio or a 1-bed")
+    assert after["room_type"] == "studio" and after["bedrooms"] == 0
+    assert after["soft_preferences"] == ["Also open to a 1-bed"]
+
+
+def _coords_state(message="Is Shoreditch safe?", rows=(), artifacts=()):
+    return {"extracted_context": {"current_message": message, "last_results": list(rows)},
+            "tool_artifacts": list(artifacts)}
+
+
+def test_b_f8_coordinates_nothing_gave_are_dropped():
+    from core.agent_loop import _without_invented_coords
+    args = {"address": "Shoreditch High Street, London E1 6JJ", "latitude": 51.5251, "longitude": -0.078}
+    assert _without_invented_coords(args, _coords_state()) == {"address": "Shoreditch High Street, London E1 6JJ"}
+
+
+@pytest.mark.parametrize("state", [
+    _coords_state("How safe is 51.5251, -0.078?"),
+    _coords_state(artifacts=[{"tool": "search_properties", "raw_data": {"latitude": 51.5251, "longitude": -0.078}}]),
+    _coords_state(rows=[{"address": "A", "geo_location": "51.5251, -0.078"}]),
+])
+def test_b_f8_coordinates_with_a_source_stay(state):
+    from core.agent_loop import _without_invented_coords
+    args = {"address": "x", "latitude": 51.5251, "longitude": -0.078}
+    assert _without_invented_coords(args, state) == args

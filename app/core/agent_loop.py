@@ -1370,6 +1370,27 @@ def _inject_poi_coords(params: dict, state: AgentState) -> dict:
     return p
 
 
+def _without_invented_coords(params: dict, state: AgentState) -> dict:
+    """``params`` without coordinates no source gave. After a failed geocode the model filled in a
+    point and a postcode of its own, and the tool measured from them (B-F8). A pair the user stated,
+    a listing holds or a tool of this turn returned stands: those digits are somewhere."""
+    p = dict(params or {})
+    latitude, longitude = p.get("latitude"), p.get("longitude")
+    if latitude is None and longitude is None:
+        return p
+    ec = state.get("extracted_context") or {}
+    sources = [str(ec.get("current_message") or ""),
+               *(str(rec.get("geo_location") or "") for rec in _known_listings(ec)),
+               json.dumps([a.get("raw_data") for a in state.get("tool_artifacts") or [] if isinstance(a, dict)],
+                          ensure_ascii=False, default=str)]
+    if any(str(latitude) in text and str(longitude) in text for text in sources):
+        return p
+    p.pop("latitude", None)
+    p.pop("longitude", None)
+    logger.info("fc_loop.invented_coordinates_dropped")
+    return p
+
+
 def _canonical_poi_args(batch: list) -> dict:
     """Collapse a batch's per-type POI fan-out into ONE call per address.
 
@@ -4546,6 +4567,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 if merged is not None:
                     args = dict(merged)
                 from core.property_scope import has_property_reference
+                args = _without_invented_coords(args, state)
                 if not has_property_reference(cur_msg, ec):
                     args = _inject_poi_coords(args, state)
                 cm = (state.get('extracted_context') or {}).get('current_message') or ''
@@ -4565,6 +4587,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 # The listing's own point, as for the nearby search in the same turn: the
                 # address geocoded about 2 km from the listing (r06 dd3d3669, e0d08fc3).
                 from core.property_scope import has_property_reference
+                args = _without_invented_coords(args, state)
                 if not has_property_reference(cur_msg, ec):
                     args = _inject_poi_coords(args, state)
             elif name in ("recall_memory", "remember"):

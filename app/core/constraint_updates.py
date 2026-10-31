@@ -1222,6 +1222,19 @@ def without_withdrawals(text: str) -> str:
     return ''.join(out)
 
 
+_STUDIO_OR_COUNT = re.compile(
+    r"\bstudios?\s+or\s+(?:an?\s+)?(?P<after>(?:\d|one|two)[\s-]*bed(?:room)?s?(?:\s+(?:flat|apartment))?)\b"
+    r"|\b(?P<before>(?:\d|one|two)[\s-]*bed(?:room)?s?(?:\s+(?:flat|apartment))?)\s+or\s+(?:an?\s+)?studios?\b", re.I)
+
+
+def studio_alternative_note(text: str) -> str:
+    """The count a "studio or a 1-bed" leaves unsearched, as a soft note, or ""."""
+    match = _STUDIO_OR_COUNT.search(str(text or ''))
+    if not match or is_hypothetical(clause_at(match.string, match.start(), match.end())):
+        return ''
+    return f"Also open to a {' '.join((match.group('after') or match.group('before')).split())}"
+
+
 # "Reset all my criteria and start from scratch." left every slot standing: the reset words
 # named no field, so nothing read them (U-06). They name the whole search, not one field: "clear
 # my budget" and "reset the search area" are not this, and long-term memory is not touched.

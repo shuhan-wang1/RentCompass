@@ -1573,6 +1573,13 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     if beds:
         result['bedrooms'], result['bedrooms_minimum'] = beds[0], beds[0] != beds[1]
         changed = True
+    # "a studio or a 1-bed": the search takes one of the two, so the other stays as the user's own
+    # note instead of going silently (F-04).
+    from core.constraint_updates import studio_alternative_note
+    alternative = studio_alternative_note(current_message)
+    if alternative and alternative not in (result.get('soft_preferences') or []):
+        result.setdefault('soft_preferences', []).append(alternative)
+        changed = True
     # A studio has no bedroom count and a count is no studio: both together find nothing.
     # What this message stated wins (r06 d7fe7ce7).
     if room_type == 'studio' and result.get('bedrooms'):

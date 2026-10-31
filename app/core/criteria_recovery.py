@@ -364,6 +364,29 @@ def repair_criteria_sources(accumulated: dict, messages: list[dict]) -> dict:
     return synchronize_monthly_budget_alias(_synchronise_recovered_area_alias(result))
 
 
+# The model's view of a turn the client cancelled or a restart cut off. The transcript shows the
+# message, the model had nothing of it, and "Which area did I most recently ask you to switch to?"
+# got "You haven't asked me to switch areas" (C-F1, 4/4). Its criteria stay unapplied.
+CANCELLED_TURN_NOTE = "(This request was cancelled before it ran: nothing was searched or changed.)"
+
+
+def with_cancelled_turns(history: list, messages: list[dict]) -> list:
+    """``history`` plus the turns cancelled since the last delivered answer, for the model to read."""
+    from uk_rent_agent.web.conversation_store import CANCELLED_TURN_TEXTS
+    items = [m for m in messages or [] if isinstance(m, dict)]
+    start = 0
+    for index, message in enumerate(items):
+        if message.get("role") == "assistant" and message.get("response_type") != "error":
+            start = index + 1
+    cancelled = [{"user": items[index].get("content"), "assistant": CANCELLED_TURN_NOTE}
+                 for index in range(start, len(items) - 1)
+                 if items[index].get("role") == "user" and items[index + 1].get("role") == "assistant"
+                 and items[index + 1].get("response_type") == "error"
+                 and str(items[index + 1].get("content") or "").strip() in CANCELLED_TURN_TEXTS
+                 and str(items[index].get("content") or "").strip()]
+    return list(history or []) + cancelled
+
+
 def criteria_with_undelivered_turns(accumulated: dict, messages: list[dict]) -> dict:
     """``accumulated`` with the criteria of the turns that failed after the last answer.
 

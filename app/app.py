@@ -3433,6 +3433,9 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
                 _reset_context.pop(_key, None)
         persistent_snapshot = copy.deepcopy(_sess.persistent_state)
         history_snapshot = list(_sess.history)
+        if not resets_all_criteria(user_message):
+            from core.criteria_recovery import with_cancelled_turns
+            history_snapshot = with_cancelled_turns(history_snapshot, _conversation_messages)
         # 🆕 Ask-AI 聚焦解析要对照"完整推荐列表"，它挂在 session 对象上（_sess.last_results，
         # extracted_context 里只留 6 条）。在同一把锁内浅拷贝，避免跨慢速 LLM 调用再次加锁。
         last_results_snapshot = list(_sess.last_results or [])

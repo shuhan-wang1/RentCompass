@@ -876,3 +876,69 @@ def test_g_14_a_refusal_inside_the_window_is_a_failure_to_retry(monkeypatch):
     from datetime import date, timedelta
     out = _weather(monkeypatch, (date.today() + timedelta(days=3)).isoformat())
     assert out["retryable"] is True and out["error"] == "The weather lookup failed."
+
+
+# G-15 ── a cancelled turn is in the model's view, marked as cancelled
+_CANCELLED_THREAD = [
+    {"role": "user", "content": "Find a 1-bed in Bow under £2,200, no commute."},
+    {"role": "assistant", "content": "Here are three flats."},
+    {"role": "user", "content": "Switch to Hackney instead, same budget."},
+    {"role": "assistant", "content": "Request cancelled.", "response_type": "error"},
+    {"role": "user", "content": "Which area did I most recently ask you to switch to?"},
+]
+
+
+def test_g_15_the_model_reads_the_cancelled_turn():
+    from core.criteria_recovery import CANCELLED_TURN_NOTE, with_cancelled_turns
+    history = [{"user": "Find a 1-bed in Bow under £2,200, no commute.", "assistant": "Here are three flats."}]
+    assert with_cancelled_turns(history, _CANCELLED_THREAD) == history + [
+        {"user": "Switch to Hackney instead, same budget.", "assistant": CANCELLED_TURN_NOTE}]
+
+
+def test_g_15_an_answer_after_it_or_a_failure_changes_the_view():
+    from core.criteria_recovery import with_cancelled_turns
+    answered = _CANCELLED_THREAD[:4] + [{"role": "user", "content": "x"}, {"role": "assistant", "content": "y"}]
+    assert with_cancelled_turns([], answered) == []
+    failed = [dict(_CANCELLED_THREAD[3], content="The model service is unavailable.")]
+    assert with_cancelled_turns([], _CANCELLED_THREAD[:3] + failed) == []
+
+
+def test_g_15_its_criteria_stay_unapplied():
+    from core.criteria_recovery import criteria_with_undelivered_turns
+    held = {"area": "Bow", "areas": ["Bow"], "max_budget": 2200}
+    assert criteria_with_undelivered_turns(held, _CANCELLED_THREAD)["area"] == "Bow"
+
+
+def test_g_15_a_turn_after_a_cancellation_hands_it_to_the_model(monkeypatch, tmp_path):
+    import importlib
+    appmod = importlib.import_module("app")
+    from core.criteria_recovery import CANCELLED_TURN_NOTE
+    real = appmod.conversation_store.get_messages
+    try:
+        seen = {}
+
+        class _Stop(Exception):
+            pass
+
+        def _capture(**kwargs):
+            seen.update(kwargs)
+            raise _Stop()
+        import asyncio
+        uid, cid = "u_g15", "c_g15"
+        monkeypatch.setattr(appmod, "create_initial_state", _capture)
+        monkeypatch.setattr(appmod, "_ensure_agent_runtime", lambda: object())
+        monkeypatch.setattr(appmod.conversation_store, "latest_snapshot", lambda *a: None)
+        monkeypatch.setattr(appmod.conversation_store, "get_messages", lambda *a: list(_CANCELLED_THREAD))
+        appmod._session_store.clear(uid, cid)
+        session = appmod._session_store.get(uid, cid)
+        session.rehydrated = True
+        session.history = [{"user": "Find a 1-bed in Bow under £2,200, no commute.", "assistant": "Here are three flats."}]
+        with pytest.raises(_Stop):
+            asyncio.run(appmod.handle_with_react_agent(_CANCELLED_THREAD[-1]["content"], {}, False,
+                                                       user_id=uid, conversation_id=cid))
+        turns = seen["extracted_context"]["history"]
+        assert turns[-1] == {"user": "Switch to Hackney instead, same budget.", "assistant": CANCELLED_TURN_NOTE}
+        assert len(session.history) == 1      # the view only: the hot history stays as it was
+    finally:
+        appmod._session_store.clear("u_g15", "c_g15")
+        monkeypatch.setattr(appmod.conversation_store, "get_messages", real)

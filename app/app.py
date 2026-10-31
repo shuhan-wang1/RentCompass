@@ -3240,6 +3240,14 @@ _REMEMBERED_QUESTION = re.compile(
     r"\b(?:list|show|tell\s+me|give\s+me)\b[^.?!]{0,20}\b(?:everything|all)\b"
     r"(?:\s+(?:the\s+)?(?:facts?|things|details|memories|info\w*|preferences))?\s+(?:that\s+)?"
     r"(?:you(?:'ve|’ve|\s+have)?\s+)?(?:saved|stored|remember\w*|know|kept)\b|"
+    # "List every single thing you have saved about me, numbered." was answered from six rows,
+    # all inferences, and the reply said nothing was saved with 17 facts stored (r06 d236b784).
+    r"\bevery(?:\s+single)?\s+(?:thing|fact|detail|item|memory|record)\b[^.?!]{0,30}\b"
+    r"(?:saved|stored|kept|know|remember\w*|have|got)\b|"
+    r"\b(?:list|show|tell\s+me|give\s+me|print|repeat)\b[^.?!]{0,40}\b(?:saved|stored|kept|remember\w*)\b"
+    r"[^.?!]{0,12}\b(?:about|on|for)\s+me\b|"
+    r"(?:列出|列一下|告诉我|说说|给我看)?[^。？！]{0,8}(?:所有|全部|一切)[^。？！]{0,12}(?:保存|存储|记住|记下|记录)|"
+    r"(?:保存|存储|记住|记下|记录)(?:了|的)[^。？！]{0,12}(?:所有|全部|一切)|"
     r"还?记得.{0,12}吗|记不记得|我的.{1,12}(?:是什么|是多少|在哪)", re.I)
 
 

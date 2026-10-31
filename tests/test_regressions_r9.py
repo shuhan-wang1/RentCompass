@@ -396,3 +396,34 @@ def test_y_06_the_stated_budget_beats_a_saved_figure_in_a_recall(rows, criteria,
     from rag.agent_memory import stated_budget_note
     note = stated_budget_note(rows, criteria)
     assert ("£1,800" in note) is expected
+
+
+# Y-07 ── every way of asking for the whole list reads every saved fact
+@pytest.mark.parametrize("message", [
+    "List every single thing you have saved about me, numbered.",
+    "List every single thing you have saved about me, numbered, don't skip any.",
+    "List every single thing I asked you to remember, numbered.",
+    "列出你保存的关于我的所有信息", "把你记住的全部内容告诉我", "What's every fact you have on me?",
+    "Show me all the things you've stored about me",
+])
+def test_y_07_the_whole_list_is_a_recall(message):
+    from app import _asks_what_is_remembered
+    assert _asks_what_is_remembered(message)
+
+
+@pytest.mark.parametrize("message", ["List every flat you found", "Show every listing in Camden", "Tell me everything about Camden"])
+def test_y_07_a_list_of_listings_is_no_recall(message):
+    from app import _asks_what_is_remembered
+    assert not _asks_what_is_remembered(message)
+
+
+def test_y_07_inferences_never_crowd_out_saved_facts(memory):
+    from app import _with_all_saved_facts
+    for index in range(17):
+        _auto_row(memory, f"The user saved fact number {index}.")
+    guesses = [{"id": f"r{i}", "text": f"The user may like option {i}.", "mtype": "reflection"} for i in range(6)]
+    rows, total = _with_all_saved_facts(memory, "u1", guesses)
+    assert total == 17
+    block = memory.format_for_prompt(rows, saved_total=total)
+    assert "all 17 saved facts are listed" in block
+    assert block.count("[FACT]") == 17 and block.rindex("[FACT]") < block.index("[INFERENCE]")

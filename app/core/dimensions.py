@@ -117,6 +117,48 @@ DIMENSION_CUES = (
 
 DIMENSIONS = tuple(d for d, _c, _t in DIMENSION_CUES)
 
+# 附近 and 周边 are prepositions before they are a question: 「Angel附近的一居室」, 「请记住我在国王十字
+# 附近上班」 and 「我想在国王十字附近找房」 each dispatched an unasked amenity lookup, and its failure
+# notice landed in the rental answer (V-09). They cue the row only when the message asks what is
+# there; a named kind of place keeps its own cue.
+_ZH_NEAR_WORDS = frozenset({"附近", "周边"})
+_ZH_NEAR_QUESTIONS = ("有什么", "有啥", "有哪些", "怎么样", "如何", "环境", "配套", "设施", "方便", "好吃", "好玩",
+                      "吃的", "玩的", "生活", "餐馆", "饭店", "中餐", "咖啡", "健身", "公园", "学校", "医院", "诊所",
+                      "银行", "地铁", "公交", "车站", "商店", "商场")
+_ZH_NEAR_WINDOW = 12
+_CLAUSE_ENDS = "，。！？,.!?；;"
+
+
+def _zh_asks_what_is_near(message: str) -> bool:
+    """True when a clause goes on from 附近 or 周边 to ask what is there. Substrings, like
+    ``cues_hit``: no word boundary exists between CJK characters."""
+    text = message or ""
+    for word in _ZH_NEAR_WORDS:
+        start = text.find(word)
+        while start >= 0:
+            window = text[start + len(word):start + len(word) + _ZH_NEAR_WINDOW]
+            for end in _CLAUSE_ENDS:
+                window = window.split(end)[0]
+            if any(question in window for question in _ZH_NEAR_QUESTIONS):
+                return True
+            start = text.find(word, start + 1)
+    return False
+
+
+# "Find a flat nearby" fanned out to an amenity lookup, as 附近 did (V-09, D-11): the word says
+# where the home is. It cues the row only when it is not about a home.
+_HOME_BEFORE_NEARBY = ("flat", "flats", "apartment", "apartments", "home", "homes", "house", "houses",
+                       "room", "rooms", "studio", "studios", "somewhere", "live", "living", "stay",
+                       "staying", "move", "rent")
+
+
+def _without_home_nearby(message: str) -> str:
+    """``message`` without the "nearby" that closes a home request. No regex: see ``cues_hit``."""
+    text = (message or "").lower()
+    for word in _HOME_BEFORE_NEARBY:
+        text = text.replace(f"{word} nearby", word)
+    return text
+
 
 def cues_hit(cues, message: str) -> bool:
     """THE cue matcher. Deterministic and bilingual: CJK cues match the raw text, ascii cues
@@ -134,7 +176,13 @@ def cues_hit(cues, message: str) -> bool:
 
 def cued_dimensions(message: str) -> list:
     """The dimensions THIS message explicitly asks about, in DIMENSION_CUES order."""
-    return [dim for dim, cues, _tools in DIMENSION_CUES if cues_hit(cues, message)]
+    found = []
+    for dim, cues, _tools in DIMENSION_CUES:
+        words = tuple(cue for cue in cues if cue not in _ZH_NEAR_WORDS)
+        read = _without_home_nearby(message) if dim == "nearby" else message
+        if cues_hit(words, read) or (len(words) != len(cues) and _zh_asks_what_is_near(message)):
+            found.append(dim)
+    return found
 
 
 def cues_for(dim: str) -> tuple:

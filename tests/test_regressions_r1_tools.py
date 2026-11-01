@@ -1,0 +1,321 @@
+"""Tool-result and transport regressions (R1-xx)."""
+from __future__ import annotations
+
+import json
+
+import pytest
+
+
+# R1-08 ── the cheapest itinerary's own fare reaches the model ────────────────────────
+def _leg(line, src, dst, minutes, mode="tube"):
+    return {"mode": mode, "lines": [line], "duration_minutes": minutes,
+            "summary": f"{line} line to {dst}", "from": f"{src} Underground Station",
+            "to": f"{dst} Underground Station"}
+
+
+def _journey_payload():
+    fastest_legs = [_leg("Metropolitan", "King's Cross St. Pancras", "Baker Street", 6),
+                    _leg("Bakerloo", "Baker Street", "Paddington", 4),
+                    _leg("Walk", "Paddington Underground", "London Paddington Rail Station", 10, "walking"),
+                    _leg("Heathrow Express", "London Paddington", "Heathrow Terminals 2 & 3 Rail Station",
+                         15, "national-rail")]
+    cheapest_legs = [_leg("Victoria", "King's Cross St. Pancras", "Euston", 2),
+                     _leg("Northern", "Euston", "Tottenham Court Road", 4),
+                     _leg("Elizabeth", "Tottenham Court Road", "Heathrow Terminals 2 & 3 Rail Station",
+                          34, "elizabeth-line")]
+    summary_fast = " -> ".join(f"{l['mode']} {l['lines'][0]} to {l['to']} ({l['duration_minutes']} min)"
+                               for l in fastest_legs)
+    summary_cheap = " -> ".join(f"{l['mode']} {l['lines'][0]} to {l['to']} ({l['duration_minutes']} min)"
+                                for l in cheapest_legs)
+    fare = lambda pence, iid: {"fare_available": True, "fare_basis": "journey_itinerary",
+                               "fare_pence": pence, "fare_gbp": pence / 100,
+                               "fare_display": f"£{pence / 100:.2f}", "fare_itinerary_id": iid}
+    return {
+        "success": True, "query_type": "journey", "coverage": "london",
+        "from": {"input": "King's Cross St Pancras", "resolved_station": "King's Cross St. Pancras Underground Station",
+                 "naptan": "940GZZLUKSX"},
+        "to": {"input": "Heathrow Airport", "resolved_station": "Heathrow Terminals 2 & 3 Underground Station",
+               "naptan": "940GZZLUHRC"},
+        "duration_minutes": 41, "changes_count": 2, "route_summary": summary_fast,
+        "route_legs": fastest_legs, "selected_itinerary_id": "tfl:fast0001",
+        "fastest_journey": {"itinerary_id": "tfl:fast0001", "duration_minutes": 41, "changes_count": 2,
+                            "route_summary": summary_fast, "route_legs": fastest_legs,
+                            "source": "TfL Unified API Journey Planner", **fare(2910, "tfl:fast0001")},
+        "cheapest_journey": {"itinerary_id": "tfl:cheap0001", "duration_minutes": 48, "changes_count": 2,
+                             "route_summary": summary_cheap, "route_legs": cheapest_legs,
+                             "source": "TfL Unified API Journey Planner", **fare(1550, "tfl:cheap0001")},
+        "source": "TfL Unified API Journey Planner", "from_cache": True, "cache_status": "fresh",
+        "stations_used": "King's Cross St. Pancras Underground Station -> Heathrow Terminals 2 & 3 "
+                         "Underground Station",
+        **fare(2910, "tfl:fast0001"), "fare_matches_itinerary": True,
+        "fare_note": "Adult pay-as-you-go single (contactless / Oyster). For unlimited travel see a "
+                     "weekly/monthly Travelcard.",
+    }
+
+
+def test_transport_view_keeps_the_cheapest_fare_inside_the_model_cap():
+    from core.agent_loop import _TOOLMSG_CAP_DEFAULT, _TOOLMSG_CAPS, project_transport_payload
+    raw = _journey_payload()
+    cap = _TOOLMSG_CAPS.get("get_transport_info", _TOOLMSG_CAP_DEFAULT)
+    view = json.dumps({"success": True, "data": project_transport_payload(raw)}, ensure_ascii=False)
+    assert '"fare_display": "£15.50"' in view[:cap]
+    assert '"fare_display": "£29.10"' in view[:cap]
+    # The raw artifact is not changed by the projection.
+    assert raw["fastest_journey"]["route_legs"] == raw["route_legs"]
+
+
+def test_transport_view_keeps_distinct_legs():
+    from core.agent_loop import project_transport_payload
+    raw = _journey_payload()
+    view = project_transport_payload(raw)
+    # The top-level legs are a copy of the fastest itinerary's; listed once.
+    assert view["fastest_journey"]["route_legs"] == raw["route_legs"]
+    assert view["route_legs"] == "same as fastest_journey.route_legs"
+    assert view["cheapest_journey"]["route_legs"] == raw["cheapest_journey"]["route_legs"]
+    assert set(view) == set(raw)
+
+
+def test_transport_view_fits_the_cap_whole():
+    from core.agent_loop import _TOOLMSG_CAP_DEFAULT, _TOOLMSG_CAPS, project_transport_payload
+    cap = _TOOLMSG_CAPS.get("get_transport_info", _TOOLMSG_CAP_DEFAULT)
+    view = json.dumps({"success": True, "data": project_transport_payload(_journey_payload())},
+                      ensure_ascii=False)
+    assert len(view) <= cap
+
+
+def test_fallback_evidence_lists_the_cheapest_itinerary_fare():
+    from core import candidate_validation as cv
+    state = {"tool_artifacts": [{"tool": "get_transport_info", "success": True,
+                                 "raw_data": _journey_payload()}],
+             "extracted_context": {"reply_language": "en"}}
+    out = cv.render_structured_evidence_fallback(state)
+    assert "£29.10" in out and "£15.50" in out
+
+
+# R1-09 ── weather resolves London districts, streets and postcodes ───────────────────
+class _Resp:
+    status_code = 200
+
+    def __init__(self, data):
+        self.data = data
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return self.data
+
+
+_CURRENT = {"current": {"time": "2026-10-29T12:00", "temperature_2m": 11, "weather_code": 3,
+                        "wind_speed_10m": 14.5}}
+
+
+@pytest.fixture
+def weather_offline(monkeypatch):
+    import requests
+    from core import maps_service as maps
+    from core.tools import get_weather as weather
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("no real HTTP in weather regressions")
+
+    monkeypatch.setattr(requests.sessions.Session, "request", forbidden)
+    monkeypatch.setattr(maps, "geocode_address", lambda *a, **k: None)
+    return weather, maps
+
+
+def _weather_get(candidates, fetched):
+    def get(url, params, **kwargs):
+        fetched.append((url, dict(params)))
+        if "geocoding-api" in url:
+            return _Resp({"results": candidates})
+        return _Resp(_CURRENT)
+    return get
+
+
+@pytest.mark.parametrize("location, queried", [
+    ("Angel, London", "Angel"),
+    ("Stratford E15, London", "Stratford"),
+    ("Stratford, London", "Stratford"),
+    ("Newham, London", "Newham"),
+])
+def test_a_london_district_without_london_in_its_admin_fields_resolves(
+        weather_offline, monkeypatch, location, queried):
+    weather, _ = weather_offline
+    fetched = []
+    candidates = [
+        {"name": "Stratford", "latitude": 52.19, "longitude": -1.71, "country_code": "GB",
+         "admin1": "England", "admin2": "Warwickshire"},          # Stratford-upon-Avon area
+        {"name": queried, "latitude": 51.54, "longitude": -0.01, "country_code": "GB",
+         "admin1": "England", "admin2": "Newham"},
+    ]
+    monkeypatch.setattr(weather.requests, "get", _weather_get(candidates, fetched))
+    result = weather.get_weather_impl(location)
+    assert result["success"], result
+    assert (result["latitude"], result["longitude"]) == (51.54, -0.01)
+    assert fetched[0][1]["name"] == queried
+    assert result["wind_speed"] == 14.5 and result["wind_speed_unit"] == "km/h"
+
+
+def test_a_london_street_falls_back_to_the_address_geocoder(weather_offline, monkeypatch):
+    weather, maps = weather_offline
+    asked = []
+    monkeypatch.setattr(weather.requests, "get", _weather_get([], []))
+    monkeypatch.setattr(maps, "geocode_address",
+                        lambda query, **k: asked.append(query) or {"lat": 51.565, "lng": -0.147})
+    result = weather.get_weather_impl("Highgate West Hill, London N6")
+    assert result["success"] and asked == ["Highgate West Hill, London N6"]
+    assert (result["latitude"], result["longitude"]) == (51.565, -0.147)
+
+
+def test_a_postcode_qualified_street_strips_the_postcode(weather_offline, monkeypatch):
+    weather, _ = weather_offline
+    fetched = []
+    candidates = [{"name": "City Road", "latitude": 51.53, "longitude": -0.09, "country_code": "GB",
+                   "admin1": "England", "admin2": "Islington"}]
+    monkeypatch.setattr(weather.requests, "get", _weather_get(candidates, fetched))
+    result = weather.get_weather_impl("City Road, London EC1V")
+    assert result["success"] and fetched[0][1]["name"] == "City Road"
+
+
+def test_a_geocoder_answer_outside_london_is_not_accepted(weather_offline, monkeypatch):
+    weather, maps = weather_offline
+    monkeypatch.setattr(weather.requests, "get", _weather_get([], []))
+    monkeypatch.setattr(maps, "geocode_address", lambda *a, **k: {"lat": 53.48, "lng": -2.24})
+    result = weather.get_weather_impl("Nowhere Street, London")
+    assert result["success"] is False and result["error_code"] == "location_unresolved"
+
+
+# R1-11 ── a cancelled or interrupted request id runs again on retry ─────────────────
+def _conv_store(tmp_path, monkeypatch, owner="this-process"):
+    from uk_rent_agent.web import conversation_store as cs
+    monkeypatch.setattr(cs, "_PROCESS_OWNER_ID", owner)
+    return cs.ConversationStore(tmp_path / "c.sqlite3")
+
+
+@pytest.mark.parametrize("cancel_text", ["Request cancelled.", "请求已取消。"])
+def test_a_cancelled_turn_is_rerun_by_a_retry_with_the_same_id(tmp_path, monkeypatch, cancel_text):
+    store = _conv_store(tmp_path, monkeypatch)
+    cid = store.create_conversation("u_sse", "sse")["id"]
+    first = store.start_request_turn("u_sse", cid, "sse-disc-1", "weather in Bow?")
+    store.finalize_request_turn("u_sse", first["id"], status="failed", response_type="error",
+                                assistant_content=cancel_text)
+    retry = store.start_request_turn("u_sse", cid, "sse-disc-1", "weather in Bow?")
+    assert retry["replayed"] is False and retry["status"] == "running"
+    assert retry["id"] != first["id"] and retry["conversation_id"] == cid
+    store.finalize_request_turn("u_sse", retry["id"], status="completed", assistant_content="Mild.",
+                                snapshot={})
+    # Once an answer was delivered, the same id replays it.
+    replay = store.start_request_turn("u_sse", cid, "sse-disc-1", "weather in Bow?")
+    assert replay["replayed"] is True and replay["id"] == retry["id"]
+    assert store.get_turn_response("u_sse", retry["id"])["message"] == "Mild."
+    store.close()
+
+
+def test_a_delivered_error_still_replays(tmp_path, monkeypatch):
+    store = _conv_store(tmp_path, monkeypatch)
+    cid = store.create_conversation("u_err", "err")["id"]
+    first = store.start_request_turn("u_err", cid, "err-1", "find a flat")
+    store.finalize_request_turn("u_err", first["id"], status="failed", response_type="error",
+                                assistant_content="The search service is unavailable right now.")
+    replay = store.start_request_turn("u_err", cid, "err-1", "find a flat")
+    assert replay["replayed"] is True and replay["status"] == "failed"
+    store.close()
+
+
+def test_a_retry_without_a_conversation_id_reruns_in_the_original_conversation(tmp_path, monkeypatch):
+    store = _conv_store(tmp_path, monkeypatch)
+    first = store.start_request_turn("u_new", None, "new-1", "hello", create_title="hello")
+    store.finalize_request_turn("u_new", first["id"], status="failed", response_type="error",
+                                assistant_content="Request cancelled.")
+    retry = store.start_request_turn("u_new", None, "new-1", "hello", create_title="hello")
+    assert retry["replayed"] is False and retry["conversation_id"] == first["conversation_id"]
+    store.close()
+
+
+def test_the_cancel_path_writes_a_text_the_store_recognises():
+    import inspect
+    import app as app_module
+    from uk_rent_agent.web.conversation_store import CANCELLED_TURN_TEXTS
+    source = inspect.getsource(app_module)
+    assert "CANCELLED_TURN_TEXTS[0]" in source and "CANCELLED_TURN_TEXTS[1]" in source
+    assert CANCELLED_TURN_TEXTS == ("Request cancelled.", "请求已取消。")
+
+
+# R1-12 ── the price headline reports a true median ──────────────────────────────────
+@pytest.mark.parametrize("prices, expected", [
+    ([2500, 2600, 2750, 2900], (2500, 2675, 2900)),
+    ([2000, 2001], (2000, 2001, 2001)),       # 2000.5 rounds half up
+    ([1800, 1900, 2400], (1800, 1900, 2400)),
+    ([1500], (1500, 1500, 1500)),
+])
+def test_price_stats_median(prices, expected):
+    from core.tools.search_properties import _price_stats
+    assert _price_stats([{"price": p} for p in reversed(prices)]) == expected
+
+
+def test_found_summary_quotes_the_true_median():
+    from core.tools.search_properties import _found_summary
+    rows = [{"price": p} for p in (2500, 2600, 2750, 2900)]
+    text = _found_summary(rows, 4, 0, 3000, None, "Hackney")
+    assert "median ~£2675" in text.replace(",", "")
+
+
+# R1-16 ── an empty or blank X-Request-Id is an absent one ───────────────────────────
+@pytest.mark.parametrize("header", ["", " ", "\t", "   \n"])
+def test_blank_request_id_gets_a_fresh_id_each_time(header):
+    import hashlib
+    from uk_rent_agent.observability import new_request_id
+    first, second = new_request_id(header), new_request_id(header)
+    assert first != second
+    assert hashlib.sha256(header.encode()).hexdigest()[:32] not in (first, second)
+
+
+def test_a_malformed_request_id_still_maps_deterministically():
+    from uk_rent_agent.observability import new_request_id
+    assert new_request_id("Root=1-abc/def") == new_request_id("Root=1-abc/def")
+    assert new_request_id("req-0001") == "req-0001"
+
+
+# R1-17 ── favourites take an http(s) URL and a string title ─────────────────────────
+@pytest.fixture
+def fav_client(tmp_path, monkeypatch):
+    from dataclasses import replace
+    import app as appmod
+    from uk_rent_agent.web.conversation_store import ConversationStore
+    from uk_rent_agent.web.session_store import SessionStore
+    store = ConversationStore(tmp_path / "fav.sqlite3")
+    monkeypatch.setattr(appmod, "conversation_store", store)
+    monkeypatch.setattr(appmod, "_session_store", SessionStore())
+    monkeypatch.setattr(appmod, "_runtime_config", replace(
+        appmod._runtime_config, allow_legacy_client_user_id=True, max_request_bytes=262144))
+    monkeypatch.setattr(appmod._api_rate_limiter, "allow", lambda *a, **k: (True, 0))
+    appmod.app.config.update(TESTING=True, MAX_CONTENT_LENGTH=262144)
+    yield appmod.app.test_client(), store
+    store.close()
+
+
+def _post_fav(client, body):
+    return client.open("/api/favorites", method="POST", data=json.dumps(body),
+                       content_type="application/json", headers={"X-User-Id": "u_fav"})
+
+
+@pytest.mark.parametrize("body", [
+    {"url": "javascript:alert(1)", "title": "t"},
+    {"url": "JavaScript:alert(1)"},
+    {"url": "data:text/html,hi"},
+    {"url": "//example.test/x"},
+    {"url": "https://example.test/1", "title": {"html": "<b>x</b>"}},
+    {"url": "https://example.test/1", "title": ["a"]},
+    {"url": "https://example.test/1", "title": "x" * 501},
+])
+def test_invalid_favorites_are_refused(fav_client, body):
+    client, store = fav_client
+    assert _post_fav(client, body).status_code == 400
+    assert store.list_favorites("u_fav") == []
+
+
+def test_a_valid_favorite_is_saved(fav_client):
+    client, store = fav_client
+    r = _post_fav(client, {"url": "https://example.test/listing/1", "title": "1 bed, Hackney"})
+    assert r.status_code == 200 and len(store.list_favorites("u_fav")) == 1

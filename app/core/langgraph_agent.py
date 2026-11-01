@@ -325,22 +325,44 @@ _RETRACTION_AFTER_RE = re.compile(
     # "is not required" is NOT here: "a lift is not required but would be nice" is a soft
     # preference, handled by the hard/soft classifier; only "no longer required" retracts.
     r"(?:(?:(?:is|are)\s+(?:not|no longer)|isn.t|aren.t|not|no longer)\s+(?:needed|necessary)"
-    r"|(?:(?:is|are)\s+)?no longer\s+required)\b",
+    r"|(?:(?:is|are)\s+)?no longer\s+required"
+    # "The garden doesn't matter any more." (R2-08)
+    r"|(?:doesn.t|does\s+not|don.t|do\s+not)\s+(?:really\s+)?matter"
+    r"|(?:is|are)\s+(?:not|no longer)\s+important|isn.t\s+important|aren.t\s+important"
+    # "The balcony requirement is gone" recorded "Must have balcony" (W-01).
+    r"|(?:(?:is|are|was|were|has\s+been|have\s+been)\s+(?:now\s+|already\s+)?|['’]s\s+)"
+    r"(?:gone|removed|dropped|cancell?ed|deleted|withdrawn|scrapped|off)"
+    r"|no\s+longer\s+(?:applies|apply|stands|stand|matters?))\b",
     re.I)
 _RETRACTION_TAIL_RE = re.compile(
     r"[^.!?;。！？,，]{0,40}?[,，]\s*(?:(?:it|that)(?:'s|\s+is)\s+)?"
     r"(?:(?:not|no longer)\s+(?:needed|necessary)|no longer\s+required)"
     r"(?:\s+any\s?more)?\s*(?:[.!?;。！？]|$)", re.I)
+# "Never mind the gym, forget that requirement." kept the gym (R1-02): "never mind",
+# "ignore", "skip" and "cancel" retract the mention they precede just like "forget".
+# "I removed the balcony requirement earlier." and "I never asked for a balcony." state that it
+# is not wanted; both recorded it (W-01).
 _RETRACTION_BEFORE_RE = re.compile(
-    r"\b(?:forget|scrap|drop|remove|ditch)\s+(?:about\s+)?(?:the|that|my)\s+(?:\w+\s+){0,1}$",
+    r"\b(?:forget|scrap(?:ped)?|drop(?:ped)?|remove[d]?|ditch(?:ed)?|never\s*mind|ignore[d]?|disregard(?:ed)?|"
+    r"skip(?:ped)?|cancel(?:l?ed)?|delete[d]?|withdrew|retracted|took\s+(?:out|off))\s+"
+    r"(?:about\s+)?(?:the|that|my)\s+(?:\w+\s+){0,1}$"
+    r"|\b(?:never|didn.t|did\s+not)\s+(?:ask(?:ed)?\s+for|want(?:ed)?|need(?:ed)?|require[d]?|"
+    r"mention(?:ed)?|sa(?:id|y)(?:\s+(?:i|we)\s+(?:need(?:ed)?|want(?:ed)?))?)\s+"
+    r"(?:(?:a|an|the|any|my)\s+)?(?:\w+\s+){0,1}$",
     re.I)
+
+
+_NO_REQUIREMENT_BEFORE = re.compile(r"\b(?:don.t|do\s+not)\s+have\s+(?:a|an|any|the)\s+(?:\w+\s+){0,1}$", re.I)
+_REQUIREMENT_WORD_AFTER = re.compile(r"\s+(?:requirements?|preferences?|filters?|conditions?)\b", re.I)
 
 
 def _feature_retracted_here(text: str, start: int, end: int) -> bool:
     text = str(text or "")
     return bool(_RETRACTION_AFTER_RE.match(text[end:end + 60])
                 or _RETRACTION_TAIL_RE.match(text[end:end + 90])
-                or _RETRACTION_BEFORE_RE.search(text[max(0, start - 40):start]))
+                or _RETRACTION_BEFORE_RE.search(text[max(0, start - 40):start])
+                or (_NO_REQUIREMENT_BEFORE.search(text[max(0, start - 40):start])
+                    and _REQUIREMENT_WORD_AFTER.match(text[end:end + 30])))
 
 
 # The clause-level retraction vocabulary, for removing an ACCUMULATED feature (unchanged).
@@ -405,7 +427,8 @@ def _extract_accessibility_requirements(message: str) -> dict[str, list[str]]:
 
     for feature, start, end in mentions:
         from core.constraint_updates import mention_is_requirement
-        if not mention_is_requirement(source, start, end) or _feature_retracted_here(source, start, end):
+        if (not mention_is_requirement(source, start, end) or _feature_retracted_here(source, start, end)
+                or _asks_about_own_need(source, start, end)):
             continue
         left = max(source.rfind(mark, 0, start) for mark in (";", "；", ",", "，", ".", "。", "!", "！", "?", "？"))
         right_candidates = [source.find(mark, end) for mark in
@@ -441,6 +464,51 @@ def _extract_accessibility_requirements(message: str) -> dict[str, list[str]]:
     return {"required": required, "soft": soft}
 
 
+# A park the home should be near, in lower case: Green Park, Finsbury Park, Park Lane and Park
+# Royal are places, and "a car park" or "a retail park" is not a wish for one.
+_NEAR_A_PARK = re.compile(
+    r"\b(?:near(?:by)?|by|next\s+to|close\s+to|beside|opposite|overlooking|walk(?:ing\s+distance)?\s+"
+    r"(?:to|of|from)|access\s+to|minutes?\s+(?:from|to))\s+(?:a|the|some)\s+(?:nice\s+|green\s+|big\s+|"
+    r"good\s+|local\s+)?(?-i:park)s?\b(?!\s+(?:lane|royal|road|street|avenue|view|side|house)\b)|"
+    r"\b(?-i:parks?)\s+nearby\b|\bgreen\s+spaces?\b|"
+    r"(?:靠近|临近|邻近|挨着|近|有|要有|附近有)(?:一?个)?公园", re.I)
+# A question opens its clause, after a linking word at most: "What is my budget now, and do I need
+# a balcony?" stored a must-have, because only the start of the clause was read, and "Must I have a
+# garden?" did too (W-01). "Can you find me a flat with a balcony?" is a request, so it stays out.
+_LISTING_QUESTION_EN = re.compile(
+    r"^\W*(?:(?:and|but|so|or|also|then|plus)\b\W*)*"
+    r"(?:(?:does|do|did|is|are|was|were|am|has|have|had)\b"
+    r"|(?:must|should|shall|need|will|would)\s+(?:i|we|it)\b"
+    r"|(?:what|which|why|how|when|where|who)(?:['’]s\b|\s+(?:do|did|does|is|are|was|were|has|have|had|happened)\b))",
+    re.I)
+_LISTING_QUESTION_ZH = re.compile(r"^[^找搜]*(?:吗\s*[？?]?\s*$|要不要|需不需要)")
+_CLAUSE_LINK = re.compile(r"[,，;；:：.!?。！？\n]|\b(?:and|but|so|or|also|then|plus)\b", re.I)
+# Whose need the question is about. "Are there flats with a lift?" searches, so it still counts.
+_OWN_NEED_IN_QUESTION = re.compile(
+    r"\b(?:i|we|my|our)\b|\b(?:required?|requirements?|needed|necessary)\b|我|需要|要求|必须", re.I)
+
+
+def _asks_about_a_listing(message: str, start: int, end: int) -> bool:
+    """True for "Does the flat have a dishwasher?" or "... and do I need a balcony?": the mention
+    between ``start`` and ``end`` sits in a question, not a wish."""
+    from core.constraint_updates import clause_at
+    clause = clause_at(message, start, end)
+    window = message[max(0, start - 120):start]
+    links = [found.end() for found in _CLAUSE_LINK.finditer(window)]
+    linked = window[links[-1]:] if links else window
+    return bool(((_LISTING_QUESTION_EN.search(clause) or _LISTING_QUESTION_EN.search(linked))
+                 and '?' in message[end:end + 60])
+                or _LISTING_QUESTION_ZH.search(clause))
+
+
+def _asks_about_own_need(message: str, start: int, end: int) -> bool:
+    """True for "Do I need a lift?": narrower than the above, for the features a search filters
+    on, where "Are there any step-free flats?" still asks for one."""
+    from core.constraint_updates import clause_at
+    return (_asks_about_a_listing(message, start, end)
+            and bool(_OWN_NEED_IN_QUESTION.search(clause_at(message, start, end))))
+
+
 def extract_preferences_from_message(user_message: str, current_prefs: dict) -> dict:
     """Extract user preferences from a message. Returns updated prefs dict."""
     prefs = {k: list(v) for k, v in current_prefs.items()}
@@ -452,6 +520,14 @@ def extract_preferences_from_message(user_message: str, current_prefs: dict) -> 
             for key in ('hard_preferences', 'required_amenities', 'soft_preferences'):
                 if key in prefs:
                     prefs[key] = [value for value in prefs[key] if feature not in str(value).lower()]
+    # A withdrawn amenity leaves these labels too, or the legacy prompt keeps quoting it.
+    stored = [value for key in ('hard_preferences', 'soft_preferences') for value in prefs.get(key) or []]
+    kept = _soft_amenity_updates(user_message, stored) if stored else None
+    if kept is not None:
+        gone = {_amenity_name(value) for value in stored} - {_amenity_name(value) for value in kept}
+        for key in ('hard_preferences', 'soft_preferences', 'required_amenities'):
+            if key in prefs:
+                prefs[key] = [value for value in prefs[key] if _amenity_name(value) not in gone]
 
     def _add(ptype, val):
         if val and val not in prefs.get(ptype, []):
@@ -465,11 +541,31 @@ def extract_preferences_from_message(user_message: str, current_prefs: dict) -> 
             if area in user_lower:
                 _add('safety_concerns', f"User expressed safety concerns about {area.title()}")
 
+    def _record_amenity(amenity, match):
+        from core.constraint_updates import mention_is_requirement
+        if (not mention_is_requirement(user_message, match.start(), match.end())
+                or _feature_retracted_here(user_message, match.start(), match.end())):
+            return
+        clause = clause_at(user_message, match.start(), match.end())
+        hard_clause = re.sub(r"not essential|isn.t essential|not required|isn.t required|不必|可有可无", '', clause, flags=re.I)
+        if _ACCESSIBILITY_HARD_CUE_RE.search(hard_clause):
+            _add('required_amenities', amenity)
+            _add('hard_preferences', f"Must have {amenity}")
+        else:
+            _add('soft_preferences', f"Would like {amenity}")
+
     # Amenity requirements
     amenity_patterns = {
         'gym': ['gym', 'fitness', 'workout'], 'pool': ['pool', 'swimming'],
-        'parking': ['parking', 'car park'], 'laundry': ['laundry', 'washing machine'],
+        'parking': ['parking', 'car park'], 'laundry': ['laundry'],
         'balcony': ['balcony', 'terrace'], 'concierge': ['concierge', '24/7', 'reception'],
+        # "Pet-friendly furnished 1 bed with a garden" kept the garden nowhere, so the
+        # zero-verified status never said the garden was unchecked (S-07).
+        'garden': ['garden', 'outdoor space'],
+        # ... nor "I need a washing machine" or "with a dishwasher, near a park" (U-11).
+        'washing machine': ['washing machine', 'washing-machine', 'washer dryer', 'washer-dryer',
+                            '洗衣机'],
+        'dishwasher': ['dishwasher', 'dish washer', '洗碗机'],
     }
     for amenity, keywords in amenity_patterns.items():
         for keyword in keywords:
@@ -477,16 +573,20 @@ def extract_preferences_from_message(user_message: str, current_prefs: dict) -> 
             # the answer told the user "You mentioned liking a pool" (R2-17).
             for match in re.finditer(r"(?<![A-Za-z])" + re.escape(keyword) + r"(?![A-Za-z])",
                                      user_message, re.I):
-                from core.constraint_updates import mention_is_requirement
-                if not mention_is_requirement(user_message, match.start(), match.end()):
+                if _asks_about_a_listing(user_message, match.start(), match.end()):
                     continue
-                clause = clause_at(user_message, match.start(), match.end())
-                hard_clause = re.sub(r"not essential|isn.t essential|not required|isn.t required|不必|可有可无", '', clause, flags=re.I)
-                if _ACCESSIBILITY_HARD_CUE_RE.search(hard_clause):
-                    _add('required_amenities', amenity)
-                    _add('hard_preferences', f"Must have {amenity}")
-                else:
-                    _add('soft_preferences', f"Would like {amenity}")
+                if amenity == 'garden' and (
+                        re.search(r"\b(?:covent|hatton|kensington|palmers|bounds|welwyn|"
+                                  r"barbican|kew|botanic(?:al)?|hampton|community|beer)\s+$",
+                                  user_message[:match.start()], re.I)
+                        or re.match(r"\s+(?:city|bridge|centre|center|village|suburb|square|"
+                                    r"street|road|walk|court|house)\b",
+                                    user_message[match.end():], re.I)):
+                    continue      # a place or building name, not a garden wish
+                _record_amenity(amenity, match)
+    for match in _NEAR_A_PARK.finditer(user_message):
+        if not _asks_about_a_listing(user_message, match.start(), match.end()):
+            _record_amenity('park', match)
 
     # Accessibility gets feature-specific strength handling rather than the global
     # substring test above. A required accessible feature is recorded both as an
@@ -571,8 +671,12 @@ def update_search_criteria(accumulated: dict, new_criteria: dict) -> dict:
 
     # no_commute: never downgrade here (True is sticky); an explicit commute
     # mention resets it in _apply_explicit_criteria_updates, not on a merge.
-    if 'no_commute' in new_criteria or result.get('no_commute'):
-        result['no_commute'] = bool(result.get('no_commute')) or bool(new_criteria.get('no_commute'))
+    # A search that did not ask leaves it unset: False from turn 2 read as "you have a commute"
+    # in a recap of a user who never mentioned one (V-17).
+    if new_criteria.get('no_commute') or result.get('no_commute'):
+        result['no_commute'] = True
+    elif 'no_commute' in new_criteria and result.get('commute_destination'):
+        result['no_commute'] = False
 
     # bedrooms: only accept a definite single count (ignore "0-2" range strings the
     # tool emits when the user did not pin a bedroom number).
@@ -622,6 +726,227 @@ _AMENITY_NEGATED_BEFORE_RE = re.compile(
     r"\bno|\bwithout)\s+(?:(?:a|an|the|any|my)\s+)?(?:\w+\s+)?$|(?:不需要|不用|不要)\s*$", re.I)
 
 
+# 「忘掉我喜欢公园这件事」 and 「不要洗碗机了」 named no English label, so the wish stayed and went
+# into the next search while the reply said it would not be used (V-15).
+_AMENITY_ZH_WORDS = {
+    "park": ("公园", "绿地"), "dishwasher": ("洗碗机",), "washing machine": ("洗衣机",), "garden": ("花园", "院子"),
+    "balcony": ("阳台", "露台"), "gym": ("健身房",), "parking": ("停车位", "车位", "停车"), "pool": ("泳池", "游泳池"),
+    "laundry": ("洗衣房",), "concierge": ("前台", "门卫"),
+}
+_ZH_WISH_WITHDRAWN_BEFORE = re.compile(
+    r"(?:忘掉|忘记|忘了)[^，。！？；,.!?;]{0,10}$|(?:不要|不用|不需要|不必|去掉|取消|删掉|删除|移除)(?:有|带|靠近)?的?$")
+_ZH_WISH_WITHDRAWN_AFTER = re.compile(r"[^，。！？；,.!?;]{0,6}(?:不要了|算了|不用了|不需要了|不必了|无所谓|取消|去掉)")
+
+
+def _zh_wish_withdrawn(name: str, message: str) -> bool:
+    """True when the message withdraws the amenity ``name`` in its Chinese word."""
+    from core.constraint_updates import _ZH_QUESTION_AFTER
+    for word in _AMENITY_ZH_WORDS.get(name, ()):
+        for match in re.finditer(re.escape(word), message or ''):
+            if _ZH_QUESTION_AFTER.match(message, match.end()):
+                continue        # 「阳台要求取消了吗？」 asks
+            if (_ZH_WISH_WITHDRAWN_BEFORE.search(message[:match.start()])
+                    or _ZH_WISH_WITHDRAWN_AFTER.match(message, match.end())):
+                return True
+    return False
+
+
+def _is_short_preference(value) -> bool:
+    """A one-to-three-word preference label ("garden", "quiet street"), not a sentence."""
+    return bool(re.fullmatch(r"[A-Za-z][A-Za-z'’\-]*(?:\s+[A-Za-z][A-Za-z'’\-]*){0,2}", str(value or "").strip()))
+
+
+# "Forget that requirement." / "Never mind that." right after a requirement was added named
+# nothing, so nothing was withdrawn (R2-08). "That" is what the user's previous message added.
+_BARE_REQUIREMENT_RETRACTION = re.compile(
+    r"^\W*(?:(?:ok(?:ay)?|actually|sorry|oh|hmm|no)\W+)*"
+    r"(?:forget|never\s*mind|drop|scrap|remove|cancel|skip|ignore|disregard|undo)\s+(?:about\s+)?"
+    r"(?:that|this|it)(?:\s+(?:last\s+)?(?:requirement|preference|one|condition|filter|request|bit|thing))?"
+    r"(?:\W+(?:please|then|after\s+all|thanks))*\W*$"
+    r"|^\W*(?:that|this|it)\s+(?:doesn.t|does\s+not)\s+matter(?:\s+any\s?more)?\W*$"
+    r"|^\W*(?:算了|不要那个了|那个不要了|那个算了|刚才那个(?:要求|条件)?(?:不要了|算了|取消))\W*$", re.I)
+
+
+def retract_previous_requirement(accumulated: dict, message: str, previous_message: str) -> dict:
+    """``accumulated`` without the features / preferences ``previous_message`` named, when
+    ``message`` is a bare "forget that requirement" (R2-08). Returns the SAME object when
+    nothing is withdrawn."""
+    if not _BARE_REQUIREMENT_RETRACTION.search(str(message or "")) or not previous_message:
+        return accumulated
+    previous = str(previous_message)
+
+    def _named(value) -> bool:
+        label = _amenity_name(value).strip()
+        return bool(label) and bool(re.search(
+            r"(?<![A-Za-z])" + re.escape(label) + r"(?![A-Za-z])", previous, re.I))
+
+    result = dict(accumulated)
+    sources = dict(accumulated.get('constraint_sources') or {})
+    changed = False
+    for field in ('property_features', 'soft_preferences'):
+        before = list(accumulated.get(field) or [])
+        after = [value for value in before if not _named(value)]
+        if after != before:
+            result[field] = after
+            sources[field] = {'source': 'user_message', 'value': after, 'text': str(message)[:800]}
+            changed = True
+    if not changed:
+        return accumulated
+    result['constraint_sources'] = sources
+    return result
+
+
+# "Actually back to the area I had before Stratford." kept Stratford: no extractor resolves a
+# reference to an EARLIER area (R2-12). It is resolved from the conversation's own messages.
+_PREVIOUS_AREA_REFERENCE = re.compile(
+    r"\b(?:(?:go(?:ing)?\s+|switch\s+|change\s+it\s+|move\s+)?back\s+to|return\s+to|revert\s+to|restore|"
+    r"use|search)\s+(?:the\s+|my\s+)?"
+    r"(?:(?P<which>previous|earlier|original|old|last|first|former|other)\s+)?"
+    r"(?:area|location|neighbou?rhood)\b"
+    r"(?:\s+(?:i|we)\s+(?:had|picked|chose|was\s+(?:searching|looking)(?:\s+in)?|used|started\s+with))?"
+    r"(?:\s+(?:before|until)\s+(?P<before>[A-Za-z][A-Za-z'’\- ]{1,40}?))?"
+    r"(?:\s+(?:please|then|again|instead|now))*\s*(?:[.!?,;]|$)"
+    r"|(?:回到|切回|换回|改回|恢复)(?:到)?\s*(?:(?P<before_zh>[^，。！？,.!?]{1,20}?)之前的|(?P<which_zh>之前|原来|上一个|先前|最初|最开始|以前)的?)"
+    r"(?:那个)?(?:区域|地区|地方|位置)", re.I)
+
+
+def _area_history(history) -> list:
+    """The areas the user's earlier messages switched to, oldest first, without repeats."""
+    from core.tools.search_properties import _extract_area, _extract_areas
+    sequence = []
+    for turn in history or []:
+        message = str((turn or {}).get("user") or "") if isinstance(turn, dict) else ""
+        if not message:
+            continue
+        area = _extract_area(message)
+        if not area:
+            areas = _extract_areas(message)
+            area = areas[0] if len(areas) == 1 else None
+        if area and (not sequence or sequence[-1].lower() != area.lower()):
+            sequence.append(area)
+    return sequence
+
+
+def resolve_previous_area(accumulated: dict, message: str, history) -> dict:
+    """``accumulated`` switched back to the earlier area ``message`` refers to ("the area I
+    had before Stratford", "the previous area", "回到之前的区域"), resolved from ``history``
+    (R2-12). Returns the SAME object when nothing resolves."""
+    match = _PREVIOUS_AREA_REFERENCE.search(str(message or ""))
+    if not match:
+        return accumulated
+    which = (match.group("which") or match.group("which_zh") or "").lower()
+    before = (match.group("before") or match.group("before_zh") or "").strip()
+    if not which and not before:
+        return accumulated
+    sequence = _area_history(history)
+    current = str(accumulated.get("area") or "")
+    target = None
+    if before:
+        from core.tools.search_properties import _match_known_area
+        left = _match_known_area(before.lower()) or before
+        hits = [i for i, area in enumerate(sequence) if area.lower() == str(left).lower()]
+        if hits and hits[-1] > 0:
+            target = sequence[hits[-1] - 1]
+    elif which in ("original", "first", "最初", "最开始"):
+        target = sequence[0] if sequence else None
+    else:
+        hits = [i for i, area in enumerate(sequence) if area.lower() == current.lower()]
+        if hits and hits[-1] > 0:
+            target = sequence[hits[-1] - 1]
+        elif sequence and sequence[-1].lower() != current.lower():
+            target = sequence[-1]
+    if not target or target.lower() == current.lower():
+        return accumulated
+    result = dict(accumulated, area=target, areas=[target])
+    sources = dict(accumulated.get("constraint_sources") or {})
+    for key in ("area", "areas"):
+        sources[key] = {"source": "user_message", "value": result[key], "text": str(message)[:800]}
+    result["constraint_sources"] = sources
+    logger.info("criteria.previous_area_restored")
+    return result
+
+
+_LONDON_POSTCODE = re.compile(r"\b(?:EC|WC|E|N|NW|SE|SW|W)\d{1,2}[A-Z]?\b(?:\s*\d[A-Z]{2})?", re.I)
+
+
+_UK_POSTCODE_IN_MESSAGE = re.compile(r"\b([A-Z]{1,2}[0-9][A-Z0-9]?)\s*([0-9][A-Z]{2})\b", re.I)
+# A work/study place word governing the postcode: "I work near", "my office is near", "study at",
+# "my job is based in", "commute to". Only filler words may sit between the cue and the postcode.
+_WORKPLACE_BEFORE_POSTCODE = re.compile(
+    r"\b(?:work\w*|job|office|workplace|employer|stud(?:y|ying|ies)|school|university|uni|college|"
+    r"campus|commut\w*|intern\w*|placement)"
+    r"(?:\s+(?:is|are|was|will\s+be|[’']s|sits?|based|located|right|just|somewhere|at|in|near|"
+    r"around|close\s+to|next\s+to|by|beside|on|the|a|an|postcode))+\s*$", re.I)
+_WORKPLACE_AFTER_POSTCODE = re.compile(
+    r"\s*(?:附近|旁边|周边|一带|那边|那里)?\s*(?:上班|工作|上学|读书|实习|办公)"
+    r"|\s*(?:is|'s|’s)\s+where\s+(?:i|we)\s+(?:work|study)", re.I)
+
+
+def _postcode_search_location(message: str) -> str | None:
+    """The full UK postcode the message names as where to search, else None.
+
+    A postcode after a work/study/commute cue is a destination, and one in a distance or
+    journey question is a one-off ("how far is SW1A 1AA from the first one?")."""
+    message = str(message or '')[:2000]
+    if not _UK_POSTCODE_IN_MESSAGE.search(message):
+        return None
+    from core.constraint_updates import one_off_distance_question, one_off_transport_question
+    if one_off_distance_question(message) or one_off_transport_question(message):
+        return None
+    # "Any nearby supermarkets around SW1A 1AA?" asks about the place, not where to live.
+    if re.search(r"\b(?:supermarkets?|shops?|gyms?|parks?|schools?|cafes?|restaurants?|pubs?|"
+                 r"amenities|nearby|weather|forecast|crime|safety|safe)\b|超市|健身房|公园|学校|天气|治安",
+                 message, re.I) and not re.search(
+                     r"\b(?:flats?|homes?|houses?|propert(?:y|ies)|rent|listings?|beds?|bedrooms?|"
+                     r"studios?|search|find|live|living)\b|房|租|找", message, re.I):
+        return None
+    for match in _UK_POSTCODE_IN_MESSAGE.finditer(message):
+        before = re.split(r'[.!?;。！？；\n]', message[max(0, match.start() - 60):match.start()])[-1]
+        after = re.split(r'[.!?;。！？；\n]', message[match.end():match.end() + 40])[0]
+        if _WORKPLACE_BEFORE_POSTCODE.search(before) or _WORKPLACE_AFTER_POSTCODE.match(after):
+            # "I work near EC2M 7PY" / "My office is near SW1A 1AA" / 在EC2M 7PY附近上班 name the
+            # workplace, not where to live: the "near" exemption below made it the area (T-01).
+            continue
+        if re.search(r"\b(?:work\w*|office|stud(?:y|ying)|commut\w*|school|university|college|campus|"
+                     r"from|to|journey|route|far)\b|上班|工作|上学|通勤|到", before, re.I) and not re.search(
+                         r"\b(?:near|around|close\s+to|by|in)\s+(?:the\s+)?(?:postcode\s+)?$", before, re.I):
+            continue
+        return f"{match.group(1).upper()} {match.group(2).upper()}"
+    return None
+
+
+_OTHER_CITY_IN_DESTINATION = re.compile(
+    r"\b(?:manchester|leeds|edinburgh|bristol|glasgow|cardiff|birmingham|liverpool|sheffield|"
+    r"newcastle|nottingham|leicester|coventry|oxford|cambridge|brighton|york|southampton|"
+    r"aberdeen|dundee|belfast|swansea|norwich|exeter|plymouth|derby|reading|bath|durham|"
+    r"canterbury|warwick|lancaster|st\s+andrews)\b", re.I)
+
+
+def _destination_left_behind(destination, new_areas) -> bool:
+    """True when a London commute destination stays behind a switch to another UK city."""
+    from core.tools.search_properties import LONDON_AREAS
+    dest = str(destination or "").strip()
+    if not dest or not new_areas:
+        return False
+    keys = [re.sub(r"[’']", "", str(area or "").lower()).strip() for area in new_areas]
+    if keys and all(key == "london" or key in LONDON_AREAS or _LONDON_POSTCODE.fullmatch(key)
+                    for key in keys):
+        # A London search left a destination in another city behind: "伦敦玛丽女王大学附近的
+        # 房子" after a Bristol search kept "University of Bristol" (R4-06).
+        return bool(_OTHER_CITY_IN_DESTINATION.search(dest)) and not re.search(
+            r"\blondon\b", dest, re.I)
+    if any(not key or key == "london" or key in LONDON_AREAS for key in keys):
+        return False
+    if any(key in dest.lower() for key in keys):
+        return False
+    return bool(re.search(r"\blondon\b", dest, re.I) or _LONDON_POSTCODE.search(dest))
+
+
+def _amenity_name(value) -> str:
+    """The amenity a stored preference names: "Must have dishwasher" -> "dishwasher"."""
+    return re.sub(r"^(?:Would like|Must have) ", "", str(value or ""))
+
+
 def _soft_amenity_updates(message: str, soft_preferences: list) -> list | None:
     """The soft-preference list after this message's amenity nice-to-haves, or None.
 
@@ -632,23 +957,86 @@ def _soft_amenity_updates(message: str, soft_preferences: list) -> list | None:
     "I don't need a balcony after all" removes the stored nice-to-have."""
     from core.tools.search_properties import _ACCESSIBILITY_FEATURES
     current = list(soft_preferences or [])
-    stated = extract_preferences_from_message(message or '', {'soft_preferences': []})
-    names = {str(v)[len('Would like '):] for v in current + list(stated.get('soft_preferences') or [])
-             if str(v).startswith('Would like ')} - set(_ACCESSIBILITY_FEATURES)
-    withdrawn = set()
+    stated = extract_preferences_from_message(message or '', {'soft_preferences': [], 'hard_preferences': []})
+    wishes = list(stated.get('soft_preferences') or []) + list(stated.get('hard_preferences') or [])
+    leads = ('Would like ', 'Must have ')
+    # A need is kept beside the nice-to-haves too: nothing can check an appliance, so it is not a
+    # search filter, but the status has to list it as not checked (U-11).
+    names = {_amenity_name(v) for v in current + wishes
+             if str(v).startswith(leads)} - set(_ACCESSIBILITY_FEATURES)
+    # A short preference stored as it was echoed ("garden") is withdrawn the same way: "Never
+    # mind about the garden." kept it in every later summary (R2-08).
+    plain = {str(v).strip() for v in current
+             if not str(v).startswith(leads) and _is_short_preference(v)}
+    names |= plain
+    withdrawn = {name for name in names if _zh_wish_withdrawn(name, message)}
     for name in names:
         for match in re.finditer(r"(?<![A-Za-z])" + re.escape(name) + r"(?![A-Za-z])", message or '', re.I):
+            from core.constraint_updates import clause_at, is_hypothetical
+            if (_asks_about_a_listing(message, match.start(), match.end())
+                    or is_hypothetical(clause_at(message, match.start(), match.end()))):
+                continue        # "Did I remove the balcony requirement?" removes nothing
             if (_feature_retracted_here(message, match.start(), match.end())
                     or _AMENITY_NEGATED_BEFORE_RE.search(message[max(0, match.start() - 50):match.start()])):
                 withdrawn.add(name)
                 break
-    updated = [v for v in current if str(v)[len('Would like '):] not in withdrawn
-               or not str(v).startswith('Would like ')]
-    for value in stated.get('soft_preferences') or []:
-        name = value[len('Would like '):] if value.startswith('Would like ') else ''
+    needed = {_amenity_name(v) for v in wishes if str(v).startswith('Must have ')}
+    updated = [v for v in current if (_amenity_name(v) not in withdrawn
+                                      or not str(v).startswith(leads))
+               and str(v).strip() not in (withdrawn & plain)
+               # A need replaces the nice-to-have it strengthens.
+               and not (str(v).startswith('Would like ') and _amenity_name(v) in needed)]
+    for value in wishes:
+        name = _amenity_name(value)
         if name in names and name not in withdrawn and value not in updated:
             updated.append(value)
     return updated if updated != current else None
+
+
+# Every requirement a turn can withdraw, as the labels the memory layer knows them by (W-08).
+_WITHDRAWABLE_FEATURES = {"pets allowed": "pets", "cats allowed": "pets", "furnished": "furnished",
+                          "lift": "lift", "step-free": "step-free",
+                          "wheelchair-accessible": "wheelchair-accessible"}
+_WITHDRAWABLE_AMENITIES = ("balcony", "garden", "parking", "gym", "pool", "laundry", "concierge",
+                           "washing machine", "dishwasher", "park", "ground floor", "ground-floor",
+                           "top floor", "top-floor", "bike storage")
+
+
+def requirements_withdrawn(before: dict, after: dict, message: str) -> list:
+    """The labels of the requirements this turn withdrew: what left the criteria, and what the
+    message withdraws whether or not this conversation held it ("I removed the balcony
+    requirement earlier" in a new conversation). A reset of the search withdraws nothing from
+    long-term memory (U-06)."""
+    from core.constraint_updates import resets_all_criteria
+    if resets_all_criteria(message):
+        return []
+
+    def _labels(criteria):
+        values = [str(v) for key in ("property_features", "soft_preferences")
+                  for v in (criteria or {}).get(key) or []]
+        return {_WITHDRAWABLE_FEATURES.get(v, _amenity_name(v)) for v in values}
+    labels = _labels(before) - _labels(after)
+    probe = {"property_features": list(_WITHDRAWABLE_FEATURES),
+             "soft_preferences": [f"Must have {name}" for name in _WITHDRAWABLE_AMENITIES]}
+    labels |= _labels(probe) - _labels(_apply_explicit_criteria_updates(probe, message))
+    return sorted(labels & (set(_WITHDRAWABLE_FEATURES.values()) | set(_WITHDRAWABLE_AMENITIES)))
+
+
+_ANYWHERE = re.compile(
+    r'\banywhere\b|\bany\s+(?:area|neighbou?rhood|part\s+of)\b|哪里都|哪儿都|哪都|任何(?:地方|区域|地区)|'
+    r'(?:区域|地区)(?:无所谓|不限|都行|都可以)|不限(?:区域|地区)', re.I)
+
+
+def _widens_to_london(message: str, accumulated: dict) -> bool:
+    """True when an area withdrawal says "anywhere" and the search is a London one."""
+    if not _ANYWHERE.search(message or ''):
+        return False
+    if re.search(r'\blondon\b|伦敦', message or '', re.I):
+        return True
+    from core.tools.search_properties import LONDON_AREAS
+    standing = list(accumulated.get('areas') or ([accumulated['area']] if accumulated.get('area') else []))
+    keys = [re.sub(r"[’']", '', str(area or '').lower()).strip() for area in standing]
+    return bool(keys) and all(key == 'london' or key in LONDON_AREAS for key in keys)
 
 
 def _withdraw_criteria_topics(accumulated: dict, message: str) -> dict:
@@ -666,6 +1054,10 @@ def _withdraw_criteria_topics(accumulated: dict, message: str) -> dict:
     cleared: dict = {}
     if topics & {'location', 'area'}:
         cleared.update(area=None, areas=[])
+        if 'location' not in topics and _widens_to_london(message, accumulated):
+            # "I don't care about the area any more, anywhere in London." widens a London
+            # search to the whole city instead of leaving no area at all (R4-02).
+            cleared.update(area='London', areas=['London'])
     if topics & {'location', 'commute'}:
         cleared.update(commute_destination=None, destination=None)
     if 'commute' in topics:
@@ -694,11 +1086,54 @@ _DEST_DAY_OR_MONTH = (
     r"\d{1,2}(?:st|nd|rd|th)?|\d{4}")
 _DEST_TRAILING_TIME = re.compile(
     r"(?:\s*[,;:–—-])?\s+(?:"
-    r"(?:right\s+|for\s+|just\s+|from\s+|as\s+of\s+)?now(?:\s+on)?|actually|nowadays|"
+    r"(?:right\s+|for\s+|just\s+|from\s+|as\s+of\s+)?now(?:\s+on)?|actually|nowadays|instead|"
     r"these\s+days|at\s+the\s+moment|at\s+present|currently|presently|any\s?more|"
     r"(?:from|starting|as\s+of|since|beginning|effective)\s+(?:(?:next|this|the|last)\s+)?"
-    rf"(?:{_DEST_DAY_OR_MONTH})(?:\s+(?:of\s+)?(?:{_DEST_DAY_OR_MONTH}))?"
+    rf"(?:{_DEST_DAY_OR_MONTH})(?:\s+(?:of\s+)?(?:{_DEST_DAY_OR_MONTH}))?|"
+    # "Waterloo next month" (R3-03); "Liverpool Street 5 days a week" / "Bank every day"
+    # made every later commute lookup fail to geocode (K-03).
+    rf"(?:next|this|later\s+this)\s+(?:{_DEST_DAY_OR_MONTH})|"
+    r"(?:\d|one|two|three|four|five|six|seven)\s*(?:days?|times?)\s*(?:a|per|each|every)\s+week|"
+    r"(?:every|each)\s+(?:single\s+)?(?:day|weekday|morning)|daily|on\s+weekdays|"
+    r"(?:monday|mon)\s*(?:to|-|–)\s*(?:friday|fri)"
     r")\s*$", re.I)
+
+
+# 「改成在金丝雀码头上班」, 「工作地点改成金丝雀码头」: the workplace moved (V-07).
+_ZH_WORKPLACE_CHANGE = re.compile(
+    r"(?:(?:工作地点|上班地点|实习地点|通勤地点|通勤目的地|目的地|公司|单位|办公室)\s*(?:也)?(?:改成|改为|改到|换成|换到|搬到|变成|搬去)\s*(?:了)?\s*(?:在|去|到)?\s*"
+    r"([^，。！？,.!?;；]{2,30}?)\s*(?:附近|那边|这边)?\s*(?:上班|工作|了)?\s*(?=$|[，。！？,.!?;；])"
+    r"|(?:改成|改为|改到|换成|换到|搬到)\s*(?:了)?\s*(?:在|去|到)\s*"
+    r"([^，。！？,.!?;；]{2,30}?)\s*(?:附近|那边|这边)?\s*(?:上班|工作|实习|办公)"
+    # 如果换成去 Canary Wharf 呢？ / 如果通勤改去 Canary Wharf 呢 replaced the area (r06 4298c21d).
+    r"|(?:换成|改成|改为|通勤(?:也)?(?:改|换))\s*(?:去|到)\s*"
+    r"([^，。！？,.!?;；]{2,30}?)\s*(?:呢|的话|吧)?\s*(?=$|[，。！？,.!?;；]))")
+
+
+# The place named before its label is rewritten to the labelled form the parser below reads.
+_WORKPLACE_NAMED_FIRST = None
+_NOT_A_PLACE_RUN = (r"(?!(?:What|Where|Which|Who|Why|When|How|It|This|That|There|Here|Change|Switch|Update|Set|Move|"
+                    r"Make|Use|Keep|Remove|Drop|Forget|Clear|Cancel|Is|Was|Actually|Now|Please|And|But|So)\b)")
+
+
+def _workplace_named_first(text: str) -> str:
+    """``text`` with "Make it Canary Wharf as the workplace" read as "my workplace is Canary
+    Wharf". "My" needs a verb or a copula: "Change my commute" names no place."""
+    global _WORKPLACE_NAMED_FIRST
+    if _WORKPLACE_NAMED_FIRST is None:
+        from core.tools.search_properties import WORKPLACE_AFTER_PLACE
+        place = r"[A-Z][\w'’\-]*(?:\s+[A-Z][\w'’\-]*){0,3}"
+        _WORKPLACE_NAMED_FIRST = re.compile(
+            # "keep King's Cross as destination" changes nothing, and is matched to stay as it is.
+            r"\b(?i:keep|leave)\s+" + place + r"(?i:" + WORKPLACE_AFTER_PLACE + r")"
+            r"|\b(?i:make|have|use|set)(?:\s+(?i:it|that))?\s+(" + place + r")(?i:" + WORKPLACE_AFTER_PLACE + r")"
+            r"|\b" + _NOT_A_PLACE_RUN + r"(" + place + r")(?i:" + WORKPLACE_AFTER_PLACE.replace(
+                r"(?:is\s+)?(?:now\s+)?my", r"is\s+(?:now\s+)?my") + r")")
+
+    def _labelled(match):
+        named = match.group(1) or match.group(2)
+        return f"my workplace is {named}" if named else match.group(0)
+    return _WORKPLACE_NAMED_FIRST.sub(_labelled, text)
 
 
 def _destination_clause(text: str) -> str:
@@ -718,6 +1153,32 @@ def _strip_destination_time_words(place: str) -> str:
             break
         value = stripped
     return value
+
+
+# Every slot of a search, cleared. An explicit None or [] is authoritative: the executor drops a
+# value the model re-supplies from the conversation it remembers.
+_RESET_CRITERIA = {
+    'area': None, 'areas': [], 'max_budget': None, 'budget_period': None, 'bedrooms': None,
+    'bedrooms_minimum': False, 'room_type': None, 'commute_destination': None, 'destination': None,
+    'max_travel_time': None, 'no_commute': None, 'move_in_date': None, 'office_days_per_week': None,
+    'property_features': [], 'soft_preferences': [], 'amenities_of_interest': [],
+}
+
+
+def _cleared_criteria(accumulated: dict) -> dict:
+    """The criteria after "start from scratch": every slot empty, the sources of the old values
+    gone and the soft gate available again. ``_last_change`` stays, so an undo can restore them
+    (U-06)."""
+    result = {key: (list(value) if isinstance(value, list) else value)
+              for key, value in _RESET_CRITERIA.items()}
+    result['constraint_sources'] = {}
+    for key, value in (accumulated or {}).items():
+        if key in ('_last_change', '_erased_fields'):
+            result[key] = value
+        elif key not in result and key != 'criteria_gate_shown':
+            result[key] = ([] if isinstance(value, list) else {} if isinstance(value, dict)
+                           else False if isinstance(value, bool) else None)
+    return result
 
 
 def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
@@ -743,6 +1204,13 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     """
     if not current_message:
         return accumulated
+    if not _reaffirmed:
+        from core.constraint_updates import resets_all_criteria, without_criteria_reset
+        if resets_all_criteria(current_message):
+            accumulated = _cleared_criteria(accumulated)
+            current_message = without_criteria_reset(current_message)
+            if not re.search(r'[0-9A-Za-z\u4e00-\u9fff]{3}', current_message):
+                return accumulated
     if not _reaffirmed:
         # "Forget everything about location" / "never mind the commute" (R4-14), read on the
         # raw text: a withdrawal is exactly what scoped_update_text removes as a reference.
@@ -853,7 +1321,8 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     # "my budget could stretch to £2,100 for the right place" keeps the ceiling (the budget
     # extractor skips it) and is kept beside it as the user's own soft note (stress A-08).
     from core.constraint_updates import conditional_stretch_notes
-    for note in conditional_stretch_notes(current_message):
+    from core.tools.search_properties import budget_floor_notes
+    for note in conditional_stretch_notes(current_message) + budget_floor_notes(current_message):
         existing = result.setdefault('soft_preferences', [])
         if note not in existing:
             existing.append(note)
@@ -872,37 +1341,68 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     # is never an address, even if a generic place classifier accepts it.
     # "my workplace is King's Cross station" names the place without a preposition; a
     # correction phrased that way used to change nothing (A-03). "St." is not a sentence end.
-    _dest_source = re.sub(r"\b(St|Dr|Mt)\.\s", r"\1 ", current_message)
+    _dest_source = _workplace_named_first(re.sub(r"\b(St|Dr|Mt)\.\s", r"\1 ", current_message))
     # The preposition-free form is only for "my office/workplace is <Place>", and the place
     # must be capitalised: "my job is remote", "my work is hybrid", "my job is stressful"
     # name no place (review of the A-03 fix).
     labelled_destination = re.search(
-        r'\b(?:(?i:my (?:office|workplace)\s+is)\s+(?=[A-Z])'
+        r'\b(?:(?i:my (?:office|workplace)\s+is(?:\s+now)?|(?:(?:my|the)\s+)?(?:commute\s+)?destination\s*(?:is(?:\s+now)?|[:=]))'
+        r'\s+(?=[A-Z])'
         r'(?!(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Weekdays?|Weekends?|'
         r'January|February|March|April|May|June|July|August|September|October|November|'
         r'December|Hybrid|Remote|Closed|Open)\b)|'
-        r'(?i:(?:my (?:office|workplace)|i work|commute|(?:a\s+)?(?:public[- ]transport\s+)?journey)'
-        r'\s+(?:is\s+)?(?:next to|near|at|to|in)\s+))([^.!?;\n]{2,90})',
-        _dest_source)
+        # "I actually work in Shoreditch now, not UCL" / "My office moved to Waterloo" kept
+        # the old destination while the commute tool used the new one (R3-03).
+        r'(?i:(?:my (?:office|workplace)(?:\s+(?:has\s+)?(?:moved|relocated)|\s+is\s+(?:now|moving))?'
+        r'|i\s+(?:(?:actually|now|currently|also|still|really)\s+)?work(?:\s+(?:now|actually|currently))?'
+        # "Change the commute destination to King's Cross", "Commute is now to Stratford" and
+        # "Change my commute from Bank to Stratford" left the destination, and the reply
+        # claimed the change (W-03).
+        r'|commut(?:e|ing)(?:\s+destination)?(?:\s+is\s+now|\s+has\s+moved|\s+now)?'
+        # With a verb only: "the commute from the first one to Bank" asks about a journey.
+        r'|(?:change|switch|move|update)\s+(?:the\s+|my\s+)?commute(?:\s+destination)?\s+from\s+'
+        r'[^.!?;,\n]{2,40}?(?=\s+to\s)'
+        r'|(?:change|set|update|switch|move)\s+(?:the\s+|my\s+)?destination'
+        r'|(?:a\s+)?(?:public[- ]transport\s+)?journey)'
+        r'\s+(?:is\s+)?(?:next to|near|at|to|in)\s+)'
+        # "I will be working at Canary Wharf instead", "my new job is at Bank" (V-07). "at a
+        # bank" and "in finance" say what the job is, not where.
+        r"|(?i:(?:i(?:\s+will|['’]ll|\s+am\s+going\s+to|['’]m\s+going\s+to)\s+(?:(?:now|actually|soon)\s+)?"
+        r"(?:be\s+)?work(?:ing)?|i(?:\s+am|['’]m)\s+(?:(?:now|actually)\s+)?working"
+        r"|my\s+new\s+(?:job|office|workplace)(?:\s+is|['’]s)?)"
+        r'\s+(?:next to|near|at|in)\s+)(?!an?\s)(?=[A-Z]))([^.!?;\n]{2,90})',
+        _dest_source) or _ZH_WORKPLACE_CHANGE.search(_dest_source)
     if labelled_destination and re.search(
             r"\b(?:don.t|do not|doesn.t|never|no longer|not)\s+(?:\w+\s+){0,2}commut\w*|\bno commute\b",
             labelled_destination.string[:labelled_destination.end()], re.I):
         # "I work from home so I don't commute at all" names no destination ("all").
         labelled_destination = None
+    from core.constraint_updates import commute_disowned
+    from core.tools.search_properties import institution_home_area
+    disowned = commute_disowned(current_message)
+    if disowned or (result.get('no_commute') and not labelled_destination
+                    and institution_home_area(current_message, follow_up_only=True)):
+        # "commute to UCL not needed" names the place to refuse it (W-04). "What about near
+        # UCL?" asks where to live, and someone who said they have no commute still has none.
+        disowned = True
+        labelled_destination = message_destination = None
     # "Forget that I work at Canary Wharf" asks to DROP the destination; it used to SET it
     # (2026-10-19 A-11). The cue must sit in the same sentence, before the destination.
+    # "Never mind LSE, I will be working at Canary Wharf": the cue has its own object.
     forget_destination = bool(labelled_destination and re.search(
-        r"\b(?:forget|disregard|never mind)\b[^.!?;\n]*$",
+        r"\b(?:forget|disregard|never mind)\b[^.!?;,\n]*$",
         _dest_source[:labelled_destination.start()], re.I))
     if forget_destination:
         def _key(value):
             return ' '.join(re.sub(r"[^a-z0-9]+", ' ', str(value or '').lower()).split())
-        forgotten = _key(re.split(r'[,;]', labelled_destination.group(1))[0])
+        forgotten = _key(re.split(r'[,;]', labelled_destination.group(labelled_destination.lastindex))[0])
         current = _key(result.get('commute_destination') or result.get('destination'))
         labelled_destination = None
         message_destination = None
         # Only the destination the user named is forgotten; another one stays.
-        if forgotten and current and (forgotten in current or current in forgotten):
+        if forgotten and current and (
+                forgotten in current or current in forgotten
+                or _key(_known_destination_address(forgotten)) == current):     # "LSE"
             result['commute_destination'] = None
             result['destination'] = None
             changed = True
@@ -913,6 +1413,8 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         named = re.split(r'\s+and\s+|,\s*(?:and|where|so|but|which|because|as|i\b|i.[dm]\b|my\b|'
                          r'find|looking|search|show|please)'
                          r'|\s+(?:so|but|because|since|which|where|while)\s+'
+                         # "My commute to Bank is 30 minutes" stored "Bank is 30 minutes".
+                         r'|\s+(?:is|takes?|needed|required)\b'
                          r'|\s+for\s+|\s+(?:arriving|leaving|departing)\b'
                          r'|\s+(?:of\s+(?:about\s+)?|within\s+|under\s+|at most\s+)(?=\d)'
                          # "King's Cross, max 30 minutes" / "Soho, no more than 35 minutes" /
@@ -920,16 +1422,36 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
                          # limit is not part of the place (R1-04, variant of A-03).
                          r'|\s*,\s*(?=(?:max(?:imum)?|at\s+most|no\s+more\s+than|up\s+to|under|within|'
                          r'less\s+than|about|around|roughly|ideally|preferably|door)\b|\d)'
-                         r'|\s*[(\[]|\s+[-–—]\s+',
-                         _destination_clause(labelled_destination.group(1)),
+                         r'|\s*[(\[]|\s+[-–—]\s+'
+                         # "I work in King's Cross not Canary Wharf": the rejected place
+                         # after "not / rather than / instead of" is not part of the new
+                         # one. Kept whole, the known-landmark lookup resolved it to the
+                         # OLD workplace and the correction changed nothing (R1-01).
+                         r'|\s*,?\s+(?:not|rather\s+than|instead\s+of)\s+',
+                         _destination_clause(labelled_destination.group(labelled_destination.lastindex)),
                          maxsplit=1, flags=re.I)[0].strip(" ,")
         named = _strip_destination_time_words(named)
+        from core.constraint_updates import is_destination_text
+        if not is_destination_text(named):
+            named, labelled_destination = '', None
         if named and not re.fullmatch(r'(?:my|the|an?)\s+(?:office|workplace)', named, re.I) \
                 and not re.fullmatch(r'(?:all|home|work|the moment|present|least|most|times?)',
                                      named, re.I):
             message_destination = {'address': named, 'name': named}
-    known_destination = (None if forget_destination else
+    known_destination = (None if forget_destination or disowned else
                          _known_destination_address(named if labelled_destination else current_message))
+    from core.constraint_updates import one_off_distance_question, one_off_transport_question
+    distance_question = not labelled_destination and (one_off_distance_question(current_message)
+                                                      or one_off_transport_question(current_message))
+    if distance_question:
+        # "how far is the first one from UCL?" asks about one journey (R3-10).
+        known_destination = message_destination = None
+    from core.constraint_updates import moves_area_only
+    area_only = not labelled_destination and moves_area_only(current_message, bool(result.get('no_commute')))
+    if area_only:
+        # "Change the area to Canary Wharf" names where to live: a place that is also a known
+        # workplace set a destination and lifted "no commute" (G-09).
+        known_destination = message_destination = None
     if message_destination or known_destination:
         destination = (
             (known_destination if (labelled_destination or (known_destination and re.search(
@@ -960,7 +1482,8 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     # nonsense areas (Mars/火星/Wakanda), so those never clobber the current area.
     from core.tools.search_properties import _extract_areas, area_list_edit
     standing_areas = list(result.get('areas') or ([result['area']] if result.get('area') else []))
-    edited_areas = area_list_edit(current_message, standing_areas)
+    edited_areas = (None if _ZH_WORKPLACE_CHANGE.search(_dest_source)
+                    else area_list_edit(current_message, standing_areas))
     if edited_areas is not None:
         # "Add Islington as well." / "Drop Hackney, just Islington." / "Remove Stratford."
         # edit the standing list instead of replacing it (R1-02). Removing the last area
@@ -971,8 +1494,18 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
             result['areas'] = edited_areas
             changed = True
     else:
-        new_areas = _extract_areas(current_message)
-        new_area = new_areas[0] if new_areas else _extract_area(current_message)
+        from core.tools.search_properties import compares_areas_only, preferred_area_switch
+        if compares_areas_only(current_message):
+            # "Compare the cheapest from Bethnal Green with the cheapest in Angel you showed
+            # earlier." asks about places, it does not move the search (U-03).
+            new_areas, new_area = [], None
+        else:
+            new_areas = _extract_areas(current_message)
+            new_area = new_areas[0] if new_areas else _extract_area(current_message)
+            if not new_area:
+                # "No wait, Islington was better. Go back." switches back (U-02).
+                new_area = preferred_area_switch(current_message)
+                new_areas = [new_area] if new_area else []
     # A curated contextual workplace does not also become a home area.
     def _place_key(value):
         return re.sub(r'[^a-z0-9]+', ' ', str(value or '').lower()).strip()
@@ -986,12 +1519,41 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     contextual_work_area = (_place_key(new_area) in destination_context
                             # "my partner works in Canary Wharf" names a workplace (r18)
                             or bool(new_area and not new_areas[1:]
-                                    and names_place_as_workplace(current_message, new_area)))
+                                    and names_place_as_workplace(current_message, new_area))
+                            # 工作地点改成金丝雀码头 moved the workplace, and the home with it.
+                            or bool(new_area and labelled_destination and _place_key(new_area) in
+                                    _place_key(result.get('commute_destination'))))
+    if not new_area and edited_areas is None:
+        # "And near SW1A 1AA postcode?" searched the old area (R4-06): a postcode the user
+        # names as where to look is the new search location.
+        new_area = _postcode_search_location(current_message)
+        new_areas = [new_area] if new_area else new_areas
+    if not new_area and edited_areas is None and result.get('area'):
+        # 「温莎附近有房吗」 named a place this parser does not know and the old city was searched
+        # (U-09): the search asks where, or starts from a destination the message named.
+        from core.tools.search_properties import unresolved_zh_search_place
+        if unresolved_zh_search_place(current_message):
+            result['area'], result['areas'] = None, []
+            changed = True
     if new_area and not contextual_work_area:
         new_areas = new_areas or [new_area]
         if result.get('area') != new_area or result.get('areas') != new_areas:
             result['area'], result['areas'] = new_area, new_areas
             changed = True
+            if not message_destination and _destination_left_behind(
+                    result.get('commute_destination') or result.get('destination'), new_areas):
+                # "Find 1 bed in Manchester" after a London commute question searched
+                # Manchester against a commute to South Kensington (R2-10). A destination in
+                # the city the search left is dropped; a new one can be stated again.
+                result['commute_destination'] = result['destination'] = None
+    if (not new_area or contextual_work_area) and edited_areas is None and result.get('area'):
+        near_institution = institution_home_area(current_message)
+        if near_institution and result.get('area') != near_institution:
+            result['area'], result['areas'] = near_institution, [near_institution]
+            changed = True
+            if _destination_left_behind(result.get('commute_destination') or result.get('destination'),
+                                        [near_institution]):
+                result['commute_destination'] = result['destination'] = None     # as for a city switch
 
     # Room type stated this turn (e.g. answering the soft gate "我要ensuite") folds into
     # the accumulated criteria even without any find/search verb.
@@ -999,11 +1561,32 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     if room_type and result.get('room_type') != room_type:
         result['room_type'] = room_type
         changed = True
+    elif not room_type and result.get('room_type'):
+        from core.constraint_updates import withdraws_room_type
+        if withdraws_room_type(current_message, result.get('room_type')):
+            # "never mind the studio" with nothing else named lifts the room type (R3-05).
+            result['room_type'] = None
+            changed = True
 
     from core.tools.search_properties import _extract_bedrooms, _accessibility_feature_mentions
     beds = _extract_bedrooms(current_message)
     if beds:
         result['bedrooms'], result['bedrooms_minimum'] = beds[0], beds[0] != beds[1]
+        changed = True
+    # "a studio or a 1-bed": the search takes one of the two, so the other stays as the user's own
+    # note instead of going silently (F-04).
+    from core.constraint_updates import studio_alternative_note
+    alternative = studio_alternative_note(current_message)
+    if alternative and alternative not in (result.get('soft_preferences') or []):
+        result.setdefault('soft_preferences', []).append(alternative)
+        changed = True
+    # A studio has no bedroom count and a count is no studio: both together find nothing.
+    # What this message stated wins (r06 d7fe7ce7).
+    if room_type == 'studio' and result.get('bedrooms'):
+        result['bedrooms'], result['bedrooms_minimum'] = 0, False
+        changed = True
+    elif beds and beds[0] and not room_type and result.get('room_type') == 'studio':
+        result['room_type'] = None
         changed = True
 
     minutes = _extract_commute_minutes(current_message)
@@ -1017,7 +1600,8 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     # I just live there / WFH" sets the flag AND drops any stale travel-time limit so
     # the next search never re-applies a filter the user has disowned.
     ml = current_message.lower()
-    names_destination = _known_destination_address(ml) is not None
+    names_destination = (_known_destination_address(ml) is not None and not distance_question
+                         and not disowned and not area_only)
     commute_intent = (bool(minutes) or names_destination or bool(message_destination)
                       or bool(days) or bool(re.search(r'\bi do commute\b|我(?:确实|需要)?通勤', current_message, re.I)))
     if commute_intent:
@@ -1025,7 +1609,14 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
             result['no_commute'] = False
             changed = True
     elif _extract_no_commute(current_message):
-        if not result.get('no_commute'):
+        from core.constraint_updates import commute_withdrawal_drops_destination, lifts_only_commute_limit
+        # "Forget the commute limit" / "Remove the commute time limit but keep King's Cross as
+        # destination" lift the LIMIT only: the user still commutes to the stored destination,
+        # which keeps its per-listing travel times (R3-11). With no destination stored the
+        # commute question is settled as before.
+        limit_only = bool(lifts_only_commute_limit(current_message)
+                          and result.get('commute_destination'))
+        if not result.get('no_commute') and not limit_only:
             result['no_commute'] = True
             changed = True
         if result.get('max_travel_time') is not None:
@@ -1033,7 +1624,6 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
             changed = True
         # Nothing is left to commute to: "Never mind about commute." kept King's Cross in
         # view_state for the rest of the conversation (NEW-4). Lifting only the LIMIT keeps it.
-        from core.constraint_updates import commute_withdrawal_drops_destination
         previous_destination = result.get('commute_destination')
         if commute_withdrawal_drops_destination(current_message) and previous_destination:
             result['commute_destination'] = None
@@ -1093,6 +1683,12 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         if 'pets allowed' not in existing and 'cats allowed' not in existing:
             existing.append('pets allowed')
             changed = True
+    from core.constraint_updates import pet_soft_wish
+    if pet_need is None and pet_requirement is None and pet_soft_wish(original_message):
+        existing = result.setdefault('soft_preferences', [])
+        if 'Would like pets allowed' not in existing:
+            existing.append('Would like pets allowed')
+            changed = True
     if pet_need is not None or pet_requirement is not None:
         # A requirement replaces its soft copy; a withdrawal removes it.
         previous_soft = result.get('soft_preferences') or []
@@ -1129,7 +1725,11 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     for feature, start, end in _accessibility_feature_mentions(current_message):
         from core.constraint_updates import clause_at
         clause = clause_at(current_message, start, end)
-        if _FEATURE_RETRACTION_RE.search(clause) or _feature_retracted_here(current_message, start, end):
+        if _asks_about_own_need(current_message, start, end):
+            continue
+        from core.constraint_updates import zh_withdrawn_at
+        if (_FEATURE_RETRACTION_RE.search(clause) or _feature_retracted_here(current_message, start, end)
+                or zh_withdrawn_at(current_message, start, end)):
             retracted.add(feature)
             for key in ('property_features', 'soft_preferences'):
                 previous = result.get(key) or []
@@ -1161,6 +1761,8 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
 
     from core.constraint_updates import cleared_fields
     for field in cleared_fields(current_message):
+        if field == 'bedrooms' and beds:
+            continue    # 取消两间卧室的要求，改成一居室: the count this message states (r06 982f7a70)
         result[field] = [] if field == 'property_features' else None
         if field == 'area':
             result['areas'] = []
@@ -1628,10 +2230,16 @@ def _make_extract_preferences_node():
     def extract_preferences_node(state: AgentState) -> dict:
         from core.constraint_updates import housing_update_text
         current_msg = (state.get("extracted_context") or {}).get("current_message") or ""
-        prefs = extract_preferences_from_message(
-            housing_update_text(current_msg),
-            state["user_preferences"]
-        )
+        from core.constraint_updates import resets_all_criteria, without_criteria_reset
+        if resets_all_criteria(current_msg):
+            prefs = extract_preferences_from_message(
+                housing_update_text(without_criteria_reset(current_msg)),
+                {key: [] for key in state["user_preferences"]})
+        else:
+            prefs = extract_preferences_from_message(
+                housing_update_text(current_msg),
+                state["user_preferences"]
+            )
         update = {"user_preferences": prefs}
         # D2: apply explicit in-message budget/commute changes to the ACCUMULATED
         # criteria every turn — even when this turn does not trigger a re-search — so
@@ -1639,10 +2247,106 @@ def _make_extract_preferences_node():
         # to the next search and to budget_status labelling.
         accumulated = state.get("accumulated_search_criteria") or {}
         new_accumulated = _apply_explicit_criteria_updates(accumulated, current_msg)
+        history = (state.get("extracted_context") or {}).get("history") or []
+        last_turn = history[-1] if history and isinstance(history[-1], dict) else {}
+        new_accumulated = retract_previous_requirement(
+            new_accumulated, current_msg, str(last_turn.get("user") or ""))
+        new_accumulated = resolve_previous_area(new_accumulated, current_msg, history)
+        new_accumulated = undo_last_change(accumulated, new_accumulated, current_msg)
         if new_accumulated is not accumulated:
             update["accumulated_search_criteria"] = new_accumulated
         return update
     return extract_preferences_node
+
+
+# "No wait, ignore that last change, go back to Hackney and the previous budget" and "Undo
+# that last change" restored the area but kept the new budget (R3-12). The state node keeps
+# the values one change replaced, so an undo restores all of them and "the previous budget"
+# restores the ceiling.
+_LAST_CHANGE_FIELDS = ("area", "areas", "max_budget", "bedrooms", "bedrooms_minimum", "room_type",
+                       "commute_destination", "destination", "max_travel_time", "no_commute")
+_UNDO_LAST_CHANGE = re.compile(
+    r"\b(?:undo|revert|reverse|cancel|ignore|scrap|disregard|forget|drop)\s+(?:that|the|my|this)\s+"
+    r"(?:last|latest|previous|recent|most\s+recent)\s+(?:change|edit|update)s?\b|"
+    r"\bundo\s+(?:that|it|this)\b|撤销(?:上一次|上次|刚才)?的?(?:修改|更改|改动)|"
+    r"(?:取消|不要)(?:上一次|上次|刚才)的?(?:修改|更改|改动)", re.I)
+
+
+_HISTORY_FIELDS = ("max_budget", "area", "bedrooms", "room_type", "commute_destination")
+_HISTORY_VALUES = 6
+
+
+def _budget_just_erased(before: dict) -> bool:
+    """True when ``before`` still holds a budget the user erased this turn: the erasure takes the
+    budget's history, and a budget stated in this conversation always has one (G-02)."""
+    return ("budget" in ((before or {}).get("_erased_fields") or ())
+            and not ((before or {}).get("constraint_history") or {}).get("max_budget"))
+
+
+def _with_constraint_history(after: dict, before: dict, changed) -> dict:
+    """``after`` with each changed field's values recorded, oldest first (V-12). A cleared value
+    leaves no trace: the user took it back, and it may have been an erasure."""
+    history = {field: list(values) for field, values in (after.get("constraint_history") or {}).items()}
+    erased = _budget_just_erased(before)
+    for field in _HISTORY_FIELDS:
+        if field not in changed:
+            continue
+        value, old = after.get(field), (before or {}).get(field)
+        if value is None:
+            history.pop(field, None)
+            continue
+        values = history.setdefault(field, [] if old is None or (erased and field == "max_budget") else [old])
+        if not values or values[-1] != value:
+            values.append(value)
+        del values[:-_HISTORY_VALUES]
+    return {**after, "constraint_history": history}
+
+
+def undo_last_change(before: dict, after: dict, message: str) -> dict:
+    """``after`` with this turn's undo applied, and the replaced values recorded."""
+    text = str(message or "")
+    last = (before or {}).get("_last_change")
+    undo = _UNDO_LAST_CHANGE.search(text)
+    from core.constraint_updates import budget_reference, budget_reference_target
+    reference = budget_reference(text)
+    target = budget_reference_target(before, reference) if reference else None
+    if (target is not None and not undo and target != (before or {}).get("max_budget")
+            and (after or {}).get("max_budget") == (before or {}).get("max_budget")):
+        result = dict(after)
+        result["max_budget"] = target
+        sources = dict(result.get("constraint_sources") or {})
+        sources["max_budget"] = {"source": "user_undo", "value": target, "text": text[:800]}
+        result["constraint_sources"] = sources
+        result["_last_change"] = {"before": {f: (before or {}).get(f) for f in _LAST_CHANGE_FIELDS}}
+        logger.info("criteria.budget_reference_restored which=%s", reference)
+        from core.criteria_contract import synchronize_monthly_budget_alias
+        return _with_constraint_history(synchronize_monthly_budget_alias(result), before, ["max_budget"])
+    previous_budget = (reference == "previous" and target is None
+                       and (after or {}).get("max_budget") == (before or {}).get("max_budget"))
+    if (undo or previous_budget) and isinstance(last, dict) and isinstance(last.get("before"), dict):
+        saved = last["before"]
+        fields = [f for f in _LAST_CHANGE_FIELDS if f in saved] if undo else ["max_budget"]
+        result = dict(after)
+        sources = dict(result.get("constraint_sources") or {})
+        for field in fields:
+            if field in ("area", "areas") and result.get(field) != (before or {}).get(field):
+                continue      # an area this message names ("go back to Hackney") wins
+            result[field] = saved.get(field)
+            # Its own source label: the restored value is not parsed from this text, so the
+            # load-time source repair must not re-derive it from the words (criteria_recovery).
+            sources[field] = {"source": "user_undo", "value": saved.get(field), "text": text[:800]}
+        result["constraint_sources"] = sources
+        result["_last_change"] = None
+        logger.info("criteria.last_change_undone fields=%s", ",".join(fields))
+        return _with_constraint_history(result, before, fields)
+    changed = [f for f in _LAST_CHANGE_FIELDS if (after or {}).get(f) != (before or {}).get(f)]
+    if not changed or after is before:
+        return after
+    result = dict(after)
+    result["_last_change"] = {"before": {f: (before or {}).get(f) for f in _LAST_CHANGE_FIELDS}}
+    if _budget_just_erased(before):
+        result["_last_change"]["before"]["max_budget"] = None
+    return _with_constraint_history(result, before, changed)
 
 
 _RECALL_KWS = [
@@ -3299,10 +4003,16 @@ _KNOWN_DESTINATIONS = {
     'imperial': 'Imperial College London, South Kensington, London SW7 2AZ',
     '帝国理工学院': 'Imperial College London, South Kensington, London SW7 2AZ',
     '帝国理工': 'Imperial College London, South Kensington, London SW7 2AZ',
+    '伦敦大学学院': 'University College London, Gower Street, London WC1E 6BT',
+    '伦敦政治经济学院': 'London School of Economics, Houghton Street, London WC2A 2AE',
+    '伦敦政经': 'London School of Economics, Houghton Street, London WC2A 2AE',
+    '伦敦国王学院': "King's College London, Strand, London WC2R 2LS",
+    '国王学院': "King's College London, Strand, London WC2R 2LS",
     "king's college": "King's College London, Strand, London WC2R 2LS",
     'kings college': "King's College London, Strand, London WC2R 2LS",
     'kcl': "King's College London, Strand, London WC2R 2LS",
     'canary wharf': 'Canary Wharf, London E14 5AB',
+    '金丝雀码头': 'Canary Wharf, London E14 5AB',
 }
 
 
@@ -5450,7 +6160,10 @@ def _make_critic_node():
                 for a in artifacts
                 if _is_retrieval_tool(a.get("tool")) and (
                     a.get("success") is False
-                    or (isinstance(a.get("raw_data"), dict) and a["raw_data"].get("success") is False))]
+                    or (isinstance(a.get("raw_data"), dict) and a["raw_data"].get("success") is False))
+                # A search that asked a clarification question did not fail (R4-08).
+                and not (isinstance(a.get("raw_data"), dict)
+                         and a["raw_data"].get("status") == "need_clarification")]
             final = enforce_no_evidence_numeric_contract(
                 final,
                 failed_lookups=failed_lookups,
@@ -5458,6 +6171,10 @@ def _make_critic_node():
                 shown_listings=list(ec.get("view_results") or ec.get("last_results_full")
                                     or ec.get("recommended_registry") or [])
                 + list(ec.get("shown_alternatives") or []),   # shown, not matches (r6d)
+                stated_budgets=[(state.get("accumulated_search_criteria") or {}).get(field)
+                                for field in ("max_budget", "monthly_total_budget")]
+                + list(((state.get("accumulated_search_criteria") or {}).get("constraint_history")
+                        or {}).get("max_budget") or []),
                 user_message=ec.get("current_message") or _current_message(
                     state.get("user_query") or ""),
                 reply_language=_reply_language_from_ctx(

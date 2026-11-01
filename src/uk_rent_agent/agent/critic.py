@@ -853,10 +853,17 @@ def _successful_numeric_evidence(evidence: Any, key: Any = "") -> str:
             return ""
         if "raw_data" in evidence:
             return _successful_numeric_evidence(evidence.get("raw_data"))
-        return " ".join(
+        # A value whose unit sits in a sibling key ("wind_speed": 11.5, "wind_speed_unit":
+        # "km/h") is written with it: "Wind 11.5 km/h" in a weather answer was graded an
+        # unsupported figure, and the regenerated answer dropped the weather (R4-07).
+        sibling_units = [f"{value:g} {evidence[f'{child_key}_unit']}"
+                         for child_key, value in evidence.items()
+                         if isinstance(value, (int, float)) and not isinstance(value, bool)
+                         and isinstance(evidence.get(f"{child_key}_unit"), str)]
+        return " ".join([
             _successful_numeric_evidence(value, child_key) for child_key, value in evidence.items()
             if not isinstance(value, (bytes, bytearray))
-        )
+        ] + sibling_units)
     if isinstance(evidence, str):
         return evidence
     return _numeric_leaf_text(key, evidence)
@@ -1323,6 +1330,8 @@ def build_correction_instruction(
 
 CAVEAT_ZH = "请对照房源原始页面核对具体价格。"
 STATION_CAVEAT_ZH = "请对照房源原始页面核对车站名称——本次检索的数据并未确认该车站。"
+FIGURES_CAVEAT = "Please double-check the figures above against their source."
+FIGURES_CAVEAT_ZH = "请对照来源核对以上数字。"
 _CJK = re.compile(r"[\u4e00-\u9fff]")
 
 
@@ -1334,7 +1343,8 @@ def append_caveat(text: str, caveat: str = CAVEAT) -> str:
     (R2-11)."""
     body = (text or "").rstrip()
     if len(_CJK.findall(body)) >= 20:
-        caveat = {CAVEAT: CAVEAT_ZH, STATION_CAVEAT: STATION_CAVEAT_ZH}.get(caveat, caveat)
+        caveat = {CAVEAT: CAVEAT_ZH, STATION_CAVEAT: STATION_CAVEAT_ZH,
+                  FIGURES_CAVEAT: FIGURES_CAVEAT_ZH}.get(caveat, caveat)
     if caveat in body:
         return body
     return f"{body}\n\n{caveat}" if body else caveat
@@ -1351,6 +1361,10 @@ def _caveat_for(verdict: CriticVerdict) -> str:
     prices = any(i.startswith("unsupported_prices:") for i in issues)
     if names and not prices:
         return STATION_CAVEAT
+    if not prices and "unsupported_external_numbers" in issues:
+        # A weather or transport answer with an unchecked figure ended "double-check the
+        # exact prices against the source listing" although it named no price (R3-25).
+        return FIGURES_CAVEAT
     return CAVEAT
 
 
@@ -1511,7 +1525,8 @@ def _shown_listing_money(shown_listings: Any) -> list[tuple[float, str]]:
 def enforce_no_evidence_numeric_contract(response: str, *, retrieved_evidence: Any,
                                         user_message: str = "", reply_language: str = "",
                                         failed_lookups: Optional[list] = None,
-                                        shown_listings: Optional[list] = None) -> str:
+                                        shown_listings: Optional[list] = None,
+                                        stated_budgets: Optional[list] = None) -> str:
     """Fail closed on external money claims when retrieval returned no usable data.
 
     The current user message is an explicit provenance source: repeating ``£900/month``
@@ -1529,10 +1544,16 @@ def enforce_no_evidence_numeric_contract(response: str, *, retrieved_evidence: A
     conversation's ``view_results``). Their prices are tool output, not external figures:
     "Which of these is closest to a tube station?" lost its list of the four listings and
     their rents when every nearby lookup of the turn failed (r07 38299e93).
+
+    ``stated_budgets`` are the ceilings the conversation's criteria hold, which the user gave
+    in an earlier turn: a gate turn that recapped "a 1-bed in Bow under £2,000" lost its whole
+    reply (V-13).
     """
     if evidence_usable(retrieved_evidence) or not has_specific_price_claims(response):
         return response
-    user_money = _evidence_money_mentions({"user_message": user_message})
+    user_money = _evidence_money_mentions({"user_message": user_message}) + _evidence_money_mentions(
+        [{"price": f"£{amount:g}"} for amount in stated_budgets or []
+         if isinstance(amount, (int, float)) and not isinstance(amount, bool) and amount > 0])
     supported = set()
     months = months_stated(response)
     year = bool(YEAR_FRAMED.search(response or ""))

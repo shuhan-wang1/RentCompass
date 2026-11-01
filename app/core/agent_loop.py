@@ -84,9 +84,11 @@ from core.candidate_validation import (
 from core import refine_results
 from core.constraint_updates import commute_query_forbidden
 from core.memory_contract import (
+    RECALL_TURN_WRITE_ERROR,
     compose_memory_contract_response,
     memory_contract_from_artifact,
     memory_contract_from_artifacts,
+    with_withheld_details_note,
 )
 from core.prompt_spec import (
     PromptAssemblyError,
@@ -309,6 +311,14 @@ register_protected_system_text(AUTOMATIC_MEMORY_DISCLOSURE_EN, AUTOMATIC_MEMORY_
 from core.memory_gate import (MEMORY_PAUSE_FIXED_TEXTS, MEMORY_PAUSED_DISCLOSURE_EN,  # noqa: E402
                               MEMORY_PAUSED_DISCLOSURE_ZH)
 register_protected_system_text(*MEMORY_PAUSE_FIXED_TEXTS)
+from core.memory_gate import (MEMORY_SINGLE_ERASE_EN, MEMORY_SINGLE_ERASE_ZH,  # noqa: E402
+                              memory_erasure_texts)
+# The erasure acknowledgements are fixed text too (R2-03).
+register_protected_system_text(*(memory_erasure_texts({"fields": ("budget",), "complete": done}, lang)[1]
+                                 for done in (True, False) for lang in ("en", "zh")))
+register_protected_system_text(*(memory_erasure_texts(
+    {"fields": ("budget",), "complete": True, "deleted": 0, "rewritten": 0}, lang)[1]
+    for lang in ("en", "zh")), MEMORY_SINGLE_ERASE_EN, MEMORY_SINGLE_ERASE_ZH)
 
 
 def disclose_automatic_memory(text: str, message: str, reply_language: str = "en",
@@ -351,6 +361,149 @@ _SAVED_BUDGET = re.compile(
     re.I | re.M)
 
 
+# A named place with a distance: "Sainsbury's Local — 220 m", "PureGym (0.4 km)".
+_PLACE_DISTANCE = re.compile(
+    r"(?<![\d.£])(\d{2,4}(?:\.\d)?)\s?(?:m|metres?|meters?|km|kilomet(?:re|er)s?|米|公里)(?![a-z\d])", re.I)
+_AMENITY_WORDS = re.compile(
+    r"\b(?:supermarkets?|gyms?|parks?|shops?|caf(?:e|é)s?|restaurants?|pubs?|schools?|pharmac(?:y|ies)|"
+    r"gps?|doctors?|stations?|tesco|sainsbury|waitrose|lidl|aldi|co-?op|m&s|marks\s*&\s*spencer|"
+    r"puregym|gym\s+group|openstreetmap)\b|超市|健身房|公园|商店|餐厅|药店|学校|车站", re.I)
+_POI_TOOLS = ("search_nearby_pois",)
+UNCHECKED_PLACES_NOTE_EN = (
+    "Note: I did not look these places up in this turn, so the names and distances above are "
+    "not checked. Ask me to search nearby places for this listing and I will check them.")
+UNCHECKED_PLACES_NOTE_ZH = "补充：本轮没有查询周边地点，以上地点名称和距离未经核实。需要的话，我可以为这套房源查询周边设施。"
+
+
+def disclose_unchecked_places(text: str, artifacts, history, reply_language: str = "en") -> str:
+    """``text`` with a note when it names nearby places with distances that no nearby-places
+    lookup produced: "What supermarkets and gyms are nearby the first listing?" was answered
+    with seven named places and distances "from the listing's coordinates" and no tool call
+    (S-02). Figures an earlier answer of this conversation already gave are not new claims."""
+    body = str(text or "")
+    # Only a turn that looked nothing up: a commute or details result carries its own
+    # walking distances and station names.
+    if any(isinstance(a, dict) and a.get("tool") for a in (artifacts or [])):
+        return body
+    lines = [line for line in body.split("\n")
+             if _PLACE_DISTANCE.search(line) and not re.search(r"\b(?:commute|journey)\b|通勤", line, re.I)]
+    if len(lines) < 2 or not _AMENITY_WORDS.search(body):
+        return body
+    earlier = " ".join(str((turn or {}).get("assistant") or "") for turn in (history or [])
+                       if isinstance(turn, dict))
+    figures = {m.group(0).replace(" ", "") for line in lines for m in _PLACE_DISTANCE.finditer(line)}
+    if earlier and all(figure in earlier.replace(" ", "") for figure in figures):
+        return body
+    zh = str(reply_language or "").lower().startswith("zh")
+    note = UNCHECKED_PLACES_NOTE_ZH if zh else UNCHECKED_PLACES_NOTE_EN
+    return body if note in body else f"{body.rstrip()}\n\n{note}"
+
+
+# "I have no Clapham listings in the cache" and "I don't have rent figures for Hackney" came from
+# a turn that ran no listing search, so they said nothing about the data (T-04).
+_UNSEARCHED_ABSENCE = re.compile(
+    r"\bno\s+(?:\w+\s+){0,2}listings?\s+(?:in|on\s+file|for|at|available|cached|stored|saved)\b|"
+    r"\b(?:don.t|do\s+not)\s+(?:currently\s+)?have\s+(?:any\s+)?(?:\w+\s+){0,3}"
+    r"(?:listings?|rent\s+(?:figures?|data|prices?))\s+(?:for|in|on|at)\b|"
+    r"\bnothing\s+(?:is\s+)?(?:listed|available|cached)\s+(?:in|for|at)\b|"
+    r"(?:缓存|数据库|数据)(?:中|里)?(?:没有|暂无)[^，。！？\n]{0,12}(?:房源|租金)|"
+    r"(?:没有|暂无)[^，。！？\n]{0,10}的?(?:房源|租金数据|租金数字)", re.I)
+UNSEARCHED_ABSENCE_NOTE_EN = (
+    "Note: I did not run a listing search in this turn, so this is not a checked result. Ask me "
+    "to search and I will check.")
+UNSEARCHED_ABSENCE_NOTE_ZH = "补充：本轮没有搜索房源，以上说法未经核实。需要的话，我可以搜索后再确认。"
+register_protected_system_text(UNSEARCHED_ABSENCE_NOTE_EN, UNSEARCHED_ABSENCE_NOTE_ZH)
+
+
+def disclose_unsearched_absence(text: str, artifacts, reply_language: str = "en") -> str:
+    """``text`` with a note when it states that listings or rents are missing for a place while
+    this turn ran no listing search."""
+    body = str(text or "")
+    if (any(isinstance(a, dict) and a.get("tool") == "search_properties" for a in (artifacts or []))
+            or not _UNSEARCHED_ABSENCE.search(body)):
+        return body
+    note = UNSEARCHED_ABSENCE_NOTE_ZH if str(reply_language or "").lower().startswith("zh") \
+        else UNSEARCHED_ABSENCE_NOTE_EN
+    return body if note in body else f"{body.rstrip()}\n\n{note}"
+
+
+def with_unapplied_turn_values(validation: dict, message: str, criteria: dict,
+                               language: str = "en") -> dict:
+    """``validation`` whose unchecked list names an area or bedroom count this turn's own words
+    state but the search did not use: "Set bedrooms to 3, area Shoreditch" searched Camden with
+    1 bedroom under "Meets all declared conditions (verified)" (R4-04). The header then covers
+    only what was checked."""
+    if not isinstance(validation, dict) or not message or not isinstance(criteria, dict):
+        return validation
+    from core.tools.search_properties import _extract_area, _extract_bedrooms, names_place_as_workplace
+    zh = str(language or "").lower().startswith("zh")
+    labels = []
+    try:
+        area = _extract_area(message)
+        searched = [str(a) for a in (criteria.get("areas") or [criteria.get("area")]) if a]
+        if (area and not names_place_as_workplace(message, area)
+                and area.strip().lower() not in {a.strip().lower() for a in searched}
+                and not (area.strip().lower() == "london" and searched)):
+            used = ", ".join(searched) or ("未指定" if zh else "none")
+            labels.append(f"区域 {area}（本次搜索使用的是 {used}）" if zh
+                          else f"area {area} (this search used {used})")
+        beds = _extract_bedrooms(message)
+        used_beds = criteria.get("bedrooms")
+        if beds and used_beds is not None and beds[0] != used_beds:
+            labels.append(f"{beds[0]} 间卧室（本次搜索使用的是 {used_beds}）" if zh
+                          else f"{beds[0]} bedrooms (this search used {used_beds})")
+    except Exception:
+        return validation
+    if not labels:
+        return validation
+    unchecked = [str(item) for item in (validation.get("unchecked") or [])]
+    return dict(validation, unchecked=unchecked + [label for label in labels if label not in unchecked])
+
+
+_USED_LEAD = re.compile(
+    r"(?:用到|用了|使用了?|按照?|根据|基于)[^。\n]{0,14}(?:偏好|条件|设置|记得|保存|记住)|"
+    r"\b(?:used|applied|using|applying|based\s+(?:this\s+)?on)\b[^.\n]{0,40}\b(?:preferences?|criteria|"
+    r"saved|remembered|details)\b", re.I)
+_LIST_LINE = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s")
+_BUDGET_LINE = re.compile(r"预算|租金上限|\bbudget\b|\bmax(?:imum)?\s+rent\b|£\s*\d", re.I)
+_BEDROOM_LINE = re.compile(r"居室|卧室|户型|\bbedrooms?\b|\b\d\s*-?\s*bed\b", re.I)
+
+
+def without_unapplied_used_claims(text: str, artifacts) -> str:
+    """``text`` without the items of a "what I used" list that the turn's search did not use.
+
+    Told to use what it remembered, a reply listed the saved budget and bedrooms as "used"
+    while the search carried neither (V-22). Only such a list is touched: the saved values are
+    not applied here, and the note on the unused budget still follows."""
+    criteria = next((raw.get("search_criteria") or raw.get("known_criteria") for raw in (
+        (a.get("raw_data") if isinstance(a, dict) and a.get("tool") == "search_properties" else None)
+        for a in artifacts or []) if isinstance(raw, dict)), None)
+    if not isinstance(criteria, dict):
+        return str(text or "")
+    unused = []
+    if criteria.get("max_budget") in (None, "", 0):
+        unused.append(_BUDGET_LINE)
+    if not isinstance(criteria.get("bedrooms"), int):
+        unused.append(_BEDROOM_LINE)
+    kept, listing = [], False
+    for line in str(text or "").split("\n"):
+        if _USED_LEAD.search(line):
+            listing = True
+            # "I used your saved budget of £2,500." states it in the sentence itself.
+            line = " ".join(sentence for sentence in re.split(r"(?<=[.!?。！？])\s+", line)
+                            if not (_USED_LEAD.search(sentence) and not sentence.rstrip().endswith((":", "："))
+                                    and any(pattern.search(sentence) for pattern in unused)))
+            if not line.strip():
+                continue
+        elif listing and _LIST_LINE.match(line):
+            if any(pattern.search(line) for pattern in unused):
+                continue
+        elif line.strip():
+            listing = False
+        kept.append(line)
+    return "\n".join(kept)
+
+
 def searched_without_budget(artifacts) -> bool:
     """True when this turn ran a listing search whose criteria carried no budget."""
     for artifact in artifacts or []:
@@ -363,6 +516,34 @@ def searched_without_budget(artifacts) -> bool:
         if isinstance(criteria, dict) and criteria.get("max_budget") in (None, "", 0):
             return True
     return False
+
+
+# "I found 6 ... flats in Hackney, all within your £3,500 limit" over a search that ran with
+# no budget at all (R3-04): the reply named a ceiling nothing applied.
+_APPLIED_BUDGET_CLAIM = re.compile(
+    r"\b(?:within|under|below|inside|in)\s+(?:your|the)\s+£\s?\d[\d,]*(?:\s*(?:/|per|a)\s*(?:month|pcm|mo))?"
+    r"\s+(?:monthly\s+)?(?:limit|budget|ceiling|max(?:imum)?|cap)\b|"
+    r"(?:预算|上限)\s*£?\s?\d[\d,]*\s*(?:镑)?(?:以内|之内|范围内)|"
+    # "I applied your saved £2,000 monthly maximum when searching" while the search had no
+    # budget (R4-11).
+    r"\b(?:applied|used|using|applying|kept|keeping)\s+(?:your|the)\s+(?:saved\s+|stored\s+|remembered\s+)?"
+    r"(?:£\s?\d[\d,]*\s+)?(?:monthly\s+)?(?:budget|limit|ceiling|max(?:imum)?|cap)\b|"
+    r"\b(?:applied|used|using|applying)\s+(?:your|the)\s+(?:saved\s+|stored\s+|remembered\s+)?"
+    r"£\s?\d[\d,]*|"
+    r"(?:已|已经)?(?:按|按照|用|使用)(?:了)?(?:你|您)?(?:保存|记住|之前保存)的预算", re.I)
+
+
+def disclose_unapplied_budget_claim(text: str, searched_without_budget: bool,
+                                    reply_language: str = "en") -> str:
+    """``text`` with a note when it claims results fit a budget the search did not apply."""
+    body = str(text or "")
+    if not searched_without_budget or not _APPLIED_BUDGET_CLAIM.search(body):
+        return body
+    zh = str(reply_language or "").lower().startswith("zh")
+    note = ("补充：本次搜索没有使用预算筛选，所以上面的结果并未按这个预算过滤。" if zh else
+            "Note: this search ran without a budget filter, so these results were not limited "
+            "to that budget.")
+    return body if note in body else f"{body.rstrip()}\n\n{note}"
 
 
 def _without_no_budget_claim(text: str) -> str:
@@ -575,7 +756,7 @@ _TOOLMSG_CAP_DEFAULT = 4000
 # two areas "come out level" or that it lacked a commute time the cards showed (R4-06).
 # Every listing keeps its identity and decision fields; optional fields go first.
 _SEARCH_LEAD_KEYS = ("status", "message", "summary", "suggestion", "partial", "partial_note",
-                     "incomplete_areas", "total_found", "total_matches", "search_criteria",
+                     "incomplete_areas", "coverage", "total_found", "total_matches", "search_criteria",
                      "known_criteria")
 _SEARCH_LIST_KEYS = ("recommendations", "over_budget_alternatives", "similar_properties",
                      "unverified_candidates", "excluded_candidates", "candidate_states")
@@ -642,6 +823,47 @@ def _project_validation(validation: dict) -> dict:
     return out
 
 
+# A journey/fare lookup carries the fastest itinerary three times (top level, fastest_journey,
+# its legs) and the cheapest one after them; at 4.7k chars the 4k cap cut the cheapest
+# itinerary's own fare, and the answer said the cheapest route's fare "didn't come back"
+# (R1-08). The model view leads with the answer fields and drops the duplicate legs; the raw
+# artifact keeps everything.
+_TRANSPORT_LEAD_KEYS = ("success", "query_type", "coverage", "from", "to", "duration_minutes",
+                        "changes_count", "fare_available", "fare_display", "fare_gbp",
+                        "fare_pence", "fare_basis", "fare_itinerary_id",
+                        "fare_matches_itinerary", "fare_note", "selected_itinerary_id")
+_JOURNEY_LEAD_KEYS = ("itinerary_id", "duration_minutes", "changes_count", "fare_available",
+                      "fare_display", "fare_gbp", "fare_pence", "fare_basis",
+                      "fare_itinerary_id")
+
+
+def project_transport_payload(raw: dict) -> dict:
+    """The model-facing view of a get_transport_info payload: answer fields first."""
+    if not isinstance(raw, dict):
+        return raw
+
+    def _journey(value):
+        if not isinstance(value, dict):
+            return value
+        lead = {k: value[k] for k in _JOURNEY_LEAD_KEYS if k in value}
+        return {**lead, **{k: v for k, v in value.items() if k not in lead}}
+
+    projected = {k: raw[k] for k in _TRANSPORT_LEAD_KEYS if k in raw}
+    for key in ("fastest_journey", "cheapest_journey"):
+        if key in raw:
+            projected[key] = _journey(raw[key])
+    fastest = raw.get("fastest_journey") if isinstance(raw.get("fastest_journey"), dict) else {}
+    for key, value in raw.items():
+        if key in projected:
+            continue
+        if key in ("route_legs", "route_summary") and value and fastest.get(key) == value:
+            # The selected itinerary IS the fastest one: its legs are listed there once.
+            projected[key] = "same as fastest_journey." + key
+            continue
+        projected[key] = value
+    return projected
+
+
 def project_search_payload(raw: dict, cap: int) -> dict:
     """The compact model-facing view of a search_properties payload, within ``cap`` chars."""
     lead = {k: raw[k] for k in _SEARCH_LEAD_KEYS if k in raw}
@@ -703,6 +925,77 @@ _CARD_FORMATTERS = {
 # pool; `no_exact_match_but_similar` is the closest-recall fallback. Both must repaint the
 # listing panel — neither is a plain chat answer.
 _SEARCH_RESULT_STATUSES = frozenset({"found", "no_exact_match_but_similar", "no_results"})
+
+# A sentence that reports the listing search as failed or to be retried.
+_SEARCH_FAILURE_SENTENCE = re.compile(
+    r"\b(?:search|lookup|query|listing)\w*\b[^.!?。！？\n]{0,60}\b(?:failed|did\s+not\s+(?:complete|finish|work)|"
+    r"didn.t\s+(?:complete|finish|work)|could\s+not|couldn.t|unavailable|errored|error)\b|"
+    r"\b(?:could\s+not|couldn.t|can.t|cannot|unable\s+to|not\s+able\s+to)\s+(?:\w+\s+){0,3}?(?:run|do|complete|"
+    r"pull\s+up|fetch|show|get|find)\b[^.!?。！？\n]{0,60}\b(?:search|listings?|results?)\b|"
+    r"\b(?:repeated|several|multiple)\s+attempts\b|\bdid(?:\s+not|n.t)\s+get\s+through\b|"
+    r"\b(?:try|retry)\s+(?:again\s+)?later\b|\bplease\s+retry\b|"
+    r"稍后(?:再)?(?:重试|再试|尝试)|查询失败|失败的查询|没有完成|未完成|出错|出现问题", re.I)
+# The critic's stock line for an answer it withdrew: nothing was withdrawn from a question.
+_WITHDRAWN_ANSWER_SENTENCE = re.compile(
+    r"无法获取可靠数据|不便提供估算|don.t\s+have\s+reliable\s+data\s+to\s+give\s+specific\s+figures|"
+    r"try\s+again\s+shortly", re.I)
+# The model's own wording of the question the search asked, which the user would read twice
+# (V-03): the search's criteria, a prompt for them, and what happens once they answer.
+_SEARCH_TALK = re.compile(
+    r"\b(?:search(?:es|ing)?|listings?|room\s+type|budget|commut(?:e|es|ing)|move[- ]?in|criteria|filters?|"
+    r"which\s+(?:area|city)|what\s+area)\b|搜索|房源|房型|预算|通勤|入住|筛选|区域|城市", re.I)
+_LIST_ITEM = re.compile(r"^\s*(?:\d+[.)]|[-*•])\s")
+_PROMPT_SENTENCE = re.compile(r"[?？:：]\s*$|^\s*(?:\d+[.)]|[-*•])\s")
+_SEARCH_PROMISE = re.compile(
+    r"\b(?:i.ll|i\s+will|i\s+can|we\s+can)\s+(?:\w+\s+){0,3}?(?:search|run|look|find|start)\b|"
+    r"\b(?:once|when|after)\s+you\s+(?:reply|answer|tell|confirm|let)\b", re.I)
+# A criterion left alone in the reply, the tail of the model's own list: "Optionally, your preferred
+# move-in date." stood before the question that asks it (D-09).
+_CRITERION_FRAGMENT = re.compile(
+    r"^\s*(?:(?:optionally|also|and|plus|finally)\b\W*)?(?:(?:your|the|a)\s+)?(?:preferred\s+|monthly\s+|target\s+)*"
+    r"(?:move[- ]?in\s+date|budget|room\s+type|commute(?:\s+destination)?|area)\W*$", re.I)
+
+
+def answer_with_clarification(text: str, question: str, *, alone: bool = False) -> str:
+    """``text`` that carries the search's clarification ``question``, once, instead of a claim
+    that the search failed (R4-08) or its own wording of the question (V-03). Other sentences
+    (a weather answer) are kept.
+
+    ``alone``: nothing but the search ran this turn, so any talk of the search or its criteria
+    in ``text`` can only be about the question; otherwise an unrelated answer may mention them."""
+    body, question = str(text or ""), str(question or "").strip()
+    if not question:
+        return body
+    asked = question in body
+
+    def echoes(sentence: str) -> bool:
+        if _SEARCH_FAILURE_SENTENCE.search(sentence) or _WITHDRAWN_ANSWER_SENTENCE.search(sentence):
+            return True
+        prompt = bool(_PROMPT_SENTENCE.search(sentence) or _SEARCH_PROMISE.search(sentence)
+                      or _CRITERION_FRAGMENT.search(sentence))
+        talk = bool(_SEARCH_TALK.search(sentence))
+        return prompt or talk if alone else prompt and talk
+
+    kept = []
+    for line in (body.replace(question, "") if asked else body).split("\n"):
+        # A list item is one unit, and "14.5 C" one sentence.
+        pieces = ([line] if _LIST_ITEM.match(line)
+                  else re.split(r"(?<=[.!?])\s+|(?<=[。！？])\s*", line))
+        survivors = [piece for piece in pieces if piece.strip() and not echoes(piece)]
+        if survivors or not line.strip():
+            kept.append(" ".join(survivors) if not re.search(r"[\u4e00-\u9fff]", line)
+                        else "".join(survivors))
+    rest = re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
+    if asked and rest == body.replace(question, "").strip():
+        return body
+    return f"{rest}\n\n{question}" if rest else question
+
+
+def _is_memory_request(message: str) -> bool:
+    """True for "Please remember that my budget is £1,400": the budget word is not a search."""
+    from core.memory_gate import user_authorizes_memory
+    return bool(user_authorizes_memory(message)) and not re.search(
+        r"\b(?:find|search|show|look(?:ing)?\s+for|listings?)\b|找|搜|房源", str(message or ""), re.I)
 
 
 def _asks_for_listings(message: str) -> bool:
@@ -1077,6 +1370,27 @@ def _inject_poi_coords(params: dict, state: AgentState) -> dict:
     return p
 
 
+def _without_invented_coords(params: dict, state: AgentState) -> dict:
+    """``params`` without coordinates no source gave. After a failed geocode the model filled in a
+    point and a postcode of its own, and the tool measured from them (B-F8). A pair the user stated,
+    a listing holds or a tool of this turn returned stands: those digits are somewhere."""
+    p = dict(params or {})
+    latitude, longitude = p.get("latitude"), p.get("longitude")
+    if latitude is None and longitude is None:
+        return p
+    ec = state.get("extracted_context") or {}
+    sources = [str(ec.get("current_message") or ""),
+               *(str(rec.get("geo_location") or "") for rec in _known_listings(ec)),
+               json.dumps([a.get("raw_data") for a in state.get("tool_artifacts") or [] if isinstance(a, dict)],
+                          ensure_ascii=False, default=str)]
+    if any(str(latitude) in text and str(longitude) in text for text in sources):
+        return p
+    p.pop("latitude", None)
+    p.pop("longitude", None)
+    logger.info("fc_loop.invented_coordinates_dropped")
+    return p
+
+
 def _canonical_poi_args(batch: list) -> dict:
     """Collapse a batch's per-type POI fan-out into ONE call per address.
 
@@ -1211,8 +1525,10 @@ def _build_messages(state: AgentState) -> list:
         discussed_areas = []
 
     focus_records = _focus_records(ec)
+    from core.constraint_updates import resets_all_criteria
     context_block = {
         "accumulated_criteria": state.get("accumulated_search_criteria") or {},
+        "search_reset": resets_all_criteria(user_message),
         "current_date": (state.get('extracted_context') or {}).get('current_date'),
         "focused_property": ec.get("focused_property") or (
             focus_records[-1] if focus_records else None),
@@ -1233,7 +1549,7 @@ def _build_messages(state: AgentState) -> list:
         from core.context_assembler import assemble_messages  # contract C
         messages = assemble_messages(
             user_message=user_message,
-            history=ec.get("history") or [],
+            history=[*(ec.get("history") or []), *(ec.get("cancelled_turns") or [])],
             memory_block=state.get("memory_context") or "",
             rolling_summary=(ec.get("rolling_summary")
                              or state.get("rolling_summary") or ""),
@@ -1857,6 +2173,35 @@ def _emit_budget_timeout(tool: str, elapsed_s: float, budget_s: float, kind: str
     _record_budget_timeout_event(
         tool=tool, phase=kind, budget_s=budget_s,
         elapsed_ms=float(elapsed_s or 0.0) * 1000.0, outcome=outcome)
+
+
+def _soft_gate_asked(artifacts) -> bool:
+    """True once the search's soft gate has asked the user something in this turn."""
+    return any(a.get("tool") == "search_properties"
+               and (a.get("raw_data") or {}).get("clarification_kind") == "soft_criteria"
+               for a in artifacts or [])
+
+
+def _other_results(artifacts) -> bool:
+    """True when a tool other than the search or a memory write produced something this turn."""
+    return any(a.get("tool") not in ("search_properties", "remember") and _is_executed(a)
+               for a in artifacts or [])
+
+
+def _soft_gate_still_open(artifacts, args: dict, message: str) -> bool:
+    """True when a same-turn search re-call would only meet the gate it already met: the
+    model's call is no answer to a question the user has not seen (V-03). A re-call carrying
+    every recommended field the user gave in this message, which the first call left out, is
+    not stopped, and it still runs unconfirmed."""
+    if not _soft_gate_asked(artifacts):
+        return False
+    from core.search_readiness import assess_search_readiness
+    return assess_search_readiness(
+        resolved_area="resolved",       # the gate only asks after the area is resolved
+        max_budget=args.get("max_budget"), room_type=args.get("room_type"),
+        no_commute=bool(args.get("no_commute")), commute_destination=args.get("commute_destination"),
+        criteria_gate_shown=False, confirmed=False, user_message=message,
+        move_in_date=args.get("move_in_date")).status != "ready"
 
 
 def _is_executed(artifact: dict) -> bool:
@@ -2591,8 +2936,54 @@ def _explicit_transport_reads(state: dict, batch_calls: list, message: str) -> l
     return calls
 
 
+# The place a weather request names. "Weather in Springfield?" met a case-sensitive "weather", so
+# the read ran for the previous area, under the question "Which Springfield?" (W-07). The cue is
+# read in any case, the place only as a place: "weather in the morning" names none.
+_WEATHER_NOT_A_PLACE = (
+    r"the|this|that|these|those|my|our|your|a|an|it|there|here|general|today|tomorrow|tonight|"
+    r"now|next|morning|afternoon|evening|spring|summer|autumn|fall|winter|january|february|march|"
+    r"april|may|june|july|august|september|october|november|december|monday|tuesday|wednesday|"
+    r"thursday|friday|saturday|sunday|any|all|each|every|both|case|mind|advance")
+_WEATHER_CUE = (r"(?i:\b(?:weather|forecast)(?:\s+(?:like|forecast|today|tomorrow|now|right\s+now|going\s+to\s+be))*"
+                r"\s+(?:in|for|at|around|near)\s+)")
+_WEATHER_PROPER_NAME = r"[A-Z][a-z’']+(?:[ -](?:(?:upon|on|under|le)[ -])?[A-Z][a-z’']+){0,3}"
+_WEATHER_PLACE_RE = re.compile(_WEATHER_CUE + r"(" + _WEATHER_PROPER_NAME + r")")
+_WEATHER_LOWER_PLACE_RE = re.compile(
+    _WEATHER_CUE + r"(?!(?i:" + _WEATHER_NOT_A_PLACE + r")\b)([a-z][a-z’'\-]{2,})(?:\s*[?.!,]|\s*$)")
+_WEATHER_PLACE_BEFORE_RE = re.compile(
+    r"(?<![A-Za-z])(" + _WEATHER_PROPER_NAME + r")(?:['’]s)?\s*(?:的)?\s*(?:weather|forecast|天气)")
+_WEATHER_NOT_A_PLACE_BEFORE = re.compile(
+    r"^(?:what|how|is|any|check|get|show|tell|also|and|the|today|tomorrow|current|local|good|bad|nice)\b", re.I)
+
+
+def _weather_place_named(text: str) -> Optional[str]:
+    """The place ``text`` asks the weather of, in its own spelling, else None."""
+    named = _WEATHER_PLACE_RE.search(text)
+    if named:
+        return named.group(1)
+    lower = _WEATHER_LOWER_PLACE_RE.search(text)
+    if lower:
+        return lower.group(1).title()
+    before = _WEATHER_PLACE_BEFORE_RE.search(text)
+    if before and not _WEATHER_NOT_A_PLACE_BEFORE.match(before.group(1)):
+        return before.group(1)
+    if '天气' in text:
+        from core.tools.search_properties import _ZH_AREA_MAP
+        for name in sorted(_ZH_AREA_MAP, key=len, reverse=True):
+            if re.search(re.escape(name) + r'(?:的|今天|明天|现在)*天气', text):
+                return _ZH_AREA_MAP[name]
+    return None
+
+
+def _read_waits_for_answer(name: str, params: dict, question) -> bool:
+    """True when the question being asked is which place the weather read is for."""
+    place = str((params or {}).get('location') or '').strip().lower()
+    return name == 'get_weather' and bool(place) and place in str(question or '').lower()
+
+
 def _explicit_weather_reads(state: dict, batch_calls: list, message: str) -> list:
-    """An explicitly requested weather read may run independently of housing clarification."""
+    """An explicitly requested weather read may run independently of housing clarification.
+    A place the request names is never replaced by another one."""
     import re
     from datetime import datetime, timedelta
     from zoneinfo import ZoneInfo
@@ -2605,10 +2996,13 @@ def _explicit_weather_reads(state: dict, batch_calls: list, message: str) -> lis
         return []
     if any(item.get('tool') == 'get_weather' for item in state.get('tool_artifacts') or []):
         return []
-    location = _dimension_location_context(state, batch_calls).get('area')
-    explicit = re.search(r'\bweather\s+(?:in|for)\s+([A-Z][a-z]+(?:[ -][A-Z][a-z]+){0,3})', text)
-    if explicit:
-        location = explicit.group(1)
+    location = _weather_place_named(text)
+    if not location:
+        # "the weather ... for my first favourite": the Saved view is not visible here, and the
+        # previous search area is not where that listing is (W-07).
+        if re.search(r'\bfavou?rites?\b|收藏', text, re.I):
+            return []
+        location = _dimension_location_context(state, batch_calls).get('area')
     if not location:
         return []
     args = {'location': location}
@@ -2875,6 +3269,8 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             lines.append("所以暂时没有可以展示的房源。")
         elif reason == "tool_call_error" and not searched:
             lines.append("这次的查询未能执行，所以还没能核实你问的内容。")
+        elif _is_memory_request(cm):
+            lines.append("这条内容本轮没有保存，也没有其他结果可以展示。")
         elif searched or _asks_for_listings(cm):
             lines.append("目前还没有可以直接展示的房源结果。")
         elif not has_results and not missing_lines:
@@ -2943,6 +3339,8 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             lines.append("So I have no listings to show you for this request yet.")
         elif reason == "tool_call_error" and not searched:
             lines.append("The lookup failed this turn, so I could not check what you asked.")
+        elif _is_memory_request(cm):
+            lines.append("That was not saved to memory this turn, and there is nothing else to show.")
         elif searched or _asks_for_listings(cm):
             # Listing results only on a turn about listings (R4-10): a gym or restaurant
             # question was told "I do not yet have listing results ready to show" (r07 B-F12).
@@ -3699,7 +4097,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                                _explicit_weather_reads(state, [], current_message))
                 available = {spec.name: spec for spec in specs}
                 independent = [(name, params) for name, params in independent
-                    if name in available and getattr(available[name], 'side_effect', 'none') != 'write'
+                    if not _read_waits_for_answer(name, params, payload.get("question"))
+                    and name in available and getattr(available[name], 'side_effect', 'none') != 'write'
                     and not getattr(available[name], 'terminal', False)
                     and _read_tool_denial(_load_tool_policy(), name, params, current_message) is None]
                 if independent:
@@ -3785,6 +4184,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             text, state.get("memory_context") or "",
             (state.get("accumulated_search_criteria") or {}).get("max_budget"), reply_language,
             searched_without_budget=searched_without_budget(state.get("tool_artifacts")))
+        text = disclose_unapplied_budget_claim(
+            text, searched_without_budget(state.get("tool_artifacts")), reply_language)
         memory_contract = state.get("memory_write_contract") or {}
         if memory_contract.get("requested"):
             lang = _reply_language_from_ctx(
@@ -3814,6 +4215,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         p = dict(params or {})
         ec = state.get("extracted_context") or {}
         acc = state.get("accumulated_search_criteria") or {}
+        from core.constraint_updates import resets_all_criteria
+        if resets_all_criteria(ec.get("current_message") or ""):
+            # The model's own summary of the request carried the cleared criteria (D-04).
+            p["user_query"] = ec.get("current_message")
         from core.langgraph_agent import _apply_explicit_criteria_updates
         # Relative budget edits were resolved by the state node against the pre-turn
         # ceiling; re-applying one here would add the delta a second time.
@@ -3855,8 +4260,11 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             kept_city = (switched if switched and bare_city_downgrades(switched, p.get("area"))
                          else None)
             from core.tools.search_properties import names_place_as_workplace
+            from core.langgraph_agent import _ZH_WORKPLACE_CHANGE
             if (switched and (p.get("area") or acc.get("area"))
-                    and names_place_as_workplace(p.get("current_message") or "", switched)):
+                    and (names_place_as_workplace(p.get("current_message") or "", switched)
+                         # 「把上班地点改成Stratford」: the zh parser's own reading (W-03).
+                         or _ZH_WORKPLACE_CHANGE.search(p.get("current_message") or ""))):
                 switched = None     # a workplace never replaces a known home area (r19)
         except Exception:
             switched = kept_city = None
@@ -3872,6 +4280,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             p["area"] = acc["area"]
         if not switched and not p.get("areas") and acc.get("areas"):
             p["areas"] = acc["areas"]
+        from core.constraint_updates import is_destination_text
+        if p.get("commute_destination") and not is_destination_text(p["commute_destination"]):
+            p.pop("commute_destination")        # a request is no place to commute to (G-08)
         cd = acc.get("commute_destination") or acc.get("destination")
         if not p.get("commute_destination") and cd and not acc.get("no_commute"):
             p["commute_destination"] = cd
@@ -3912,6 +4323,11 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             p["move_in_date"] = acc["move_in_date"]
         if acc.get("criteria_gate_shown"):
             p["criteria_gate_shown"] = True
+        if _soft_gate_asked(state.get("tool_artifacts")):
+            # The gate asked the user this turn, so this message left it open. The model
+            # confirming it for them in a re-call ran the search unasked (U-09).
+            p["confirmed"] = False
+            p.pop("criteria_gate_shown", None)
         if not p.get("area") and not p.get("commute_destination") and acc.get("destination"):
             p["location"] = acc["destination"]
         if acc.get("property_features"):
@@ -3928,6 +4344,13 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         keep_model_area = False
         try:
             from core.tools.search_properties import names_follow_up_area
+            _model_location = p.get("location")
+            if (isinstance(_model_location, str) and _model_location.strip()
+                    and names_follow_up_area(p.get("current_message") or "", _model_location)):
+                # The legacy alias reads only without an area, so a follow-up's place sent as
+                # `location` beside the standing area searched the old one (V-06).
+                p["area"] = _model_location.split(",")[0].strip()
+                p.pop("location")
             _model_area = p.get("area")
             keep_model_area = bool(
                 isinstance(_model_area, str) and _model_area.strip() and acc.get("area")
@@ -3961,8 +4384,22 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         if (acc.get('area') and not acc.get('areas') and not keep_model_area
                 and not (kept_city and acc.get('area') == kept_city)):
             p['areas'] = [acc['area']]
+        # A comparison searches every place it names and stores none of them: the stored
+        # criteria are authoritative above, and the turn searched one area while the reply
+        # said the other had no listings (r06 964d569e, 2e376445, ba0ec277).
+        from core.tools.search_properties import comparison_areas
+        _compared = comparison_areas(p.get("current_message") or "",
+                                     acc.get("areas") or ([acc["area"]] if acc.get("area") else []))
+        if len(_compared) > 1:
+            p["area"], p["areas"] = _compared[0], _compared
         if cd and not acc.get('no_commute'):
             p['commute_destination'] = cd
+        # 「温莎附近有房吗」 cleared the area, and the old commute destination then chose where to
+        # search: a place nobody could read has to come back as a question (V-21).
+        from core.tools.search_properties import unresolved_zh_search_place
+        if not p.get('area') and unresolved_zh_search_place(p.get("current_message") or ""):
+            for key in ('commute_destination', 'location', 'areas'):
+                p.pop(key, None)
         # A destination / location the user withdrew is not re-supplied by the model from the
         # conversation it remembers (R4-14); one this message names again stays.
         from core.constraint_updates import drop_withdrawn_places
@@ -4021,6 +4458,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 budget -= (len(content) - cap) + 150
             logger.info("fc_loop.toolmsg_truncated tool=%s len=%d cap=%d", tool, len(content), cap)
             return content[:cap] + "\n...[truncated]", tainted
+        if tool == "get_transport_info" and isinstance(raw, dict):
+            raw = project_transport_payload(raw)      # (R1-08)
         content, tainted = _render_toolmsg(tool, raw, result)
         if len(content) > cap:
             logger.info("fc_loop.toolmsg_truncated tool=%s len=%d cap=%d", tool, len(content), cap)
@@ -4053,7 +4492,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             payload["outcome"] = result.outcome
         return json.dumps(payload, ensure_ascii=False, default=str), tainted
 
-    async def execute_tools_node(state: AgentState) -> Command[Literal["agent"]]:
+    async def execute_tools_node(
+            state: AgentState) -> Command[Literal["agent", "format_output_fc"]]:
         messages = list(state.get("messages") or [])
         ai = messages[-1] if messages else None
         batch = list(getattr(ai, "tool_calls", None) or [])
@@ -4127,6 +4567,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 if merged is not None:
                     args = dict(merged)
                 from core.property_scope import has_property_reference
+                args = _without_invented_coords(args, state)
                 if not has_property_reference(cur_msg, ec):
                     args = _inject_poi_coords(args, state)
                 cm = (state.get('extracted_context') or {}).get('current_message') or ''
@@ -4142,6 +4583,13 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     requested_radius = _user_radius_m(cm)
                     if requested_radius is not None:
                         args['radius'] = requested_radius
+            elif name == "check_safety":
+                # The listing's own point, as for the nearby search in the same turn: the
+                # address geocoded about 2 km from the listing (r06 dd3d3669, e0d08fc3).
+                from core.property_scope import has_property_reference
+                args = _without_invented_coords(args, state)
+                if not has_property_reference(cur_msg, ec):
+                    args = _inject_poi_coords(args, state)
             elif name in ("recall_memory", "remember"):
                 # PRIVACY (mirror legacy execute_tool_node): namespace from state, and
                 # fail closed on a missing user_id rather than falling into the shared
@@ -4152,8 +4600,12 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 stated_fn = getattr(mem_gate, "content_is_user_stated", None) if mem_gate else None
                 clause = clause_fn(cur_msg) if (name == "remember" and clause_fn) else ""
                 proposed = str(args.get("content") or args.get("fact") or "")
+                points_back = bool(clause) and bool(getattr(
+                    mem_gate, "remember_points_back", lambda _m: False)(cur_msg))
+                translated = getattr(mem_gate, "restates_across_languages", lambda *_a: False)
                 if (clause and stated_fn is not None and not stated_fn(proposed, clause)
-                        and stated_fn(clause, proposed)):
+                        and (points_back or stated_fn(clause, proposed)
+                             or translated(proposed, clause))):
                     # "… Please remember that I have a cat." with a search in the same batch:
                     # the model's paraphrase ("pet owner, needs a pet-friendly property") or
                     # the whole request is not the user's own statement, so the tainted-turn
@@ -4161,10 +4613,15 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     # proposal RESTATES the user's clause (plus additions), save the fact
                     # exactly as the user worded it instead. Unrelated content (H13: a
                     # tool-derived "flat viewing at 1400 Camden Road") is not substituted and
-                    # meets the gate as before.
+                    # meets the gate as before. "… Please remember that." names no fact: what it
+                    # points at is the user's own statements, whatever the model proposed (U-05).
                     logger.info("fc_loop.remember_content_from_user_clause")
                     args["content"] = clause
                     args.pop("fact", None)
+            if name in ('calculate_commute', 'calculate_commute_cost'):
+                _coords = _listing_coords_for(args.get('from_address'), ec)
+                if _coords:
+                    args['_from_coordinates'] = {'lat': _coords[0], 'lng': _coords[1]}
             if name in ('calculate_commute_cost', 'check_transport_cost'):
                 office_days = (state.get('accumulated_search_criteria') or {}).get('office_days_per_week')
                 spec = specs.get(name)
@@ -4179,6 +4636,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             from core.strict_schema import strip_null_args
             args = strip_null_args(args)
             digest = _params_digest(name, args)
+            if name == "search_properties" and _soft_gate_still_open(artifacts, args, cur_msg):
+                plan.append((tc, digest, ("gate_open", ""), args))
+                continue
             if (name, digest) in seen:
                 plan.append((tc, digest, "skip_dup", args))
                 continue
@@ -5105,6 +5565,22 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                                        ensure_ascii=False),
                     tool_call_id=tcid, name=name))
                 continue
+            if isinstance(mode, tuple) and mode[0] == "gate_open":
+                artifacts.append(_artifact(
+                    turn, name, None, digest, success=False,
+                    error="not run: the search is waiting for the user's answer",
+                    denied=True, elapsed_ms=0))
+                messages.append(ToolMessage(
+                    content=json.dumps({
+                        "success": False, "data": None,
+                        "error": ("not run: this search is waiting for the user's answer to the "
+                                  "question it asked, which the system shows them. Nothing "
+                                  "failed. Do not call it again this turn, do not repeat the "
+                                  "question, and do not say the search failed; answer only "
+                                  "what else the user asked."),
+                    }, ensure_ascii=False),
+                    tool_call_id=tcid, name=name))
+                continue
             if isinstance(mode, tuple) and mode[0] == "deny_policy":
                 # Read refused before dispatch by core.tool_policy. Recorded exactly like the
                 # write refusals — denied=True, raw_data None — so it is a REQUESTED and not
@@ -5151,7 +5627,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 # a distinct reason and no frozen candidate (there is nothing new to save).
                 artifacts.append(_artifact(
                     turn, name, None, digest, success=False,
-                    error="denied: recall-question turn, memory write blocked", denied=True))
+                    error=RECALL_TURN_WRITE_ERROR, denied=True))
                 messages.append(ToolMessage(
                     content=json.dumps({
                         "success": False, "data": None,
@@ -5599,6 +6075,12 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         if specialist_dispatch:
             update["manager_task_plans"] = manager_task_plans
             update["specialist_results"] = specialist_result_payloads
+        if (plan and all(isinstance(entry[2], tuple) and entry[2][0] == "gate_open" for entry in plan)
+                and not _other_results(artifacts)):
+            # Nothing else to answer: the gate's own question ends the turn, with no model hop
+            # to report the unrun call as a failure (V-03).
+            update.update({"final_response": "", "response_type": "clarification"})
+            return Command(update=update, goto="format_output_fc")
         return Command(update=update, goto="agent")
 
     # ── format_output_fc ───────────────────────────────────────────
@@ -5652,9 +6134,12 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             (state.get('extracted_context') or {}).get('current_message') or state.get('user_query') or '')
 
         def _apply_memory_contract(response: str) -> str:
-            return compose_memory_contract_response(
+            composed = compose_memory_contract_response(
                 response, memory_contract, language=lang,
                 preserve_content=has_other_result)
+            return with_withheld_details_note(
+                composed, memory_contract,
+                (state.get("extracted_context") or {}).get("current_message") or "", lang)
 
         def _last(tool_name):
             for a in reversed(artifacts):
@@ -5762,6 +6247,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 response = "\n\n".join(part for part in (
                     lead, render_similar_listings(panel_recs, language=language)) if part)
             else:
+                if requires_status:
+                    validation = with_unapplied_turn_values(
+                        validation, str(ec.get('current_message') or ''),
+                        search_found.get('search_criteria') or {}, language)
                 response = (render_candidate_status(validation, language=language)
                             if requires_status else
                             final_response or search_found.get("summary")
@@ -5818,7 +6307,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             # After the critic, whose regeneration drops anything appended before it: a
             # budgetless search names the saved budget it did not use (R3-03).
             response = acknowledge_remembered_budget(
-                response, state.get("memory_context") or "", acc.get("max_budget"), language,
+                without_unapplied_used_claims(response, artifacts) if state.get("memory_context")
+                else response, state.get("memory_context") or "", acc.get("max_budget"), language,
                 searched_without_budget=searched_without_budget(artifacts))
             # Structured cards (safety/POI/commute) also present this turn ride along in tool_data.
             _merge_cards(artifacts, tool_data)
@@ -5827,6 +6317,15 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     "response_type": response_type, "tool_data": tool_data}
 
         # A dangling search clarification with no final answer -> surface it.
+        if search_clarify is not None and final_response and search_found is None:
+            # The search asked a question; the model reported it as a failed search to retry
+            # later and dropped the question (R4-08). The question reaches the user, and the
+            # failure sentences go.
+            _question = str(search_clarify.get("question") or "").strip()
+            final_response = answer_with_clarification(
+                final_response, _question, alone=not _other_results(artifacts))
+            if final_response.strip() == _question:
+                final_response = ""     # the question alone: rendered with its panel below
         if search_clarify is not None and not final_response:
             tool_data = {
                 "missing_fields": search_clarify.get("missing_fields", []),
@@ -5852,8 +6351,24 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         response = acknowledge_remembered_budget(
             response, state.get("memory_context") or "", acc.get("max_budget"), lang,
             searched_without_budget=searched_without_budget(artifacts))
+        response = disclose_unchecked_places(
+            response, artifacts, (state.get("extracted_context") or {}).get("history") or [], lang)
+        response = disclose_unsearched_absence(response, artifacts, lang)
         return {"final_response": _apply_memory_contract(response),
                 "response_type": response_type, "tool_data": tool_data}
+
+    def format_output_with_notes(state: AgentState) -> dict:
+        """The formatter's answer, with the sentence an unresolved budget reference needs."""
+        out = format_output_fc_node(state)
+        ec = state.get("extracted_context") or {}
+        message = ec.get("current_message") or _current_message(state.get("user_query") or "")
+        from core.constraint_updates import budget_reference_note, without_budget_set_claim
+        note = budget_reference_note(message, state.get("accumulated_search_criteria") or {},
+                                     _reply_language_from_ctx(ec, message))
+        if note and isinstance(out, dict) and out.get("final_response") and out.get("response_type") != "error":
+            # One outcome: the sentence, and no claim beside it that the budget was set.
+            out = {**out, "final_response": f"{without_budget_set_claim(out['final_response'])}\n\n{note}".strip()}
+        return out
 
     # ── answer contract (manager_v1 only) ──────────────────────────
     def _answer_contract_payload(state: AgentState, result: dict) -> dict:
@@ -5905,7 +6420,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
 
     def format_output_fc_with_contract(state: AgentState) -> dict:
         """manager_v1 wrapper: the fc formatter, plus the validated answer contract."""
-        payload = dict(format_output_fc_node(state) or {})
+        payload = dict(format_output_with_notes(state) or {})
         payload["answer_contract"] = _answer_contract_payload(state, payload)
         return payload
 
@@ -5914,7 +6429,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         "agent": agent_node,
         "execute_tools": _with_reply_language(execute_tools_node),
         "format_output_fc": (format_output_fc_with_contract if specialist_dispatch
-                             else format_output_fc_node),
+                             else format_output_with_notes),
     }
 
 

@@ -405,6 +405,35 @@ def _normalize_address_for_routing(address: str) -> str:
     
     return address
 
+# "Bow" resolved to Bow, Devon and "Richmond, London" missed too: Nominatim was asked for the
+# first GB match with no preference (U-12). A name the product curates as a London area is looked
+# for inside Greater London first; any other name is geocoded as before.
+_GREATER_LONDON_VIEWBOX = "-0.56,51.72,0.34,51.25"      # west, north, east, south
+_LONDON_QUALIFIER = re.compile(
+    r"\s*,?\s*(?:greater\s+)?london(?:\s*,\s*(?:uk|united\s+kingdom|england|gb))?\s*$"
+    r"|\s*,\s*(?:uk|united\s+kingdom|england|gb)\s*$", re.I)
+
+
+def curated_london_name(address: str) -> bool:
+    """True when ``address`` is a curated London area, bare or as "<area>, London"."""
+    name = _LONDON_QUALIFIER.sub("", str(address or "").strip())
+    key = re.sub(r"[’']", "", name).strip().lower()
+    if not key:
+        return False
+    try:
+        from core.tools.search_properties import LONDON_AREAS
+    except Exception:
+        return False        # the curated table is a preference, never a reason to fail a lookup
+    return key in LONDON_AREAS and key != "london"
+
+
+def _inside_greater_london(geo: dict) -> bool:
+    try:
+        return 51.25 <= float(geo.get("lat")) <= 51.72 and -0.56 <= float(geo.get("lng")) <= 0.34
+    except (TypeError, ValueError):
+        return False
+
+
 def _free_geocode(address: str, *, deadline: Optional[float] = None) -> dict | None:
     """Free geocoder: Postcodes.io for UK postcodes, else OSM Nominatim.
 
@@ -437,7 +466,9 @@ def _free_geocode(address: str, *, deadline: Optional[float] = None) -> dict | N
         ttl_seconds=GEOCODE_CACHE_TTL_SECONDS,
         version=_GEOCODE_CACHE_VERSION,
     )
-    if cache_status == "fresh" and cached is not None:
+    london_name = curated_london_name(address)
+    # A curated London name cached from before the bias, outside London, is not reused.
+    if cache_status == "fresh" and cached is not None and (not london_name or _inside_greater_london(cached)):
         return cached
 
     result = None
@@ -462,14 +493,15 @@ def _free_geocode(address: str, *, deadline: Optional[float] = None) -> dict | N
     # 2) Fall back to Nominatim (free, no key)
     if result is None:
         try:
-            r = requests.get(
-                "https://nominatim.openstreetmap.org/search",
-                params={'q': address, 'format': 'json', 'countrycodes': 'gb',
-                        'limit': 1, 'addressdetails': 1},
-                headers=_OSM_HEADERS, timeout=request_timeout(10),
-            )
-            if r.status_code == 200:
-                arr = r.json()
+            bounds = {'viewbox': _GREATER_LONDON_VIEWBOX, 'bounded': 1}
+            for bias in ([bounds, {}] if london_name else [{}]):
+                r = requests.get(
+                    "https://nominatim.openstreetmap.org/search",
+                    params={'q': address, 'format': 'json', 'countrycodes': 'gb',
+                            'limit': 1, 'addressdetails': 1, **bias},
+                    headers=_OSM_HEADERS, timeout=request_timeout(10),
+                )
+                arr = r.json() if r.status_code == 200 else None
                 if arr:
                     top = arr[0]
                     result = {'lat': float(top['lat']), 'lng': float(top['lon']),
@@ -479,6 +511,7 @@ def _free_geocode(address: str, *, deadline: Optional[float] = None) -> dict | N
                               'match_type': (top.get('addresstype') or top.get('type')
                                              or top.get('class')),
                               'place_rank': top.get('place_rank')}
+                    break
         except Exception as e:
             print(f"  [geocode] Nominatim error exception_type={type(e).__name__}")
 
@@ -640,7 +673,23 @@ def _tfl_changes_count(journey: dict) -> int | None:
     return max(0, boardings - 1)
 
 
-def calculate_travel_details(origin_address: str, destination_address: str, mode: str = "transit") -> dict | None:
+_TFL_AREA = (51.25, 51.72, -0.56, 0.34)     # lat min/max, lon min/max: Greater London
+_BEYOND_TFL_KM = 40
+
+
+def _beyond_tfl_coverage(origin: dict, destination: dict, distance_km) -> bool:
+    """True when an end of a long pair lies outside Greater London."""
+    south, north, west, east = _TFL_AREA
+    try:
+        inside = all(south <= float(p['lat']) <= north and west <= float(p['lng']) <= east
+                     for p in (origin, destination))
+        return not inside and float(distance_km) > _BEYOND_TFL_KM
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def calculate_travel_details(origin_address: str, destination_address: str, mode: str = "transit",
+                             *, origin_coordinates=None) -> dict | None:
     """Travel time + route, with the BASIS of the number attached to the number.
 
     ``duration_minutes`` is set if and only if the TfL Journey Planner actually returned an
@@ -648,6 +697,9 @@ def calculate_travel_details(origin_address: str, destination_address: str, mode
     ``estimated_duration_minutes`` with a range and a caveat, and ``duration_minutes`` is
     ``None`` — a haversine guess must not arrive in a field that reads as a measured journey
     time. See ``core.commute_basis`` for why (short trips estimate 1.8x-6x low).
+
+    ``origin_coordinates`` are a listing's own (lat, lon): "King Square, London, EC1V" does not
+    geocode, and the model then fell back to a station and gave no monthly cost (V-18).
 
     Returns None only when the addresses could not be geocoded, i.e. a real failure.
     """
@@ -657,7 +709,7 @@ def calculate_travel_details(origin_address: str, destination_address: str, mode
         return None
     origin_n = _normalize_address_for_routing(origin_address)
     dest_n = _normalize_address_for_routing(destination_address)
-    o = _get_coordinates(origin_n)
+    o = origin_coordinates or _get_coordinates(origin_n)
     d = _get_coordinates(dest_n)
     if not o or not d:
         return None
@@ -674,7 +726,8 @@ def calculate_travel_details(origin_address: str, destination_address: str, mode
         out.update(describe_measured(int(journey['duration'])))
         return out
 
-    est = straight_line_travel_estimate(origin_n, dest_n, mode)
+    est = straight_line_travel_estimate(origin_n, dest_n, mode, **(
+        {'origin_coordinates': origin_coordinates} if origin_coordinates else {}))
     if est is None:
         return None
     out = {
@@ -694,12 +747,20 @@ def calculate_travel_details(origin_address: str, destination_address: str, mode
     # producer knows the mode; passing it means the calibration can never be applied to a mode
     # it was not fitted on, whoever calls. withdraw_uncalibrated_mode stays as a second line of
     # defence for callers that pass their own payloads in.
+    if _beyond_tfl_coverage(o, d, est.get('distance_km')):
+        # Newcastle to Leeds came back as "385-754 minutes": a formula fitted on London
+        # journeys says nothing about a 150 km trip (B-F6).
+        out.update(describe_estimate(None, est.get('distance_km'), mode=mode))
+        out['route_summary'] = 'Outside TfL coverage: no journey time is available for this pair.'
+        out['basis_note'] = ("This pair is outside the area TfL covers, so no journey time could "
+                             "be established. Say so; suggest National Rail for rail journeys.")
+        return out
     out.update(describe_estimate(est['minutes'], est.get('distance_km'), mode=mode))
     return out
 
 
 def calculate_travel_basis(origin_address: str, destination_address: str,
-                           mode: str = "transit") -> dict | None:
+                           mode: str = "transit", *, origin_coordinates=None) -> dict | None:
     """CACHED, basis-aware travel payload — the single producer both commute tools read.
 
     Same shape as ``calculate_travel_details`` (it IS ``calculate_travel_details``, memoised),
@@ -722,7 +783,9 @@ def calculate_travel_basis(origin_address: str, destination_address: str,
         return None
     origin_n = _normalize_address_for_routing(origin_address)
     dest_n = _normalize_address_for_routing(destination_address)
-    cache_key = create_cache_key('calculate_travel_basis_v1', origin_n, dest_n, mode)
+    cache_key = (create_cache_key('calculate_travel_basis_v1', origin_n, dest_n, mode, str(origin_coordinates))
+                 if origin_coordinates else
+                 create_cache_key('calculate_travel_basis_v1', origin_n, dest_n, mode))
     cached_result = get_from_cache(cache_key)
     if cached_result is not None:
         print(
@@ -731,7 +794,8 @@ def calculate_travel_basis(origin_address: str, destination_address: str,
         )
         return cached_result
 
-    out = calculate_travel_details(origin_address, destination_address, mode)
+    out = calculate_travel_details(origin_address, destination_address, mode, **(
+        {'origin_coordinates': origin_coordinates} if origin_coordinates else {}))
     if out is None:
         return None
     set_to_cache(cache_key, out)
@@ -1077,7 +1141,7 @@ def get_environmental_data(address: str) -> dict:
 
 
 def straight_line_travel_estimate(origin_address: str, destination_address: str,
-                                  mode: str = "transit") -> dict | None:
+                                  mode: str = "transit", *, origin_coordinates=None) -> dict | None:
     """Distance-based travel-time GUESS. Returns ``{'minutes', 'distance_km'}`` or None.
 
     This is NOT a journey time, and callers must not present it as one — see
@@ -1089,14 +1153,14 @@ def straight_line_travel_estimate(origin_address: str, destination_address: str,
         return None
 
     # v2: the cached value used to be a bare int; the shape changed, so the key must too.
-    cache_key = create_cache_key('straight_line_travel_estimate_v2',
-                                 origin_address, destination_address, mode)
+    cache_key = create_cache_key('straight_line_travel_estimate_v2', origin_address,
+                                 destination_address, mode, *([str(origin_coordinates)] if origin_coordinates else []))
     cached_result = get_from_cache(cache_key)
     if cached_result is not None:
         return cached_result
 
     # Try to get coordinates
-    origin_coords = _get_coordinates(origin_address)
+    origin_coords = origin_coordinates or _get_coordinates(origin_address)
     dest_coords = _get_coordinates(destination_address)
 
     if not origin_coords or not dest_coords:

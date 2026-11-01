@@ -171,6 +171,76 @@ def _postcode_area(district: str) -> str:
     return re.match(r'[A-Z]*', str(district or '').upper()).group()
 
 
+_STATION_SUFFIX = re.compile(
+    r"\s*(?:\((?:london|h&c line|[a-z ]+ line)\)\s*)?"
+    r"(?:(?:underground|tube|dlr|overground|rail(?:way)?|elizabeth\s+line)\s+)?station\s*$", re.I)
+
+
+def _station_key(name) -> str:
+    """A station name compared without its suffix, punctuation or "&"."""
+    value = _STATION_SUFFIX.sub("", str(name or "").strip())
+    value = re.sub(r"\s*\((?:london|[a-z ]+ line)\)\s*", " ", value, flags=re.I)
+    value = value.lower().replace("&", " and ")
+    value = re.sub(r"[’'.]", "", value)
+    value = re.sub(r"\bsaint\b", "st", value)
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", value).split())
+
+
+def _exact_station_match(location: str) -> dict | None:
+    """TfL's station whose name IS ``location`` (a station suffix aside), else None.
+
+    Only a bare name is looked up: an address, a postcode or anything with a digit or a
+    comma goes to the geocoder as before."""
+    text = str(location or "").strip()
+    if not text or re.search(r"[\d,]", text) or len(text) > 60:
+        return None
+    key = _station_key(text)
+    if not key:
+        return None
+    status, data = _tfl_get(f"/StopPoint/Search/{_STATION_SUFFIX.sub('', text).strip()}",
+                            {'modes': _STATION_MODES})
+    matches = (data or {}).get('matches') if isinstance(data, dict) else None
+    exact = [m for m in matches or []
+             if isinstance(m, dict) and m.get('id') and _station_key(m.get('name')) == key]
+    # "Clapham Junction" and "Bank" match TfL interchange hubs (HUBCLJ, HUBBAN). The journey
+    # planner does not know a hub id and disambiguated it to a "Cycle Hub" in Richmond and a
+    # "HUBBARD DRIVE" in Chessington, priced as success (U-01). Only a station's own NaPTAN id
+    # is a stop; a hub is resolved to the station at its position.
+    for match in exact:
+        if not _is_hub_id(match.get('id')):
+            return _station_found(match.get('id'), match.get('name'), match.get('lat'), match.get('lon'))
+    for match in exact:
+        lat, lon = match.get('lat'), match.get('lon')
+        if lat is None or lon is None:
+            continue
+        status, data = _tfl_get('/StopPoint', {
+            'lat': lat, 'lon': lon, 'radius': 300,
+            'stopTypes': 'NaptanMetroStation,NaptanRailStation', 'modes': _STATION_MODES,
+        })
+        stops = (data or {}).get('stopPoints') if isinstance(data, dict) else None
+        named = sorted((stop for stop in stops or []
+                        if isinstance(stop, dict) and stop.get('id') and not _is_hub_id(stop.get('id'))
+                        and _station_key(stop.get('commonName')) == key),
+                       key=lambda stop: (0 if stop.get('stopType') == 'NaptanMetroStation' else 1,
+                                         stop.get('distance') or 0))
+        if named:
+            return _station_found(named[0].get('id'), named[0].get('commonName'), lat, lon)
+    # No station of that name: the geocoder resolves it as before.
+    return None
+
+
+def _is_hub_id(stop_id) -> bool:
+    """True for a TfL interchange hub id (HUBxxx), which is not a journey-planner stop."""
+    return str(stop_id or '').upper().startswith('HUB')
+
+
+def _station_found(stop_id, name, lat, lon) -> dict:
+    found = {'in_london': True, 'station': True, 'token': stop_id, 'name': name}
+    if lat is not None and lon is not None:
+        found['coords'] = {'lat': lat, 'lng': lon}
+    return found
+
+
 def _resolve_station(location: str) -> dict:
     """Resolve a free-text place/postcode/station to a fare-chargeable TfL station.
 
@@ -192,13 +262,22 @@ def _resolve_station(location: str) -> dict:
 
     # v3: resolutions are now checked against the input's postcode district (R2-09); a v2
     # entry may hold a wrong-district station.
-    cache_key = create_cache_key('tfl_resolve_station_v3', location.lower())
+    # v4: a v3 entry may hold a TfL hub id (HUBCLJ) as the stop token (U-01).
+    cache_key = create_cache_key('tfl_resolve_station_v4', location.lower())
     cached = _cache_get(cache_key, _GEO_TTL)
     if cached is not None:
         return cached
 
     result = {"input": location, "in_london": None, "station": False, "token": None,
               "name": None, "coords": None}
+    # "Camden Town Underground Station" geocoded next to King's Cross and was priced from
+    # King's Cross St. Pancras (R4-13). A station name resolves by TfL's own name first, and
+    # only an exact match (suffixes and punctuation aside) is taken.
+    exact = _exact_station_match(location)
+    if exact:
+        result.update(exact)
+        _cache_set(cache_key, result)
+        return result
     geo = _geocode(location)
     if not (geo and geo.get('lat') is not None):
         # Scraped listing addresses often end in an outward-only postcode
@@ -265,6 +344,8 @@ def _resolve_station(location: str) -> dict:
     # Geocoding failed: try a direct station-name search (handles bare names).
     status, data = _tfl_get(f"/StopPoint/Search/{location}", {'modes': _STATION_MODES})
     matches = (data or {}).get('matches') if isinstance(data, dict) else None
+    # A hub id is not a stop the journey planner knows (U-01).
+    matches = [m for m in matches or [] if isinstance(m, dict) and not _is_hub_id(m.get('id'))]
     if matches:
         top = matches[0]
         result.update({'in_london': True, 'station': True,
@@ -319,6 +400,19 @@ def _journey_time_params():
 
 def _london_now():
     return datetime.now(ZoneInfo("Europe/London"))
+
+
+def _now_journey_time() -> dict:
+    """Evidence for a journey planned for the current London time."""
+    now = _london_now()
+    evidence = {'timezone': 'Europe/London', 'time_basis': 'now',
+                'planned_at': now.strftime('%Y-%m-%d %H:%M')}
+    if now.hour < 6:
+        evidence['night_service_note'] = (
+            f"Planned for now ({now.strftime('%H:%M')} London time), so this is a night-service "
+            "journey. A weekday daytime journey is usually quicker and may use other lines and "
+            "fares; state the planning time, and offer to plan it for a daytime departure.")
+    return evidence
 
 
 _MONTHS = {name.lower(): month for month in range(1, 13)
@@ -611,6 +705,13 @@ def _do_journey(from_location: str, to_location: str, want_fare: bool,
         if status == 200 and isinstance(data, dict) and data.get('journeys'):
             resp = data
             _cache_set(cache_key, resp)
+        elif status == 200 and (not isinstance(data, dict) or 'journeys' not in data):
+            # A 200 with no journey data at all is a provider fault, not a finding: the reply
+            # said "it isn't a temporary error I can retry" (C-F3). An empty list is a finding.
+            return {'success': False, 'coverage': 'london', 'service_status': 'invalid_response',
+                    'error': 'TfL returned an unreadable response, so this journey could not be checked.',
+                    'retryable': True, 'journey_time': time_evidence,
+                    'source': 'TfL Unified API Journey Planner'}
         else:
             return {'success': False, 'coverage': 'london',
                     'error': 'TfL could not verify this journey for the requested time.',
@@ -649,6 +750,11 @@ def _do_journey(from_location: str, to_location: str, want_fare: bool,
         out["planned_for"] = planned_for
     if time_evidence:
         out['journey_time'] = time_evidence
+    elif requested_time is None:
+        # Planned for "now" (the documented default): say when that was, and at night that the
+        # result is a night-service journey (R4-14: 01:20-01:50 queries returned 102-139 min
+        # night buses and a bus fare for a tube question).
+        out['journey_time'] = _now_journey_time()
     # Note which stops we matched (satisfies the disambiguation "note in output").
     if frm.get('name') or to.get('name'):
         out["stations_used"] = f"{frm.get('name') or from_location} -> {to.get('name') or to_location}"

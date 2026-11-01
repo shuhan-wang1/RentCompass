@@ -62,6 +62,37 @@ def without_third_party_clauses(text: str) -> str:
 # A conditional stretch is not a new ceiling (stress A-08): "my budget could stretch to £2,100
 # for the right place" raised max_budget 1,900 -> 2,100. Narrower than the memory layer's
 # _SOFT_BOUND on purpose: "Could you find flats under £2,000?" is a ceiling.
+# Full-width digits were folded long ago; zh numerals never were: 两千五百镑, 二千镑, 两千五, 三千以内 and
+# 一千八百 gave no budget, the search ran unfiltered and later replies still quoted the figure (W-06).
+# A digit after 千 with no unit counts hundreds (两千五 is 2500), after 百 tens. 三千多, 几千 and 两三千
+# are not figures anyone can search on, so they stay as they are.
+_ZH_DIGITS = {'零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9}
+_ZH_NUMERAL_BEFORE = r'(?<![一二两三四五六七八九十百千万零几数\d])'
+_ZH_NUMERAL_AFTER = r'(?![一二两三四五六七八九十百千万零几多来余])'
+_ZH_MONEY = re.compile(
+    _ZH_NUMERAL_BEFORE + r'(?:(?P<wan>[一二两三])万(?P<wan_k>[一二两三四五六七八九])?'
+    r'|(?P<k>[一二两三四五六七八九])千(?:零(?P<k_ten>[一二三四五六七八九])十'
+    r'|(?P<k_h>[一二两三四五六七八九])(?:百(?:(?P<k_t>[一二三四五六七八九])十?)?)?)?'
+    r'|(?P<h>[二两三四五六七八九])百(?:(?P<h_t>[一二三四五六七八九])十?)?)' + _ZH_NUMERAL_AFTER)
+_DIGIT_THOUSANDS = re.compile(r'(?<![\d.])(\d)千(?:(\d)百?)?(?![\d多来余])')
+
+
+def _zh_money_value(match) -> str:
+    def digit(name):
+        return _ZH_DIGITS.get(match.group(name) or '零', 0)
+    return str(digit('wan') * 10000 + digit('wan_k') * 1000 + digit('k') * 1000 + digit('k_h') * 100
+               + digit('k_ten') * 10 + digit('k_t') * 10 + digit('h') * 100 + digit('h_t') * 10)
+
+
+def zh_money_digits(text: str) -> str:
+    """``text`` with zh numerals of 200 and over written in digits, for the budget parsers."""
+    value = str(text or '')
+    if not re.search(r'[百千万]', value):
+        return value
+    value = _DIGIT_THOUSANDS.sub(lambda m: str(int(m.group(1)) * 1000 + int(m.group(2) or 0) * 100), value)
+    return _ZH_MONEY.sub(_zh_money_value, value)
+
+
 _STRETCH_CUE = re.compile(
     r"\b(?:stretch\w*|at\s+a\s+push|for\s+the\s+right\s+(?:place|flat|home|property|one)|"
     r"wiggle\s+room|leeway|willing\s+to\s+go|would\s+consider\s+(?:going|paying)|"
@@ -75,8 +106,17 @@ _STRETCH_CLAUSE_SPLIT = re.compile(
 _MONEY_FIGURE = re.compile(r"£\s?\d|\d\s?(?:k\b|pcm|p/m|per\s+month|a\s+month|pw|per\s+week|镑|英镑)|\d{3,}", re.I)
 
 
+# "Actually I can stretch to £480pw." moves the ceiling: a plain "can", the message's only figure and
+# no condition, so there is nothing for it to stretch beside and no case for keeping the old one.
+_FIRM_STRETCH = re.compile(r"\b(?:i|we)\s+can\s+(?:now\s+)?stretch\s+(?:up\s+)?to\s+£?\s?\d", re.I)
+
+
 def _stretch_clauses(text: str) -> list[str]:
-    return [part.strip() for part in _STRETCH_CLAUSE_SPLIT.split(str(text or '')[:4000])
+    value = str(text or '')[:4000]
+    if (_FIRM_STRETCH.search(value) and len(_STRETCH_CUE.findall(value)) == 1
+            and len(re.findall(r"£\s?\d|(?<![\d,.])\d{3,}", value)) == 1):
+        return []
+    return [part.strip() for part in _STRETCH_CLAUSE_SPLIT.split(value)
             if part and _STRETCH_CUE.search(part) and _MONEY_FIGURE.search(part)]
 
 
@@ -101,6 +141,31 @@ def conditional_stretch_notes(text: str) -> list[str]:
 # A place the user only mentions does not replace a commute destination already set:
 # "…, and I study part-time at Birkbeck." (a "nothing to search" background turn) replaced
 # the Canary Wharf workplace with Malet Street (stress A-08). A destination change says so.
+# "Use my saved budget and commute to find a 1-bed flat in Angel" stored the rest of the sentence as
+# the destination, and every commute lookup failed to geocode it (G-08). A place does not open with
+# a verb or name a home.
+_NOT_A_DESTINATION = re.compile(
+    r"^\W*(?i:find(?:ing)?|search(?:ing)?|look(?:ing)?|get|see|show|use|using|rent|renting|live|living|buy)\b"
+    r"|\b(?:flats?|apartments?|studios?|bedrooms?|rooms?|houses?|homes?)\b|\b\d\s*-?\s*bed\b")
+
+
+_AREA_NAMED_CHANGE = re.compile(
+    r"\b(?:change|switch|move|set|update)\b[^.!?;]{0,24}\b(?:area|location|search)\b[^.!?;]{0,12}\bto\b"
+    r"|(?:区域|地区|位置)(?:改成|改为|换成|换到)", re.I)
+_SWITCH_ONLY = re.compile(r"^\W*(?:(?:ok(?:ay)?|actually|no|sorry)\W+)*(?:switch|change|move|go)\s+(?:it\s+)?(?:back\s+)?to\b", re.I)
+
+
+def moves_area_only(text: str, no_commute: bool = False) -> bool:
+    """True when the message moves where to live and says nothing of work. "Switch to Canary Wharf"
+    reads so only for someone who has said they do not commute."""
+    return bool(_AREA_NAMED_CHANGE.search(text or '') or (no_commute and _SWITCH_ONLY.search(text or '')))
+
+
+def is_destination_text(text) -> bool:
+    """False for a clause or a request stored in the place of a destination."""
+    return not _NOT_A_DESTINATION.search(str(text or ''))
+
+
 _DESTINATION_CHANGE_CUE = re.compile(
     r"\b(?:commut\w*|work\w*|office|workplace|job|destination|travel\w*\s+to|get(?:ting)?\s+to|"
     r"near|nearby|close\s+to|around|walking\s+distance|instead|now|actually|chang\w*|switch\w*|"
@@ -126,8 +191,79 @@ def replaces_destination(text: str, name: str) -> bool:
     return bool(_SEARCH_REQUEST.search(value) and not _NO_SEARCH.search(value))
 
 
+_WITHDRAW_VERB = re.compile(r'\b(?:discard|disregard|ignore|withdraw)\b|作废|撤销|丢弃', re.I)
+# A comma between thousands ("£3,500") does not end a part.
+_PART_BOUNDARY = re.compile(r',(?!\d{3}(?!\d))|，|\s+[-–—]\s+|\s+but\s+', re.I)
+# "Ignore Stratford, use Poplar" states its replacement in words (G-02).
+_REPLACEMENT_CUE = re.compile(r"^\s*(?:and\s+|then\s+|please\s+|just\s+)*(?:use|search|try|look\s+in|go\s+with)\b", re.I)
+
+
+def _replacement_after_withdrawal(match) -> str:
+    """What a withdrawn clause still states after the withdrawal: a new money figure or a
+    replacement in words.
+
+    "Actually ignore my saved rent maximum, I can pay up to £3,500 this time" and "Ignore the
+    budget I mentioned before, now it's £3,500 max" dropped the whole sentence, so the search
+    ran with no ceiling at all while the reply said "within your £3,500 limit" (R3-04). A
+    retraction followed by a new value in the same sentence is a replacement; the withdrawn
+    part itself, and anything else after it, stays a reference."""
+    clause = match.group(0)
+    parts = _PART_BOUNDARY.split(clause)
+    first = next((i for i, part in enumerate(parts) if _WITHDRAW_VERB.search(part)), None)
+    if first is None:
+        return ''
+    kept = [re.sub(r'^use\b(?=\s+[^£\d])', 'search', part.strip(), flags=re.I) for part in parts[first + 1:]
+            if (_MONEY_FIGURE.search(part) or _REPLACEMENT_CUE.search(part))
+            and not _WITHDRAW_VERB.search(part)]
+    if not kept:
+        return ''
+    end = clause.rstrip()[-1:] if clause.rstrip()[-1:] in '。.!?;；' else ''
+    return ', '.join(kept) + (end or '.') + ' '
+
+
+# Full-width digits, Latin letters and the full-width pound sign ("１-bed", "￡２０００") read as
+# nothing to every parser, so an English message silently lost its bedrooms and budget
+# (R3-17). Only those forms are folded; CJK punctuation stays as the zh patterns expect it.
+_FULLWIDTH_ASCII = {code: code - 0xFEE0 for code in (*range(0xFF10, 0xFF1A), *range(0xFF21, 0xFF3B),
+                                                   *range(0xFF41, 0xFF5B))}
+_FULLWIDTH_ASCII.update({0xFFE1: ord('£'), 0xFF04: ord('$'), 0xFF0D: ord('-'), 0x3000: ord(' ')})
+
+
+def fold_fullwidth_ascii(text) -> str:
+    """``text`` with full-width digits, Latin letters, ￡ and the ideographic space folded."""
+    return str(text or '').translate(_FULLWIDTH_ASCII)
+
+
+# A quoted passage introduced as someone else's text ("Here is a listing note: '...'", "the
+# agent wrote: \"...\"") or carrying its own save cue or role label is not the user's
+# criteria: the pasted note's "£300" became the search's max_budget (S-04; R3-08 kept it out
+# of memory only).
+_PASTE_LEAD_IN = re.compile(
+    r"\b(?:listing|agent|agent'?s|landlord|landlord'?s|letting\s+agent|advert|ad|someone|he|she|they)\b"
+    r"[^.!?;\n\"'“‘「]{0,20}\b(?:note|notes|wrote|writes|said|says|message|text|description|reads?)\b"
+    r"[^.!?;\n\"'“‘「]{0,6}[:：]?\s*$", re.I)
+
+
+def without_pasted_text(text: str) -> str:
+    """``text`` without quoted third-party passages and pasted instructions (S-04)."""
+    value = str(text or '')
+    if not re.search(r"[\"'“‘「『]|\b(?:system|assistant|developer)\s*:", value, re.I):
+        return value
+    from core.memory_gate import (_FOREIGN_CUE, _QUOTED_SPAN, _ROLE_LABEL_PASTE,
+                                  _THIRD_PERSON_REMEMBER)
+
+    def _quoted(match):
+        lead = value[max(0, match.start() - 60):match.start()]
+        if _FOREIGN_CUE.search(match.group(2)) or _PASTE_LEAD_IN.search(lead):
+            return ' '
+        return match.group(0)
+    value = _QUOTED_SPAN.sub(_quoted, value)
+    value = _ROLE_LABEL_PASTE.sub(' ', value)
+    return _THIRD_PERSON_REMEMBER.sub(' ', value)
+
+
 def scoped_update_text(text: str) -> str:
-    text = str(text or '')
+    text = without_pasted_text(str(text or ''))
     text = without_third_party_clauses(text)
     # Withdrawn experiments and other people's plans are references, not updates.
     # Each clause pattern is anchored at a clause START (``_CLAUSE_START``). Unanchored, the
@@ -135,7 +271,7 @@ def scoped_update_text(text: str) -> str:
     # attempt re-scanning to its end: O(n²) on a long paste with no full stop, run several
     # times per turn on the event loop (2026-10-19, B-01 class). Leftmost-match semantics
     # already started every real match at a clause start, so the result is unchanged.
-    text = _WITHDRAWN_CLAUSE.sub('', text)
+    text = _WITHDRAWN_CLAUSE.sub(_replacement_after_withdrawal, text)
     text = _KEPT_OUT_CLAUSE.sub('', text)
     # A comparison can quote another plan without changing it. Keep the explicit
     # modification, excluding the clause marked as unchanged.
@@ -167,6 +303,16 @@ def explicit_criteria_revision(text: str) -> bool:
     return False
 
 
+_ASKS_FOR_HOMES = re.compile(
+    r"^\s*is\s+there\s+(?:any|anything)\b[^.!?]{0,24}\b(?:housing|accommodation|flats?|homes?|rooms?|studios?|"
+    r"apartments?)\b", re.I)
+
+
+def asks_for_homes(text: str) -> bool:
+    """A search phrased as a question: "Is there any housing near SW7 2AZ under £900?"."""
+    return bool(_ASKS_FOR_HOMES.search(text or ''))
+
+
 def is_criteria_consultation(text: str) -> bool:
     """An explicit read-only request must also bypass cached-result refinement."""
     if re.search(r"(?:don.t|do not|please don.t) change (?:my |the )?(?:search )?(?:criteria|filters)"
@@ -179,7 +325,10 @@ def is_criteria_consultation(text: str) -> bool:
     if re.search(r'\b(?:save|favourite|favorite)\b|收藏', text, re.I) and re.search(r'\bfavou?rites?\b|收藏', text, re.I) and not re.search(
             r'\b(?:find|search|set|change|raise|lower|remove|drop|switch|restore)\b|改为|改回|更新|找房|搜索', text, re.I):
         return True
-    update = re.search(r'\b(?:set|change|raise|lower|remove|drop|find|search|show|available)\b|改为|改回|更新|取消|删除|移除|找房|搜索', text, re.I)
+    # "Is there any housing near SW7 2AZ under £900?" asks for a search: as a read-only question it
+    # kept neither the budget nor the area, and the gate asked for the budget it had just read (G-10).
+    update = (re.search(r'\b(?:set|change|raise|lower|remove|drop|find|search|show|available)\b|改为|改回|更新|取消|删除|移除|找房|搜索',
+                        text, re.I) or asks_for_homes(text))
     if re.search(r'\b(?:details?|furniture|furnished|bills|availability|tenancy|epc)\b|房源详情|家具|账单', text, re.I) and re.search(
             r'^\s*(?:please|can |could |what|tell |explain|get |check |verify|for the)|请|这套|这个房源|告诉|查询|[?？]', text, re.I) and not re.search(
             r'\b(?:find|search|set|change|raise|lower|remove|drop|switch|restore)\b|改为|改回|更新|取消|删除|移除|找房|搜索', text, re.I):
@@ -228,6 +377,30 @@ def clause_at(text: str, start: int, end: int) -> str:
     return text[left:right]
 
 
+_WITHDRAWN_BEFORE_MENTION = re.compile(
+    r"(?<!n't )(?<!n’t )(?<!\bnot )(?<!\bnever )"
+    r"\b(?:never\s*mind|forget(?:\s+about)?|scrap|ditch|drop|skip|retract|withdraw|cancel|remove|delete|undo"
+    r"|no\s+longer\s+(?:want|need))"
+    r"(?:\s+(?:the|a|an|my|that|this))?\s+$", re.I)
+
+
+def withdraws_room_type(text: str, room_type) -> bool:
+    """True when ``text`` withdraws the standing ``room_type`` ("never mind studio",
+    "forget the studio", "no longer need a studio", "不要studio了")."""
+    from core.tools.search_properties import _ROOM_TYPE_SYNONYMS
+    needles = dict(_ROOM_TYPE_SYNONYMS).get(str(room_type or ''), ())
+    value = str(text or '')
+    for needle in needles:
+        for found in re.finditer(r'(?<![a-z])' + re.escape(needle) + r'(?![a-z])', value, re.I):
+            before = _CLAUSE_BOUNDARY.split(value[max(0, found.start() - 60):found.start()])[-1][-45:]
+            after = value[found.end():found.end() + 12]
+            if (_WITHDRAWN_BEFORE_MENTION.search(before)
+                    or re.search(r'(?:不要|不用|不需要|不考虑)\s*$', before)
+                    and re.match(r'\s*(?:了|也行|吧)', after)):
+                return True
+    return False
+
+
 def mention_is_requirement(text: str, start: int, end: int) -> bool:
     clause = clause_at(text, start, end)
     # Negation belongs to this clause. In particular, "not all London: a whole
@@ -248,7 +421,13 @@ def mention_is_requirement(text: str, start: int, end: int) -> bool:
     # "I don't need a balcony after all" recorded "Must have balcony" (stress A-04 replay).
     if re.search(r'(?:not(?: a| an)?|no|without|remove|exclude|avoid|delete|don.t want'
                  r'|(?:don.t|do not|doesn.t|does not) need|no need for)\s+(?:\w+\s+){0,3}$'
+                 # "1 bed rather than studio" stored the studio beside the count.
+                 r'|\b(?:rather\s+than|instead\s+of)\s+(?:(?:a|an|the|my)\s+)?$'
                  r'|(?:不(?:要|是|需要|想|考虑)|取消|删除|移除|去掉|排除)[^，。；;!?]{0,14}$', before, re.I):
+        return False
+    # "Never mind studio, 2 beds" kept the studio, so every later search asked for a studio
+    # with two bedrooms (R3-05). "Don't forget the studio" is still a requirement.
+    if _WITHDRAWN_BEFORE_MENTION.search(before):
         return False
     if re.search(r'是否|有没有|能否|\b(?:does it|is there|are there|do they|can you explain)\b', clause, re.I):
         return False
@@ -257,16 +436,37 @@ def mention_is_requirement(text: str, start: int, end: int) -> bool:
     return True
 
 
+# "Which of the listings you showed me in Bethnal Green was the cheapest?" asks about results
+# already on the page; it moved the search area, and the next edit searched there (r06 e07e26d4).
+_SHOWN_RESULTS = re.compile(
+    r"\byou(?:['’]ve|\s+have|\s+had|\s+just|\s+already)*\s+"
+    r"(?:showed|shown|listed|found|gave|given|recommended|suggested|mentioned|sent|returned)\b"
+    r"|\b(?:shown|listed|recommended)\s+(?:earlier|before|above|previously)\b"
+    r"|你(?:刚才|刚刚|之前|前面|上次)?(?:给我|帮我|为我)?(?:看|展示|列出|找到|推荐|搜到|发)(?:过|了)?的", re.I)
+_SHOWN_RESULTS_ACTION = re.compile(
+    r"\b(?:show\s+me|go(?:ing)?\s+back|back\s+to|switch|move|search|look\s+in|again)\b"
+    # "I need to commute to King's Cross, how long from the first area you showed?" states a need.
+    r"|\bI\s+(?:need|want|work|commute)\b|回到|切换|换到|再搜|我要|我需要", re.I)
+
+
+def without_shown_results_questions(text: str) -> str:
+    """``text`` without the sentences that only ask about results already shown."""
+    sentences = re.findall(r"[^.!?;；。！？\n]+[.!?;；。！？\n]*", text or '')
+    kept = [sentence for sentence in sentences if not (
+        _SHOWN_RESULTS.search(sentence) and not _SHOWN_RESULTS_ACTION.search(sentence))]
+    return ''.join(kept) if len(kept) != len(sentences) else text
+
+
 def housing_update_text(text: str) -> str:
     """Exclude standalone ancillary requests from the housing mutation channel."""
-    text = scoped_update_text(text)
+    text = without_shown_results_questions(scoped_update_text(text))
     # Negative/preservation clauses in an ancillary question are not housing
     # instructions. Require a positive housing action before accepting its places.
     if is_criteria_consultation(text):
         return ''
     auxiliary = re.search(r'天气|气温|票价|线路状态|\b(?:weather|temperature|fare|travelcard|line status|journey)\b', text, re.I)
     if auxiliary:
-        from core.tools.search_properties import _KNOWN_AREAS
+        from core.tools.search_properties import _CUE_ONLY_AREAS, _KNOWN_AREAS
         affirmative = []
         for clause in re.split(r'[。.!?;；\n]', text):
             if re.search(r'\b(?:don.t|do not|never)\b|不要|无需|不用|别', clause, re.I):
@@ -274,17 +474,24 @@ def housing_update_text(text: str) -> str:
             if re.search(r'\b(?:unchanged|remain|stay|only a weather|only weather)\b|不变|保持原', clause, re.I):
                 continue
             area_action = any(any(re.match(re.escape(name) + r'(?![a-z])', match.group(1), re.I)
-                                  for name in _KNOWN_AREAS)
-                for match in re.finditer(r'\b(?:search(?: in| around)?|keep|restore|switch to|change to)\s+([a-z][a-z\s\-]{0,35})', clause, re.I))
+                                  for name in (*_KNOWN_AREAS, *_CUE_ONLY_AREAS))
+                for match in re.finditer(
+                    r'\b(?:search(?: in| around)?|keep|restore|(?:switch|change|move)'
+                    r'(?:\s+(?:the\s+|my\s+)?(?:area|search|location))?\s+to)\s+([a-z][a-z\s\-]{0,35})', clause, re.I))
             explicit_slot = re.search(
                 r'\b(?:rent|budget|ceiling|bedrooms?|whole (?:flat|property)|self.contained|workplace)\b'
                 r'|\b(?:commute|commuting|office)\b.{0,65}\b(?:days?|minutes?|change|workplace)\b'
                 r'|\b(?:my (?:job|work)|a job)\b.{0,35}\b(?:near|next to|at|in)\b'
                 r'|\b(?:wheelchair|step.free|doorways?|corridors?|bathroom|cats?|pets?|landlord|permission|consent|lifts?|elevators?|balcony|garden)\b'
                 r'|\bfocus on\b|月租|租金|预算|卧室|整租|到岗|入住|起租|轮椅|无台阶|猫|许可|电梯|阳台|花园', clause, re.I)
-            if area_action or explicit_slot or re.search(r'\b(?:search|find|rent)\b.{0,35}\b(?:flat|home|house|property|properties|studio|bedroom)|'
+            # "Show me Angel flats under £2100 and tell me the weather there." searched the old
+            # area (R4-07, 18/18): a "show me" request and "<homes> under £N" are housing too.
+            if area_action or explicit_slot or re.search(r'\b(?:search|find|rent|show(?:\s+me)?|look(?:ing)?\s+for|get\s+me)\b'
+                         r'.{0,35}\b(?:flat|home|house|property|properties|studio|bedroom|apartment|places|listings)|'
+                         r'\b(?:flats?|homes?|houses?|studios?|apartments?|places|listings)\b.{0,25}'
+                         r'\b(?:under|below|up\s+to|max(?:imum)?)\s*£?\s*\d|'
                          r'\b(?:set|change|raise|lower|remove|drop)\b.{0,30}\b(?:budget|bedroom|area|room type|commute destination|my office)|'
-                         r'找房|搜索房源|找.{0,8}(?:公寓|卧|住处)|预算改|改为|改回|恢复', clause, re.I):
+                         r'找房|搜索房源|找.{0,12}(?:公寓|卧|住处|居室|studio|单间)|预算改|改为|改回|恢复', clause, re.I):
                 affirmative.append(clause)
         if not affirmative:
             return ''
@@ -322,20 +529,65 @@ def explicit_feature_requirement_text(text: str) -> str:
     return ' '.join(selected)
 
 
+_SAVED_VALUE = (r"(?:saved|stored|remembered|usual)\s+(?:search\s+|default\s+|rent\s+)?"
+                r"(?:budget|ceiling|criteria|preferences|requirements|settings|filters?|details)")
+
+
+# The user's budget, named as what to search by, without the word "saved": "use my default budget",
+# "Find me a 1-bed under my budget", "applying my budget", "stick to my budget", "Use the budget you
+# have saved for me" applied nothing while the reply talked of a budget (G-08, F-03).
+_OWN_BUDGET_REFERENCE = re.compile(
+    r"\b(?:use|using|apply|applying|with|under|within|stick(?:ing)?\s+to|keep(?:ing)?\s+to|respect(?:ing)?)\s+"
+    r"(?:my|the)\s+(?:(?:default|normal|usual|current|set)\s+)?budget\b"
+    r"(?!\s+(?:is|was|of|to|at|by|could|can|for|£|\d))"
+    r"|\b(?:use|using|apply|applying)\s+(?:the\s+|my\s+)?budget\s+(?:that\s+)?(?:you(?:\s+have|['’]ve)?|i(?:\s+have|['’]ve)?)\s+"
+    r"(?:saved|stored|got|gave|told)\b", re.I)
+
+
+def references_own_budget(text: str) -> bool:
+    """True for that reference outside a question about something: "Is it under my budget?"."""
+    for sentence in re.split(r'(?<=[.!?。！？])\s*', str(text or '')[:2000]):
+        if (_OWN_BUDGET_REFERENCE.search(sentence)
+                and not (sentence.rstrip().endswith(('?', '？')) and _ASKS_ABOUT_IT.search(sentence))):
+            return True
+    return False
+
+
 def references_saved_criteria(text: str) -> bool:
+    if references_own_budget(text):
+        return True
     return bool(re.search(
-        r'(?:按|用|恢复|复述|记得)[^。！？]{0,35}(?:长期|默认|保存|偏好)|长期默认|saved (?:search |default )?(?:criteria|preferences)|'
-        r'(?:use|apply|restore|recall|repeat)[^.!?]{0,35}(?:defaults|remembered|preferences)', text or '', re.I))
+        r'(?:按|用|恢复|复述|记得)[^。！？]{0,35}(?:长期|默认|保存|偏好|记住|存的)|长期默认|'
+        r'saved (?:search |default )?(?:criteria|preferences)|'
+        r'(?:use|apply|restore|recall|repeat)[^.!?]{0,35}(?:defaults|remembered|preferences)|'
+        # "Find me a flat in Bow using my saved budget and preferences." (W-09).
+        r'\b' + _SAVED_VALUE + r'\b', text or '', re.I))
+
+
+# What a saved value is taken for. "show" only with a home noun: "Show my saved budget" is a recall.
+_RESTORE_CUE = re.compile(
+    r'搜|找|恢复|使用|按|用|\b(?:use|using|apply|applying|restore|find|search|look\s+for|with|stick|keep|'
+    r'show\s+(?:me\s+)?(?:flats?|homes?|listings?|properties|places|options))\b', re.I)
+_ONLY_THE_BUDGET = re.compile(r'\b(?:saved|stored|remembered|usual)\s+(?:rent\s+)?(?:budget|ceiling)\b|保存的预算|记住的预算', re.I)
+_SAVED_OTHER_THAN_BUDGET = re.compile(r'\b(?:preferences|criteria|requirements|settings|filters?|details|defaults)\b|偏好|条件|默认', re.I)
+_SAVED_COMMUTE_TOO = re.compile(r'\b(?:commute|workplace|office)\b', re.I)
+_COMMUTE_FIELDS = {'commute_destination', 'destination', 'no_commute', 'max_travel_time'}
+_SAVED_FIELDS = {'area', 'areas', 'max_budget', 'budget_period', 'room_type', 'bedrooms',
+                 'bedrooms_minimum', 'commute_destination', 'destination', 'no_commute',
+                 'max_travel_time', 'property_features', 'soft_preferences', 'move_in_date',
+                 'monthly_total_budget', 'office_days_per_week'}
+_BUDGET_FIELDS = {'max_budget', 'budget_period', 'monthly_total_budget'}
 
 
 def restore_saved_criteria(accumulated: dict, memories: list, message: str) -> dict:
     """Use only this authenticated user's retrieved memory, on an explicit request.
 
     Prompt recollection alone does not enforce filters. Project the selected semantic
-    preference into the same structured state the search executor validates.
+    preference into the same structured state the search executor validates. A saved default
+    in one row wins as a whole; otherwise each field comes from the newest row that states it,
+    so a plain "max budget £2,000" counts (W-09). "my saved budget" takes the budget only.
     """
-    if not references_saved_criteria(message) or not re.search(
-            r'搜|找|恢复|使用|按|\b(?:use|apply|restore|find|search|show)\b', message, re.I):
+    if not references_saved_criteria(message) or not _RESTORE_CUE.search(message):
         return accumulated
     from core.langgraph_agent import _apply_explicit_criteria_updates
     # A reflection is the assistant's inference ("fixed budget of around £2,300/month"),
@@ -344,27 +596,165 @@ def restore_saved_criteria(accumulated: dict, memories: list, message: str) -> d
                         key=lambda m: str(m.get('created_at') or ''), reverse=True)
     candidates.sort(key=lambda m: (m.get('mtype') != 'semantic',
         not bool(re.search(r'默认|长期|\bdefaults?\b|saved preferences', str(m.get('text') or ''), re.I))))
+    own_budget = references_own_budget(message)
+    budget_only = bool((_ONLY_THE_BUDGET.search(message) or own_budget)
+                       and not _SAVED_OTHER_THAN_BUDGET.search(message))
+    wanted = (_BUDGET_FIELDS | _COMMUTE_FIELDS if budget_only and _SAVED_COMMUTE_TOO.search(message)
+              else _BUDGET_FIELDS)
+    if own_budget and budget_only:
+        # "my budget" is the one this conversation holds; a saved figure fills in only when it
+        # has one meaning, the rule of restore_saved_budget (E-02).
+        figures = {_apply_explicit_criteria_updates({}, str(m.get('text') or '')).get('max_budget')
+                   for m in candidates if m.get('mtype') == 'semantic'} - {None}
+        if (accumulated or {}).get('max_budget') is not None or len(figures) != 1:
+            return accumulated
+    merged, owners = {}, {}
+
+    def _restored(fields: dict, owner_of) -> dict:
+        restored = dict(accumulated)
+        restored.update(fields)
+        restored['constraint_sources'] = {
+            **(accumulated.get('constraint_sources') or {}),
+            **{k: {'source': 'saved_preference', 'memory_id': owner_of(k), 'value': v}
+               for k, v in fields.items()},
+        }
+        return _apply_explicit_criteria_updates(restored, message)
+
     for memory in candidates:
         text = str(memory.get('text') or '')
         parsed = _apply_explicit_criteria_updates({}, text)
-        fields = {k: v for k, v in parsed.items() if k in {
-            'area', 'areas', 'max_budget', 'budget_period', 'room_type', 'bedrooms',
-            'bedrooms_minimum', 'commute_destination', 'destination', 'no_commute',
-            'max_travel_time', 'property_features', 'soft_preferences', 'move_in_date',
-            'monthly_total_budget', 'office_days_per_week'}}
+        fields = {k: v for k, v in parsed.items() if k in _SAVED_FIELDS}
         if fields.get('max_travel_time'):
             fields.setdefault('no_commute', False)
-        if sum(k in fields for k in ('room_type', 'bedrooms')) + bool(
-                fields.get('max_budget') or fields.get('monthly_total_budget')) >= 2:
-            restored = dict(accumulated)
-            restored.update(fields)
-            restored['constraint_sources'] = {
-                **(accumulated.get('constraint_sources') or {}),
-                **{k: {'source': 'saved_preference', 'memory_id': memory.get('id'), 'value': v}
-                   for k, v in fields.items()},
-            }
-            return _apply_explicit_criteria_updates(restored, message)
-    return accumulated
+        if not budget_only and any(k in fields for k in ('room_type', 'bedrooms')) and bool(
+                fields.get('max_budget') or fields.get('monthly_total_budget')):
+            return _restored(fields, lambda _key: memory.get('id'))
+        if memory.get('mtype') != 'semantic':
+            continue
+        for key, value in fields.items():
+            if key not in merged and value not in (None, [], '') and (not budget_only or key in wanted):
+                merged[key], owners[key] = value, memory.get('id')
+    return _restored(merged, owners.get) if merged else accumulated
+
+
+# "Budget back to what it was when I started" and 把预算恢复成最开始的数字 kept the current ceiling
+# while the reply listed results as if it had moved (W-05). A reference to an earlier value resolves
+# from this conversation's own constraint_history.
+_BUDGET_FIRST = re.compile(
+    r"\b(?:original|initial|first|starting|opening)\s+(?:budget|ceiling|figure|amount|limit)\b"
+    r"|\bbudget\s+(?:i|we)\s+(?:started|began)\s+with\b"
+    r"|\bbudget\b[^.!?\n]{0,40}\b(?:what\s+it\s+was\s+)?(?:when\s+(?:i|we)\s+(?:started|began)|"
+    r"at\s+the\s+(?:start|beginning)|originally|to\s+begin\s+with|at\s+first)\b"
+    r"|\bbudget\b[^.!?\n]{0,40}\bwhat\s+(?:i|we)\s+(?:started|began)\s+with\b"
+    r"|(?:最开始|一开始|刚开始|最初|起初|当初|最早)的?(?:预算|数字|金额|价格|上限|那个)"
+    r"|预算[^，。！？,.!?]{0,12}(?:恢复|改回|回到|换回|调回|还原|退回)[成到为]?(?:最开始|一开始|刚开始|最初|起初|当初|最早)", re.I)
+_BUDGET_PREVIOUS = re.compile(
+    r"\b(?:the|my)\s+(?:previous|earlier|old|prior|last)\s+(?:budget|ceiling|figure|amount)\b"
+    r"|\bbudget\s+i\s+had\s+before\b"
+    r"|\bbudget\b[^.!?\n]{0,40}\bwhat\s+it\s+was\s+(?:before|earlier|previously)\b"
+    r"|(?:之前|原来|上一次|上次|先前|以前)的预算"
+    r"|预算[^，。！？,.!?]{0,12}(?:恢复|改回|回到|换回|调回|还原|退回)[成到为]?(?:之前|原来|上一次|上次|先前|以前)", re.I)
+_BUDGET_RESTORE_CUE = re.compile(
+    r"\b(?:back|revert\w*|restor\w*|return\w*|reset|go|use|using|put|set|change|switch\w*|apply|please|instead|again)\b"
+    r"|恢复|改回|回到|换回|调回|还原|退回|用|按", re.I)
+# "Forget my old budget, use £2,300 instead" names the old budget to get rid of it. Read as a
+# reference to it, the turn restored the empty slot from before the old budget (G-02).
+_BUDGET_DISOWNED = re.compile(
+    r"\b(?:forget(?:\s+about)?|ignore|disregard|scrap|ditch|drop|delete|remove|lose|never\s*mind(?:\s+about)?)\s+"
+    r"(?:the|my)\s+(?:previous|earlier|old|prior|last|original|initial|first|starting|opening)\s+"
+    r"(?:budget|ceiling|figure|amount|limit)\b"
+    r"|(?:忘掉|忘记|删除|删掉|去掉|不要)(?:我的)?(?:之前|原来|上一次|上次|先前|以前|最开始|一开始|最初)的预算", re.I)
+_ASKS_ABOUT_IT = re.compile(r"^\W*(?:what|which|when|why|how|did|do|does|is|are|was|were|has|have)\b", re.I)
+_ZH_ASKS_ABOUT_IT = re.compile(r"多少|什么|几|吗|么[？?]")
+
+
+def budget_reference(text: str) -> str | None:
+    """'first' or 'previous' when the message asks for an earlier budget, else None."""
+    value = str(text or '')[:2000]
+    for sentence in re.split(r'(?<=[!?？。！])\s*|(?<=\.)\s+(?=\D)', value):
+        which = 'first' if _BUDGET_FIRST.search(sentence) else 'previous' if _BUDGET_PREVIOUS.search(sentence) else None
+        if (not which or is_hypothetical(sentence) or not _BUDGET_RESTORE_CUE.search(sentence)
+                or _BUDGET_DISOWNED.search(sentence)):
+            continue
+        if (sentence.rstrip().endswith(('?', '？')) and _ASKS_ABOUT_IT.search(sentence)) or _ZH_ASKS_ABOUT_IT.search(sentence):
+            continue
+        return which
+    return None
+
+
+def budget_reference_target(criteria: dict, which: str):
+    """The earlier budget ``which`` refers to in ``criteria``'s own history, else None."""
+    values = list(((criteria or {}).get('constraint_history') or {}).get('max_budget') or [])
+    if not values:
+        return None
+    if which == 'first':
+        return values[0]
+    current = (criteria or {}).get('max_budget')
+    at = max((i for i, value in enumerate(values) if value == current), default=None)
+    if at is None:
+        return values[-1]
+    return values[at - 1] if at > 0 else None
+
+
+def restore_saved_budget(accumulated: dict, memories: list, message: str) -> dict:
+    """The one budget this user saved, for an earlier budget a new conversation does not hold.
+
+    "Budget back to what it was when I started" in a fresh conversation searched with no budget,
+    and the reply said it had set £2,000, that £2,000 was not applied, and that it had no earlier
+    budget (r05 8a4045f5). With exactly one saved figure the request has one meaning. With none or
+    several, nothing is set and ``budget_reference_note`` says so."""
+    which = budget_reference(message)
+    if (not which or (accumulated or {}).get('max_budget') is not None
+            or budget_reference_target(accumulated, which) is not None):
+        return accumulated
+    from core.langgraph_agent import _apply_explicit_criteria_updates
+    figures = {}
+    for memory in memories or []:
+        if memory.get('mtype') != 'semantic':
+            continue
+        budget = _apply_explicit_criteria_updates({}, str(memory.get('text') or '')).get('max_budget')
+        if budget:
+            figures.setdefault(budget, memory.get('id'))
+    if len(figures) != 1:
+        return accumulated
+    ((budget, owner),) = figures.items()
+    restored = dict(accumulated or {}, max_budget=budget, budget_period='month')
+    restored['constraint_sources'] = {
+        **((accumulated or {}).get('constraint_sources') or {}),
+        'max_budget': {'source': 'saved_preference', 'memory_id': owner, 'value': budget}}
+    return restored
+
+
+def budget_reference_note(message: str, criteria: dict, language: str = 'en') -> str:
+    """The sentence that goes with an earlier budget this conversation does not hold: the reply
+    must not carry on as if it had been applied."""
+    which = budget_reference(message)
+    if not which:
+        return ''
+    source = ((criteria or {}).get('constraint_sources') or {}).get('max_budget') or {}
+    if source.get('source') == 'user_undo' and source.get('text') == str(message)[:800]:
+        return ''
+    if source.get('source') == 'saved_preference':
+        return ''
+    if budget_reference_target(criteria, which) is not None:
+        return ''
+    current = (criteria or {}).get('max_budget')
+    if language == 'zh':
+        return (f'这次对话里没有更早的预算记录，所以预算仍是£{current:,.0f}。' if current
+                else '这次对话里没有更早的预算记录，请告诉我要用的预算。')
+    return (f"I don't have an earlier budget in this conversation, so it stays at £{current:,.0f}." if current
+            else "I don't have an earlier budget in this conversation. What ceiling should I use?")
+
+
+_BUDGET_SET_CLAIM = re.compile(
+    r"[^.!?。！？\n]*(?:\b(?:set|put|moved?|changed?|reset|restored?|reverted?|returned)\b[^.!?\n]{0,30}\bbudget\b"
+    r"[^.!?\n]{0,24}\b(?:back|to\s+£)|\bbudget\b[^.!?\n]{0,12}\b(?:is|now)\s+back\b"
+    r"|(?:已|已经|帮你)?把?预算[^。！？\n]{0,10}(?:恢复|改回|调回|设回|设为|改为))[^.!?。！？\n]*[.!?。！？]?\s*", re.I)
+
+
+def without_budget_set_claim(text: str) -> str:
+    """``text`` without a sentence saying a budget was set back, for a turn that set none."""
+    return _BUDGET_SET_CLAIM.sub('', str(text or '')).strip()
 
 
 def resolve_clarification_reply(message: str, messages: list) -> str:
@@ -467,6 +857,38 @@ def cat_permission_update(text: str) -> bool | None:
     return None
 
 
+# A zh withdrawal is bound to the feature it names, in either order: 「算了，不要宠物要求了」,
+# 「不需要宠物了」 and 「宠物要求算了」 kept the filter while the reply said it was dropped (W-02), and
+# 「算了，不用阳台了」 says nothing about pets. 「不要宠物」 alone can be a wish for a pet-free building, so
+# 不要 needs 了 or a word like 要求 after the feature.
+_ZH_DROP_BEFORE = re.compile(
+    r"(?P<verb>不要|不用|不需要|不必|无需|不再需要|不再要|去掉|取消|删掉|删除|移除|忽略|撤销|撤回)"
+    r"(?:有|带|养|允许|可以养|能养|靠近)*的?\s*$")
+_ZH_REQUIREMENT_WORD = r"(?:的)?(?:事|这个|这条|这项|这一条|这一项)?(?:要求|条件|筛选|需求|限制)?"
+_ZH_DROP_TAIL = re.compile(r"\s*(?:的)?(?:事|这个|这条|这项)?(?:要求|条件|筛选|需求|限制)|\s*(?:的事)?\s*(?:了|吧)")
+_ZH_DROP_AFTER = re.compile(
+    r"\s*" + _ZH_REQUIREMENT_WORD + r"(?:也|就|都)?"
+    r"(?:不要了|不用了|不需要了|不必了|算了|不重要了|无所谓|不管了|不考虑了|取消|去掉|删掉|删除|移除|撤销)")
+_ZH_QUESTION_AFTER = re.compile(r"[^，。！？；,.!?;\n]{0,14}(?:吗|么|[？?])")
+
+
+def zh_withdrawn_at(text: str, start: int, end: int) -> bool:
+    """True when the zh words around ``text[start:end]`` withdraw that feature (W-02)."""
+    if _ZH_QUESTION_AFTER.match(text, end):
+        return False
+    before = _ZH_DROP_BEFORE.search(text[max(0, start - 12):start])
+    if before and (before.group('verb') != '不要' or _ZH_DROP_TAIL.match(text, end)):
+        return True
+    return bool(_ZH_DROP_AFTER.match(text, end))
+
+
+def zh_feature_withdrawn(text: str, words) -> bool:
+    """True when ``text`` withdraws a feature named by one of the zh ``words``."""
+    value = str(text or '')
+    return any(zh_withdrawn_at(value, found.start(), found.end())
+               for word in words for found in re.finditer(re.escape(word), value))
+
+
 _PET_WORD = r'\b(?:cats?|kittens?|pets?|dogs?|pupp(?:y|ies))\b|猫|狗|宠物'
 _PET_WITHDRAWAL = re.compile(
     r'\b(?:forget|never\s*mind|ignore|drop|remove|scrap|skip|disregard|cancel)\b[^.!?;]{0,30}'
@@ -476,9 +898,36 @@ _PET_WITHDRAWAL = re.compile(
     r'|\b(?:cats?|pets?|dogs?)\b[^.!?;]{0,25}\b(?:doesn.t|does\s+not|don.t|do\s+not|no\s+longer)\s+matter'
     r'|\b(?:the\s+)?(?:cat|pet|dog)\s+(?:is|has)\s+(?:gone|rehomed|no\s+longer\s+with\s+me)\b'
     r'|\bno\s+(?:need\s+for\s+)?pets?\s+(?:needed|required|requirement)\b'
+    # "I don't need pets allowed", "No need for it to be pet friendly", "I'm not bringing a pet".
+    r"|\b(?:don.t|do\s+not|doesn.t|does\s+not|no)\s+(?:need|require)\s+(?:for\s+)?(?:it\s+to\s+be\s+)?"
+    r"(?:a\s+|any\s+|the\s+)?(?:cats?|pets?|dogs?)\b"
+    r"|\bnot\s+(?:bringing|having|taking|getting)\s+(?:a\s+|any\s+|the\s+|my\s+)?(?:cats?|pets?|dogs?)\b"
     r'|不再养|不养(?:猫|狗|宠物)了|没有(?:猫|狗|宠物)了'
     r'|(?:猫|狗|宠物)(?:的事|的要求|的条件|这个条件)?(?:不用|不需要|算了|不重要了|取消)'
-    r'|(?:取消|去掉|删除|忽略)[^。；]{0,10}(?:猫|狗|宠物)', re.I)
+    r'|(?:取消|去掉|删除|忽略)[^。；]{0,10}(?:猫|狗|宠物)'
+    # A correction in a message of its own: "Sorry, no cat, I was thinking of someone else.",
+    # "No cat after all.", "抱歉，我没有狗，不需要宠物条件。" kept the pet filter (R1-02). A bare
+    # "no pets in the building" is still a building rule, not a withdrawal.
+    r'|\b(?:sorry|actually|oops|my\s+mistake|scratch\s+that|correction|wait)\b[\s,]+(?:i\s+)?'
+    r'(?:no|don.t\s+have\s+an?|do\s+not\s+have\s+an?|haven.t\s+got\s+an?)\s+(?:cats?|pets?|dogs?|kittens?)\b'
+    r'|\b(?:no|(?:don.t|do\s+not)\s+have\s+(?:an?|any))\s+(?:cats?|pets?|dogs?|kittens?)\s+after\s+all\b'
+    r'|(?:抱歉|不好意思|其实|说错了|搞错了)[^。；]{0,6}没(?:有)?(?:养)?(?:猫|狗|宠物)'
+    r'|(?:不用|不需要|不要求|不必|无需)(?:允许)?(?:养)?(?:猫|狗|宠物)(?:的)?(?:条件|要求|许可)'
+    r'|不要求(?:允许)?(?:养)?(?:猫|狗|宠物)', re.I)
+
+
+# An attribute written directly before the home being asked for ("pet-friendly furnished 1
+# bed", "a furnished studio") is part of the request, as its "must" form is (R3-07). Up to
+# three other attributes may sit between it and the home word.
+_ATTRIBUTE_OF_HOME = (
+    r"(?<![a-z-]){word}\s+(?:(?:pet[- ]friendly|(?:fully\s+)?furnished|modern|spacious|quiet|bright|"
+    r"large|small|cosy|cozy|new|self[- ]contained|ground[- ]floor|top[- ]floor|"
+    r"(?:\d|one|two|three|four)\s*-?\s*bed(?:room)?(?:ed)?)\s+){{0,3}}"
+    r"(?:flats?|apartments?|studios?|houses?|homes?|places?|maisonettes?|(?:\d|one|two|three|four)\s*-?\s*bed"
+    r"(?:room)?s?\b)")
+_SOFT_WORDING = re.compile(
+    r"\b(?:ideally|preferably|if\s+possible|would\s+(?:like|prefer|be\s+nice)|nice\s+to\s+have|"
+    r"bonus|not\s+essential|don.t\s+mind|either\s+way|prefer)\b|最好|如果可以|优先", re.I)
 
 
 def furnished_requirement_update(text: str) -> bool | None:
@@ -493,6 +942,8 @@ def furnished_requirement_update(text: str) -> bool | None:
         clause = match.group()
         if not re.search(r'furnish|家具|家私', clause, re.I):
             continue
+        if zh_feature_withdrawn(clause, ('家具', '家私')):
+            return False
         if re.search(r"\b(?:unfurnished|furnished)\s+(?:is\s+)?(?:fine|ok(?:ay)?)\b|"
                      r"\b(?:furnish\w*|furniture)\b[^.!?]{0,25}\b(?:doesn.t|does not|don.t|do not)\s+"
                      r"(?:matter|need|mind)|\b(?:don.t|do not|no longer)\s+(?:need|require|care about)\s+"
@@ -504,6 +955,11 @@ def furnished_requirement_update(text: str) -> bool | None:
                                       r'\bunfurnished\s+only\b', clause, re.I)
         if wants_unfurnished:
             continue
+        if re.search(_ATTRIBUTE_OF_HOME.format(word=r"(?:fully\s+)?furnished"), clause, re.I) \
+                and not _SOFT_WORDING.search(clause):
+            # "Furnished pet-friendly 1 bed with a garden in Camden" names the attribute of
+            # the home it asks for, like "it must be furnished" (R3-07).
+            return True
         if re.search(r"\bfurnished\s+only\b|\bonly\s+(?:fully\s+)?furnished\b|"
                      r"\b(?:must|has\s+to|have\s+to|needs?\s+to|should)\s+be\s+(?:fully\s+)?furnished\b|"
                      r"\b(?:don.t|do\s+not)\s+want\s+(?:anything\s+|an?\s+)?unfurnished\b|"
@@ -511,6 +967,18 @@ def furnished_requirement_update(text: str) -> bool | None:
                      r"必须(?:带|有)家具|(?:要|需要)(?:带|有)家具|只要(?:带)?家具", clause, re.I):
             return True
     return None
+
+
+def pet_soft_wish(text: str) -> bool:
+    """"I'd like pets allowed if possible": no filter, but listed as not checked (V-08)."""
+    for match in re.finditer(r'[^。.!?;；\n]+[。.!?;；\n]*', text or ''):
+        clause = match.group()
+        if (_SOFT_WORDING.search(clause) and re.search(
+                r'\b(?:pets?|cats?|dogs?)\s+(?:are\s+)?(?:allowed|welcome|accepted|ok(?:ay)?)\b|'
+                r'\bpet[- ]friendly\b|允许(?:养)?(?:宠物|猫|狗)|可以养|能养|可养', clause, re.I)
+                and not is_hypothetical(clause) and not re.search(r'[?？]|是否|吗|\bwhether\b', clause, re.I)):
+            return True
+    return False
 
 
 def pet_requirement_update(text: str) -> bool | None:
@@ -525,7 +993,7 @@ def pet_requirement_update(text: str) -> bool | None:
         clause = match.group()
         if not re.search(_PET_WORD, clause, re.I):
             continue
-        if _PET_WITHDRAWAL.search(clause):
+        if _PET_WITHDRAWAL.search(clause) or zh_feature_withdrawn(clause, ('宠物', '猫', '狗')):
             return False
         if is_hypothetical(clause) or re.search(
                 r'[?？]|是否|吗|\b(?:do not assume|don.t assume|unknown|whether)\b', clause, re.I):
@@ -536,14 +1004,19 @@ def pet_requirement_update(text: str) -> bool | None:
                                r'|允许|可以养|能养|接受|可养', clause, re.I)
         if not permission:
             continue
-        hard = re.search(r'\b(?:must|needs?\s+to|has\s+to|have\s+to|required?|requires|essential|mandatory|only)\b'
-                         r'|必须|一定要|需要|要求', clause, re.I)
+        hard = re.search(r'\b(?:must|has\s+to|have\s+to|required?|requires|essential|mandatory|only)\b'
+                         r"|(?<!no\s)(?<!t\s)\bneeds?\b|必须|一定要|需要|要求", clause, re.I)
         restrictive = (re.search(r'\b(?:that|which|where)\s+(?:allows?|accepts?|permits?)\s+(?:pets?|cats?|dogs?)\b'
+                                 # "... with a garden and pets allowed" (V-08)
+                                 r'|\b(?:pets?|cats?|dogs?)\s+(?:are\s+)?(?:allowed|welcome|accepted|ok(?:ay)?)\b'
                                  r'|\bpet[- ]friendly\s+(?:flat|home|place|property|apartment|studio|house|\d|one|two)'
                                  r'|允许养|可以养|能养|可养', clause, re.I)
                        and re.search(r'\b(?:find|search|show|look(?:ing)?\s+for|want|need)\b|找|搜|要', clause, re.I))
         if hard or restrictive:
             return True
+        if re.search(_ATTRIBUTE_OF_HOME.format(word=r"pet[- ]friendly"), clause, re.I) \
+                and not _SOFT_WORDING.search(clause):
+            return True     # "Pet-friendly furnished 1 bed in Hackney" (R3-07)
     return None
 
 
@@ -677,8 +1150,10 @@ def cleared_fields(text: str) -> set[str]:
 # still carried the destination (A-F5). The topic word must be the direct object of the
 # withdrawal ("forget [everything we said] [about] [the] location"); "Don't forget the
 # area" and "ignore my friend's area" are not withdrawals.
+# "Retract the commute again." and "Retract the area" changed nothing (R4-05, R4-02).
 _TOPIC_VERB = (r"(?<!n't )(?<!\bnot )(?<!\bnever )"
-               r"\b(?:forget|disregard|ignore|never\s*mind|scrap|drop|clear|reset|cancel|ditch)\b")
+               r"\b(?:forget|disregard|ignore|never\s*mind|scrap|drop|clear|reset|cancel|ditch|"
+               r"retract|withdraw|remove|undo|lose|delete)\b")
 _TOPIC_EVERYTHING = (r"(?:\s+about)?(?:\s+(?:everything|anything|all))?"
                      r"(?:\s+(?:that\s+)?(?:we|i|you)(?:\s+(?:have|'ve|had))?\s+"
                      r"(?:said|discussed|talked\s+about|mentioned|covered|agreed)"
@@ -692,11 +1167,27 @@ _TOPIC_RE = {
                            r"|(?:忘掉|忘记|忘了|不管|别管|不考虑|不用考虑|不要考虑)[^。，,.!?；;]{0,12}(?:位置|地点|地段)",
                            re.I),
     'area': re.compile(_TOPIC_VERB + _TOPIC_EVERYTHING + _TOPIC_OBJECT
-                       + r"(?:areas?|neighbou?rhoods?)\b"
-                       r"|(?:忘掉|忘记|忘了|不管|别管|不考虑|不用考虑|不要考虑)[^。，,.!?；;]{0,12}(?:区域|地区)",
+                       + r"(?:areas?|neighbou?rhoods?)\b(?!\s+(?:like|near|around|with)\b)"
+                       r"|(?:忘掉|忘记|忘了|不管|别管|不考虑|不用考虑|不要考虑|撤销|撤回|取消|去掉)"
+                       r"[^。，,.!?；;]{0,12}(?:区域|地区)"
+                       # "I don't care about the area any more, anywhere in London." kept Bow
+                       # and answered from the old results as "outside the requested areas"
+                       # (R4-02): the user widens the search to anywhere.
+                       r"|\b(?:don.t|do\s+not|no\s+longer)\s+care\s+(?:about\s+)?(?:the\s+|which\s+|what\s+)?"
+                       r"(?:areas?|neighbou?rhoods?)\b"
+                       r"|\b(?:areas?|neighbou?rhoods?)\s+(?:doesn.t|does\s+not|no\s+longer|don.t)\s+matters?\b"
+                       r"|\bany\s+(?:area|neighbou?rhood|part\s+of\s+(?:london|the\s+city))\s+"
+                       r"(?:is|will\s+do|works)\b"
+                       r"|\banywhere(?=\s+in\s+(?:london|the\s+city)\b|\s+(?:is\s+fine|is\s+ok(?:ay)?|will\s+do|"
+                       r"works|at\s+all)\b|\s*(?:[.,!;]|$))"
+                       r"|哪里都(?:行|可以|好)|哪儿都(?:行|可以|好)|哪都(?:行|可以)|(?:伦敦)?任何(?:地方|区域|地区)都?(?:行|可以)?"
+                       r"|(?:区域|地区)(?:无所谓|不限|都行|都可以)|不限(?:区域|地区)",
                        re.I),
     'commute': re.compile(_TOPIC_VERB + _TOPIC_EVERYTHING + _TOPIC_OBJECT
-                          + r"(?:commut(?:e|es|ing)|journey\s+to\s+work)\b(?!\s+(?:time|limit|filter|cap|max))",
+                          + r"(?:commut(?:e|es|ing)|journey\s+to\s+work)\b"
+                          r"(?!\s+(?:time|limit|filter|cap|max|times|duration))"
+                          # 「撤销通勤要求，在Hackney找」 (R4-04); 取消通勤时间限制 lifts only the limit.
+                          r"|(?:撤销|撤回|取消|去掉|删除|删掉)[^。，,.!?；;]{0,6}通勤(?!时间|时长|限制)",
                           re.I),
 }
 
@@ -740,6 +1231,115 @@ def without_withdrawals(text: str) -> str:
     return ''.join(out)
 
 
+_STUDIO_OR_COUNT = re.compile(
+    r"\bstudios?\s+or\s+(?:an?\s+)?(?P<after>(?:\d|one|two)[\s-]*bed(?:room)?s?(?:\s+(?:flat|apartment))?)\b"
+    r"|\b(?P<before>(?:\d|one|two)[\s-]*bed(?:room)?s?(?:\s+(?:flat|apartment))?)\s+or\s+(?:an?\s+)?studios?\b", re.I)
+
+
+def studio_alternative_note(text: str) -> str:
+    """The count a "studio or a 1-bed" leaves unsearched, as a soft note, or ""."""
+    match = _STUDIO_OR_COUNT.search(str(text or ''))
+    if not match or is_hypothetical(clause_at(match.string, match.start(), match.end())):
+        return ''
+    return f"Also open to a {' '.join((match.group('after') or match.group('before')).split())}"
+
+
+# "Reset all my criteria and start from scratch." left every slot standing: the reset words
+# named no field, so nothing read them (U-06). They name the whole search, not one field: "clear
+# my budget" and "reset the search area" are not this, and long-term memory is not touched.
+_CRITERIA_NOUN = (r"(?:(?:search\s+)?(?:criteria|criterion|filters?|preferences|requirements|conditions|"
+                  r"constraints|settings)\b|search\b(?!\s+(?:area|radius|budget|location|distance)))")
+_RESET_DETERMINER = (r"(?:my|the|our|these|those|your|this)?\s*(?:current\s+|saved\s+)?")
+# "start over in Hackney" resets; "start again in May" is a date.
+_RESET_ENDS = (r"(?=\s*(?:$|[.,!?;:，。！？：]|and\b|with\b|please\b|(?:in|from|around|near)\s+"
+               r"(?!(?:the\s+)?(?:\d|new\b|next\b|(?:spring|summer|autumn|fall|winter|january|february|"
+               r"march|april|may|june|july|august|sept?(?:ember)?|october|november|december|monday|"
+               r"tuesday|wednesday|thursday|friday|saturday|sunday)\b))))")
+_RESET_ALL_CRITERIA = re.compile(
+    r"\b(?:reset|restart|clear|wipe|scrap|erase)\s+(?:out\s+)?(?:all\s+(?:of\s+)?)?" + _RESET_DETERMINER + _CRITERIA_NOUN
+    + r"|\b(?:forget|remove|delete|drop)\s+all\s+(?:of\s+)?" + _RESET_DETERMINER + _CRITERIA_NOUN
+    + r"|\b(?:reset|clear|wipe)\s+(?:out\s+)?everything\b(?!\s+(?:about|you|i\b))"
+    r"|\b(?:(?:start|begin)(?:ing)?\s+(?:all\s+)?(?:again|over|afresh|anew)\b"
+    r"(?:\s+from\s+(?:the\s+beginning|scratch))?|(?<!the\s)(?<!a\s)(?<!after\s)restart(?:ing)?\b)" + _RESET_ENDS +
+    r"|\b(?:start|begin|search|do\s+(?:it|this))\s+(?:all\s+over\s+)?from\s+scratch\b"
+    r"|重新开始(?!上|工作|读|学|租约|计时)|从头(?:开始|来)|从零开始|全部重来|重来一次|重新来过?"
+    r"|(?:清空|重置|清除|清掉)(?:掉|一下)?(?:我的|所有的?|全部的?)*(?:搜索|筛选|查询|找房)?的?"
+    r"(?:条件|筛选|要求|标准|偏好|设置|搜索)"
+    r"|(?:删除|删掉|取消|去掉)(?:掉|一下)?(?:我的)?(?:所有的?|全部的?)(?:搜索|筛选|查询|找房)?的?(?:条件|筛选|要求|标准|偏好)",
+    re.I)
+_RESET_NEGATED = re.compile(
+    r"(?:\b(?:don['’]?t|do\s+not|never|not\s+to|without)\s+(?:\w+\s+){0,2}|不要|别|不用|不想|无需|不必)$", re.I)
+_RESET_QUESTION = re.compile(r"^\s*(?:how|what|why|when|where|does|do|did|should|will|is|are)\b|怎么|如何|为什么", re.I)
+
+
+def _criteria_reset_spans(text: str) -> list[tuple[int, int]]:
+    value = str(text or '')[:4000]
+    spans = []
+    for match in _RESET_ALL_CRITERIA.finditer(value):
+        clause = clause_at(value, match.start(), match.end())
+        if (is_hypothetical(clause) or _RESET_QUESTION.search(clause)
+                or _RESET_NEGATED.search(value[:match.start()])):
+            continue
+        spans.append(match.span())
+    return spans
+
+
+def resets_all_criteria(text: str) -> bool:
+    """True when this message resets the whole search ("Clear my filters", 清空条件)."""
+    return bool(_criteria_reset_spans(text))
+
+
+def history_after_reset(history: list, message: str = '') -> list:
+    """What the model may still read of ``history``: nothing from before the last reset. "Can we
+    start from scratch with Hackney?" left a clean state, and the old turns gave the model "the
+    filters I sent (1-bed, under £2,200)" to write about and a user_query to fill in, past two
+    instructions not to (D-04, F-01). The reset turn itself stays: it states what comes next."""
+    turns = list(history or [])
+    if resets_all_criteria(message):
+        return []
+    for index in range(len(turns) - 1, -1, -1):
+        if isinstance(turns[index], dict) and resets_all_criteria(turns[index].get('user') or ''):
+            return turns[index:]
+    return turns
+
+
+# What opens the rest of a reset: "start from scratch with Hackney" names a place, which only
+# the words after a cue reveal once the reset is gone (V-02). "with a 2-bed" is no place.
+_RESET_PLACE_LEAD = re.compile(r"\s*(?:with|from|using)\s+(?!(?:a|an|the|my|our|\d+)\b)", re.I)
+
+
+def without_criteria_reset(text: str) -> str:
+    """``text`` minus its reset phrases, so what follows still applies: "Start again, 2-bed in
+    Hackney." searches that, and "Start from scratch with Hackney" searches Hackney."""
+    value = str(text or '')
+    out, position = [], 0
+    for start, end in _criteria_reset_spans(value):
+        out.append(value[position:start])
+        position = end
+        lead = _RESET_PLACE_LEAD.match(value, end)
+        if lead:
+            out.append(' in ')
+            position = lead.end()
+    out.append(value[position:])
+    return ''.join(out)
+
+
+# "commute to UCL not needed" stored UCL as the destination (W-04): the place is named only to say
+# that the user does not go there.
+_COMMUTE_DISOWNED = re.compile(
+    r"\bcommut\w*(?:\s+(?:time\s+)?(?:to|into)\s+[^,.;!?\n]{1,40}?)?\s+(?:is\s+|are\s+)?"
+    r"(?:(?:not|no\s+longer)\s+(?:needed|required|necessary|relevant|important)"
+    r"|isn.t\s+(?:needed|required|necessary|relevant|important)|unnecessary)\b"
+    r"|\b(?:no|without\s+a|(?:don.t|do\s+not)\s+need\s+a)\s+commut\w*\s+(?:to|into)\b"
+    r"|\b(?:don.t|do\s+not|won.t|will\s+not|no\s+need\s+to)\s+(?:need\s+to\s+|have\s+to\s+)?commute\s+(?:to|into)\b"
+    r"|(?:不用|不需要|无需|不必)通勤(?:到|去)", re.I)
+
+
+def commute_disowned(text: str) -> bool:
+    """True when the message says the commute it names does not apply."""
+    return bool(_COMMUTE_DISOWNED.search(str(text or '')[:4000]))
+
+
 def commute_withdrawal_drops_destination(text: str) -> bool:
     """A no-commute statement withdraws the destination too, unless it only lifts the limit.
 
@@ -750,6 +1350,17 @@ def commute_withdrawal_drops_destination(text: str) -> bool:
         r'\bcommut\w*\s+(?:times?|durations?|limits?|filters?|caps?|max(?:imum)?|thresholds?)\b'
         r'|\btime\s+limit\b'
         r'|通勤(?:时间|时长)|时间限制|不限制通勤', str(text or ''), re.I)
+
+
+def lifts_only_commute_limit(text: str) -> bool:
+    """True when the message lifts the commute TIME LIMIT and does not say the user stops
+    commuting: "Forget the commute limit", "取消通勤时间限制" (R3-11)."""
+    value = str(text or '')
+    if re.search(r"\b(?:don.t|do\s+not|won.t|never|no\s+longer)\s+(?:need\s+to\s+)?commute\b|"
+                 r"\bno\s+commut\w*\s+(?:needed|required|at\s+all)\b|\bwork(?:ing)?\s+from\s+home\b|"
+                 r"\bwfh\b|\bremote(?:ly)?\b|不(?:需要|用)?通勤|在家(?:办公|工作)", value, re.I):
+        return False
+    return not commute_withdrawal_drops_destination(value)
 
 
 def withdrawn_by_user(accumulated: dict, field: str) -> bool:
@@ -775,6 +1386,9 @@ def drop_withdrawn_places(params: dict, accumulated: dict, message: str) -> tupl
     message names again is the user's choice and stays."""
     p = dict(params or {})
     dropped = []
+    if commute_disowned(message) and isinstance(p.get('commute_destination'), str):
+        p.pop('commute_destination', None)      # "commute to UCL not needed" names it to refuse it
+        dropped.append('commute_destination')
     for field, cleared in (('commute_destination', 'commute_destination'), ('location', 'area')):
         value = p.get(field)
         if (isinstance(value, str) and value.strip() and withdrawn_by_user(accumulated, cleared)
@@ -782,6 +1396,65 @@ def drop_withdrawn_places(params: dict, accumulated: dict, message: str) -> tupl
             p.pop(field, None)
             dropped.append(field)
     return p, dropped
+
+
+# A question about how far a SHOWN listing is from a place (R3-10): "Out of curiosity how
+# far is the first one from UCL?" set UCL as the commute destination for every later
+# search, over an explicit "no commute needed", and "第一套离国王十字远吗？" moved the search
+# area to King's Cross. The place is the end of one journey, not a criterion.
+_LISTING_DEICTIC = re.compile(
+    r"\b(?:the\s+)?(?:first|second|third|fourth|fifth|last|cheapest|top|other)\s+"
+    r"(?:one|flat|listing|place|property|home|option|studio)\b"
+    r"|\b(?:this|that|these|those)\s+(?:one|ones|flats?|listings?|places?|propert(?:y|ies)|homes?|apartments?)\b"
+    r"|\b(?:number|no\.|#)\s*\d\b|\bis\s+it\b|\bare\s+they\b|\bit\s+(?:to|from)\b"
+    r"|第[一二三四五六七八九十\d]+(?:套|个|间|处)|[这那](?:套|个|间|处|几套|些)", re.I)
+_DISTANCE_QUESTION = re.compile(
+    r"\bhow\s+(?:far|long|close|near)\b|\b(?:distance|far|close|near)\s+(?:away\s+)?(?:from|to)\b"
+    r"|\b(?:commute|journey|trip)\s+(?:time\s+)?(?:from|to)\b"
+    r"|离[^，。？?！!]{1,20}(?:远|近|多远|多久|多长时间)|到[^，。？?！!]{1,20}(?:要)?(?:多久|多长时间|多远|远吗|近吗)"
+    # 「从这些房子到伦敦大学学院哪个最近？」 compares the listings; it states no commute (U-09).
+    r"|到[^，。？?！!]{1,20}(?:哪个|哪套|哪间|哪一个|哪一套)[^，。？?！!]{0,4}(?:最近|最远|最快|更近|更快)", re.I)
+_OWN_COMMUTE_STATEMENT = re.compile(
+    r"\b(?:i|we)\s+(?:\w+\s+)?(?:work|study|studies|commute|go\s+to\s+work)\b"
+    r"|\bmy\s+(?:office|workplace|work|job|school|university|college|campus|commute)\b"
+    r"|我[^，。？?！!]{0,8}(?:上班|上学|工作|通勤|读书|实习)", re.I)
+
+
+def one_off_distance_question(text: str) -> bool:
+    """True when the message asks how far a shown listing is from a place and states no
+    commute of the user's own."""
+    value = str(text or '')[:2000]
+    if _OWN_COMMUTE_STATEMENT.search(value):
+        return False
+    for sentence in re.split(r'(?<=[!?？。！])\s*|(?<=\.)\s+', value):
+        question = (sentence.rstrip().endswith(('?', '？'))
+                    or re.match(r'\s*(?:out\s+of\s+curiosity,?\s+)?(?:how|is|are|what|which)\b', sentence, re.I)
+                    or re.search(r'[吗呢]\s*$|多远|多久', sentence))
+        if question and _DISTANCE_QUESTION.search(sentence) and _LISTING_DEICTIC.search(sentence):
+            return True
+    return False
+
+
+_TRANSPORT_QUESTION = re.compile(
+    r"\b(?:fares?|zones?|travel\s*cards?|oyster|tickets?|how\s+(?:do|can|would)\s+i\s+get|"
+    r"(?:tube|train|bus|dlr)\s+(?:from|to|between)|transport\s+links?|connected)\b"
+    r"|票价|几区|怎么去|交通(?:怎么样|方便吗)", re.I)
+
+
+def one_off_transport_question(text: str) -> bool:
+    """True when the message asks about a fare, zone or journey and states no commute of the
+    user's own: "What are the fares and zones for Clapham to Canary Wharf?" made Canary
+    Wharf the search's commute destination for the rest of the conversation (R4-06)."""
+    value = str(text or '')[:2000]
+    if _OWN_COMMUTE_STATEMENT.search(value):
+        return False
+    for sentence in re.split(r'(?<=[!?？。！])\s*|(?<=\.)\s+', value):
+        question = (sentence.rstrip().endswith(('?', '？'))
+                    or re.match(r'\s*(?:how|is|are|what|which|does|do)\b', sentence, re.I)
+                    or re.search(r'[吗呢]\s*$', sentence))
+        if question and _TRANSPORT_QUESTION.search(sentence):
+            return True
+    return False
 
 
 def independent_memory_task(message: str) -> bool:

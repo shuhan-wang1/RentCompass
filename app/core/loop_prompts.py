@@ -117,7 +117,9 @@ DEICTIC_RULE = (
     "LAST one in the context block's list of listings they have looked at. 「上一个聚焦的」means "
     "the one they looked at before that. Resolve references from the context block, never by "
     "guessing an index. Describe these to the user in plain language ('the listing you're "
-    "looking at', 'the one before it') and never by the names the context block uses."
+    "looking at', 'the one before it') and never by the names the context block uses. List "
+    "listings in the order the search returned them, numbered as they are: the cards show that "
+    "order and 'the second one' means the second card, so never re-sort them in the text."
 )
 
 # 4 no-fabrication (echoes SECURITY_DIRECTIVE point 4, kept for the loop's tool-choice path).
@@ -141,7 +143,8 @@ NO_EMOJI_RULE = (
 MEMORY_CONFIRM_RULE = (
     "MEMORY SAVES: When you confirm that something was saved to long-term memory, show the "
     "user the EXACT content being saved. If a save is blocked pending confirmation, quote the "
-    "precise text you would store and ask the user to confirm — do not paraphrase it."
+    "precise text you would store and ask the user to confirm — do not paraphrase it. Write a "
+    "saved fact with 'the user' or the user's own words: a first name says nothing about gender."
 )
 
 # Long-term memory is injected into the FC context when available. The rule must not
@@ -366,17 +369,34 @@ def render_accumulated_criteria(criteria: Optional[Dict[str, Any]]) -> str:
         return ""
     body: List[str] = []
     for key, value in criteria.items():
-        if key in ('constraint_sources', 'plans', 'criteria_repair_provenance') or key.startswith('_'):
+        if key in ('constraint_sources', 'plans', 'criteria_repair_provenance',
+                   'constraint_history') or key.startswith('_'):
             continue
-        if value in (None, "", [], {}, ()):
+        if value in (None, "", [], {}, ()) or (key == 'no_commute' and not value):
             continue
         body.append(f"{key}: {value}")
     if not body:
         return ""
+    if not (criteria.get('no_commute') or criteria.get('commute_destination')
+            or criteria.get('destination')):
+        body.append("commute: not specified (the user has not said whether they commute)")
     return "\n".join(
         ["=== ACCUMULATED SEARCH CRITERIA (confirmed so far) ===", *body,
+         *_changed_values(criteria.get('constraint_history')),
          "=== END ACCUMULATED SEARCH CRITERIA ==="]
     )
+
+
+def _changed_values(history: Any) -> List[str]:
+    """What the user set in this conversation, oldest first: "What did I say my budget was
+    originally?" had only the current value and an old saved memory to answer from (V-12)."""
+    rows = [f"{field}: {' -> '.join(str(v) for v in values)}"
+            for field, values in (history if isinstance(history, dict) else {}).items()
+            if isinstance(values, list) and len(values) > 1]
+    if not rows:
+        return []
+    return ["Changed in this conversation, oldest first, the last is current (this outranks "
+            "saved memory for what the user said here):", *rows]
 
 
 def render_focused_property(record: Optional[Dict[str, Any]]) -> str:

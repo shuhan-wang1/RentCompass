@@ -1032,6 +1032,9 @@ def _dest_candidate_gate(cand: str) -> bool:
     return source == "landmark" and key in UNIVERSITY_KEYS
 
 
+_UK_POSTCODE_RE = re.compile(r"\b[A-Z]{1,2}[0-9][A-Z0-9]?\s*[0-9][A-Z]{2}\b", re.I)
+
+
 def extract_destination_from_text(text: str) -> dict | None:
     """Scan a raw user message for a commute DESTINATION (university/workplace) and
     return the first confirmed one, else None.
@@ -1050,6 +1053,9 @@ def extract_destination_from_text(text: str) -> dict | None:
     Shoreditch") yields None and never a false lock. NEVER raises."""
     if not text or not text.strip():
         return None
+    # "What about EC1A 4HQ?" stored the destination "HQ" (the inward code read as a
+    # headquarters, R4-06): a postcode is never a named destination here.
+    text = _UK_POSTCODE_RE.sub(lambda m: " " * len(m.group()), text)
     seen: set[str] = set()
     try:
         for m in _DEST_CANDIDATE_RE.finditer(text):
@@ -1071,6 +1077,9 @@ def extract_destination_from_text(text: str) -> dict | None:
                 forms.append(run)
             for cand in forms:
                 cand = " ".join(cand.split())
+                # The sentence's own full stop is not part of the name: "a nurse at St Thomas'
+                # Hospital." stored the destination "St Thomas' Hospital." (R2-14).
+                cand = re.sub(r"(?<!\bSt)(?<!\bDr)(?<!\bMt)[.!?,;:]+$", "", cand).strip()
                 key = cand.lower()
                 if key in seen:
                     continue
@@ -1440,6 +1449,14 @@ def _filter_band(rows: list[dict], min_beds: int, max_beds: int,
     return out
 
 
+def _sample_facts(rows: list[dict], min_beds: int, max_beds: int) -> dict:
+    """What a held sample says beyond the band: how many rows it holds, and the cheapest of the
+    requested size, so an empty band can say both (G-05)."""
+    prices = [price for price in (_row_price(r) for r in rows or [] if _in_band(r, min_beds, max_beds, 0, 10**9))
+              if price is not None]
+    return {"sample_size": len(rows or []), "sample_cheapest": min(prices) if prices else None}
+
+
 class _ScrapeOutcome(tuple):
     """Keep the historical two-value unpacking contract and attach safe evidence."""
 
@@ -1600,7 +1617,7 @@ def _get_listings_unlocked(
         meta.update(source="hit", source_status="cached", retrieval_complete=True,
                     coverage=saved_evidence.get("coverage") or meta["coverage"],
                     fetched_at=_fetched, cache_age_seconds=max(0, round(time.time() - _fetched, 2)),
-                    count=len(filtered),
+                    count=len(filtered), **_sample_facts(rows, min_bedrooms, max_bedrooms),
                     elapsed_s=round(time.time() - t0, 2))
         if not filtered:
             meta["message"] = "No matching listings were found in the cached area sample; this does not establish that the area has no matches."
@@ -1639,7 +1656,7 @@ def _get_listings_unlocked(
             meta.update(source="scraped", source_status="ok", retrieval_complete=True,
                         coverage=getattr(outcome, "coverage", None) or meta["coverage"],
                         fetched_at=time.time(), cache_age_seconds=0,
-                        count=len(filtered),
+                        count=len(filtered), **_sample_facts(canonical_rows, min_bedrooms, max_bedrooms),
                         elapsed_s=round(time.time() - t0, 2))
             if not filtered:
                 meta["message"] = "No matching listings were found in the retrieved area sample; this does not establish that the area has no matches."
@@ -1707,8 +1724,8 @@ def get_listings(
     kwargs = dict(force_refresh=force_refresh, budget_s=budget_s, cache_only=cache_only,
                   _cache_instance=cache)
     if cache_only or not slug:
-        return _get_listings_unlocked(location, min_bedrooms, max_bedrooms, min_price,
-                                      max_price, limit, **kwargs)
+        return _with_freshest_prices(_get_listings_unlocked(
+            location, min_bedrooms, max_bedrooms, min_price, max_price, limit, **kwargs))
     start = time.monotonic()
     total_budget = max(0, float(SCRAPE_BUDGET_S if budget_s is None else budget_s))
     digest = hashlib.sha256(str(slug).encode()).hexdigest()[:24]
@@ -1731,10 +1748,69 @@ def get_listings(
                 time.sleep(min(0.05, total_budget))
         try:
             kwargs["budget_s"] = max(0, total_budget - (time.monotonic() - start))
-            return _get_listings_unlocked(location, min_bedrooms, max_bedrooms, min_price,
-                                          max_price, limit, **kwargs)
+            return _with_freshest_prices(_get_listings_unlocked(
+                location, min_bedrooms, max_bedrooms, min_price, max_price, limit, **kwargs))
         finally:
             fcntl.flock(lock_file, fcntl.LOCK_UN)
+
+
+# One listing URL can sit in two area caches fetched at different times ("Holborn" older at
+# £2,400, "Bloomsbury" newer at £2,350): the search showed one price and the details lookup,
+# which reads the newest copy, the other (K-04). A search row takes the newest copy's price
+# and availability. The index is rebuilt only when the cache changes.
+_FRESHEST_INDEX: dict = {"stamp": None, "rows": {}}
+_FRESHEST_LOCK = threading.Lock()
+
+
+def _freshest_copy_index() -> dict:
+    """URL (no trailing slash) -> the newest cached copy of that listing row."""
+    try:
+        cache = _cache()
+        with cache._lock, cache._connect() as db:
+            stamp = (str(cache.path),) + tuple(db.execute(
+                "SELECT COUNT(*), MAX(fetched) FROM listings").fetchone())
+            if stamp == _FRESHEST_INDEX["stamp"]:
+                return _FRESHEST_INDEX["rows"]
+            raw = db.execute("SELECT rows, fetched FROM listings").fetchall()
+    except (OSError, sqlite3.Error, TypeError):
+        return {}
+    index: dict = {}
+    for rows_json, fetched in raw:
+        try:
+            rows = json.loads(rows_json)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        when = float(fetched or 0)
+        for row in rows or []:
+            url = (row.get("URL") or "").strip().rstrip("/") if isinstance(row, dict) else ""
+            if url and (url not in index or when > index[url][0]):
+                index[url] = (when, row)
+    rows_by_url = {url: row for url, (_when, row) in index.items()}
+    with _FRESHEST_LOCK:
+        _FRESHEST_INDEX.update(stamp=stamp, rows=rows_by_url)
+    return rows_by_url
+
+
+def _with_freshest_prices(result: dict) -> dict:
+    """``result`` with each row's price/availability taken from the newest cached copy."""
+    rows = (result or {}).get("rows") if isinstance(result, dict) else None
+    if not rows:
+        return result
+    try:
+        index = _freshest_copy_index()
+    except Exception:
+        return result
+    out, changed = [], False
+    for row in rows:
+        url = (row.get("URL") or "").strip().rstrip("/") if isinstance(row, dict) else ""
+        newest = index.get(url) if url else None
+        if isinstance(newest, dict) and newest.get("Price") and newest.get("Price") != row.get("Price"):
+            row = dict(row, Price=newest["Price"])
+            if newest.get("Available From"):
+                row["Available From"] = newest["Available From"]
+            changed = True
+        out.append(row)
+    return dict(result, rows=out) if changed else result
 
 
 def _demo_rows(requested_city: str | None) -> list[dict]:

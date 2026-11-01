@@ -12,6 +12,8 @@ from __future__ import annotations
 import asyncio
 import bisect
 import functools
+import json
+import logging
 import math
 import os
 import re
@@ -19,6 +21,8 @@ import time
 from typing import Any
 
 from core.tenancy_reference import monthly_from_weekly
+
+logger = logging.getLogger(__name__)
 
 
 _NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
@@ -36,6 +40,19 @@ _COMMUTE_CLAIM = re.compile(
 
 def _norm(value: Any) -> str:
     return " ".join(str(value or "").strip().lower().split())
+
+
+def _is_in_london(candidate: dict, area: str) -> bool:
+    """True when the candidate's area is a London area or its address/coordinates are in London."""
+    import re as _re
+    from core.tools.search_properties import LONDON_AREAS
+    if _re.sub(r"[’']", "", area) in LONDON_AREAS:
+        return True
+    address = " ".join(str(candidate.get(key) or "") for key in ("address", "Address", "provider_address"))
+    if _re.search(r"\blondon\b", address, _re.I):
+        return True
+    from core.commute import in_london
+    return in_london(candidate.get("geo_location") or candidate.get("Geo_Location"))
 
 
 def candidate_key(candidate: dict) -> str:
@@ -459,7 +476,9 @@ def validate_candidates(candidates: list[dict], criteria: dict | None,
             actual_area = _norm(candidate.get("area") or candidate.get("Area"))
             if not actual_area:
                 unknown_reasons.append("area is not verified")
-            elif actual_area not in requested_areas:
+            elif actual_area not in requested_areas and not (
+                    'london' in requested_areas and _is_in_london(candidate, actual_area)):
+                # "anywhere in London" asks for the whole city: Bow is inside it (R4-02).
                 reasons.append(f"area {actual_area} is outside the requested areas")
 
         requested_features = constraints["property_features"]
@@ -577,7 +596,30 @@ def validate_candidates(candidates: list[dict], criteria: dict | None,
         "eligible": [s for s in statuses if s["status"] == "eligible"],
         "excluded": [s for s in statuses if s["status"] == "excluded"],
         "unknown": [s for s in statuses if s["status"] == "unknown"],
+        "unchecked": unchecked_requirements(criteria),
     }
+
+
+_SOFT_LEAD = re.compile(r"^(?:would\s+like|must\s+have|prefers?|ideally|preferably)\s+", re.I)
+
+
+def unchecked_requirements(criteria: dict | None) -> list[str]:
+    """What the user asked for that no validation step checks: the stored soft
+    preferences and exclusions ("garden", "no basement or ground-floor flats", "不要一楼").
+
+    "Pet-friendly furnished 1 bed with a garden" and "no basement or ground-floor flats" were
+    headed "Meets all declared conditions (verified)" while nothing had checked the garden or
+    the floor (R3-07, K-01). A budget stretch note is about the ceiling, which is checked."""
+    seen, out = set(), []
+    for value in ((criteria or {}).get("soft_preferences") or []):
+        text = _SOFT_LEAD.sub("", " ".join(str(value or "").split())).strip(" .;,")
+        if not text or re.search(r"£\s?\d|\d{3,}|stretch", text, re.I):
+            continue
+        key = text.lower()
+        if key not in seen:
+            seen.add(key)
+            out.append(text)
+    return out[:8]
 
 
 def _address(status: dict) -> str:
@@ -721,18 +763,22 @@ def render_candidate_status(validation: dict, *, language: str = "en") -> str:
     eligible = validation.get("eligible") or []
     excluded = validation.get("excluded") or []
     unknown = validation.get("unknown") or []
+    unchecked = [str(item) for item in (validation.get("unchecked") or []) if str(item).strip()]
     if zh:
         if eligible:
-            lines.append("满足全部已声明条件（已核实）：")
+            # The header never covers a requirement nobody checked (R3-07).
+            lines.append("满足已核实的条件：" if unchecked else "满足全部已声明条件（已核实）：")
         lines.extend(f"- {_address(s)}（{_price_text(s)}" +
                      (f"，通勤已核实 {s['candidate']['verified_commute_minutes']:g} 分钟" if
                       s.get("candidate", {}).get("verified_commute_minutes") is not None else "") + ")"
                      for s in eligible)
         if not eligible:
             lines.append("- 没有同时满足且已核实的房源。")
+        if unchecked:
+            lines.append("以下要求未逐条核实，请向中介确认：" + "、".join(unchecked))
         if excluded:
             lines.append("已排除/不符合：")
-            lines.extend(f"- {_address(s)}：{'；'.join(_candidate_reason_zh(reason) for reason in s.get('reasons') or ['不满足硬约束'])}" for s in excluded)
+            lines.extend(dict.fromkeys(f"- {_address(s)}：{'；'.join(_candidate_reason_zh(reason) for reason in s.get('reasons') or ['不满足硬约束'])}" for s in excluded))
         if unknown:
             lines.append("尚未核实：")
             lines.extend(f"- {_address(s)}：{_unknown_reason_text(s, zh=True)}" for s in unknown)
@@ -742,17 +788,21 @@ def render_candidate_status(validation: dict, *, language: str = "en") -> str:
         return "\n".join(lines)
 
     if eligible:
-        lines.append("Meets all declared conditions (verified):")
+        lines.append("Meets the checked conditions (verified):" if unchecked
+                     else "Meets all declared conditions (verified):")
     lines.extend(f"- {_address(s)} ({_price_text(s)}" +
                  (f", commute verified at {s['candidate']['verified_commute_minutes']:g} min" if
                   s.get("candidate", {}).get("verified_commute_minutes") is not None else "") + ")"
                  for s in eligible)
     if not eligible:
         lines.append("- No listing is both fully eligible and verified.")
+    if unchecked:
+        lines.append("Not checked for any listing (confirm with the agent): " + "; ".join(unchecked))
     if excluded:
         lines.append("Excluded / does not meet:")
-        lines.extend(f"- {_address(s)}: {('; '.join(s.get('reasons') or ['hard constraint failed']))}"
-                     for s in excluded)
+        # Two rows can read the same and be different listings: only the identical line goes (X-01).
+        lines.extend(dict.fromkeys(f"- {_address(s)}: {('; '.join(s.get('reasons') or ['hard constraint failed']))}"
+                                   for s in excluded))
     if unknown:
         lines.append("Not verified:")
         lines.extend(f"- {_address(s)}: {_unknown_reason_text(s)}" for s in unknown)
@@ -995,10 +1045,15 @@ def _known_commute_caps(state: dict) -> set[float]:
             caps.add(number)
     current = str((state.get("extracted_context") or {}).get("current_message") or
                   state.get("user_query") or "")
+    # So is one stated earlier: "you dropped the 30-minute limit" in a recap of criteria the user
+    # changed was removed as an unverified commute claim (V-19).
+    current = " ".join([current] + [str(turn.get("user") or "") for turn in
+                                    (state.get("extracted_context") or {}).get("history") or []
+                                    if isinstance(turn, dict)])
     # A user's explicitly stated ceiling is a constraint even before a criteria refresh.
     # Read only user text, never the answer whose measurements are being checked.
     for pattern in (
-        r"(?:within|under|at most|no more than|maximum of)\s*(\d+(?:\.\d+)?)\s*[-–]?\s*(?:minutes?|mins?)",
+        r"(?:within|under|at most|no more than|maximum of|max)\s*(\d+(?:\.\d+)?)\s*[-–]?\s*(?:minutes?|mins?)",
         r"(\d+(?:\.\d+)?)\s*[-–]?\s*(?:minutes?|mins?)\s*(?:commute\s+)?(?:cap|limit|maximum)",
         r"(\d+(?:\.\d+)?)\s*分钟\s*(?:以内|之内|上限|为上限)",
     ) + _COMMUTE_LIMIT_PATTERNS:
@@ -1141,7 +1196,8 @@ _FIT_WORD = re.compile(
     # priorities" beside the word commute is not a commute claim (R3-01, R2-19).
     r"(?:under|over|about|around)(?=\s+(?:(?:your|the|my|its|a|an|half|just|roughly|about|around|commute|"
     r"commuting|journey|travel|time|daily|stated|maximum|max)\s+){0,3}"
-    r"(?:\d|(?:hours?|hrs?|limit|cap|max|maximum|target|threshold|ceiling|requirement|minutes?|mins?)\b))|"
+    # A clock time is no duration: "planned for around 21:43" (r06 721bf285).
+    r"(?:\d(?!\d?\s*:\s*\d\d)|(?:hours?|hrs?|limit|cap|max|maximum|target|threshold|ceiling|requirement|minutes?|mins?)\b))|"
     # "takes about 40 minutes" / "takes an hour" — never "take an umbrella" (R2-01 f).
     r"(?:takes?|took)(?=\s+(?:about|around|roughly|approximately|over|under|less|more|an?\s+"
     r"(?:hour|while|bit|long)|\d|just|only|at\s+least|up\s+to|nearly|almost|half|longer|"
@@ -1275,6 +1331,7 @@ _MONEY_OR_WEATHER_SPAN = re.compile(
     # "search actual listings … within a budget" (r18 eb65e918) is money too.
     r"\b(?:within|under|over|above|below|inside|outside|beyond)\s+(?:your\s+|the\s+|my\s+|a\s+|any\s+)?"
     r"(?:budget|price\s+range|ceiling|rent\s+(?:limit|cap|ceiling))\b|"
+    r"符合预算|预算(?:以|之)?内|超(?:出|过)?预算|"
     r"(?:\b(?:about|around|roughly|over|under|above|below)\s+)?(?<![\d.])-?\d+(?:\.\d+)?\s*"
     r"(?:°\s*[CF]?|℃|degrees?(?:\s+[CF]\b)?)|"
     r"\btemperatures?\s+(?:\w+\s+){0,2}(?:above|below|around|about|over|under)\s+\w+|"
@@ -1311,8 +1368,18 @@ _PROXIMITY_PHRASE = re.compile(
     re.I)
 
 
+# What a journey tool covers is no journey: "It does not confirm that a station or journey falls
+# within Zones 1-4", "This route is outside the area our journey tool covers", "I can check commute
+# times within London" lost the tool's own note, 11 times in 45 tool turns (B-F4).
+_COVERAGE_PHRASE = re.compile(
+    r"\b(?:within|inside|outside|beyond)\s+(?:(?:travel|fare|tfl)\s+)?(?:zones?\s*\d|(?:greater\s+)?london\b|"
+    r"(?:the\s+|that\s+|this\s+|its\s+|our\s+|their\s+)(?:\w+\s+)?(?:area|region|coverage|network)\b)",
+    re.I)
+
+
 def _without_money_or_weather(text: str) -> str:
     text = _MONEY_OR_WEATHER_SPAN.sub(" ", str(text or ""))
+    text = _COVERAGE_PHRASE.sub(" ", text)
     return _PROXIMITY_PHRASE.sub(" ", _POSITIONAL_REFERENCE.sub(" ", text))
 
 
@@ -1328,6 +1395,7 @@ _COMMUTE_DENIAL = re.compile(
     r"\b(?:didn't|did\s+not|haven't|have\s+not|hasn't|has\s+not|never)\s+"
     r"(?:set|give|given|specif(?:y|ied)|mention(?:ed)?|include[d]?|appl(?:y|ied)|ask(?:ed)?\s+for)\s+"
     r"(?:(?:a|any|your)\s+)?commute\b|"
+    r"(?:不需要|不用|无需|没有)通勤|"
     r"没有(?:设置|设定|提供|指定)?通勤|无通勤|不考虑通勤|未(?:设置|设定|指定)通勤",
     re.IGNORECASE)
 
@@ -1384,9 +1452,16 @@ _SPECULATION = re.compile(r"\b(?:could|might|may)\s+(?:well\s+|also\s+|even\s+)?
 # nothing.
 _ADVICE_CLAUSE = re.compile(
     r"^\s*(?:(?:and|but|so|or)\s+)?(?:(?:for|in)\s+[\w'’ -]{1,40}?,?\s+)?"
-    r"(?:you|i|we)\s+(?:would|might|may|could|should)\s+(?:also\s+)?(?:want|need|like|prefer|do\s+well|have)?"
+    r"(?:(?:you|i|we)\s+(?:would|might|may|could|should)\s+(?:also\s+)?(?:want|need|like|prefer|do\s+well|have)?"
     r"\s*(?:to\s+)?(?:either\s+)?(?:look|search|consider|focus|try|check|aim|target|accept|choose|pick|find|"
-    r"weigh|trade|compromise|live|go)\b", re.I)
+    r"weigh|trade|compromise|live|go)\b"
+    # "and I'll search for listings that fit", "Tell me your commute and ...", "Allow a longer
+    # commute": what happens next, or what the user could change. Nothing is said of a journey.
+    r"|(?:i['’]ll|i\s+will|i\s+can|we['’]ll)\s+(?:then\s+)?(?:search|look|check|find|run|try|show)\b"
+    r"|(?:please\s+)?tell\s+me\b|let\s+me\s+know\b"
+    r"|(?:allow|accept|consider|try|widen|relax|raise|extend|increase)\s+(?:a|an|your|the)\b"
+    # 可以看看 Hackney 周边通勤相近但租金更低的区域 (r05 876e3d1c).
+    r"|(?:你)?(?:也)?(?:可以|不妨|建议)(?:再)?(?:看看|考虑|试试|放宽))", re.I)
 
 
 # A figure-free condition on the USER's priorities ("If your priority is a shorter journey",
@@ -1394,7 +1469,8 @@ _ADVICE_CLAUSE = re.compile(
 _PRIORITY_CONDITION = re.compile(
     r"^\s*(?:(?:and|but|so|or)\s+)?(?:if|whether|should|when)\b[^.;!?]{0,80}?"
     r"\b(?:priorit(?:y|ies|ise|ize)|matters?|care\s+(?:more|most|about)|prefer\w*|value\s+\w+\s+more|"
-    r"is\s+(?:more|most)\s+important)\b", re.I)
+    # "If you're moving to Inverness for a different reason and no longer need the London commute".
+    r"is\s+(?:more|most)\s+important|no\s+longer\s+need|don.t\s+need)\b", re.I)
 
 
 _GENERIC_COMMUTE_REFERENCE = re.compile(
@@ -1652,6 +1728,8 @@ def _route_legs(journey: dict) -> list[dict]:
         modes = [str(line) for line in leg.get("lines") or [] if str(line or "").strip()]
         if str(leg.get("mode") or "").lower() == "walking":
             modes.extend(("walk", "步行", "走路"))
+        elif str(leg.get("mode") or "").lower() == "bus":
+            modes.extend(("bus", "公交"))       # "9 min walk, 14 min bus, 3 min walk" (r05 af228062)
         if not modes:
             continue
         legs.append({"minutes": float(value),
@@ -1834,18 +1912,86 @@ def _bind_listing_travel_time(bindings: list[dict], row: dict) -> None:
                                 + _place_labels(row.get("provider_address"))))
     if not labels:
         return
-    existing = next((b for b in bindings if not b.get("members")
-                     and set(b.get("labels") or []) & set(labels)), None)
-    if existing is None:
-        existing = {"labels": labels, "minutes": None, "destinations": []}
-        bindings.append(existing)
-    existing["listing"] = True
-    if not existing.get("destinations"):
-        existing["destinations"] = _place_labels(destination)
-    if measured and existing.get("minutes") is None:
-        existing["minutes"] = minutes
-    elif not measured and existing.get("minutes") is None and not existing.get("estimate"):
-        existing["estimate"] = [minutes]
+    # The listing's own binding, by its whole address: two flats on Goswell Road share the short
+    # label, and the second flat's figure went to the first, so its line had no evidence and
+    # lost a supported figure (r05 78275cc0). One listing's minutes never license another's. The
+    # same address listed twice is one place, and each row's figure is that address's.
+    open_bindings = [b for b in bindings if not b.get("members")]
+    own = [b for b in open_bindings if labels[0] in (b.get("labels") or [])] or [
+        b for b in open_bindings if set(b.get("labels") or []) & set(labels) and not b.get("listing")][:1]
+    if not own:
+        own = [{"labels": labels, "minutes": None, "destinations": []}]
+        bindings.append(own[0])
+    for existing in own:
+        existing["listing"] = True
+        if not existing.get("destinations"):
+            existing["destinations"] = _place_labels(destination)
+        if measured and existing.get("minutes") is None:
+            existing["minutes"] = minutes
+        elif measured and existing.get("minutes") != minutes:
+            existing["alt_minutes"] = sorted({*(existing.get("alt_minutes") or []), minutes})
+        elif not measured and existing.get("minutes") is None:
+            existing["estimate"] = sorted({*(existing.get("estimate") or []), minutes})
+
+
+def _same_pair_measurement(routes: list[dict], binding: dict) -> dict | None:
+    """The route already measured for this origin, destination and mode, else None."""
+    if binding.get("minutes") is None:
+        return None
+    return next((prior for prior in routes
+                 if prior.get("minutes") is not None and prior.get("mode") == binding.get("mode")
+                 and set(map(_norm, prior["labels"])) & set(map(_norm, binding["labels"]))
+                 and set(map(_norm, prior["destinations"])) & set(map(_norm, binding["destinations"]))),
+                None)
+
+
+def _add_route_measurement(route: dict, binding: dict) -> None:
+    """One pair planned several times in a turn (now, then at the time the user meant) is one
+    route with several measurements. Kept apart, the bindings tied on every line naming the pair
+    and the 27 minutes the answer quoted was replaced by the first result, a night bus (U-13).
+    The latest call is the route's figure and the others stay quotable."""
+    others = {route["minutes"], *(route.get("alt_minutes") or []), *(binding.get("alt_minutes") or [])}
+    others.discard(binding["minutes"])
+    route["minutes"] = binding["minutes"]
+    route["alt_minutes"] = sorted(others)
+    route["place_alternatives"] = sorted(others)
+    route["labels"] = list(dict.fromkeys(route["labels"] + binding["labels"]))
+    route["destinations"] = list(dict.fromkeys(route["destinations"] + binding["destinations"]))
+    route["legs"] = (binding.get("legs") or []) + (route.get("legs") or [])
+    if not route["legs"]:
+        route.pop("legs")
+    route["remeasured"] = True
+
+
+# The tool's own band for a measured route: duration_category "Medium (20-45 min)". The model
+# says it back, "That falls in the medium range of 20 to 45 minutes", and lost it (r06 ffcc2196).
+_DURATION_BAND = re.compile(r"(\d{1,3})\s*[-–]\s*(\d{1,3})\s*min", re.I)
+_BAND_QUOTE = re.compile(r"(?<![\d.])(\d{1,3})\s*(?:-|–|to|至|到)\s*(\d{1,3})\s*-?\s*(?:minutes?|mins?\b|分钟)", re.I)
+
+
+# The fare tools' coverage notes, for a zh reply: the English one sat inside it (r06 4298c21d).
+_ZH_COVERAGE_NOTES = {
+    "Postcode-derived zones are approximate, not verified station or itinerary coverage. Out-of-zone "
+    "services and supplements require separate fare evidence.":
+        "按邮编估算的分区只是近似值，并未核实具体车站或路线的覆盖范围；分区以外的服务和附加费需另行核实票价。",
+    "No zonal price is assigned when either address has an unknown zone.":
+        "任一地址的分区未知时，不会给出分区票价。",
+    "These prices apply only to the explicitly selected TfL zones. They do not verify that an address, "
+    "station or whole route is covered; out-of-zone stations such as Watford Junction require a "
+    "separately verified fare/extension.":
+        "这些价格只适用于明确选定的 TfL 分区，并不代表地址、车站或整条路线都在覆盖范围内；"
+        "Watford Junction 等分区外车站需另行核实票价或延伸票。",
+    "This is a price for the specified or approximately inferred zones, not verified coverage of the "
+    "named stations or full journey. Out-of-zone stations require separately verified extensions/fares.":
+        "这是指定或大致推断分区的价格，并未核实所述车站或全程的覆盖范围；分区外车站需另行核实延伸票或票价。",
+}
+
+
+def _quotes_duration_band(fragment: str, pool: list) -> bool:
+    """Every minute figure in ``fragment`` is the band a measured route of this turn came in."""
+    bands = {c["band"] for c in pool if c.get("band")}
+    quotes = [(float(a), float(b)) for a, b in _BAND_QUOTE.findall(str(fragment or ""))]
+    return bool(bands and quotes and all(quote in bands for quote in quotes))
 
 
 def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
@@ -1858,7 +2004,9 @@ def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
     _bind_search_travel_times(bindings, state.get("tool_artifacts") or [],
                               shown_rows=_shown_listing_rows(state))
     routes = []
-    for artifact in state.get("tool_artifacts") or []:
+    current = list(state.get("tool_artifacts") or [])
+    earlier = list((state.get("extracted_context") or {}).get("earlier_routes") or [])
+    for position, artifact in enumerate(current + earlier):
         if not _usable_artifact(artifact):
             continue
         raw = artifact["raw_data"]
@@ -1897,6 +2045,18 @@ def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
         binding = {"labels": _place_labels(raw.get("from_address") or raw.get("from")),
                    "destinations": _place_labels(raw.get("to_address") or raw.get("to")),
                    "minutes": value, "mode": _arithmetic.route_mode(raw.get("mode"))}
+        if position >= len(current):
+            # A journey an earlier turn measured is still true when this one quotes it: "40 min
+            # (TfL journey plan)" went from a comparison table because that route was not in this
+            # turn's state (F-02). This turn's own measurement of the pair wins.
+            if any(set(map(_norm, prior["labels"])) & set(map(_norm, binding["labels"]))
+                   and set(map(_norm, prior["destinations"])) & set(map(_norm, binding["destinations"]))
+                   for prior in routes):
+                continue
+            binding["earlier"] = True
+        band = _DURATION_BAND.search(str(journey.get("duration_category") or "")) if value is not None else None
+        if band:
+            binding["band"] = (float(band.group(1)), float(band.group(2)))
         legs = _route_legs(journey) if value is not None else []
         # The planner's CHEAPER itinerary for the same pair is part of the same result: "A
         # cheaper alternative takes 45 minutes with one change" and "Cheapest route, £29.00:
@@ -1933,12 +2093,16 @@ def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
                 equivalent["destinations"] + binding["destinations"]))
             if equivalent["minutes"] is None and value is not None:
                 equivalent["minutes"] = value
+                if binding.get("band"):
+                    equivalent["band"] = binding["band"]
                 if legs:
                     equivalent["legs"] = legs
                 if binding.get("alt_minutes"):
                     equivalent["alt_minutes"] = binding["alt_minutes"]
             if estimate:
                 equivalent["estimate"] = sorted(set(equivalent.get("estimate") or []) | set(estimate))
+        elif (repeat := _same_pair_measurement(routes, binding)) is not None:
+            _add_route_measurement(repeat, binding)
         elif not any(binding == prior for prior in routes):
             routes.append(binding)
 
@@ -1968,11 +2132,12 @@ def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
         if not any(route == binding for binding in bindings):
             bindings.append(route)
 
+    fresh = [r for r in routes if not r.get("earlier")]
     distinct = {(tuple(map(_norm, r["labels"])), tuple(map(_norm, r["destinations"])),
-                 r["minutes"]) for r in routes}
+                 r["minutes"]) for r in fresh}
     # Two tools may name the same station slightly differently. A default is allowed only
     # for a genuinely single origin/destination/measurement, or the legacy nameless result.
-    default = routes[0] if len(distinct) == 1 else None
+    default = fresh[0] if len(distinct) == 1 and not fresh[0].get("remeasured") else None
     if default is not None and (state.get("candidate_validation") or {}).get("statuses"):
         current = str((state.get("extracted_context") or {}).get("current_message")
                       or state.get("user_query") or "").lower()
@@ -1985,6 +2150,19 @@ def _response_commute_bindings(state: dict) -> tuple[list[dict], dict | None]:
         if not same_listing and (names_listing or not names_route):
             default = None
     return bindings, default
+
+
+_EARLIER_ROUTES_KEPT = 8
+_ROUTE_TOOLS = {"calculate_commute", "calculate_commute_cost", "get_transport_info"}
+
+
+def earlier_routes(previous: list | None, artifacts: list | None) -> list:
+    """The journeys the last turns measured, for a later turn that quotes one again. Tool output,
+    never model prose, and only the newest few."""
+    fresh = [{"tool": artifact.get("tool"), "success": True, "raw_data": artifact.get("raw_data")}
+             for artifact in artifacts or []
+             if isinstance(artifact, dict) and artifact.get("tool") in _ROUTE_TOOLS and _usable_artifact(artifact)]
+    return (list(previous or []) + fresh)[-_EARLIER_ROUTES_KEPT:]
 
 
 _THE_LISTING = re.compile(r"\b(?:the|this|that)\s+(?:flat|listing|property|apartment|home|house|studio)\b", re.I)
@@ -2011,23 +2189,62 @@ _SAVING_HEADER = re.compile(
 # The user's own limit, restated as a criterion: "Your criteria are saved: studio, up to
 # £2,000/month, within 25 minutes of Old Street." (r19 a81297be) — nothing is said to BE within it.
 _BARE_LIMIT = re.compile(
-    r"^\s*(?:and\s+|with\s+|plus\s+)?(?:a\s+commute\s+(?:of\s+)?)?(?:within|under|up\s+to|inside|no\s+more\s+than|"
-    r"at\s+most|max(?:imum)?(?:\s+of)?)\s+(?:about\s+)?\d{1,3}\s*(?:minutes?|mins?)(?:['’]?\s+(?:commute|travel))?"
+    # "(under £2,500 a month and within 30 minutes of Bank station)": both of the user's limits.
+    r"^\s*(?:(?:up\s+to|under|below|max(?:imum)?(?:\s+of)?)\s+£[\d,]+(?:\s*(?:a|per)\s+month|/\s*month|\s*pcm)?\s+(?:and|with)\s+)?"
+    r"(?:and\s+|with\s+|plus\s+|including\s+)?(?:a\s+commute\s+(?:of\s+)?|commute\s+)?(?:(?:within|under|up\s+to|inside|no\s+more\s+than|"
+    r"at\s+most|max(?:imum)?(?:\s+of)?)\s+(?:about\s+)?\d{1,3}\s*(?:minutes?|mins?)|"
+    # "including a commute of 30 minutes or less to King's Cross" (G-07).
+    r"\d{1,3}\s*(?:minutes?|mins?)\s+or\s+(?:less|under|fewer))(?:['’]?\s+(?:commute|travel))?"
     r"(?:\s+(?:of|to|from)\s+(?P<place>[^.,;!?]+?))?\s*$", re.I)
 _WORKPLACE_WORDS = re.compile(r"^(?:(?:your\s+|the\s+)?(?:work|office|workplace|job|campus|university|school))$", re.I)
+
+
+# The same limit as one item of a bracketed recap: "(1-bed whole flat, under £1,900 a month, commute
+# to King's Cross under 30 minutes)", "（Islington、1 房整套、月租 £2,200 以内、通勤 30 分钟内）" (F-02).
+_RECAP_LIMIT = re.compile(
+    r"^\s*commute\s+(?:to\s+(?P<place>[^.,;!?]+?)\s+)?(?:under|within|up\s+to|max(?:imum)?(?:\s+of)?)\s+"
+    r"\d{1,3}\s*(?:minutes?|mins?)(?:\s+to\s+(?P<after>[^.,;!?]+?))?\s*$"
+    r"|^\s*通勤\s*(?:到?[^\d，、。]{0,20}?)?\s*\d{1,3}\s*分钟\s*(?:以内|之内|内)\s*$", re.I)
 
 
 def _restates_user_limit(fragment: str, bindings: list, user_destinations: list | None) -> bool:
     """A clause that is ONLY the user's limit, to the user's own destination (or "work"), with no
     listing, area or route as its subject. ``_preference_commute_reference`` still requires the
     figure to be the user's cap and still rejects "this flat … within …"."""
-    match = _BARE_LIMIT.match(str(fragment or ""))
+    text = str(fragment or "").strip(" ()（）")
+    match = _BARE_LIMIT.match(text)
+    if not match and re.match(r"\s*[(（]", str(fragment or "")):
+        items = [item for item in re.split(r"[,，、]", text) if item.strip()]
+        match = _RECAP_LIMIT.match(items[-1]) if len(items) > 1 else None
+        if match and any(_MINUTE_TOKEN.search(item) for item in items[:-1]):
+            match = None
     if not match:
         return False
-    place = (match.group("place") or "").strip()
+    place = (match.groupdict().get("place") or match.groupdict().get("after") or "").strip()
     if place and not _WORKPLACE_WORDS.match(place) and not any(
             _label_key(label) and _label_key(label) == _label_key(place) for label in user_destinations or []):
         return False      # "within 25 minutes of Bank" when the user works at Old Street
+    named = _line_binding(fragment, bindings)
+    return named is None or not (named.get("labels") or named.get("members"))
+
+
+# The reply saying the user's own limit back to them: "Got it: you commute to Holborn with a
+# 30-minute maximum." was removed as an unverified commute claim, and the note then stood on a turn
+# that made no claim (D-03). The subject is the user or the search to come, never a place.
+_LIMIT_ACKNOWLEDGED = re.compile(
+    r"^\W*(?:(?:got\s+it|noted|understood|ok(?:ay)?|sure|thanks|great|perfect|right)\b\W*)*(?:so\s+)?"
+    r"(?:you(?:['’]re|\s+are)?\b|your\b|i['’]ll\b|i\s+will\b|i\s+can\b|we['’]ll\b|with\s+(?:a|your)\b|"
+    r"(?:a\s+|the\s+)?commute\b|\d{1,3}\s*-?\s*(?:minutes?|mins?)\s+(?:at\s+most|max(?:imum)?)\b)", re.I)
+
+
+def _acknowledges_user_limit(fragment: str, caps: set, bindings: list) -> bool:
+    """True for a clause that only repeats the user's own limit (see ``_LIMIT_ACKNOWLEDGED``)."""
+    values = _minute_claim_values(fragment)
+    if not values or any(value not in caps for value in values) or not _LIMIT_ACKNOWLEDGED.match(fragment):
+        return False
+    if re.search(r"takes?|took|measured|returned|actually|verified|meets?|satisf(?:y|ies)|exceeds?|fits?|"
+                 r"\b(?:is|are)\s+(?:\w+\s+)?(?:inside|within|under|over|below|above)\b", fragment, re.I):
+        return False        # "the commute is well inside your 30 minute limit" is a verdict
     named = _line_binding(fragment, bindings)
     return named is None or not (named.get("labels") or named.get("members"))
 
@@ -2109,6 +2326,14 @@ def _line_binding(line: str, bindings: list[dict], default: dict | None = None) 
         return listing_hits[0]
     if len(set(independent)) > 1:
         return {"labels": [], "minutes": None, "destinations": [], "members": named_bindings}
+    if ambiguous and len(
+            {(b.get("minutes"), tuple(b.get("alt_minutes") or ()), tuple(b.get("estimate") or ()),
+              tuple(map(_norm, b.get("destinations") or [])), b.get("mode") or "transit")
+             for b in tied}) == 1:
+        # Two flats on one street with one figure: it is true of either. So is a listing and the
+        # route the turn measured from it: "King Square ... 32 minutes" read as ambiguous and the
+        # measured figure went, on every line about a listing the tool had timed (G-07).
+        return next((b for b in tied if b.get("legs")), tied[0])
     if ambiguous:
         # The same place measured by bike and by public transport is two journeys, told apart
         # by the mode the line names; a line naming none is about the public-transport one (r6b).
@@ -2161,6 +2386,11 @@ def _names_route_place(target_text: str, binding: dict, scope: str) -> bool:
     """
     hay = _label_key(target_text)
     if any(_key_in(_label_key(label), hay) for label in binding.get("destinations") or []):
+        return True
+    # The place without its tenant: "29 min to King's Cross" on a route to "Google King's Cross"
+    # (G-07). Two words at least, so "to London" is not a route to "Canary Wharf, London".
+    if len(hay.split()) >= 2 and any(_label_key(label).endswith(f" {hay}")
+                                     for label in binding.get("destinations") or []):
         return True
     if re.search(r"\bline\b|\bdlr\b|\boverground\b|\bthameslink\b", hay) and any(
             _key_in(_label_key(mode), hay) for leg in binding.get("legs") or []
@@ -2694,6 +2924,44 @@ def _shared_by_every_route(fragment: str, pool: list) -> bool:
                for value in values for route in routes)
 
 
+_BARE_ASIDE = re.compile(r"[(（][^()（）]{0,24}[)）]")
+
+
+# "None are within 30 minutes of King's Cross", "Nothing came back within 30 minutes": a search that
+# found no listing inside the user's limit, said in the limit's own words (G-07).
+_NOTHING_INSIDE_LIMIT = re.compile(
+    r"^\W*(?:(?:but|and|so|sadly|unfortunately)\W+)*(?:none|nothing|no\s+(?:listing|flat|home|property|result|"
+    r"option|match)s?|i\s+(?:found|have|see)\s+no\b)", re.I)
+
+
+def _no_listing_inside_limit(fragment: str, caps: set, pool: list) -> bool | None:
+    """That statement's truth: no route of the turn is within the limit quoted. None for any other
+    clause."""
+    values = _minute_claim_values(fragment)
+    if not (values and _NOTHING_INSIDE_LIMIT.match(fragment)
+            and all(any(abs(value - cap) < 1e-9 for cap in caps) for value in values)):
+        return None
+    return not any(c.get("minutes") is not None and c["minutes"] <= min(values) + 1e-9 for c in pool)
+
+
+# A wish for something nearby is no commute: "You would like a gym within 10 minutes" went from a
+# recall of saved facts, and the list lost its number 3 (A-F8).
+_AMENITY_TIME = re.compile(
+    r"\b(?:gyms?|supermarkets?|shops?|parks?|cafes?|caf\u00e9s?|pubs?|restaurants?|schools?|nurser(?:y|ies)|"
+    r"gps?|pharmac(?:y|ies)|librar(?:y|ies)|pools?|playgrounds?|green\s+spaces?)\s+"
+    r"(?:(?:that\s+is|is|are)\s+)?(?:within|under|in|less\s+than)\s+(?:about\s+)?\d{1,3}\s*(?:minutes?|mins?)\b|"
+    r"\b(?:within|under|less\s+than)\s+(?:about\s+)?\d{1,3}\s*(?:minutes?|mins?)['’]?\s+"
+    r"(?:(?:walk|walking\s+distance)\s+)?(?:of|from|to)\s+(?:a|an|the|some)\s+"
+    r"(?:gym|supermarket|shop|park|cafe|pub|restaurant|school|nursery|gp|pharmacy|library|pool|playground)\b", re.I)
+_WISH_WORD = re.compile(
+    r"\b(?:would\s+like|wants?|wish(?:es)?|prefers?|needs?|looking\s+for|hop(?:e|ing)\s+for|saved|noted)\b|想要|希望|偏好", re.I)
+
+
+def _amenity_wish(fragment: str, preference_line: bool) -> bool:
+    return bool(_AMENITY_TIME.search(fragment) and not _COMMUTE_WORD.search(fragment)
+                and (preference_line or _WISH_WORD.search(fragment)))
+
+
 def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
                         context: str = "", heading: str = "",
                         itinerary: frozenset | set = frozenset(),
@@ -2755,6 +3023,9 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
         # A fastest itinerary is not an accessibility audit or a personalised travel time.
         return False
     bounded = _bound_is_evidenced(fragment, binding["minutes"])
+    if bounded is False and any(_bound_is_evidenced(fragment, figure) is True
+                                for figure in binding.get("place_alternatives") or []):
+        bounded = True      # any measurement of the named pair evidences it (U-13)
     if bounded is not None:
         return bounded
     own = {binding["minutes"]} | set(binding.get("alt_minutes") or [])   # the route's figures
@@ -2787,8 +3058,11 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
     names_own_leg = bool(values) and all(
         any(abs(value - leg["minutes"]) < 1e-9 for leg in _legs_named_at(scope, binding)) for value in values)
     hay = _label_key(scope)
+    # A bare "(约 9 分钟)" after a named leg is that leg, however far the leg runs: "Jubilee 线从
+    # Stratford 到 Canary Wharf（约 9 分钟）" names both ends of the trip too (r06 b3cb3997).
     end_to_end = (any(_key_in(_label_key(l), hay) for l in binding.get("labels") or [])
-                  and any(_key_in(_label_key(l), hay) for l in destinations))
+                  and any(_key_in(_label_key(l), hay) for l in destinations)
+                  and not (names_own_leg and _BARE_ASIDE.fullmatch(fragment.strip())))
     if not (_WHOLE_TRIP_WORD.search(fragment) or (_WHOLE_TRIP_WORD.search(heading) and not names_own_leg)
             or end_to_end):
         # A leg named in the line's label counts too: "- Heathrow Express to London
@@ -2815,7 +3089,8 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
         # quoting THAT as an estimate is still honest.
         return _estimate_is_quoted_as_estimate(fragment, binding, caps, context, sentence_marked)
 
-    pointed = _POSITIONAL_REFERENCE.sub(" ", fragment)     # "the figure above" is no verdict
+    # "the figure above" is no verdict, and nor is "within budget" beside a journey time.
+    pointed = _MONEY_OR_WEATHER_SPAN.sub(" ", _POSITIONAL_REFERENCE.sub(" ", fragment))
     asserts_pass = bool(_PASS_VERDICT.search(pointed))
     asserts_fail = bool(_FAIL_VERDICT.search(pointed))
     if asserts_pass and asserts_fail:
@@ -2838,6 +3113,11 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
         return bool(_LIMIT_LABEL.search(f"{fragment} {heading}") or re.search(
             r"\b(?:limit|cap|ceiling|maximum|max|target|requirement)\b|上限|要求", fragment, re.I))
     return bool(values)
+
+
+# "All times below are measured by the TfL Journey Planner": it says where figures came from.
+_TIMES_POINTED_AT = re.compile(r"\b(?:times?|figures?)\s+(?:below|above)\b", re.I)
+_ROUTE_PROVENANCE = re.compile(r"\bmeasured\s+(?:by|with|on|using|from)\s+(?:the\s+)?TfL\b|实测.{0,6}TfL", re.I)
 
 
 def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None = None,
@@ -2895,6 +3175,10 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
     # the DIFFERENCE of two of this turn's measurements, quoted with a comparative (R2-25).
     measured = sorted({c["minutes"] for c in pool if c.get("minutes") is not None})[:40]
     differences = {round(abs(a - b), 2) for i, a in enumerate(measured) for b in measured[i + 1:]}
+    # The fastest and the cheapest itinerary of one pair are two measurements too (r06 586bc045).
+    for candidate in pool:
+        own_figures = sorted({candidate.get("minutes"), *(candidate.get("alt_minutes") or [])} - {None})
+        differences |= {round(abs(a - b), 2) for i, a in enumerate(own_figures) for b in own_figures[i + 1:]}
     # ... under each consistent choice of a place's measurements (r21 8f4f0a00)
     for variant in _arithmetic.route_variants(
             [{"labels": list(c.get("labels") or []), "minutes": c["minutes"],
@@ -2995,8 +3279,22 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                         _LIMIT_LABEL.search(heading_now[0]) or _LIMIT_LABEL.search(fragment))
                     or _restates_user_limit(fragment, bindings, user_destinations)):
                 return True
+            if not pool and _acknowledges_user_limit(fragment, caps, bindings):
+                return True
+            nothing_inside = _no_listing_inside_limit(fragment, caps, pool)
+            if nothing_inside is not None:
+                return nothing_inside
+            if _amenity_wish(fragment, preference_line):
+                return True
             if _quotes_source_text(fragment, source_texts):
                 return True
+            named_part = _TIMES_POINTED_AT.sub(" ", fragment)       # "All times below ..."
+            verdict = bool(_PASS_VERDICT.search(named_part) or _FAIL_VERDICT.search(named_part))
+            if not verdict and _quotes_duration_band(fragment, pool):
+                return True
+            if (not verdict and _ROUTE_PROVENANCE.search(fragment) and not _minute_claim_values(fragment)
+                    and pool and all(c.get("minutes") is not None for c in pool)):
+                return True     # every figure of the turn is a measurement, so this is true of them
             effective = _binding if _binding is not None else binding
             mode = (_arithmetic.figure_mode(f"{previous_clause} {fragment}")
                     if _MINUTE_TOKEN.search(fragment) else None)
@@ -3085,7 +3383,15 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 # route of the turn satisfies it (r06 27d8b56d).
                 measured_routes = [c for c in pool if c.get("minutes") is not None]
                 return bool(measured_routes) and all(
-                    _bound_is_evidenced(fragment, c["minutes"]) is True for c in measured_routes)
+                    _bound_is_evidenced(fragment, figure) is True for c in measured_routes
+                    for figure in [c["minutes"], *(c.get("place_alternatives") or [])])
+            if ((effective is None or effective is default_binding) and values and any(
+                    _estimate_is_quoted_as_estimate(fragment, c, caps, context, sentence_marked)
+                    for c in pool if c.get("estimate"))):
+                # "Commute to Bank is an estimated ~39 minutes (derived from straight-line
+                # distance)" under a listing the line does not name, beside one measured route of
+                # the area: said as an estimate, of a listing the search estimated (F-02).
+                return True
             if effective is not None:
                 return False
             if _per_period_line(line, fragment):
@@ -3301,8 +3607,14 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 # "… than Camden but a much shorter commute" names Camden as what the line's
                 # subject is compared WITH; the subject stays (r11 97bdde65).
                 compared_with = local is not None and local is _comparison_target(fragment, bindings)
+                # The start of the line's own address, shared with another listing on that street:
+                # alone it binds to nothing, and "Goswell Road, Angel, London, EC1V: 35 min" then
+                # fell to the Angel route's 32 (r05 87134033).
+                own_address_part = bool(inherited and not local.get("labels") and not local.get("members")
+                                        and any(_label_key(fragment) in _label_key(long)
+                                                for long in inherited.get("labels") or []))
                 if (not nested_component or _asserts_commute(fragment) or "→" in fragment) \
-                        and not area_cell and not compared_with:
+                        and not area_cell and not compared_with and not own_address_part:
                     inherited = local
             # A parenthetical already checked against its own clause is not re-judged as part
             # of the enclosing clause: "Walk to the exit (5 min)" kept its leg figure above,
@@ -3348,7 +3660,9 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             bare_figure = bool(_BARE_FIGURE.fullmatch(claim.strip()))
             drop = fragment.strip() and asserts and not _evidenced(
                 claim, _the_listing_referred_to(claim, inherited, local, context_fragment, bindings),
-                context=context_fragment if bare_figure else "",
+                # "Walk to 5 Appold Street, London — 7 min": the leg's name is a clause further
+                # back than the address's last part (r05 f5d380af).
+                context=" ".join(parts[max(0, index - 4):index:2]) if bare_figure else "",
                 sentence_marked=sentence_marked, previous_clause=context_fragment)
             # A dependent clause after a redacted one restates its verdict without repeating
             # its subject ("…, which is well within your limit"), so it goes with it.
@@ -3558,7 +3872,7 @@ def _without_orphaned_lead_ins(source: list, produced_at: list, lines: list) -> 
 
 _COMPARATIVE_DIFFERENCE = re.compile(
     r"\b(?:shorter|longer|quicker|faster|slower|less|more|saves?|saving|extra|difference|"
-    r"cuts?|adds?)\b|更短|更长|更快|更慢|节省|省|多出|相差", re.I)
+    r"cuts?|adds?)\b|更短|更长|更快|更慢|节省|省|多出|相差|只差", re.I)
 
 
 _BARE_FIGURE = re.compile(
@@ -3732,6 +4046,28 @@ def _commute_unverified_note(zh: bool) -> str:
             "Note: some commute claims could not be verified and have been removed from this answer.")
 
 
+def _superseded_journeys(artifacts: list) -> set:
+    """ids of the transport results another result of the same pair answers better: the time the
+    user asked for over "now", otherwise the latest call (U-13). Results for several requested
+    times of one pair all stay."""
+    groups: dict = {}
+    for artifact in artifacts:
+        if (not _usable_artifact(artifact)
+                or artifact.get("tool") not in {"calculate_commute", "get_transport_info"}):
+            continue
+        raw = artifact["raw_data"]
+        origin = _place_labels(raw.get("from_address") or raw.get("from"))
+        target = _place_labels(raw.get("to_address") or raw.get("to"))
+        if origin and target and _measured_minutes(raw) is not None:
+            groups.setdefault((_norm(origin[0]), _norm(target[0])), []).append(artifact)
+    superseded: set = set()
+    for group in groups.values():
+        asked = [a for a in group
+                 if (a["raw_data"].get("journey_time") or {}).get("time_basis") == "user_requested"]
+        superseded.update(id(a) for a in group if not any(a is kept for kept in (asked or group[-1:])))
+    return superseded
+
+
 def render_structured_evidence_fallback(state: dict, *, language: str | None = None) -> str:
     """Render independent facts from THIS turn's completed artifacts, without an LLM.
 
@@ -3756,7 +4092,10 @@ def render_structured_evidence_fallback(state: dict, *, language: str | None = N
     usable_tools = {a.get('tool') for a in artifacts if _usable_artifact(a)}
     has_forecast = any(_usable_artifact(a) and a.get('tool') == 'get_weather'
                        and a['raw_data'].get('weather_type') == 'forecast' for a in artifacts)
+    superseded = _superseded_journeys(artifacts)
     for artifact in artifacts:
+        if id(artifact) in superseded:
+            continue
         if not _usable_artifact(artifact):
             if (isinstance(artifact, dict) and artifact.get('tool') in {'get_transport_info', 'get_weather'}
                     and not any(artifact.get(flag) for flag in ('timed_out','denied','abandoned','outcome_unknown'))):
@@ -3890,6 +4229,16 @@ def render_structured_evidence_fallback(state: dict, *, language: str | None = N
                 route = f" ({origin[0]} → {target[0]})" if origin and target else ""
                 add(f"Returned one-way fare{route}: £{fare:.2f}; this is not a return fare or a monthly total.",
                     f"返回的单程票价{route}：£{fare:.2f}，并非往返或每月总额。")
+            # The planner's cheapest itinerary carries its own fare (R1-08).
+            cheapest = raw.get("cheapest_journey")
+            if (isinstance(cheapest, dict) and cheapest.get("fare_available")
+                    and isinstance(cheapest.get("fare_gbp"), (int, float))
+                    and cheapest.get("itinerary_id") != raw.get("selected_itinerary_id")):
+                minutes = cheapest.get("duration_minutes")
+                took = (f", {minutes:g} minutes" if isinstance(minutes, (int, float)) else "")
+                took_zh = (f"，{minutes:g} 分钟" if isinstance(minutes, (int, float)) else "")
+                add(f"Returned cheapest itinerary{took}: one-way fare £{cheapest['fare_gbp']:.2f}.",
+                    f"返回的最便宜行程{took_zh}：单程票价 £{cheapest['fare_gbp']:.2f}。")
             for line in raw.get("lines") or []:
                 if isinstance(line, dict) and line.get("name") and line.get("status"):
                     add(f"Returned line status: {plain(line['name'])}: {plain(line['status'])}.",
@@ -3937,7 +4286,7 @@ def render_structured_evidence_fallback(state: dict, *, language: str | None = N
                     f"返回的建议月交通费估算：£{cost['monthly_cost']:.2f}/月，并非已核实的实际支出。")
             if cost.get("coverage_verified") is False:
                 add("Route fare-zone coverage remains unverified. " + plain(cost.get("coverage_note")),
-                    "该行程所需票价分区仍未核实。" + plain(cost.get("coverage_note")))
+                    "该行程所需票价分区仍未核实。" + _ZH_COVERAGE_NOTES.get(plain(cost.get("coverage_note")), ""))
     from core.commuting_estimate import estimate_monthly_commuting, render_monthly_commuting_estimate
     message = (state.get('extracted_context') or {}).get('current_message') or state.get('user_query') or ''
     for artifact in reversed(state.get('tool_artifacts') or []):
@@ -4252,15 +4601,41 @@ def _visible_content(text: str) -> str:
     return "".join(_CONTENT_CHARS.findall(str(text or "")))
 
 
+# A memory note the reply proposes to save, quoted after its lead-in ("This is the exact text
+# I would save:", "我会保存这段原文："). It is the note's wording, not a journey claim: "User
+# no longer works at UCL and does not want UCL used as their ... commute destination" was
+# withdrawn whole and the user was asked to confirm a blank (R1-10).
+_SAVE_PROPOSAL_LEAD = re.compile(
+    r"(?:\b(?:save|store|remember|saving|storing)\b|保存|记住|存下)[^\n:：]{0,60}[:：]\s*\n+", re.I)
+_SAVE_PROPOSAL_BODY = re.compile(r"(?:[ \t]*(?:>|[\"“「'‘])[^\n]{1,400}(?:\n|$))+|[^\n]{1,300}(?=\n\s*\n|$)")
+
+
+def proposed_memory_quotes(text: str) -> list[str]:
+    """The quoted note(s) a reply proposes to save, verbatim, in order (R1-10)."""
+    quotes: list[str] = []
+    for lead in _SAVE_PROPOSAL_LEAD.finditer(str(text or "")):
+        # The lead-in must be a statement ABOUT the save, in its own sentence.
+        sentence = re.split(r"[.!?。！？]\s", text[:lead.start()])[-1] + lead.group()
+        if not re.search(r"\b(?:text|note|wording|this|following|memory)\b|原文|内容|这段|这条|如下",
+                         sentence, re.I):
+            continue
+        body = _SAVE_PROPOSAL_BODY.match(text, lead.end())
+        if body and body.group().strip():
+            quotes.append(body.group().rstrip("\n"))
+    return quotes
+
+
 def validate_commute_response(response: str, state: dict) -> str:
     """Remove only unsupported commute assertions; never touch fixed system text.
 
     System-composed passages (``register_protected_system_text``) and this validator's own
     note are masked before redaction and restored after it, in place. The note is appended
-    only when this pass removed visible text, and never twice (R3-01)."""
+    only when this pass removed visible text, and never twice (R3-01). A memory note the reply
+    proposes to save is masked the same way (R1-10)."""
     text = str(response or "")
     notes = (_commute_unverified_note(False), _commute_unverified_note(True))
-    protected = [t for t in list(_PROTECTED_SYSTEM_TEXTS) + list(notes) if t in text]
+    protected = [t for t in list(_PROTECTED_SYSTEM_TEXTS) + list(notes) + proposed_memory_quotes(text)
+                 if t in text]
     if not protected:
         return _validate_commute_response(text, state)
     masked = text
@@ -4329,6 +4704,8 @@ def _validate_commute_response(response: str, state: dict, *, note_present: bool
                     return f"{rendered.strip()}\n\n{fixed}"
         return fallback or fixed
     redacted, new_fragments = _clean_commute_fragments(redacted)
+    if removed:
+        redacted = _without_empty_headings(redacted)
     if previous_fragments or new_fragments:
         # Restore factual route/cost/detail evidence after removing an orphaned conclusion.
         # Weather already present in its own section need not be repeated in the repair.
@@ -4352,10 +4729,81 @@ def _validate_commute_response(response: str, state: dict, *, note_present: bool
         # visible commute claim was withdrawn by THIS pass, so no note claims one was (R1-10,
         # R3-01).
         return redacted
+    _log_removed_commute_text(removed, original)
+    redacted = _renumbered_list(redacted)
     note = _commute_unverified_note(zh)
     if note_present or note in redacted or _commute_unverified_note(not zh) in redacted:
         return redacted
     return f"{redacted}\n\n{note}"
+
+
+_HEADING_LINE = re.compile(r"^\s*(?:\*\*[^*\n]{1,60}\*\*\s*:?|#{1,4}\s+[^\n]{1,60})\s*$")
+
+
+def _without_empty_headings(text: str) -> str:
+    """``text`` without a heading whose section went with the removed claim: "**Time cost**" stood
+    empty above "**Caveats**" (D-10). Only a heading with nothing under it goes."""
+    lines = str(text or "").split("\n")
+    kept: list[str] = []
+    for index, line in enumerate(lines):
+        if _HEADING_LINE.match(line):
+            following = next((other for other in lines[index + 1:] if other.strip()), None)
+            if following is None or _HEADING_LINE.match(following):
+                continue
+        kept.append(line)
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
+
+
+_NUMBERED_ITEM = re.compile(r"^(\s*)(\d{1,3})([.)]\s)")
+
+
+def _renumbered_list(text: str) -> str:
+    """``text`` with its numbered lists counting straight: a removed item left "1, 2, 4" (A-F8)."""
+    out, expected = [], None
+    for line in str(text or "").split("\n"):
+        item = _NUMBERED_ITEM.match(line)
+        if item:
+            number = int(item.group(2))
+            if expected is not None and number > expected:
+                line = f"{item.group(1)}{expected}{item.group(3)}{line[item.end():]}"
+                number = expected
+            expected = number + 1
+        elif line.strip() and not line.startswith((" ", "\t")):
+            expected = None
+        out.append(line)
+    return "\n".join(out)
+
+
+def _draft_sentence(draft: str, fragment: str) -> str:
+    """The sentence of the model's draft that held ``fragment``, or ""."""
+    needle = str(fragment or "").strip()
+    at = draft.find(needle) if needle else -1
+    if at < 0:
+        return ""
+    opening = max((m.end() for m in re.finditer(r"[.!?。！？\n](?=\s|$)|\n", draft[max(0, at - 240):at])), default=0)
+    start = max(0, at - 240) + opening
+    closing = re.search(r"[.!?。！？](?=\s|$)|\n", draft[at + len(needle):at + len(needle) + 240])
+    return draft[start:at + len(needle) + (closing.end() if closing else 240)]
+
+
+def _log_removed_commute_text(removed: list, draft: str = "") -> None:
+    """What the note stands for, in the local app log: the note fires only when a sentence went,
+    and the sentence was in no evidence (D-03). Each sample comes with the draft sentence around
+    it, because a fragment alone cannot be judged (G-07). Model prose, through the same redactors
+    as memory, cut short. Never raises."""
+    try:
+        from rag.agent_memory import redact_secrets, redact_sensitive
+
+        def _clean(value: str, limit: int) -> str:
+            return " ".join(redact_secrets(redact_sensitive(str(value))[0])[0].split())[:limit]
+        samples = [_clean(fragment, 160) for fragment in removed[:6]]
+        sentences = list(dict.fromkeys(_clean(_draft_sentence(draft, fragment), 320)
+                                       for fragment in removed[:6]))
+        logger.info("commute.claims_removed count=%d samples=%s sentences=%s", len(removed),
+                    json.dumps(samples, ensure_ascii=False),
+                    json.dumps([s for s in sentences if s], ensure_ascii=False))
+    except Exception as exc:
+        logger.info("commute.claims_removed logging skipped type=%s", type(exc).__name__)
 
 
 def _listing_source_texts(state: dict) -> list[str]:

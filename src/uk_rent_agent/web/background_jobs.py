@@ -5,7 +5,7 @@ import threading
 import uuid
 from collections.abc import Callable
 
-from uk_rent_agent.web.conversation_store import ConversationStore
+from uk_rent_agent.web.conversation_store import BackgroundJobGone, ConversationStore
 
 
 logger = logging.getLogger(__name__)
@@ -75,6 +75,15 @@ class OutboxWorker:
         try:
             self.process(job, self.worker_id)
             self.store.complete_background_job(job["id"], self.worker_id)
+        except BackgroundJobGone:
+            # Deleting a conversation right after a turn removes its pending jobs; the job
+            # in flight is dropped with it, not retried or reported as a failure (R3-24).
+            try:
+                self.store.complete_background_job(job["id"], self.worker_id)
+            except Exception:
+                pass          # the row went with the conversation
+            logger.info("background_job.dropped_with_conversation",
+                        extra={"job_id": job.get("id"), "job_kind": job.get("kind")})
         except Exception as exc:  # the durable row owns retry/error state
             status = self.store.retry_background_job(
                 job["id"], self.worker_id, f"{type(exc).__name__}: {exc}",

@@ -66,6 +66,11 @@ def new_request_id(value: str | None = None) -> str:
     one-id-one-request intact. Only a genuinely absent id gets a fresh uuid4,
     because there is nothing to correlate with.
     """
+    if value is not None and not value.strip():
+        # An empty or blank header is an ABSENT id. Hashed, it became sha256("")[:32] for
+        # every such request, so all of a client's later messages collided (409
+        # idempotency_key_reused, or a replay into another conversation) (R1-16).
+        value = None
     if value is not None and _REQUEST_ID_RE.fullmatch(value):
         return value
     if value is not None:

@@ -78,6 +78,8 @@ def reconcile_search_criteria(accumulated: dict, searched: dict) -> dict:
             continue
         for key in keys:
             value = searched.get(key)
+            if field == 'no_commute' and not value:
+                continue    # the tool's default: False read as "you have a commute" (V-17, D-08)
             if value is not None and value != '' and value != []:
                 result[field] = deepcopy(value)
                 break
@@ -86,6 +88,19 @@ def reconcile_search_criteria(accumulated: dict, searched: dict) -> dict:
     result['area'] = areas[0] if areas else None
     result['destination'] = result.get('commute_destination')
     return synchronize_monthly_budget_alias(result)
+
+
+def criteria_with_compared_areas(accumulated: dict, message: str) -> dict:
+    """The turn's criteria for checking its rows, which are not the stored ones on a comparison.
+
+    A comparison searches every place it names and stores none: the compared place's rows are
+    the point of the turn, not a miss on the stored area."""
+    from core.tools.search_properties import comparison_areas
+    result = dict(accumulated or {})
+    compared = comparison_areas(message, result.get('areas'))
+    if len(compared) > 1:
+        result['area'], result['areas'] = compared[0], compared
+    return result
 
 
 def apply_form_criteria(accumulated: dict, form: dict) -> dict:

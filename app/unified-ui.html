@@ -1846,6 +1846,7 @@
                 error_favorite: "Could not update your saved properties.",
                 error_map: "Could not generate the map.",
                 error_forget: "Could not delete your data.",
+                error_forget_busy: "Your last message is still being finished. Nothing was deleted; please try again in about 30 seconds.",
 
                 // Edit user message + version switching
                 edit_message: "Edit message",
@@ -2095,6 +2096,7 @@
                 error_favorite: "无法更新您的收藏。",
                 error_map: "无法生成地图。",
                 error_forget: "无法删除您的数据。",
+                error_forget_busy: "您的上一条消息仍在处理中。尚未删除任何数据，请约 30 秒后再试。",
 
                 // 编辑用户消息 + 版本切换
                 edit_message: "编辑消息",
@@ -5065,6 +5067,7 @@
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ user_id: getUserId() })
                         });
+                        if (response.status === 409) { showToast(t('error_forget_busy'), 'error'); return; }
                         if (!response.ok) { showToast(t('error_forget'), 'error'); return; }
                         if (secondaryPane) closeSecondaryPane();
                         conversations = [];

@@ -98,30 +98,95 @@ def _sentences(line: str) -> list[str]:
     return [part for part in parts if part]
 
 
+# A rent word right before the amount, in that amount's own clause. A fare can be "priced at"
+# too, so a price counts only as the listing's own.
+_RENT_LEAD = re.compile(
+    r'(?:\brent(?:al)?(?:\s+(?:price|figure|amount|cost))?(?:\s+(?:is|of|at|for|comes\s+to|stands\s+at))?'
+    r'|\b(?:recorded|asking|listed|listing|advertised)\s+(?:price|rent)(?:\s+(?:is|of|at))?'
+    r'|\blisted\s+at|\bit\s+is\s+priced\s+at'
+    r'|\b(?:this|that|the)\s+(?:listing|flat|apartment|studio|property|home)\s+(?:is|costs)'
+    r'|(?:月租|房租|租金)(?:为|是|约)?)\s*[:：=(（]?\s*$', re.I)
+# The rent word names the user's limit, or a rent over some other period.
+_OTHER_RENT = re.compile(
+    r"\b(?:max(?:imum)?|budget|limit|ceiling|weeks?'?|weekly|annual|yearly|years?'?s?|total)\b"
+    r'|预算|上限|押金|每周|每年|年租', re.I)
+# After "rent is £N": a different period, or a difference from something else.
+_OTHER_AFTER_RENT = re.compile(
+    r'\s*(?:pw\b|/\s*w(?:ee)?k|per\s+week|a\s+week|weekly|/\s*y(?:ea)?r|per\s+(?:year|annum)|a\s+year|'
+    r'yearly|annually|over\b|under\b|more\b|less\b|above\b|below\b|higher\b|lower\b|cheaper\b|short\b|'
+    r'extra\b|每周|每年|/周|/年)', re.I)
+# The words a reply puts between a listing's name and its rent: "(£N/month)", ": 1 bed flat,
+# £N/month", " is the cheapest at £N/month", " flat (the first one, £N a month)". A word that is
+# not here means the amount is about something the sentence went on to name, so the list stays
+# free of nouns for what a home costs to run or to travel from.
+_NAME_TO_RENT_WORDS = frozenset((
+    'is at for a an the of and also both are was costs cost priced listed advertised asking '
+    'available cheapest cheaper dearest lowest highest priciest option only one live first '
+    'second third fourth fifth two three four five flat flats apartment studio house '
+    'maisonette penthouse bungalow cottage duplex loft mews home property listing card whole '
+    'ensuite share shared room double single terraced terrace end semi detached bed beds '
+    'bedroom bedrooms minute minutes min mins mile miles away walk routed estimated london '
+    'greater uk').split())
+_NAME_TO_RENT_ZH = re.compile(r'[的是为一两二三四五卧居室房套]|公寓|单间|整套|月租|租金|房租|\d+')
+_MARKUP = re.compile(r'https?://[^\s)]*|[*_`\[\]]')
+_WORD = re.compile(r"[^\W_]+(?:'[^\W_]+)?")
+_POSTCODE = re.compile(r'\b[A-Z]{1,2}\d[A-Z\d]?(?:\s*\d[A-Z]{2})?\b')
+# "E8 (Hackney) at", "E3 in Bow, at": the area, which the address need not spell out.
+_AREA_NOTE = re.compile(r"\((?:[A-Z][\w'-]*\s?){1,3}\)|\bin\s(?:[A-Z][\w'-]*\s?){1,3}")
+
+
+def _rent_is_labelled(head: str) -> bool:
+    """``head`` ends in a rent word that means this listing's monthly rent."""
+    lead = _RENT_LEAD.search(head)
+    if not lead:
+        return False
+    clause = max(head.rfind(mark, 0, lead.start()) for mark in ',;.:!?，；。：！？') + 1
+    return not _OTHER_RENT.search(head[clause:lead.start()])
+
+
+def _follows_name(head: str, row: dict) -> bool:
+    """``head`` ends in ``row``'s name, its own address and a description of the home."""
+    key = row['address'].split(',')[0].strip().lower()
+    at = head.lower().rfind(key)
+    if at < 0 or '£' in head[at:]:
+        return False
+    own = {word.lower() for word in _WORD.findall(row['address'])}
+    gap = _AREA_NOTE.sub(' ', _POSTCODE.sub(' ', _MARKUP.sub(' ', head[at + len(key):])))
+    return all(word.lower() in own or word.lower() in _NAME_TO_RENT_WORDS
+               or not _NAME_TO_RENT_ZH.sub('', word) for word in _WORD.findall(gap))
+
+
 def _bind_sentence(line: str, row: dict) -> str:
     """Correct the rent and listing id stated in ``line``, which names ``row``."""
     price = re.search(r'\d[\d,]*(?:\.\d+)?', str(row.get('price') or ''))
     if price and not re.search(r'\bpw\b|/week|per week', str(row.get('price') or ''), re.I):
         amount = '£' + price.group()
-        # Correct only a rent assertion, preserving budgets, deposits and
-        # independent arithmetic in the same answer.
+
+        # Only a rent assertion is corrected: an amount labelled as rent, or one attached to
+        # the listing's name. Any other monthly figure in a sentence naming a listing is the
+        # model's own, so a fare, a Travelcard, council tax or broadband keeps its value
+        # (r06 643c2132: a £119.90 Travelcard became the listing's £1800).
         def rent(match):
-            before = line[max(0, match.start()-24):match.start()]
-            after = line[match.end():].lstrip()
-            if _RANGE_BEFORE.search(line[:match.start()]) or _RANGE_AFTER.match(line[match.end():]):
+            head, tail = line[:match.start()], line[match.end():]
+            if _RANGE_BEFORE.search(head) or _RANGE_AFTER.match(tail):
                 return match.group()
+            after = tail.lstrip()
             if re.match(r'(?:bills?|utilities|electricity|gas|water|parking|transport|deposit|budget|total)\b|水电|账单|停车|网费|服务费|押金|合计|预算|开支', after, re.I):
                 return match.group()
-            if re.search(r'budget|ceiling|deposit|bills?|utilities|total|difference|预算|押金|差额|账单|开支|合计|水电|通勤费', before, re.I):
+            if _rent_is_labelled(head):
+                return amount + match.group(1)
+            # An unlabelled amount followed by a word may describe a separate expense.
+            if after and after[0] not in ',，;；|.。)]）':
                 return match.group()
-            # An unlabelled amount followed by a word may describe a
-            # separate expense. Only explicit rent can override that.
-            if after and after[0] not in ',，;；|.。)]' and not re.search(r'\brent\b|月租|房租', before, re.I):
-                return match.group()
-            return amount + match.group(1)
+            return amount + match.group(1) if _follows_name(head, row) else match.group()
         line = re.sub(r'£\s*\d[\d,]*(?:\.\d+)?(\s*(?:/month|pcm|per month|a month|/月|每月))', rent, line, count=1, flags=re.I)
-        line = re.sub(r'((?:\brent(?: is| of)?|(?:月租|房租)(?:为|是)?)\s*[:：]?\s*)£\s*\d[\d,]*(?:\.\d+)?',
-                      lambda m: m.group(1) + amount, line, flags=re.I)
+
+        def stated_rent(match):
+            if _OTHER_AFTER_RENT.match(line[match.end():]) or not _rent_is_labelled(line[:match.start(2)]):
+                return match.group()
+            return match.group(1) + amount
+        line = re.sub(r'((?:\brent(?: is| of)?|(?:月租|房租)(?:为|是)?)\s*[:：]?\s*)(£\s*\d[\d,]*(?:\.\d+)?)',
+                      stated_rent, line, flags=re.I)
     identifier = re.search(r'/details/(\d+)', row['url'])
     if identifier:
         line = re.sub(r'((?:\bID|房源编号|房源ID)\s*[:：#]?\s*)\d{5,}',

@@ -43,7 +43,9 @@ def test_a08_the_background_turn_keeps_area_ceiling_and_destination():
     assert after["max_budget"] == 1900
     assert after["commute_destination"] == _CW and after["destination"] == _CW
     # The stretch is kept as the user's own soft note; the stated move-in month still applies.
-    assert after["soft_preferences"] == ["my budget could stretch to £2,100 for the right place"]
+    # So is the dishwasher it asks for (U-11).
+    assert after["soft_preferences"] == ["my budget could stretch to £2,100 for the right place",
+                                         "Would like dishwasher"]
     assert str(after.get("move_in_date") or "").endswith("-03-01")
 
 

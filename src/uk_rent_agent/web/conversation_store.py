@@ -232,6 +232,11 @@ class ConversationNotFound(ForkError):
     """Source conversation does not exist for this user."""
 
 
+# The assistant text a turn cancelled by a client disconnect is finalised with. Such a turn
+# delivered nothing, so a retry with the same X-Request-Id runs it again (R1-11).
+CANCELLED_TURN_TEXTS = ("Request cancelled.", "请求已取消。")
+
+
 class IdempotencyKeyReused(ForkError):
     """The idempotency key already names a branch of a DIFFERENT source or kind.
 
@@ -265,6 +270,10 @@ class ConversationBusy(RuntimeError):
         self.retry_after = max(1, int(retry_after))
 
 
+class BackgroundJobGone(RuntimeError):
+    """The job row was deleted (with its conversation) while a worker held it (R3-24)."""
+
+
 class PrivacyErasureInProgress(RuntimeError):
     """New turns are blocked while the user's cross-store deletion is running."""
 
@@ -274,9 +283,13 @@ class PrivacyErasureInProgress(RuntimeError):
 TITLE_MAX_CHARS = 200
 
 
+# A title with U+202E shows reversed in the sidebar: bidi controls have no place in a label.
+_BIDI_CONTROLS = re.compile("[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]")
+
+
 def _bounded_title(value, fallback: str, suffix: str = "") -> str:
     """``value`` bounded; else ``fallback`` + ``suffix`` with the suffix always kept."""
-    text = " ".join(str(value or "").split())
+    text = " ".join(_BIDI_CONTROLS.sub("", str(value or "")).split())
     if text:
         return text[:TITLE_MAX_CHARS].rstrip()
     room = max(0, TITLE_MAX_CHARS - len(suffix))
@@ -438,6 +451,32 @@ def _now_iso() -> str:
         return now.isoformat()
 
 
+# The reply a later turn reads. Cut at 500 characters, the weather section of a compound answer
+# was invisible next turn, which then said it still owed the weather and fetched it again
+# (V-11). Evidence lines stay out: they quote listing text, which as an assistant message would
+# read as the assistant's own words, and the listings block carries it as data.
+#
+# Review of what else gets through (D-12): any other line can quote a listing, and the last two
+# replies can add 7000 characters, but in 502 replies of two rounds the most added was 3466 (p90
+# 1111) and none held a phone number. The size stays, since cutting it brings V-11 back and the
+# assembler already bounds the total. What is stripped is what cannot help the next turn: a line
+# labelled as a listing's own text, under a bullet or bold as well, and a contact detail.
+HISTORY_REPLY_CHARS = 4000
+_EVIDENCE_LINE = re.compile(
+    r"^\s*(?:[-*•]\s+)?(?:\*\*)?\s*(?:Returned listing details|Reported features|Availability|"
+    r"(?:Property |Listing )?description|Listing (?:text|copy|wording|says)|Advert(?:isement)?(?: text)?|"
+    r"Agent|Contact|"
+    r"返回的房源详情|房源所列配置|可入住信息|房源描述|房源原文|房源文字|中介|联系方式)\s*(?:\*\*)?\s*[:：]", re.I)
+_CONTACT_DETAIL = re.compile(
+    r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z0-9.-]+|(?<![\d£.])(?:\+44\s?(?:\(0\)\s?)?|0)\d(?:[ -]?\d){8,10}(?!\d)")
+
+
+def history_reply(text) -> str:
+    """``text`` as the hot history keeps it; the context assembler bounds what is sent."""
+    lines = [line for line in str(text or "").split("\n") if not _EVIDENCE_LINE.match(line)]
+    return _CONTACT_DETAIL.sub("[contact detail]", "\n".join(lines)).strip()[:HISTORY_REPLY_CHARS]
+
+
 class ConversationStore:
     def __init__(self, db_path):
         self.db_path = str(db_path)
@@ -528,6 +567,17 @@ class ConversationStore:
                     self._conn.rollback()
                 except sqlite3.Error:
                     pass
+
+    def _never_delivered(self, user_id: str, turn) -> bool:
+        """True for a failed turn that produced no answer: interrupted (no assistant message)
+        or cancelled by a client disconnect (R1-11). Caller holds the lock."""
+        if turn["assistant_message_id"] is None:
+            return True
+        row = self._conn.execute(
+            "SELECT content, response_type FROM messages WHERE user_id=? AND id=?",
+            (user_id, turn["assistant_message_id"])).fetchone()
+        return bool(row is not None and row["response_type"] == "error"
+                    and (row["content"] or "").strip() in CANCELLED_TURN_TEXTS)
 
     def _lease_blocks(self, lease, now: str) -> bool:
         """True while ``lease`` belongs to a turn that can still be running somewhere."""
@@ -895,8 +945,12 @@ class ConversationStore:
             if msg["role"] == "user":
                 pending_user = msg["content"]
             elif msg["role"] == "assistant":
-                history.append({"user": pending_user or "",
-                                "assistant": (msg["content"] or "")[:500]})
+                # A turn the client cancelled was never answered: "Request cancelled." is no
+                # reply for the model to build on, as the hot history already holds (C-F4).
+                if (msg.get("response_type") != "error"
+                        or (msg.get("content") or "").strip() not in CANCELLED_TURN_TEXTS):
+                    history.append({"user": pending_user or "",
+                                    "assistant": history_reply(msg["content"])})
                 pending_user = None
         if max_len and len(history) > max_len:
             history = history[-max_len:]
@@ -994,10 +1048,21 @@ class ConversationStore:
                                 "SELECT * FROM turns WHERE user_id=? AND id=?",
                                 (user_id, replay["id"]),
                             ).fetchone()
-                    self._conn.commit()
-                    out = self._turn_dict(replay)
-                    out["replayed"] = True
-                    return out
+                    if replay["status"] == "failed" and self._never_delivered(user_id, replay):
+                        # A cancelled or interrupted turn delivered no answer: replaying it made
+                        # every retry of the same X-Request-Id return 502 "Request cancelled." /
+                        # "...please send it again" forever (R1-11). The id is released and the
+                        # message runs again as a new turn; a completed turn still replays.
+                        self._conn.execute(
+                            "DELETE FROM turn_requests WHERE user_id=? AND request_id=?",
+                            (user_id, request_id))
+                        cid = cid or replay["conversation_id"]
+                        replay = None
+                    else:
+                        self._conn.commit()
+                        out = self._turn_dict(replay)
+                        out["replayed"] = True
+                        return out
 
                 if cid:
                     exists = self._conn.execute(
@@ -1205,6 +1270,24 @@ class ConversationStore:
                 (user_id, request_id),
             ).fetchone()
         return self._turn_dict(row) if row else None
+
+    def request_turn_replays(self, user_id: str, turn: dict) -> bool:
+        """True when a retry of ``turn``'s request id replays the stored answer as is.
+
+        False for a turn ``start_request_turn`` may run again: a cancelled or interrupted turn
+        that delivered no answer, or a 'running' one whose owner may be gone. The chat routes
+        replayed every such turn before reaching the store, so a retry after a disconnect got
+        502 "Request cancelled." for good (R2-01)."""
+        status = (turn or {}).get("status")
+        if status == "completed":
+            return True
+        if status != "failed":
+            return False
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT assistant_message_id FROM turns WHERE user_id=? AND id=?",
+                (user_id, turn.get("id"))).fetchone()
+            return row is not None and not self._never_delivered(user_id, row)
 
     def request_message_differs(self, user_id: str, turn: dict, user_content: str) -> bool:
         """True when a replayed request id carries a DIFFERENT user message (R1-15)."""
@@ -1465,6 +1548,13 @@ class ConversationStore:
                 raise
         return self._background_job_dict(claimed)
 
+    def _job_gone(self, job_id: int) -> bool:
+        """True when the job row no longer exists (deleted with its conversation)."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT 1 FROM background_jobs WHERE id=?", (int(job_id),)).fetchone()
+        return row is None
+
     def save_background_job_result(
         self, job_id: int, worker_id: str, result: dict
     ) -> None:
@@ -1477,6 +1567,8 @@ class ConversationStore:
             )
             self._conn.commit()
         if updated.rowcount != 1:
+            if self._job_gone(job_id):
+                raise BackgroundJobGone("background job was removed with its conversation")
             raise RuntimeError("background job lease was lost before saving result")
 
     def complete_background_job(self, job_id: int, worker_id: str) -> None:
@@ -1491,6 +1583,8 @@ class ConversationStore:
             )
             self._conn.commit()
         if updated.rowcount != 1:
+            if self._job_gone(job_id):
+                raise BackgroundJobGone("background job was removed with its conversation")
             raise RuntimeError("background job lease was lost before completion")
 
     def retry_background_job(
@@ -1559,6 +1653,27 @@ class ConversationStore:
                 raise
         return True
 
+    def pending_memory_changes(self, user_id: str) -> list[dict]:
+        """The criteria changes of this user's memory jobs that have not stored yet, oldest
+        first. Bounded: a recall reads this on every turn."""
+        with self._lock:
+            rows = self._conn.execute(
+                """SELECT payload_json FROM background_jobs
+                   WHERE user_id=? AND kind='memory_turn' AND status IN ('pending','running')
+                     AND result_json IS NULL
+                   ORDER BY id DESC LIMIT 50""",
+                (user_id,),
+            ).fetchall()
+        changes = []
+        for row in reversed(rows):
+            try:
+                change = json.loads(row["payload_json"]).get("criteria_changes")
+            except (TypeError, ValueError, AttributeError):
+                continue
+            if isinstance(change, dict) and change:
+                changes.append(change)
+        return changes
+
     def background_job_counts(self) -> dict[str, int]:
         with self._lock:
             rows = self._conn.execute(
@@ -1613,6 +1728,43 @@ class ConversationStore:
             )
             self._conn.commit()
         return self.get_turn(user_id, turn_id)
+
+    def close_orphaned_turns(self) -> int:
+        """Close every running turn whose lease no longer blocks (its process is gone).
+
+        A restart during an in-flight turn left the turn 'running' until the next chat on
+        that conversation reconciled it, and the user's message showed no reply at all
+        (R3-22). Such a turn is finalised like a client disconnect: failed, with the
+        cancelled text as its answer, so a retry with the same request id runs it again.
+        A turn another live process still owns is left alone. Returns how many were closed."""
+        now = _now_iso()
+        with self._lock:
+            leases = self._conn.execute(
+                """SELECT l.user_id, l.conversation_id, l.turn_id, l.expires_at, l.owner_id, t.status
+                   FROM conversation_turn_leases l
+                   JOIN turns t ON t.id=l.turn_id AND t.user_id=l.user_id
+                   WHERE t.status='running'""").fetchall()
+            orphaned = [(lease["user_id"], lease["conversation_id"], lease["turn_id"])
+                        for lease in leases if not self._lease_blocks(lease, now)]
+        closed = 0
+        for user_id, conversation_id, turn_id in orphaned:
+            try:
+                zh = self._conversation_is_zh(user_id, conversation_id)
+                self.finalize_request_turn(
+                    user_id, turn_id, status="failed", response_type="error",
+                    assistant_content=CANCELLED_TURN_TEXTS[1] if zh else CANCELLED_TURN_TEXTS[0],
+                    recommendations=[], snapshot=None, background_jobs=[])
+                closed += 1
+            except Exception:
+                continue          # finalised meanwhile, or the conversation is gone
+        return closed
+
+    def _conversation_is_zh(self, user_id: str, conversation_id: str) -> bool:
+        with self._lock:
+            row = self._conn.execute(
+                """SELECT content FROM messages WHERE user_id=? AND conversation_id=? AND role='user'
+                   ORDER BY id DESC LIMIT 1""", (user_id, conversation_id)).fetchone()
+        return bool(row and re.search(r"[\u4e00-\u9fff]", row["content"] or ""))
 
     def fail_turn(self, user_id: str, turn_id: str) -> None:
         """Mark a turn 'failed' (sets completed_at)."""

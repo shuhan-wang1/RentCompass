@@ -66,6 +66,10 @@ _CLARIFICATION_MARKERS = (
 _CLARIFICATION_TURNS = 5
 _HISTORY_TURNS = 3
 _MIN_HISTORY_TURNS = 2
+# A reply older than the last two turns is read as it always was; what a later turn must not
+# lose is the answer it follows (V-11). Tried in order once dropping turns has not been enough.
+_OLD_REPLY_CHARS = 500
+_REPLY_CAPS = (2000, 1000, 500)
 
 
 class SnapshotSchemaError(Exception):
@@ -750,6 +754,14 @@ def history_conflict_decision(history: Optional[List[Dict[str, str]]],
 # Context assembly
 # ---------------------------------------------------------------------------
 
+def _history_reply_for(turn: Dict[str, str], index: int, count: int, reply_cap: Optional[int]) -> str:
+    """The reply of ``turn``, ``index`` of the ``count`` turns sent, as this assembly sends it."""
+    text = (turn.get("assistant") or "")
+    if index < count - _MIN_HISTORY_TURNS:
+        return text[:_OLD_REPLY_CHARS]
+    return text[:reply_cap] if reply_cap else text
+
+
 def assemble(*, user_message: str, history: Optional[List[Dict[str, str]]],
              memory_block: str = "", has_property_context: bool = False,
              rolling_summary: Optional[str] = None,
@@ -783,7 +795,7 @@ def assemble(*, user_message: str, history: Optional[List[Dict[str, str]]],
         initial_turns = 0
     elif history:
         last = history[-1] if isinstance(history[-1], dict) else {}
-        last_response = last.get("assistant", "") or ""
+        last_response = (last.get("assistant", "") or "")[:_OLD_REPLY_CHARS]
         is_clarification = (
             any(q in last_response.lower() for q in _CLARIFICATION_MARKERS)
             and len(user_message.split()) <= 5
@@ -800,13 +812,13 @@ def assemble(*, user_message: str, history: Optional[List[Dict[str, str]]],
         mode = "plain"
         initial_turns = 0
 
-    def build_history_query(n_turns: int) -> str:
+    def build_history_query(n_turns: int, reply_cap: Optional[int] = None) -> str:
         if not include_history:
             return user_message
         turns = history[-n_turns:] if n_turns > 0 else []
         history_text = "\n".join(
-            f"User: {h.get('user', '')}\nAlex: {h.get('assistant', '')}"
-            for h in turns
+            f"User: {h.get('user', '')}\nAlex: {_history_reply_for(h, i, len(turns), reply_cap)}"
+            for i, h in enumerate(turns)
         )
         if mode == "clarification":
             return (
@@ -831,8 +843,8 @@ def assemble(*, user_message: str, history: Optional[List[Dict[str, str]]],
     conflict_block = render_history_conflicts(
         detect_history_conflicts(history, user_message))
 
-    def compose(n_turns: int, mem: str, summ: Optional[str]) -> str:
-        out = build_history_query(n_turns)
+    def compose(n_turns: int, mem: str, summ: Optional[str], reply_cap: Optional[int] = None) -> str:
+        out = build_history_query(n_turns, reply_cap)
         if summ and include_history:
             out = f"Earlier conversation summary:\n{summ}\n\n{out}"
         if mem:
@@ -856,29 +868,36 @@ def assemble(*, user_message: str, history: Optional[List[Dict[str, str]]],
         if estimate_tokens(result) <= token_budget:
             return result
 
+    # (1b) cut the two replies left.
+    reply_cap = None
+    for reply_cap in _REPLY_CAPS:
+        result = compose(n_turns, mem, summ, reply_cap)
+        if estimate_tokens(result) <= token_budget:
+            return result
+
     # (2) cap memory_block at 25% of budget, cutting whole lines from the END.
     if mem:
         mem = _truncate_memory_to_cap(mem, token_budget * 0.25)
-        result = compose(n_turns, mem, summ)
+        result = compose(n_turns, mem, summ, reply_cap)
         if estimate_tokens(result) <= token_budget:
             return result
 
     # (3) cap rolling_summary at 20% of budget.
     if summ and include_history:
         summ = _truncate_chars_to_cap(summ, token_budget * 0.20)
-        result = compose(n_turns, mem, summ)
+        result = compose(n_turns, mem, summ, reply_cap)
         if estimate_tokens(result) <= token_budget:
             return result
 
     # (4) drop memory_block, then summary, entirely. Never trim user_message.
     if mem:
         mem = ""
-        result = compose(n_turns, mem, summ)
+        result = compose(n_turns, mem, summ, reply_cap)
         if estimate_tokens(result) <= token_budget:
             return result
     if summ:
         summ = None
-        result = compose(n_turns, mem, summ)
+        result = compose(n_turns, mem, summ, reply_cap)
 
     return result
 
@@ -948,6 +967,13 @@ def assemble_messages(*, user_message: str,
         discussed_areas=ctx.get("discussed_areas"),
         shown_alternatives=ctx.get("shown_alternatives"),
     )
+    if ctx.get('search_reset'):
+        # After "Can we start from scratch with Hackney?" the state was clean, and the model
+        # brought "1 bed / £2,200" back from the history it still reads (D-04).
+        context_sections = ("The user reset the search in this message: every criterion from earlier in "
+                            "this conversation is gone. Only the criteria listed here and what this "
+                            "message states apply. Do not reuse, mention or compare against any earlier "
+                            "budget, bedroom count, room type or commute.\n\n" + context_sections)
     if ctx.get('current_date'):
         context_sections = (f"Current date in Europe/London: {ctx['current_date']}. "
                             "Distinguish today's date from cached listing dates.\n\n" + context_sections)
@@ -961,7 +987,8 @@ def assemble_messages(*, user_message: str,
         context_sections = (f"{conflict_section}\n\n{context_sections}"
                             if context_sections else conflict_section)
 
-    def build(n_turns: int, mem: str, summary: str, sections: str) -> list:
+    def build(n_turns: int, mem: str, summary: str, sections: str,
+              reply_cap: Optional[int] = None) -> list:
         msgs: list = [system_message(system_spec)]
         context_msg = loop_prompts.compose_context_message(sections, mem, summary)
         if context_msg:
@@ -969,11 +996,11 @@ def assemble_messages(*, user_message: str,
             # and an LLM-derived rolling summary. It must never inherit system priority.
             msgs.append(HumanMessage(content=context_msg))
         turns = history[-n_turns:] if n_turns > 0 else []
-        for h in turns:
+        for index, h in enumerate(turns):
             if not isinstance(h, dict):
                 continue
             user_text = (h.get("user") or "").strip()
-            assistant_text = (h.get("assistant") or "").strip()
+            assistant_text = _history_reply_for(h, index, len(turns), reply_cap).strip()
             if user_text:
                 msgs.append(HumanMessage(content=user_text))
             if assistant_text:
@@ -1002,10 +1029,17 @@ def assemble_messages(*, user_message: str,
         if total_tokens(msgs) <= token_budget:
             return msgs
 
+    # (1b) cut the two replies left.
+    reply_cap = None
+    for reply_cap in _REPLY_CAPS:
+        msgs = build(n_turns, mem, summary, sections, reply_cap)
+        if total_tokens(msgs) <= token_budget:
+            return msgs
+
     # (2) cap memory_block at 25% of budget (whole lines from the END).
     if mem:
         mem = _truncate_memory_to_cap(mem, token_budget * 0.25)
-        msgs = build(n_turns, mem, summary, sections)
+        msgs = build(n_turns, mem, summary, sections, reply_cap)
         if total_tokens(msgs) <= token_budget:
             return msgs
 
@@ -1013,16 +1047,16 @@ def assemble_messages(*, user_message: str,
     # history turns are trimmed, but can never crowd out the current request.
     if summary:
         summary = _truncate_lines_to_cap(summary, token_budget * 0.20)
-        msgs = build(n_turns, mem, summary, sections)
+        msgs = build(n_turns, mem, summary, sections, reply_cap)
         if total_tokens(msgs) <= token_budget:
             return msgs
 
     # (4) cap the context sections to whatever budget the never-trimmed parts leave.
     if sections:
-        without_sections = total_tokens(build(n_turns, mem, summary, ""))
+        without_sections = total_tokens(build(n_turns, mem, summary, "", reply_cap))
         remaining = max(int(token_budget - without_sections), 0)
         sections = _truncate_lines_to_cap(sections, remaining)
-        msgs = build(n_turns, mem, summary, sections)
+        msgs = build(n_turns, mem, summary, sections, reply_cap)
 
     # Best effort: message #1 and the current user_message are never trimmed, so the
     # result may still exceed a pathologically small budget — that is by contract.

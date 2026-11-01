@@ -8,11 +8,24 @@ must stay an honest empty.
 """
 
 import json
+from datetime import datetime, timezone
 
 import pytest
 
 import core.scraping.onthemarket as om
-from core.scraping import on_demand
+from core.scraping import on_demand, otm_access
+
+
+@pytest.fixture(autouse=True)
+def _current_robots_policy(tmp_path, monkeypatch):
+    # The built-in robots allowlist is dated (ROBOTS_VERIFIED_AT) with a 7-day TTL, so
+    # these tests started failing on the wall clock once it expired: the fake session's
+    # markup was then fetched as robots.txt and the source went into cooldown (R1-07).
+    # Pin the policy to "verified now" and give each test its own access-state file, so
+    # neither the date nor another test's cooldown row can decide the outcome.
+    monkeypatch.setenv("OTM_ACCESS_STATE_PATH", str(tmp_path / "otm_access.sqlite3"))
+    monkeypatch.setattr(otm_access, "ROBOTS_VERIFIED_AT", datetime.now(timezone.utc).isoformat())  # gitleaks:allow
+    monkeypatch.setattr(otm_access, "MIN_INTERVAL_SECONDS", 0)  # gitleaks:allow
 
 
 def _next_data(list_value):

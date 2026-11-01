@@ -53,9 +53,10 @@ def test_first_retry_after_a_dead_owner_is_terminal(tmp_path, monkeypatch):
     new._conn.execute("UPDATE conversation_turn_leases SET owner_id=? WHERE turn_id=?",
                       ("killed-process", turn["id"]))
     new._conn.commit()
-    replay = new.start_request_turn("u_dead", cid, "dead-req-0", "find me a flat")
-    assert replay["replayed"] is True and replay["status"] == "failed"
+    retry = new.start_request_turn("u_dead", cid, "dead-req-0", "find me a flat")
     assert new.get_turn_response("u_dead", turn["id"])["interrupted"] is True
+    # Not 409, and not a terminal replay either: the message runs again (R1-11).
+    assert retry["replayed"] is False and retry["status"] == "running"
     new.close()
 
 

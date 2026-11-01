@@ -35,7 +35,7 @@ from uk_rent_agent.web.background_jobs import OutboxWorker
 from uk_rent_agent.web.conversation_store import (
     ConversationStore, ConversationNotFound, NoCompletedTurn, TurnNotFound,
     TurnNotInConversation, TurnNotCompleted, ConversationBusy,
-    PrivacyErasureInProgress, IdempotencyKeyReused,
+    PrivacyErasureInProgress, IdempotencyKeyReused, CANCELLED_TURN_TEXTS,
 )
 from uk_rent_agent.web.identity import (
     resolve_user_id, normalize_message, valid_user_id, InvalidUserId, InvalidMessage,
@@ -537,6 +537,8 @@ def _canary_headers(response):
     single after_request hook is cheaper and less error-prone than per-endpoint edits, and
     the values are process constants (no per-request work). X-Request-Id stays set by the
     turn endpoints themselves (it is per-request)."""
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"    # the map iframe is srcdoc, not a framed page
     response.headers["X-Agent-Arch"] = AGENT_ARCH
     response.headers["X-Agent-Version"] = APP_CANDIDATE_SHA
     response.headers["X-Agent-Specialists"] = "1" if MANAGER_V1_SPECIALISTS else "0"
@@ -1273,8 +1275,14 @@ def _get_session(user_id, conversation_id):
             )
         try:
             if not sess.history:
-                sess.history = conversation_store.rehydrate_history(
-                    user_id, conversation_id, MAX_HISTORY_LENGTH)
+                from core.constraint_updates import history_after_reset
+                sess.history = history_after_reset(conversation_store.rehydrate_history(
+                    user_id, conversation_id, MAX_HISTORY_LENGTH))
+                erased = tuple(sess.persistent_state.get('accumulated_search_criteria', {}).get(
+                    '_erased_fields') or ())
+                if erased:
+                    from rag.agent_memory import history_without_fields
+                    sess.history = history_without_fields(sess.history, erased)
             # Rehydrate the last structured search as well as text history. A browser
             # refresh must not make property follow-ups lose their target merely because
             # the in-memory cache was evicted.
@@ -1537,6 +1545,18 @@ def _conversation_busy_response(exc, **body):
     response.status_code = 409
     response.headers["Retry-After"] = _busy_retry_after(exc)
     return response
+
+
+_TITLE_REQUEST_MAX_CHARS = 1000
+
+
+def _validate_title(title: str) -> None:
+    """A title a person could have typed. The store keeps 200 characters of it; a blank one or a
+    100k one is refused on create as on rename, not quietly replaced or cut (C-F03)."""
+    if not title.strip():
+        raise ApiError(400, "title is required")
+    if len(title) > _TITLE_REQUEST_MAX_CHARS:
+        raise ApiError(400, f"title must be at most {_TITLE_REQUEST_MAX_CHARS} characters")
 
 
 def get_json_or_400() -> dict:
@@ -1900,9 +1920,17 @@ def _rate_limit_subject() -> str:
     return f"ip:{remote}"
 
 
+# Endpoints whose 400 (invalid input, refused before any work) gives its charge back (R2-18).
+_RATE_LIMIT_REFUND_ON_400 = frozenset({'/api/alex', '/api/search_direct'})
+
+
 @app.before_request
 def _limit_expensive_api_requests():
     if request.method == 'OPTIONS' or not request.path.startswith('/api/'):
+        return None
+    if request.routing_exception is not None:
+        # GET /api/alex answered 429 instead of 405: a request no route accepts costs nothing
+        # and Flask answers it (404/405) without spending the caller's bucket (R2-18).
         return None
     limits = {
         '/api/alex': 12,
@@ -1912,17 +1940,33 @@ def _limit_expensive_api_requests():
         '/api/auth/register': 5,
     }
     limit = limits.get(request.path, 120)
+    key = f"{request.path}:{_rate_limit_subject()}"
     allowed, retry_after = _api_rate_limiter.allow(
-        f"{request.path}:{_rate_limit_subject()}",
+        key,
         limit=limit,
         window_seconds=_runtime_config.rate_limit_window_seconds,
     )
     if allowed:
+        if request.path in _RATE_LIMIT_REFUND_ON_400:
+            g.rate_limit_charge = key
         return None
     response = jsonify({'error': 'too many requests; please try again shortly',
                         'error_code': 'rate_limited', 'retry_after': retry_after})
     response.status_code = 429
     response.headers['Retry-After'] = str(retry_after)
+    return response
+
+
+@app.after_request
+def _refund_invalid_input_charge(response):
+    """A chat request refused as invalid input (400) did no work; its charge is returned, so a
+    typo cannot use up the chat bucket (R2-18)."""
+    key = g.pop('rate_limit_charge', None)
+    if key and response.status_code == 400:
+        try:
+            _api_rate_limiter.refund(key)
+        except Exception as exc:
+            logger.warning("rate_limit.refund_failed", extra={"error_type": type(exc).__name__})
     return response
 
 
@@ -2082,7 +2126,10 @@ async def api_alex():
     if existing_turn is not None:
         if conversation_store.request_message_differs(user_id, existing_turn, user_message):
             return _request_id_reused_response(request_id)
-        return _request_replay_response(user_id, request_id, existing_turn)
+        if conversation_store.request_turn_replays(user_id, existing_turn):
+            return _request_replay_response(user_id, request_id, existing_turn)
+        # (R2-01) A cancelled, interrupted or ownerless turn goes on to start_request_turn,
+        # which re-runs it (or replays a turn that is still running) in one transaction.
 
     # --- resolve / implicitly create the conversation --------------------------
     # New conversations are stamped with THIS process's architecture provenance at creation;
@@ -2194,8 +2241,11 @@ async def api_alex():
         try:
             conversation_store.finalize_request_turn(
                 user_id, turn_id, status="failed", response_type="error",
-                assistant_content=("请求已取消。" if _resolve_reply_language(user_message, ui_language) == "zh"
-                                   else "Request cancelled."),
+                # One of CANCELLED_TURN_TEXTS: a retry with the same request id re-runs a
+                # cancelled turn instead of replaying this text (R1-11).
+                assistant_content=(CANCELLED_TURN_TEXTS[1]
+                                   if _resolve_reply_language(user_message, ui_language) == "zh"
+                                   else CANCELLED_TURN_TEXTS[0]),
                 recommendations=[], snapshot=None, background_jobs=[],
             )
         except Exception as exc:
@@ -2964,6 +3014,16 @@ def _turn_memory_contract(final_state: dict) -> dict:
     return final_state.get('memory_write_contract') or {}
 
 
+def _memory_withdrawn_requirements(before, after, user_message) -> list:
+    """The requirements this turn withdrew, for the memory job (W-08). Never raises."""
+    try:
+        from core.langgraph_agent import requirements_withdrawn
+        return requirements_withdrawn(before, after, user_message)
+    except Exception as exc:
+        print(f"[memory] withdrawn requirements skipped; error_type={type(exc).__name__}")
+        return []
+
+
 def _memory_criteria_changes(before, after) -> dict:
     """The turn's criteria slot changes for the memory job; never raises (R3-02)."""
     try:
@@ -3048,6 +3108,9 @@ def _apply_background_job(job: dict, worker_id: str) -> None:
             job["user_id"], job["conversation_id"],
             str(result.get("summary") or ""), through,
         ):
+            if conversation_store.get_conversation(job["user_id"], job["conversation_id"]) is None:
+                from uk_rent_agent.web.conversation_store import BackgroundJobGone
+                raise BackgroundJobGone("conversation was deleted before its summary job ran")
             raise RuntimeError("no completed snapshot exists for summary job")
         with _session_store.turn_lock(job["user_id"], job["conversation_id"]):
             sess = _get_session(job["user_id"], job["conversation_id"])
@@ -3072,6 +3135,8 @@ def _apply_background_job(job: dict, worker_id: str) -> None:
                 context_tainted=bool(payload.get("context_tainted", False)),
                 **({"criteria_changes": payload["criteria_changes"]}
                    if payload.get("criteria_changes") else {}),
+                **({"withdrawn_requirements": payload["withdrawn_requirements"]}
+                   if payload.get("withdrawn_requirements") else {}),
                 **({"memory_withheld": bool(payload["memory_withheld"])}
                    if "memory_withheld" in payload else {}),
             )
@@ -3083,6 +3148,36 @@ def _apply_background_job(job: dict, worker_id: str) -> None:
         return
 
     raise ValueError(f"unsupported background job kind: {kind!r}")
+
+
+_orphan_sweep_done = False
+_orphan_sweep_lock = threading.Lock()
+
+
+@app.before_request
+def _close_orphaned_turns_once():
+    """On this process's first request, close the turns a previous process left running.
+
+    A restart during an in-flight turn left that turn 'running' and its message unanswered
+    until the next chat on the same conversation reconciled it (R3-22). Under pytest it runs
+    only when ORPHAN_SWEEP_ENABLED is set, like the outbox worker, so a test's own leases are
+    never swept by whichever test happens to run first."""
+    global _orphan_sweep_done
+    if _orphan_sweep_done:
+        return None
+    if "PYTEST_CURRENT_TEST" in os.environ and not os.getenv("ORPHAN_SWEEP_ENABLED"):
+        return None
+    with _orphan_sweep_lock:
+        if _orphan_sweep_done:
+            return None
+        _orphan_sweep_done = True
+        try:
+            closed = conversation_store.close_orphaned_turns()
+            if closed:
+                logger.info("turns.orphaned_closed", extra={"count": closed})
+        except Exception as exc:
+            logger.error("turns.orphan_sweep_failed", extra={"error_type": type(exc).__name__})
+    return None
 
 
 def _ensure_outbox_worker():
@@ -3129,7 +3224,32 @@ def _spawn_rolling_summary_update(user_id, conversation_id, dropped_turns,
 _REMEMBERED_QUESTION = re.compile(
     r"\b(?:what|anything|everything|which)\b[^.?!]{0,40}\b(?:remember|saved|stored|kept|know)\b"
     r"[^.?!]{0,25}\b(?:about\s+me|me|my)\b|\bdo\s+you\s+(?:remember|store|keep|save)\b|"
-    r"记得.{0,12}我|记住了.{0,8}(?:什么|哪些)|(?:保存|存储|存)了.{0,10}(?:什么|哪些|我)", re.I)
+    r"记得.{0,12}我|记住了.{0,8}(?:什么|哪些)|(?:保存|存储|存)了.{0,10}(?:什么|哪些|我)|"
+    # "Do I have any allergies on file?" was answered from six relevance-ranked rows that missed
+    # the saved cat allergy, and the reply said allergies are not stored (S-03).
+    r"\b(?:do|have|did)\s+(?:i|you)\b[^.?!]{0,40}\bon\s+(?:file|record)\b|"
+    r"\bon\s+(?:file|record)\s+(?:for|about)\s+me\b|"
+    r"\b(?:do|have)\s+you\s+(?:got|have)\s+(?:my\b|anything\s+(?:about|on)\s+me\b)|"
+    r"\b(?:what|anything)\b[^.?!]{0,20}\b(?:have|got)\s+(?:on|about)\s+me\b|"
+    r"有没有.{0,12}(?:记录|保存|存)|(?:记录|档案)(?:里|中)|"
+    # "Where do I work?" and 「我的工作地点和过敏情况你还记得吗？」 denied a saved workplace: a
+    # question about the user's own facts is answered from every saved fact (T-03, U-04).
+    r"\bwhere\s+do\s+i\s+(?:work|study)\b|"
+    r"\bwhat(?:'s|’s|\s+is|\s+are|\s+was|\s+were)\s+my\s+(?:budget|workplace|office|job|work|"
+    r"employer|commute|allerg\w*|pets?|preferences?|requirements?|needs|deal[\s-]?breakers?|"
+    r"name|move[\s-]?in\s+date|saved\s+\w+)\b|"
+    r"\b(?:list|show|tell\s+me|give\s+me)\b[^.?!]{0,20}\b(?:everything|all)\b"
+    r"(?:\s+(?:the\s+)?(?:facts?|things|details|memories|info\w*|preferences))?\s+(?:that\s+)?"
+    r"(?:you(?:'ve|’ve|\s+have)?\s+)?(?:saved|stored|remember\w*|know|kept)\b|"
+    # "List every single thing you have saved about me, numbered." was answered from six rows,
+    # all inferences, and the reply said nothing was saved with 17 facts stored (r06 d236b784).
+    r"\bevery(?:\s+single)?\s+(?:thing|fact|detail|item|memory|record)\b[^.?!]{0,30}\b"
+    r"(?:saved|stored|kept|know|remember\w*|have|got)\b|"
+    r"\b(?:list|show|tell\s+me|give\s+me|print|repeat)\b[^.?!]{0,40}\b(?:saved|stored|kept|remember\w*)\b"
+    r"[^.?!]{0,12}\b(?:about|on|for)\s+me\b|"
+    r"(?:列出|列一下|告诉我|说说|给我看)?[^。？！]{0,8}(?:所有|全部|一切)[^。？！]{0,12}(?:保存|存储|记住|记下|记录)|"
+    r"(?:保存|存储|记住|记下|记录)(?:了|的)[^。？！]{0,12}(?:所有|全部|一切)|"
+    r"还?记得.{0,12}吗|记不记得|我的.{1,12}(?:是什么|是多少|在哪)", re.I)
 
 
 # How many saved facts a recall question puts in the memory block (R4-13). Wide on purpose: the
@@ -3138,7 +3258,12 @@ _RECALL_FACTS_MAX = 100
 
 
 def _asks_what_is_remembered(message: str) -> bool:
-    return bool(_REMEMBERED_QUESTION.search(str(message or "")[:2000]))
+    """True for a question answered from every saved fact. The write gate's recall cues count too:
+    "What did I tell you about my pets?" got the six most relevant rows, which missed the saved
+    cat, and the reply said nothing was saved (D-01)."""
+    from core.memory_gate import is_pure_recall_question
+    text = str(message or "")[:2000]
+    return bool(_REMEMBERED_QUESTION.search(text)) or is_pure_recall_question(text)
 
 
 def _conversation_memory_turn(user_id, conversation_id, user_message) -> dict:
@@ -3206,7 +3331,8 @@ def _write_back_turn(user_id, conversation_id, user_message, assistant_text,
         if criteria_overwrite:
             _sess.persistent_state.setdefault('accumulated_search_criteria', {})
             _sess.persistent_state['accumulated_search_criteria'].update(criteria_overwrite)
-        _sess.history.append({'user': user_message, 'assistant': (assistant_text or '')[:500]})
+        from uk_rent_agent.web.conversation_store import history_reply
+        _sess.history.append({'user': user_message, 'assistant': history_reply(assistant_text)})
         if len(_sess.history) > MAX_HISTORY_LENGTH:
             # Capture the turns about to fall out of the hot window so they can be folded
             # into the rolling summary (background) — otherwise their context is lost.
@@ -3292,10 +3418,23 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     # call in phase 2. We work off deep-copied snapshots so the graph mutating its
     # inputs can never corrupt the shared cached state mid-flight.
     turn_lock = _session_store.turn_lock(user_id, conversation_id)
+    from core.constraint_updates import history_after_reset, resets_all_criteria
+    _reset_in_conversation = resets_all_criteria(user_message) or any(
+        message.get('role') == 'user' and resets_all_criteria(message.get('content') or '')
+        for message in _conversation_messages)
     with turn_lock:
         _sess = _get_session(user_id, conversation_id)
+        if resets_all_criteria(user_message):
+            # The old search leaves what the model reads, not only the state: a summary of the
+            # turns before is the same text (F-01).
+            _sess.history = history_after_reset(_sess.history, user_message)
+            _reset_context = _sess.persistent_state.get('extracted_context') or {}
+            for _key in ('rolling_summary', 'rolling_summary_through_turn_id', 'earlier_routes'):
+                _reset_context.pop(_key, None)
         persistent_snapshot = copy.deepcopy(_sess.persistent_state)
         history_snapshot = list(_sess.history)
+        from core.criteria_recovery import cancelled_turns
+        _cancelled_turns = [] if resets_all_criteria(user_message) else cancelled_turns(_conversation_messages)
         # 🆕 Ask-AI 聚焦解析要对照"完整推荐列表"，它挂在 session 对象上（_sess.last_results，
         # extracted_context 里只留 6 条）。在同一把锁内浅拷贝，避免跨慢速 LLM 调用再次加锁。
         last_results_snapshot = list(_sess.last_results or [])
@@ -3304,6 +3443,10 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     persistent_snapshot['accumulated_search_criteria'] = await asyncio.to_thread(
         repair_criteria_sources, persistent_snapshot.get('accumulated_search_criteria') or {},
         _conversation_messages)
+    # What the user stated in a turn that failed before answering still applies (R3-18).
+    from core.criteria_recovery import criteria_with_undelivered_turns
+    persistent_snapshot['accumulated_search_criteria'] = criteria_with_undelivered_turns(
+        persistent_snapshot['accumulated_search_criteria'], _conversation_messages)
     persistent_snapshot['user_preferences'] = preferences_after_criteria_repair(
         persistent_snapshot.get('user_preferences') or {},
         persistent_snapshot['accumulated_search_criteria'])
@@ -3425,16 +3568,45 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     _mems = []
     _semantic_defaults = []
     _saved_total = None
+    _memory_erasure = None
+    _single_memory_erase = False
     try:
         from rag.agent_memory import get_agent_memory
         _am = get_agent_memory()
+        # (R2-03) An explicit "forget my budget" is honoured BEFORE memory is read, not only
+        # by the post-turn job: the reply then tells the truth and a new conversation started
+        # seconds later cannot recall the value.
+        from rag.agent_memory import erasure_request_fields, erasure_request_names_other_memory
+        _erase_fields = erasure_request_fields(user_message)
+        _single_memory_erase = erasure_request_names_other_memory(user_message)
+        if _erase_fields:
+            _memory_erasure = _am.forget_fact(user_id, _erase_fields)
+            # An erased value stays out of what the model reads next: this conversation's
+            # earlier turns, and the record of how the criteria changed (V-11, V-12).
+            from rag.agent_memory import history_without_fields
+            history_snapshot = history_without_fields(history_snapshot, _erase_fields)
+            _cancelled_turns = history_without_fields(_cancelled_turns, _erase_fields)
+            with turn_lock:
+                _session = _get_session(user_id, conversation_id)
+                _session.history = history_without_fields(_session.history, _erase_fields)
+            _changes = (persistent_snapshot.get('accumulated_search_criteria') or {}).get(
+                'constraint_history')
+            if 'budget' in _erase_fields and isinstance(_changes, dict):
+                _changes.pop('max_budget', None)
+            # After a restart the history comes back from the message table, which still holds
+            # the value: the snapshot says what to take out of it (D-13).
+            _criteria = persistent_snapshot.setdefault('accumulated_search_criteria', {})
+            _criteria['_erased_fields'] = sorted({*(_criteria.get('_erased_fields') or ()), *_erase_fields})
         _lineage = conversation_store.get_branch_lineage(user_id, conversation_id)
         _mems = _am.retrieve(user_message, session_id=user_id, user_id=user_id, n=6,
                              branch_lineage=_lineage)
         from core.constraint_updates import references_saved_criteria
-        if references_saved_criteria(user_message):
+        _saved_reference = references_saved_criteria(user_message)
+        if _saved_reference:
             _semantic_defaults = _am.semantic_records(user_id=user_id)
-        if _asks_what_is_remembered(user_message):
+        # An explicit reference to saved data reads all of it too: with six relevant rows the
+        # reply said 2 of 14 saved facts existed and asked for a budget that was stored (W-09).
+        if _asks_what_is_remembered(user_message) or _saved_reference:
             # "What do you remember about me?" is answered from EVERY saved fact, not the six
             # most relevant mixed records: a recall of 12 saved facts merged, dropped and
             # miscounted them, and filled the gap with inferences (R2-20). A cap of 20 then
@@ -3442,6 +3614,11 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             # (R4-13): the block now carries all of them up to a wide bound, and says how many
             # of how many it lists.
             _mems, _saved_total = _with_all_saved_facts(_am, user_id, _mems)
+        from rag.agent_memory import with_pending_changes, without_rows_of_conversation
+        _mems = with_pending_changes(_mems, conversation_store.pending_memory_changes(user_id))
+        if _reset_in_conversation and _saved_total is None:
+            # A recall still reads everything: "what do you remember?" has its own answer.
+            _mems = without_rows_of_conversation(_mems, conversation_id)
         _mem_block = (_am.format_for_prompt(_mems, user_id=user_id) if _saved_total is None
                       else _am.format_for_prompt(_mems, saved_total=_saved_total,
                                                  user_id=user_id))
@@ -3454,6 +3631,14 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     persistent_snapshot['accumulated_search_criteria'] = restore_saved_criteria(
         persistent_snapshot.get('accumulated_search_criteria') or {},
         _semantic_defaults or _mems, user_message)
+    from core.constraint_updates import budget_reference, restore_saved_budget
+    if budget_reference(user_message):
+        try:
+            persistent_snapshot['accumulated_search_criteria'] = restore_saved_budget(
+                persistent_snapshot['accumulated_search_criteria'],
+                _am.semantic_records(user_id=user_id), user_message)
+        except Exception as _e:
+            print(f"[Memory] saved budget skipped; error_type={type(_e).__name__}")
     selected_memory_ids = {source.get('memory_id') for source in (
         persistent_snapshot['accumulated_search_criteria'].get('constraint_sources') or {}).values()
         if isinstance(source, dict) and source.get('source') == 'saved_preference'}
@@ -3465,6 +3650,21 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
                       else _am.format_for_prompt(_mems, saved_total=_saved_total,
                                                  user_id=user_id))
 
+    if _saved_total is not None and _mem_block:
+        from rag.agent_memory import stated_budget_note
+        _budget_note = stated_budget_note(_mems, persistent_snapshot['accumulated_search_criteria'])
+        if _budget_note:
+            _mem_block = _budget_note + "\n" + _mem_block
+
+    if _memory_erasure:
+        from core.memory_gate import memory_erasure_texts
+        _erasure_note = memory_erasure_texts(
+            _memory_erasure, _resolve_reply_language(user_message, ui_language))[0]
+        if _erasure_note:
+            _mem_block = _erasure_note + ("\n" + _mem_block if _mem_block else "")
+    if _single_memory_erase:
+        from core.memory_gate import MEMORY_SINGLE_ERASE_NOTE
+        _mem_block = MEMORY_SINGLE_ERASE_NOTE + ("\n" + _mem_block if _mem_block else "")
     if _memory_turn.get('paused'):
         # Runtime data the model reads: memory is paused for the rest of this conversation.
         from core.memory_gate import MEMORY_PAUSE_NOTE
@@ -3476,7 +3676,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     _uses_fc_runtime = uses_fc_runtime(AGENT_ARCH)
     query_with_history = assemble_context(
         user_message=user_message,
-        history=history_snapshot,
+        history=history_snapshot + _cancelled_turns,
         memory_block="" if _uses_fc_runtime else _mem_block,
         has_property_context=has_property_context,
         rolling_summary=(persistent_snapshot.get('extracted_context') or {}).get('rolling_summary'),
@@ -3484,12 +3684,14 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
 
     # 原始当前消息（不含记忆/历史前缀）——供工具做"仅基于本条消息"的解析
     # (预算/通勤正则、postcode/序数解析)，避免误抓注入记忆里的旧值。
-    extracted_context['current_message'] = user_message
+    from core.constraint_updates import fold_fullwidth_ascii
+    extracted_context['current_message'] = fold_fullwidth_ascii(user_message)
     # 会话历史（SessionStore shape: [{"user":.., "assistant":..}, ...]）——无条件写入
     # extracted_context。legacy 字符串装配路径（assemble_context 上面已单独喂过 history）
     # 忽略该键；fc_loop 的 assemble_messages 用它构造 user/assistant 消息对，否则 fc 模型
     # 拿不到任何对话历史。放在这里（早于建图）保证两条路径都可用。
     extracted_context['history'] = history_snapshot
+    extracted_context['cancelled_turns'] = _cancelled_turns
     # 🆕 回复语言（产品规则）：本条消息含中文→'zh'；否则 UI=en→'en'；否则 'zh'。用 pristine
     # user_message（早于记忆/历史前缀），图 agent 读取该键并转发给 search 工具，使 /api/alex
     # 与 "search anyway" 路径不再中英混杂。
@@ -3624,11 +3826,11 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     if isinstance(tool_data, dict) and 'recommendations' in tool_data:
         # Check the final user constraints again, independently of the tool's echo.
         from core.candidate_validation import validate_candidates, candidate_reason_text
-        from core.criteria_contract import reconcile_search_criteria
+        from core.criteria_contract import criteria_with_compared_areas, reconcile_search_criteria
         accumulated = reconcile_search_criteria(
             final_state.get('accumulated_search_criteria') or {}, tool_data.get('search_criteria') or {})
         final_state['accumulated_search_criteria'] = accumulated
-        actual_criteria = dict(accumulated)
+        actual_criteria = criteria_with_compared_areas(accumulated, user_message)
         if accumulated.get('max_budget') is not None:
             actual_criteria['rent_filter_ceiling_monthly'] = (tool_data.get('search_criteria') or {}).get('max_budget_monthly')
             actual_criteria['max_budget_monthly'] = accumulated['max_budget']
@@ -3701,6 +3903,16 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     from core.memory_gate import acknowledge_memory_pause
     response_text = acknowledge_memory_pause(response_text, _memory_turn.get('event'),
                                              _memory_language)
+    if _memory_erasure:
+        from core.memory_gate import acknowledge_memory_erasure
+        from core.tools.search_properties import _extract_budget
+        response_text = acknowledge_memory_erasure(
+            response_text, _memory_erasure, _memory_language,
+            states_new_value=_extract_budget(user_message)[0] is not None)
+    # Only the server says a memory was deleted; a request it cannot perform is said plainly (U-10a).
+    from core.memory_gate import settle_memory_deletion_claims
+    response_text = settle_memory_deletion_claims(response_text, user_message, _memory_erasure,
+                                                  _memory_language)
     # Explicit frequency arithmetic uses this turn's observed fare, never a stored
     # price or an inferred property cost. The estimate cannot qualify a candidate.
     from core.commuting_estimate import estimate_monthly_commuting, render_monthly_commuting_estimate
@@ -3784,11 +3996,22 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
                             else _UNSET),
     )
 
+    # The journeys this turn measured stay quotable on the next ones (F-02).
+    from core.candidate_validation import earlier_routes
+    with turn_lock:
+        _get_session(user_id, conversation_id).persistent_state.setdefault('extracted_context', {})[
+            'earlier_routes'] = earlier_routes(extracted_context.get('earlier_routes'),
+                                               final_state.get('tool_artifacts'))
+
     # ── 长期记忆：随 turn 原子提交到 durable outbox，响应路径不做 LLM/SQLite 写入 ──
     # 记忆按 user_id 命名空间共享（跨会话）；worker 使用 idempotency_key 做 at-least-once
     # 去重。进程若在响应后退出，租约到期后另一进程会继续，不会静默丢任务。
     _td = final_state.get('tool_decision')
     _tool_used = _td.get('tool') if isinstance(_td, dict) else None
+    # The same parsers as the state node: a long paste takes seconds, so not on the event loop.
+    _withdrawn_requirements = await asyncio.to_thread(
+        _memory_withdrawn_requirements, _criteria_before_turn,
+        final_state.get('accumulated_search_criteria'), user_message)
     _queue_background_job({
         "kind": "memory_turn",
         "dedupe_key": f"turn:{request_id}:memory" if request_id else (
@@ -3812,6 +4035,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             # assistant prose): "Make that Poplar" replaces the stored area (R3-02).
             "criteria_changes": _memory_criteria_changes(
                 _criteria_before_turn, final_state.get('accumulated_search_criteria')),
+            "withdrawn_requirements": _withdrawn_requirements,
             # Taken when the turn started (r6-M1): the job may run after a later turn lifted
             # the pause, so it must not re-read the conversation's flag.
             "memory_withheld": bool(_memory_turn.get('withhold')),
@@ -4118,7 +4342,9 @@ async def api_search_direct():
     if existing_turn is not None:
         if conversation_store.request_message_differs(user_id, existing_turn, readable):
             return _request_id_reused_response(request_id)
-        return _request_replay_response(user_id, request_id, existing_turn)
+        if conversation_store.request_turn_replays(user_id, existing_turn):
+            return _request_replay_response(user_id, request_id, existing_turn)
+        # (R2-01) Not replayed here: start_request_turn re-runs a turn that delivered nothing.
 
     # --- resolve / implicitly create the conversation (mirrors /api/alex) -------
     conversation_id = data.get('conversation_id')
@@ -4464,6 +4690,8 @@ def create_conversation():
     if data.get('title') is not None and not isinstance(data.get('title'), str):
         # A list/number/object title reached `.strip()` in the store and 500'd (C-09).
         raise ApiError(400, "title must be a string")
+    if data.get('title') is not None:
+        _validate_title(data['title'])
     # Stamp architecture provenance at creation (this process's constants).
     conv = conversation_store.create_conversation(
         user_id, title=data.get('title'),
@@ -4477,8 +4705,9 @@ def rename_conversation(cid):
     data = get_json_or_400()
     user_id, _ = resolve_identity(data)
     title = data.get('title')
-    if not isinstance(title, str) or not title.strip():
+    if not isinstance(title, str):
         raise ApiError(400, "title is required")
+    _validate_title(title)
     conv = conversation_store.rename_conversation(user_id, cid, title.strip())
     if conv is None:
         raise ApiError(404, "conversation not found")
@@ -4560,8 +4789,7 @@ def fork_conversation(cid):
     except Exception:
         idem = None
     if not idem:
-        _body_idem = data.get('idempotency_key')
-        idem = _body_idem if isinstance(_body_idem, str) and _body_idem.strip() else None
+        idem = _body_idempotency_key(data)
 
     try:
         child = conversation_store.fork_conversation(
@@ -4577,6 +4805,18 @@ def fork_conversation(cid):
     # The store also mirrors forked_from_turn_id at the top level of the returned dict; it is
     # already part of the conversation dict shape, so nothing extra to strip.
     return jsonify({"conversation": child, "idempotent": idempotent}), (200 if idempotent else 201)
+
+
+def _body_idempotency_key(data: dict):
+    """The body's idempotency key: a non-blank string, absent when blank. Any other type is
+    a 400 — a number or an object used to be ignored, so a retried fork made a second
+    branch while the client believed it was protected (R3-23)."""
+    value = data.get('idempotency_key')
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ApiError(400, "idempotency_key must be a string")
+    return value.strip() or None
 
 
 @app.route('/api/conversations/<cid>/edit_turn', methods=['POST'])
@@ -4608,8 +4848,7 @@ def edit_turn(cid):
     except Exception:
         idem = None
     if not idem:
-        _body_idem = data.get('idempotency_key')
-        idem = _body_idem if isinstance(_body_idem, str) and _body_idem.strip() else None
+        idem = _body_idempotency_key(data)
 
     try:
         child = conversation_store.branch_for_edit(
@@ -4621,7 +4860,33 @@ def edit_turn(cid):
         raise  # non-fork error → global handler (500)
 
     idempotent = bool(child.pop("idempotent", False))
+    if not idempotent:
+        _retire_memory_of_edited_turns(user_id, cid, turn_id.strip())
     return jsonify({"conversation": child, "idempotent": idempotent}), (200 if idempotent else 201)
+
+
+def _retire_memory_of_edited_turns(user_id, cid, turn_id) -> None:
+    """What the extractor kept of the edited turn and the ones after it goes with them: "must be
+    furnished" outlived its own edit (W-08). The source conversation is untouched. Never raises."""
+    try:
+        turns = conversation_store.list_turns(user_id, cid)
+        started = next((t.get("started_at") for t in turns if t.get("id") == turn_id), None)
+        if started is None:
+            return
+        removed = [t.get("id") for t in turns if str(t.get("started_at") or "") >= str(started)]
+        from rag.agent_memory import get_agent_memory, requirement_labels
+        memory = get_agent_memory()
+        memory.retire_turn_rows(user_id, cid, removed)
+        # A reflection has no provenance, so it goes by topic, as for a withdrawal: a requirement
+        # only the removed turns stated.
+        said = [m for m in conversation_store.get_messages(user_id, cid) if m.get("role") == "user"]
+        taken_out = {label for m in said if m.get("turn_id") in removed
+                     for label in requirement_labels(m.get("content"))}
+        still_said = {label for m in said if m.get("turn_id") not in removed
+                      for label in requirement_labels(m.get("content"))}
+        memory.retire_withdrawn_requirements(user_id, sorted(taken_out - still_said))
+    except Exception as exc:
+        print(f"[memory] edited turn retirement skipped; error_type={type(exc).__name__}")
 
 
 @app.route('/api/conversations/<cid>/version_map', methods=['GET'])
@@ -4843,10 +5108,17 @@ def forget_me():
 # Favorites — per-USER, persisted to sqlite (survives restart), keyed on lowercase url
 # ============================================================================
 
+_FAVORITE_SERVER_OWNED_FIELDS = frozenset({
+    "user_id", "userid", "owner", "owner_id", "verified", "is_verified", "verification",
+    "availability", "available", "is_available",
+})
+
+
 @app.route('/api/favorites', methods=['POST'])
 def add_favorite():
     """Add/replace a favorite. Body is the full property dict (lowercase canonical keys)
-    plus user_id. Stored VERBATIM (incl. geo_location) — no fields stripped."""
+    plus user_id. Stored as sent (incl. geo_location) except the server-owned identity and
+    verification fields (R2-17)."""
     data = get_json_or_400()
     user_id, _ = resolve_identity(data)
     # New frontend sends lowercase `url`; keep `URL` as a legacy fallback.
@@ -4856,7 +5128,35 @@ def add_favorite():
     if not isinstance(url, str):
         # str() of a list/dict used to be stored as the favourite's key (C-16).
         raise ApiError(400, "Property URL must be a string")
-    conversation_store.add_favorite(user_id, url, data)
+    from urllib.parse import urlsplit
+    try:
+        parts = urlsplit(url.strip())
+    except ValueError:
+        parts = None
+    if (parts is None or parts.scheme.lower() not in ("http", "https") or not parts.netloc
+            or len(url) > 2048):
+        # A "javascript:" URL was stored and handed back to the page (R1-17).
+        raise ApiError(400, "Property URL must be an http(s) link")
+    # The key is the trimmed URL: " https://…/1 " was stored with its spaces and could not
+    # be removed with the URL the page shows (R3-23).
+    url = url.strip()
+    price = data.get('price')
+    if price is not None and (isinstance(price, bool) or not isinstance(price, (str, int, float))):
+        # An object price was stored and rendered as "[object Object]" (R3-23).
+        raise ApiError(400, "price must be a string or a number")
+    title = data.get('title')
+    if title is not None and (not isinstance(title, str) or len(title) > 500):
+        # An object title was stored and returned verbatim; validated like a conversation
+        # title (C-09, R1-17).
+        raise ApiError(400, "title must be a string of at most 500 characters")
+    # Identity and verification are the server's to state, never the client's: a favourite
+    # kept a posted user_id, "verified": true and "availability" verbatim for any URL (R2-17).
+    stored = {key: value for key, value in data.items()
+              if str(key).lower().replace("-", "_") not in _FAVORITE_SERVER_OWNED_FIELDS}
+    for key in ('url', 'URL'):
+        if isinstance(stored.get(key), str):
+            stored[key] = stored[key].strip()
+    conversation_store.add_favorite(user_id, url, stored)
     return jsonify({"success": True, "message": "Added to favorites"})
 
 
@@ -4873,7 +5173,8 @@ def get_favorites_list():
 def remove_favorite(url):
     """Remove a favorite by (percent-decoded) url. Identity via header + ?user_id=."""
     user_id, _ = _identity_from_request()
-    if conversation_store.remove_favorite(user_id, url):
+    if conversation_store.remove_favorite(user_id, url.strip()) or (
+            url != url.strip() and conversation_store.remove_favorite(user_id, url)):
         return jsonify({"success": True, "message": "Removed from favorites"})
     raise ApiError(404, "Property not found")
 
@@ -4894,8 +5195,9 @@ def generate_property_map():
     Returns:
     HTML content of the interactive map or error
     """
-    data = request.get_json()
-    if not data or not data.get('address'):
+    # A body that is not an object ([1], "s", 5) answered 500 at data.get (U-07).
+    data = get_json_or_400()
+    if not data.get('address'):
         return jsonify({"error": "Property address is required"}), 400
     
     try:

@@ -153,6 +153,16 @@ def do_not_remember_requested(user_msg: str) -> bool:
 
 
 _OPTED_OUT_LOG = "User asked: [message not stored at the user's request]"
+_INSTRUCTION_WITHHELD_LOG = "User asked: [an instruction to the assistant, not stored]"
+
+
+def _instruction_shaped(text) -> bool:
+    """The memory gate's instruction test (R1-15), for the automatic layers (R2-13)."""
+    try:
+        from core.memory_gate import content_is_instruction_shaped
+        return content_is_instruction_shaped(text if isinstance(text, str) else "")
+    except Exception:
+        return False
 
 
 # ── Conversation-wide opt-out (r6-M1) ─────────────────────────────────────────
@@ -431,9 +441,117 @@ _CRITERIA_FACT = re.compile(
     r"commute)\b|预算|租金|找|想住|区域|通勤|卧室|开间", re.I)
 
 
+# What a withdrawn requirement looks like in a stored sentence, by the labels of
+# core.langgraph_agent.requirements_withdrawn (W-08).
+_GROUND_FLOOR = re.compile(r"\bground[- ]floor\b|一楼|底层", re.I)
+_TOP_FLOOR = re.compile(r"\b(?:top|upper)[- ]floor\b|顶层", re.I)
+_REQUIREMENT_TOPICS = {
+    "balcony": re.compile(r"\b(?:balcon(?:y|ies)|terraces?)\b|阳台|露台", re.I),
+    "garden": re.compile(r"\b(?:gardens?|outdoor\s+space)\b|花园|院子", re.I),
+    "parking": re.compile(r"\b(?:parking|car\s+park)\b|停车|车位", re.I),
+    "gym": re.compile(r"\b(?:gym|fitness)\b|健身房", re.I),
+    "pool": re.compile(r"\b(?:swimming\s+)?pool\b|泳池", re.I),
+    "laundry": re.compile(r"\blaundry\b|洗衣房", re.I),
+    "concierge": re.compile(r"\bconcierge\b|前台|门卫", re.I),
+    "washing machine": re.compile(r"\bwasher[- ]dryer\b|\bwashing[- ]machine\b|洗衣机", re.I),
+    "dishwasher": re.compile(r"\bdish\s?washer\b|洗碗机", re.I),
+    "park": re.compile(r"\bparks?\b|\bgreen\s+spaces?\b|公园|绿地", re.I),
+    "pets": re.compile(r"\bpets?\b|\bpet[- ]friendly\b|\bcats?\b|\bdogs?\b|宠物|猫|狗", re.I),
+    "furnished": re.compile(r"\bfurnish\w*|\bfurniture\b|家具|家私", re.I),
+    "lift": re.compile(r"\b(?:lifts?|elevators?)\b|电梯", re.I),
+    "step-free": re.compile(r"\bstep[- ]free\b|\blevel\s+access\b|无台阶", re.I),
+    "wheelchair-accessible": re.compile(r"\bwheelchair\b|轮椅", re.I),
+    # "I no longer need a ground-floor flat" left the row, and a recall said yes (G-11).
+    "ground floor": _GROUND_FLOOR,
+    "ground-floor": _GROUND_FLOOR,
+    "top floor": _TOP_FLOOR,
+    "top-floor": _TOP_FLOOR,
+    "bike storage": re.compile(r"\b(?:bike|bicycle|cycle)\s+(?:storage|store|shed)\b|自行车", re.I),
+}
+_REQUIREMENT_VERB = re.compile(
+    r"\b(?:wants?|wanted|needs?|needed|requires?|required|requirements?|must|looking\s+for|seek\w*|"
+    r"prefers?|preferences?|would\s+like|wish(?:es)?|has\s+to\s+have|should\s+have|"
+    r"allow\w*|accept\w*|friendly)\b|要|需要|必须|希望|想要|偏好|喜欢", re.I)
+_ROW_CLAUSES = re.compile(r"(?<=[.;。；!！])\s*")
+_REQUIREMENT_AFTER = (r"\s*,?\s*(?:\b(?:and|with|plus)\s+|和|与)(?:(?:a|an|the|some|access\s+to)\s+)?"
+                      r"(?:[\w-]+\s+)?{word}(?:\s+(?:access|allowed|included))?")
+_REQUIREMENT_BEFORE = r"(?:(?:a|an|the|some)\s+)?{word}\s*(?:,\s*(?:and\s+)?|\band\s+|和|与)\s*"
+
+
+def _states_requirement(text: str, topic: re.Pattern) -> bool:
+    """True when one clause of ``text`` states ``topic`` as a requirement."""
+    return any(topic.search(clause) and _REQUIREMENT_VERB.search(clause)
+               for clause in _ROW_CLAUSES.split(str(text or "")))
+
+
+def requirement_labels(text: str) -> set:
+    """The requirement topics ``text`` mentions."""
+    return {label for label, topic in _REQUIREMENT_TOPICS.items() if topic.search(str(text or ""))}
+
+
+def _without_requirement(text: str, topics: list) -> str:
+    """``text`` with only its other facts, or '' when nothing else is left in it."""
+    clauses = [clause for clause in _ROW_CLAUSES.split(str(text or "")) if clause.strip()]
+    kept = [clause for clause in clauses if not any(_states_requirement(clause, t) for t in topics)]
+    if kept:
+        return " ".join(kept).strip()
+    trimmed = str(text or "").strip()
+    for topic in topics:
+        found = topic.search(trimmed)
+        word = re.escape(found.group()) if found else None
+        for form in (_REQUIREMENT_AFTER, _REQUIREMENT_BEFORE) if word else ():
+            match = re.search(form.format(word=word), trimmed, re.I)
+            if match:
+                trimmed = trimmed[:match.start()] + trimmed[match.end():]
+                break
+    trimmed = trimmed.strip()
+    if trimmed == str(text or "").strip() or any(_states_requirement(trimmed, t) for t in topics):
+        return ""
+    return trimmed
+
+
 def _criteria_row(text: str) -> bool:
     value = str(text or "")
     return bool(_CRITERIA_FACT.search(value)) and not _THIRD_PARTY.search(value)
+
+
+def with_pending_changes(mems: list, pending: list) -> list:
+    """``mems`` as they will read once the memory jobs already queued for this user have run.
+
+    A job runs after its turn has answered, so a recall right after "back to Hackney, £1,800"
+    read the £2,200 of an earlier turn and called the right figure a guess to ignore (r06
+    4d5bbafe); the row reached £1,800 about a minute later. This changes what the turn reads, not
+    what is stored: the jobs still write the rows. Auto-extracted rows about the user's own
+    search only, as for ``_supersede_slot_facts``."""
+    changes = [clean for clean in map(_sanitize_changes, pending or []) if clean]
+    if not changes:
+        return mems
+    out = []
+    for record in mems or []:
+        text = record.get("text")
+        if (record.get("mtype") == "semantic" and record.get("source") == SOURCE_AUTO
+                and _criteria_row(text)):
+            for change in changes:
+                text = _superseded_text(text, change) or text
+            record = dict(record, text=text)
+        out.append(record)
+    return out
+
+
+def stated_budget_note(mems: list, criteria: dict | None) -> str:
+    """A line for a recall's memory block when a saved fact gives another budget than this
+    conversation's criteria: the budget the user stated last is the current one."""
+    budget = (criteria or {}).get("max_budget")
+    if not budget:
+        return ""
+    for record in mems or []:
+        text = str(record.get("text") or "")
+        if record.get("mtype") == "semantic" and _BUDGET_WORD.search(text) and (
+                _row_bounds(text).get("money") not in (None, budget)):
+            return (f"The budget stated most recently in this conversation is £{budget:,.0f} a month. "
+                    "A saved fact that gives another figure is older: asked for the current budget, "
+                    "give this one and say the saved figure differs.")
+    return ""
 
 
 def _money_pattern(amount) -> re.Pattern | None:
@@ -689,15 +807,23 @@ _FIELD_TERMS = {
 
 # Delete IMPERATIVES. Each requires a field term within a short, punctuation-free window
 # so a delete verb in one clause cannot reach a field in the next.
+# The window stops at a comma and at a word that opens the next instruction ("delete the cat
+# and update my budget"), and the field boundary is ASCII because CJK counts as \w ("delete
+# my预算" has no \b). "Don't forget my budget is £2,000" is a save request, not a delete.
+_ERASE_WINDOW = r"(?:(?!\b(?:and|but|then|update|change|set|keep|save|remember)\b)[^.!?;,\n]){{0,24}}?"
+_ERASE_FIELD = r"(?:(?<![A-Za-z])(?:{f})(?![A-Za-z])|(?:{z}))"
 _ERASE_EN_TEMPLATES = (
-    r"\b(?:forget|delete|remove|erase|discard|clear|wipe|scrub|drop)\b"
-    r"[^.!?;\n]{{0,24}}?\b(?:{f})\b",
+    r"(?<!n't\s)(?<!n’t\s)(?<!not\s)(?<!never\s)"
+    r"\b(?:forget|delete|remove|erase|discard|clear|wipe|scrub|drop)\b" + _ERASE_WINDOW + _ERASE_FIELD,
     r"\b(?:don'?t|do\s+not|stop|no\s+longer)\s+"
     r"(?:keep|keeping|save|saving|store|storing|remember|remembering|hold|holding)\b"
-    r"[^.!?;\n]{{0,24}}?\b(?:{f})\b",
+    + _ERASE_WINDOW + _ERASE_FIELD,
 )
-_ERASE_ZH = ("忘掉", "忘记", "删除", "删掉", "清除", "清掉", "不要记", "别记", "不用记",
-             "不要保存", "别保存", "取消记录")
+_ERASE_ZH = ("忘掉", "忘记", "删除", "删掉", "删了", "删去", "移除", "清除", "清掉", "不要记", "别记",
+             "不用记", "不要保存", "别保存", "取消记录")
+# Cues that already say "do not keep it": a negation in front of the others cancels them
+# (别忘记我的预算 asks the opposite of a delete).
+_ERASE_ZH_NEGATIVE = ("不要记", "别记", "不用记", "不要保存", "别保存")
 
 # The erasure must be about THIS user's own stored value. Without a first-person
 # reference ("forget my budget", "don't keep any budget for me") a delete verb next to a
@@ -710,17 +836,31 @@ _ERASE_ZH = ("忘掉", "忘记", "删除", "删掉", "清除", "清掉", "不要
 # do Camden rents average? £1800") be scrubbed as if it were their own budget. The
 # distilled layers do not need it — _states_field_value exempts semantic/reflection by
 # mtype, which is what covers a pronoun-free "budget £1400/month".
-_FIRST_PERSON = re.compile(r"\b(?:my|mine|me|i|i'?m|we|our|us)\b", re.IGNORECASE)
+_FIRST_PERSON = re.compile(r"(?<![A-Za-z0-9_])(?:my|mine|me|i|i'?m|we|our|us)(?![A-Za-z0-9_])", re.IGNORECASE)
 _FIRST_PERSON_ZH = ("我", "咱")
 
 # A record "states a value" for a field when it names the field AND carries a money-sized
 # number. Three+ digits (or a £ prefix) keeps "2 bedrooms" out of a budget scrub.
-_MONEY_RE = re.compile(r"£\s*\d[\d,]*(?:\.\d+)?|\b\d[\d,]{2,}(?:\.\d+)?\b")
+#
+# The boundaries are ASCII: Python counts CJK as \w, so \b found no figure in "1800英镑", the
+# row was "value-free" and "forget my budget" left it stored while the reply said it was gone
+# (U-10b). A figure with a unit attached ("1800pcm", "2k", "2千", 两千块, "two thousand pounds")
+# is a value too. A year, a distance or a count ("2025年", "300米") is not.
+_MONEY_RE = re.compile(
+    r"[£￡]\s*\d[\d,]*(?:\.\d+)?"
+    r"|(?<![0-9A-Za-z_])\d[\d,]{2,}(?:\.\d+)?"
+    r"(?:(?![0-9A-Za-z_])(?!\s*[年月日号米里分平路人个条间层楼天周岁])|(?=(?:pcm|pm|pw|gbp|k)\b))"
+    r"|(?<![0-9A-Za-z_.])\d{1,3}(?:\.\d+)?\s?(?:[kK](?![0-9A-Za-z_])|千)"
+    r"|[一二两三四五六七八九十][百千万][零一二两三四五六七八九十百千]*(?![米里年天分人个条间层楼])"
+    r"|\b(?:a|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|"
+    r"fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+(?:hundred|thousand|grand)\b", re.I)
 
 # field -> compiled EN delete-imperative patterns (field alternation substituted in).
 _ERASE_PATTERNS = {
     field: tuple(
-        re.compile(tpl.format(f="|".join(re.escape(t) for t in terms)), re.IGNORECASE)
+        re.compile(tpl.format(f="|".join(re.escape(t) for t in terms if t.isascii()),
+                              z="|".join(re.escape(t) for t in terms if not t.isascii())),
+                   re.IGNORECASE)
         for tpl in _ERASE_EN_TEMPLATES
     )
     for field, terms in _FIELD_TERMS.items()
@@ -732,6 +872,62 @@ def _mentions_field(text: str, field: str) -> bool:
     return any(term in value for term in _FIELD_TERMS.get(field, ()))
 
 
+# "User asked: Find me a 1-bed in Hackney under £1,850, no commute" says no budget word, so "forget
+# my budget" left the row, the reply said the figure would not come back, and a later conversation
+# recited it (G-04). A bound on a home's rent IS the budget, however it is worded. Fares, a listing's
+# price and anything said of another person are not.
+_BOUND_FIGURE = (r"(?:(?:[£￡]\s?)?(?:\d{1,2},?\d{3}|\d{3})(?:\.\d+)?(?!\d|,\d)|(?:[£￡]\s?)?\d{1,2}(?:\.\d+)?k\b)"
+                 r"(?!\s*(?:m\b|km\b|metres?|meters?|miles?|mins?|minutes?|sq|ft\b|feet|米|公里|分钟))")
+_BOUND_UNIT = (r"(?:\s*(?:pcm|pm|pw|pcw|p/m|p/w|per\s+(?:month|week)|a\s+(?:month|week)|/\s*(?:month|week|mo|wk)|"
+               r"monthly|weekly))?")
+_ZH_BOUND_FIGURE = (r"(?:[£￡]\s?)?\d{3,}(?:\.\d+)?\s*(?:英镑|镑|磅|块|元)?"
+                    r"|[一二两三四五六七八九十][千万百][零一二两三四五六七八九十百千]*\s*(?:英镑|镑|磅|块|元)?")
+_RENT_BOUND = re.compile(
+    r"\b(?:under|below|beneath|less\s+than|no\s+more\s+than|not\s+more\s+than|at\s+most|up\s+to|"
+    r"max(?:imum)?(?:\s+of)?)\s*(?:" + _BOUND_FIGURE + r")" + _BOUND_UNIT +
+    r"|(?<![\w.,£￡])(?:" + _BOUND_FIGURE + r")" + _BOUND_UNIT + r"\s*(?:max(?:imum)?|tops|at\s+most|or\s+(?:less|under))\b"
+    r"|(?:(?:每月|每周|月租|周租|租金|房租)\s*)?(?:不超过|不高于|不到|低于|少于|小于|最多|至多|顶多|最高)\s*"
+    r"(?:每月|每周|月租|租金)?\s*(?:" + _ZH_BOUND_FIGURE + r")"
+    r"|(?:(?:每月|每周|月租|周租|租金|房租)\s*)?(?:" + _ZH_BOUND_FIGURE + r")\s*(?:以内|以下|之内|封顶)", re.I)
+_HOME_WORD = re.compile(
+    r"\b(?:flats?|studios?|rooms?|houses?|homes?|apartments?|maisonettes?|places?|propert(?:y|ies)|"
+    r"bedsits?|bedrooms?|beds?|listings?)\b|\d\s*-?\s*beds?\b|"
+    r"房|公寓|单间|一居|两居|二居|三居|卧室|一室|两室|整租|合租", re.I)
+_NOT_A_RENT = re.compile(
+    r"\b(?:fares?|travel\s*cards?|oyster|transport|deposits?|council\s+tax|bills?|broadband|salary|"
+    r"incomes?|earn\w*|gyms?)\b|交通|押金|车票|月票|工资|收入", re.I)
+_BOUND_WINDOW = 24
+_LOG_LEAD = re.compile(r"^\s*User asked:\s*", re.I)
+
+
+def _rent_bounds(text: str) -> list:
+    """The spans of ``text`` that bound the user's rent, sentence by sentence."""
+    value = str(text or "")
+    if _THIRD_PARTY.search(value):
+        return []
+    spans = []
+    for match in _RENT_BOUND.finditer(value):
+        around = value[max(0, match.start() - _BOUND_WINDOW):match.end() + _BOUND_WINDOW]
+        if not _NOT_A_RENT.search(around):
+            spans.append(match.span())
+    if not spans or _HOME_WORD.search(value):
+        return spans
+    # "under £1,850 please" answers the question it was asked: no noun, and little else in the row.
+    rest = _LOG_LEAD.sub("", _RENT_BOUND.sub(" ", value))
+    return spans if len(re.findall(r"[^\W\d_]+", rest)) <= 3 else []
+
+
+def _without_rent_bounds(text: str) -> str:
+    """``text`` with its rent bounds cut, the rest of the sentence kept."""
+    value = str(text or "")
+    for start, end in reversed(_rent_bounds(value)):
+        value = value[:start] + value[end:]
+    value = re.sub(r"[ \t]{2,}", " ", value)
+    value = re.sub(r"\s+([,.!?;，。！？；])", r"\1", value)
+    value = re.sub(r"[,，]+\s*(?=[,，.!?;。！？；])", "", value)
+    return value.strip(" ,，")
+
+
 def _states_field_value(text: str, field: str, mtype: str = "") -> bool:
     """True when ``text`` is a statement of THIS user's value for ``field``.
 
@@ -739,15 +935,151 @@ def _states_field_value(text: str, field: str, mtype: str = "") -> bool:
     OR a distilled layer (semantic/reflection records are about the user by
     construction — "budget £1400/month" carries no pronoun). (c) is what keeps a market
     fact the user merely asked about ("Camden rents average £1800") out of the scrub.
+    A bound on the rent of a home is the budget without any of that (G-04).
     """
+    if field == "budget" and _rent_bounds(text):
+        return True
     if not _mentions_field(text, field):
         return False
     if not _MONEY_RE.search(text or ""):
         return False
     if mtype in ("semantic", "reflection"):
         return True
-    return bool(_FIRST_PERSON.search(text or "")
+    # "... the user's budget is £99/month ..." in the episodic log is this user's value too:
+    # "forget my budget" left it there and the reply said every layer was cleared (R3-15).
+    return bool(_FIRST_PERSON.search(text or "") or _USER_POSSESSIVE.search(text or "")
                 or any(ch in (text or "") for ch in _FIRST_PERSON_ZH))
+
+
+_USER_POSSESSIVE = re.compile(r"\b(?:the\s+)?user['’]s\b|用户的", re.I)
+
+
+# One saved note often states several facts ("User is allergic to cats, needs step-free
+# access, and has a maximum budget of £1,800 per month."). "Forget my budget only" deleted
+# that whole row and the cat allergy with it (R4-01): the field's clauses are cut out and
+# the rest of the note is kept. A comma between digits ("£1,800") is not a clause break.
+_SENTENCE_SPLIT = re.compile(r"(?<=[!?;。！？；])\s*|(?<=\.)(?!\d)\s*")
+_CLAUSE_SPLIT = re.compile(
+    r"\s*(?:(?<!\d)[,，]|[,，](?!\d)|、)\s*(?:(?:and|but|also|plus)\s+)?"
+    r"|\s+(?:and|but|plus|while|whereas)\s+|以及|并且|而且|另外")
+# What is left of a note once a clause is removed must still say something: a lead-in
+# ("User asked: Please remember:") or a conjunction alone is no fact.
+_NOTE_BOILERPLATE = re.compile(
+    r"\b(?:user|the|asked|please|remember|that|my|i|i'?m|is|are|has|have|and|also|"
+    r"note|saved|fact)\b|用户|请记住|记住|我的|我|是|和|也", re.I)
+
+
+def _without_field_clauses(text: str, field: str) -> str:
+    """``text`` with every clause that names ``field`` or carries a money figure removed.
+
+    Returns "" when nothing but lead-in words would be left, so the caller deletes the row
+    instead of keeping an empty shell. The value cannot survive: every clause with a
+    money-sized number goes, whether or not it repeats the field's name. A rent bound goes on its
+    own first, so "Find a 1-bed in Hackney under £1,850" keeps what it asked for (G-04).
+    """
+    out = []
+    cjk = bool(re.search(r"[\u4e00-\u9fff]", text or ""))
+    if field == "budget":
+        text = _without_rent_bounds(text)
+    for sentence in _SENTENCE_SPLIT.split(str(text or "")):
+        if not sentence.strip():
+            continue
+        if not (_mentions_field(sentence, field) or _MONEY_RE.search(sentence)):
+            out.append(sentence.strip())
+            continue
+        stripped = sentence.strip()
+        end = stripped[-1] if stripped[-1] in ".!?;。！？；" else ""
+        body = stripped[:-1] if end else stripped
+        kept = [c.strip() for c in _CLAUSE_SPLIT.split(body)
+                if c and c.strip() and not (_mentions_field(c, field) or _MONEY_RE.search(c))]
+        if kept:
+            out.append(("，" if cjk else ", ").join(kept) + (end or ("。" if cjk else ".")))
+    rest = ("" if cjk else " ").join(out).strip()
+    if not re.search(r"\w{2,}", _NOTE_BOILERPLATE.sub(" ", re.sub(r"[^\w\s]", " ", rest))):
+        return ""
+    return rest
+
+
+def _row_conversation(meta: dict):
+    """The conversation a row was derived from, when it records one."""
+    return meta.get("conversation_id") or meta.get("origin_conversation_id")
+
+
+def without_rows_of_conversation(memories: list, conversation_id) -> list:
+    """``memories`` without what was derived automatically from one conversation. After "start
+    from scratch" those rows say what the search was before (G-06). An explicitly saved fact stays,
+    and so does anything from another conversation."""
+    return [memory for memory in memories or []
+            if memory.get("from_conversation") != conversation_id
+            or (memory.get("mtype") == "semantic" and memory.get("source") != SOURCE_AUTO)]
+
+
+def history_without_fields(history: list, fields: tuple) -> list:
+    """``history`` turns with what they say about the erased ``fields`` removed. The reply is
+    no longer cut at 500 characters, so a recap's tail can hold a value the user just erased."""
+    cleaned = []
+    for turn in history or []:
+        if not isinstance(turn, dict):
+            cleaned.append(turn)
+            continue
+        kept = dict(turn)
+        for key in ("user", "assistant"):
+            for field in fields:
+                kept[key] = _without_field_clauses(str(kept.get(key) or ""), field)
+        cleaned.append(kept)
+    return cleaned
+
+
+# zh has no word boundaries, so the cue has to govern the field inside one clause: "请把已保存
+# 的预算更新为2000英镑，并删掉我对猫过敏这条信息" asked to UPDATE the budget and it was scrubbed
+# because a cue and a term sat anywhere in the message (U-10a). Between them only the words of a
+# plain "delete my saved X" may stand, so 帮我删掉租金太高的房源 is about a listing.
+_ZH_CLAUSE_BREAK = re.compile(r"[，,。；;！？!?\n]|并且|而且|并|然后|接着|同时|另外|以及|但是|但|不过")
+_ZH_OTHER_VERB = re.compile(
+    r"更新|改成|改为|改到|换成|换为|调整|调到|调成|设为|设成|设置为|提高|降低|加到|增加到?|减到|减少|保留|留着")
+_ZH_ERASE_CANCELLED = re.compile(r"(?:不要|不用|不必|不需要|无需|别|勿|没有|没)(?:再|去|帮我|给我)?$")
+_ZH_OWN_WORDS = (r"(?:我们?|咱们?|你|已经?|之前|刚才|以前|原来|现在|当前|保存|记住|记录|存|说|设置|写|"
+                 r"的|所有|全部|那个|这个|这条|那条|关于|有关|旧|个人|每月|月度|最高|最大)*")
+_ZH_RECORD_WORDS = (r"(?:的|信息|记录|记忆|数字|金额|数据|内容|上限|限制|设置|条目|这条|这一条|这项|这一项|"
+                    r"这个|那条|那个)*")
+_ZH_FIELD_THEN_CUE = re.compile(
+    _ZH_RECORD_WORDS + r"(?:也|都|就|请|麻烦|帮我|给我|替我|你|一起|全部|可以|能)*")
+_ZH_CUE_THEN_FIELD = re.compile(_ZH_OWN_WORDS)
+_ZH_AFTER_FIELD = re.compile(
+    r"(?:[是为:：]?\s*[£￡]?\s*\d[\d,.]*\s*(?:英镑|英磅|镑|磅|元|块|[kK])?)?" + _ZH_RECORD_WORDS
+    + r"(?:(?:和|及|还有)[^，。]*)?(?:吧|了|呢|啊|呀|哦|一下|好吗|可以吗|行吗|吗|谢谢)*")
+# A budget is always the user's own; 价格 and 租金 also describe a listing.
+_ZH_OWN_FIELD_TERMS = ("预算",)
+# "delete the budget from your memory" is about this user's record too.
+_YOUR_MEMORY = re.compile(r"\byour\s+(?:long[- ]term\s+)?(?:memory|memories|notes|records)\b", re.I)
+
+
+def _zh_erase_cues(clause: str, *, delete_only: bool = False):
+    """(text before, text after) each delete cue that is not negated in this clause.
+    ``delete_only`` leaves out the cues that only ask not to keep something (不要记)."""
+    for cue in _ERASE_ZH:
+        if delete_only and cue in _ERASE_ZH_NEGATIVE:
+            continue
+        for match in re.finditer(re.escape(cue), clause):
+            before = clause[:match.start()]
+            if cue not in _ERASE_ZH_NEGATIVE and _ZH_ERASE_CANCELLED.search(before):
+                continue
+            yield before, clause[match.end():]
+
+
+def _zh_clause_erases(clause: str, terms) -> bool:
+    if _ZH_OTHER_VERB.search(clause):
+        return False
+    for before, after in _zh_erase_cues(clause):
+        for term in terms:
+            at = after.find(term)
+            if (at >= 0 and _ZH_CUE_THEN_FIELD.fullmatch(after[:at])
+                    and _ZH_AFTER_FIELD.fullmatch(after[at + len(term):])):
+                return True
+            at = before.rfind(term)
+            if at >= 0 and _ZH_FIELD_THEN_CUE.fullmatch(before[at + len(term):]):
+                return True
+    return False
 
 
 def erasure_request_fields(text: str) -> tuple:
@@ -760,19 +1092,159 @@ def erasure_request_fields(text: str) -> tuple:
     raw = (text or "").strip()
     if not raw:
         return ()
-    if not (_FIRST_PERSON.search(raw) or any(ch in raw for ch in _FIRST_PERSON_ZH)):
-        return ()
+    own = bool(_FIRST_PERSON.search(raw) or _YOUR_MEMORY.search(raw)
+               or any(ch in raw for ch in _FIRST_PERSON_ZH))
+    clauses = [c for c in _ZH_CLAUSE_BREAK.split(raw) if c]
     hits = []
     for field, terms in _FIELD_TERMS.items():
-        matched = any(pat.search(raw) for pat in _ERASE_PATTERNS[field])
+        matched = own and any(pat.search(raw) for pat in _ERASE_PATTERNS[field])
         if not matched:
-            # zh has no word boundaries: a delete cue plus a field term anywhere in the
-            # (short) message is the signal.
-            matched = (any(cue in raw for cue in _ERASE_ZH)
-                       and any(t in raw for t in terms))
+            zh_terms = terms if own else tuple(t for t in terms if t in _ZH_OWN_FIELD_TERMS)
+            matched = any(_zh_clause_erases(clause, zh_terms) for clause in clauses)
         if matched:
             hits.append(field)
     return tuple(hits)
+
+
+# Deleting one saved fact is not built (only a budget figure and the whole of a user's data can
+# be erased). "Delete the cat allergy from your memory" got "I've saved that to memory" and no
+# word about the delete (U-10a). This recognises such a request so the reply can say so. It must
+# not fire on a search retraction ("forget the garden", "remove my area filter").
+_OTHER_MEMORY_NOUNS = (
+    r"allerg\w*|workplace|employer|office|job|address|name|phone(?:\s+number)?|email|birthday|age|"
+    r"pets?|dog|cat|nationality|notes?|memory|memories|facts?|info|information|details?|records?|data")
+_ERASE_NOT_NEGATED = r"(?<!n't\s)(?<!n’t\s)(?<!not\s)(?<!never\s)"
+_OTHER_MEMORY_ERASE_EN = (
+    re.compile(_ERASE_NOT_NEGATED + r"\b(?:forget|delete|remove|erase|wipe|scrub|drop)\b[^.!?;\n]{0,60}?"
+               r"\b(?:from|in|out\s+of|off)\s+(?:your|the|my)?\s*(?:long[- ]term\s+)?"
+               r"(?:memory|memories|notes|records)\b", re.I),
+    re.compile(_ERASE_NOT_NEGATED + r"\b(?:forget|delete|erase|wipe|scrub|remove)\s+"
+               r"(?:that\s+|the\s+fact\s+that\s+|about\s+)?(?:i'm|i’m|i\s+am|i've|i’ve|i\s+have|"
+               r"i\s+own|i\s+work|i\s+study|we\s+have|we're|we’re)\b"
+               r"(?![^.!?;\n]*\b(?:need|want|looking|searching|prefer|said|asked|mentioned|told)\b)",
+               re.I),
+    re.compile(_ERASE_NOT_NEGATED + r"\b(?:forget|delete|erase|wipe|scrub|remove)\s+"
+               r"(?:my|the|that|this)\s+(?:saved\s+|stored\s+|remembered\s+)?(?:[\w'’-]+\s+){0,3}?"
+               r"(?:" + _OTHER_MEMORY_NOUNS + r")(?=\s*(?:$|[.,!?;]|and\b|from\b|please\b|too\b|as\s+well\b))",
+               re.I),
+)
+_OTHER_MEMORY_ZH_OBJECT = re.compile(
+    r"这条|这一条|那条|记忆|记录|信息|资料|过敏|我的(?:工作|公司|单位|地址|名字|姓名|电话|手机|邮箱|宠物|狗|猫)|"
+    r"我(?:有|养了?)(?:一[只条])?(?:狗|猫)")
+_OTHER_MEMORY_ZH_NOT = re.compile(r"聊天|搜索|对话|会话|历史")
+
+
+def erasure_request_names_other_memory(text: str) -> bool:
+    """True when the user asks to delete a saved memory that is not an erasable field."""
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    all_terms = tuple(t for terms in _FIELD_TERMS.values() for t in terms)
+    for sentence in re.split(r"(?<=[.!?。！？；;])\s*|\n", raw):
+        for clause in re.split(r"\s+(?:and|but|then)\s+|[,，、]", sentence, flags=re.I):
+            for pattern in _OTHER_MEMORY_ERASE_EN:
+                match = pattern.search(clause)
+                if match and not any(_mentions_field(match.group(), field) for field in _FIELD_TERMS):
+                    return True
+    for clause in _ZH_CLAUSE_BREAK.split(raw):
+        if not clause or _ZH_OTHER_VERB.search(clause) or _OTHER_MEMORY_ZH_NOT.search(clause):
+            continue
+        if any(term in clause for term in all_terms):
+            continue
+        if (_OTHER_MEMORY_ZH_OBJECT.search(clause)
+                and any(True for _pair in _zh_erase_cues(clause, delete_only=True))):
+            return True
+    return False
+
+
+# A self-introduction names the user as surely as "my name is" (U-08): "Hi, I'm <Name>, looking
+# for a flat" and 我是<姓名> were stored verbatim. Only capitalised tokens count, and "I'm Polish"
+# or "I'm Looking For A Flat" are not names: the list holds what can follow "I'm" with a capital.
+_NOT_A_NAME = (
+    # Demonyms and languages.
+    r"afghan|african|albanian|algerian|american|angolan|arab|arabic|argentine|argentinian|armenian|"
+    r"asian|australian|austrian|azerbaijani|bangladeshi|belarusian|belgian|bengali|black|bolivian|"
+    r"bosnian|brazilian|brit|british|bulgarian|burmese|cambodian|cameroonian|canadian|cantonese|"
+    r"caribbean|chilean|chinese|colombian|congolese|croatian|cuban|cypriot|czech|danish|dominican|"
+    r"dutch|ecuadorian|egyptian|emirati|english|eritrean|estonian|ethiopian|european|filipino|filipina|"
+    r"finnish|flemish|french|georgian|german|ghanaian|greek|guatemalan|haitian|hindi|hispanic|"
+    r"honduran|hungarian|icelandic|indian|indonesian|iranian|iraqi|irish|israeli|italian|ivorian|"
+    r"jamaican|japanese|jordanian|kazakh|kenyan|korean|kosovan|kurdish|kuwaiti|lao|latin|latino|latina|"
+    r"latvian|lebanese|libyan|lithuanian|luxembourgish|macedonian|malawian|malaysian|maltese|mandarin|"
+    r"mexican|moldovan|mongolian|montenegrin|moroccan|nepali|nepalese|nigerian|norwegian|omani|"
+    r"pakistani|palestinian|panamanian|paraguayan|persian|peruvian|polish|portuguese|punjabi|qatari|"
+    r"romanian|russian|rwandan|saudi|scandinavian|scottish|senegalese|serbian|sierra|singaporean|"
+    r"slovak|slovakian|slovenian|somali|spanish|sudanese|swedish|swiss|syrian|taiwanese|tajik|tamil|"
+    r"tanzanian|thai|tibetan|tunisian|turkish|turkmen|ugandan|ukrainian|urdu|uruguayan|uzbek|"
+    r"venezuelan|vietnamese|welsh|white|yemeni|zambian|zimbabwean|"
+    # Faiths.
+    r"anglican|atheist|buddhist|catholic|christian|hindu|jewish|mormon|muslim|orthodox|protestant|sikh|"
+    # Words a capitalised or title-case message puts there.
+    r"a|about|above|after|again|all|allergic|almost|already|also|always|an|around|at|available|away|"
+    r"back|based|because|before|being|below|between|both|busy|but|by|certain|close|coming|confused|"
+    r"considering|currently|definitely|desperate|disabled|divorced|done|down|due|easy|employed|engaged|"
+    r"even|ever|excited|fairly|female|fine|flexible|for|free|from|frustrated|full|gay|getting|glad|"
+    r"going|good|grateful|happy|having|hoping|here|home|hopeful|how|in|interested|into|just|keen|"
+    r"late|leaving|less|like|likely|literally|living|local|looking|lost|lucky|male|married|maybe|me|"
+    r"more|mostly|moving|much|my|near|nearby|needing|nervous|never|new|next|nice|no|non|not|now|"
+    r"of|off|ok|okay|old|on|one|only|open|or|our|out|over|part|partnered|paying|perhaps|planning|"
+    r"please|pretty|probably|prepared|quite|rather|ready|really|relocating|renting|retired|right|"
+    r"same|searching|self|seeking|separated|settling|she|short|single|so|still|straight|struggling|"
+    r"sure|sorry|staying|studying|still|such|that|the|their|then|there|thinking|this|tired|to|too|"
+    r"totally|trans|trying|two|under|unemployed|unsure|up|usually|vegan|vegetarian|very|visiting|"
+    r"waiting|wanting|well|what|when|where|who|widowed|willing|with|working|worried|your|anything|"
+    r"nothing|everything|something|anyone|someone|everyone|anybody|nobody|parking|flats?|homes?|"
+    r"houses?|rents?|prices?|transport|schools?|shops?|area|areas|stay|look|wait|stop|click|come|go|get")
+_NAME_TOKEN = (r"(?-i:[A-ZÀ-Þ](?:[a-zß-ÿ]+(?:[A-ZÀ-Þ][a-zß-ÿ]+)?|['’][A-ZÀ-Þ][a-zß-ÿ]+)"
+               r"(?:[-'’][A-ZÀ-Þ]?[a-zß-ÿ]+)*)(?![\w-]*[0-9])")
+_NAMED = rf"(?!(?:{_NOT_A_NAME})\b){_NAME_TOKEN}"
+_NAME_RUN = rf"{_NAMED}(?:\s+{_NAMED}){{0,3}}"
+# The name has to end the phrase: "I'm Erasmus student" and "I'm Camden based" describe the user.
+_NAME_ENDS = (r"(?=\s*(?:$|[,.!?;:)—–]|\s-\s|(?:and|but|from|looking|searching|hoping|trying|"
+              r"who|here|i|i'm|i’m)\b))")
+_ZH_SURNAME = ("王李张刘陈杨黄赵吴周徐孙马朱胡郭何高林罗郑梁谢宋唐许韩冯邓曹彭曾肖田董袁潘于蒋蔡余杜叶程苏魏吕"
+               "丁任沈姚卢姜崔钟谭陆汪范金石廖贾夏韦付方白邹孟熊秦邱江尹薛闫段雷侯龙史陶黎贺顾毛郝龚邵万钱严覃"
+               "武戴莫孔向汤")
+_SELF_INTRODUCTION_PATTERN = (
+    rf"(?P<cue>\b(?:i'm|i’m|i\s+am|im)\s+)(?P<name>{_NAME_RUN}){_NAME_ENDS}"
+    rf"|(?P<cue2>\bthis\s+is\s+)(?P<name2>{_NAME_RUN})(?=\s+(?:speaking|here|calling)\b)"
+    rf"|(?P<cue3>^\s*(?:(?:hi|hello|hey|hiya)\b[,!.\s]*)?)(?P<name3>{_NAME_RUN})(?=\s+here\b\s*(?:$|[,.!:;—–-]))"
+    # 我是学生 / 我是中国人 / 我是白领: the token may not end in a word for a kind of person.
+    rf"|(?P<cue4>我是)(?P<name4>(?:欧阳|司马|上官|诸葛|[{_ZH_SURNAME}])[\u4e00-\u9fff]{{1,2}}?)"
+    r"(?<![人生员师士领族者工家长女子客东友])"
+    r"(?=\s*(?:$|[，,。.！!？?；;、]|想|要|打算|正在|在找|来))")
+_PLACE_SUFFIX = re.compile(r"\s+(?:town|road|central|circus|park|square|station|street)$")
+
+
+def _is_curated_place(name: str) -> bool:
+    """True for a place the search itself knows, with or without "Town" or "Road" after it."""
+    try:
+        from core.tools.search_properties import _CUE_ONLY_AREAS, _KNOWN_AREAS
+    except Exception:
+        return False
+    key = re.sub(r"[’']", "", " ".join(str(name or "").lower().split()))
+    return any(k in _KNOWN_AREAS or k in _CUE_ONLY_AREAS for k in (key, _PLACE_SUFFIX.sub("", key)))
+
+
+def _introduces_a_place(match: re.Match) -> bool:
+    """"Camden here" and "this is Hackney here" say where, not who (V-01). "I'm Victoria" and
+    "this is Chelsea speaking" name a person whatever the table holds."""
+    following = match.string[match.end():match.end() + 12].lstrip().lower()
+    name = match.group("name3") or (match.group("name2") if following.startswith("here") else None)
+    return bool(name) and _is_curated_place(name)
+
+
+class _IdentityStatement:
+    """A compiled pattern with its "<place> here" matches left out, for ``.search`` callers."""
+
+    def __init__(self, pattern: re.Pattern):
+        self.pattern = pattern
+
+    def finditer(self, text: str):
+        return (m for m in self.pattern.finditer(text) if not _introduces_a_place(m))
+
+    def search(self, text: str):
+        return next(self.finditer(text), None)
 
 
 # ── Sensitive personal data in AUTO-memory (2026-10-19 A-09) ─────────────────
@@ -823,16 +1295,23 @@ _SENSITIVE_CLAUSE_PATTERNS = (
         r"(?:儿子|女儿|孩子)(?:叫|名叫|名字)|(?:小学|中学|幼儿园)(?:上学|读书|念书)|就读于", re.I)),
     # A self-identifying name (R1-08): "Hi. My name is Priya Raman, ..." stayed in the
     # episodic layer while the assistant told the user "I don't have your name".
-    ("identity", re.compile(
+    ("identity", _IdentityStatement(re.compile(
         r"\b(?:my|user'?s?|the user'?s|his|her|their)\s+(?:full\s+|first\s+|last\s+|sur|given\s+|family\s+)?"
         r"name\b|\b(?:i\s+am|i'm|user\s+is|they\s+are|he\s+is|she\s+is)\s+(?:called|named)\b|"
-        r"\bcall\s+me\s+(?-i:[A-Z])|我叫|我的名字|名字(?:是|叫)|我姓|用户(?:名叫|叫|的名字)", re.I)),
+        r"\bcall\s+me\s+(?-i:[A-Z])|我叫|我的名字|名字(?:是|叫)|我姓|用户(?:名叫|叫|的名字)|"
+        # Another person's name is not a fact about the user either: "my landlord's name is
+        # <name>" became a semantic fact while the reply asked the user to confirm first (R3-09).
+        r"\b(?:my|our)\s+(?:\w+\s+)?(?:landlord|landlady|agent|neighbou?r|boss|manager|employer|"
+        r"colleague|flatmate|housemate|roommate|partner|wife|husband|friend|mother|mum|mom|father|"
+        r"dad|brother|sister|son|daughter|guarantor)(?:['’]s\s+(?:full\s+|first\s+|last\s+)?name\b|"
+        r"\s+is\s+(?:called|named)\b)|房东(?:叫|名叫|的名字)|" + _SELF_INTRODUCTION_PATTERN, re.I))),
 )
+_SELF_INTRODUCTION = _IdentityStatement(re.compile(_SELF_INTRODUCTION_PATTERN, re.I))
 # Anchored and bounded: unanchored, a long word or digit run was re-scanned from every
 # position looking for an "@" (O(n²) in one C call, holding the GIL — 10 s for 60k chars).
 _EMAIL_RE = re.compile(r"(?<![\w.+-])[\w.+-]{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63}){1,8}")
 _PHONE_RE = re.compile(
-    r"(?<![\d£$])(?:\+44\s?\(?0?\)?\s?\d|\(0\d|\b0\d)(?:[\s)-]{0,2}\d){8,9}(?!\d)")
+    r"(?<![\d£$])(?:\+44\s?\(?0?\)?\s?\d|\(0\d|(?<![a-z0-9_])0\d)(?:[\s)-]{0,2}\d){8,9}(?!\d)", re.I)
 # Clause boundaries: sentence/clause punctuation (a comma or full stop between digits is a
 # thousands separator or a decimal point, never a boundary), or "and/but" introducing a new
 # first-person clause ("... a year and I'm on a visa").
@@ -846,6 +1325,206 @@ _CHILD_NAME_RE = re.compile(
     r"\b((?i:son|daughter|child|kid|stepson|stepdaughter))\b,?\s+(?:(?i:called|named)\s+)?"
     r"[A-Z][a-z]{1,20}\b,?")
 
+# ── Secrets: never kept in ANY memory row, explicit or automatic (R1-05) ─────────────────
+# "Remember my card number <card> expiry <mm/yy> CVV <cvv>", a bank password and a
+# passport + National Insurance number were each stored verbatim as a semantic row AND as the
+# episodic "User asked: ..." row, then echoed back as "Saved text". Unlike a phone number, a
+# credential, a payment card or a government id number is never a fact the product needs, so
+# the value itself is replaced wherever it appears; the words around it stay.
+_SECRET_MARKER = "[security detail not stored]"
+_SECRET_VALUE = r"(?P<v>\"[^\"\n]{1,64}\"|'[^'\n]{1,64}'|[^\s,;]{1,64})"
+_IS = r"(?:\s+(?:is|was)\s*|\s*[:=]\s*|\s+)"
+# Each pattern names the secret itself as group ``v``; the label before it ("my CVV",
+# "password") stays, so the reply and the log can say what was withheld.
+_SECRET_PATTERNS = tuple((name, re.compile(pattern, re.I)) for name, pattern in (
+    # An API key is recognised by its shape, label or none, in any language: every form of "sk-…"
+    # passed, "api_key=sk-…" included, and a zh clause could be saved verbatim (D-06).
+    ("credentials", r"(?<![A-Za-z0-9_-])(?P<v>(?:sk|pk|rk)-(?:[a-z]{2,8}-)?[A-Za-z0-9_-]{16,}"
+                    r"|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[abpr]-[A-Za-z0-9-]{16,}"
+                    r"|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}"
+                    r"|eyJ[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]+){0,2})(?![A-Za-z0-9_-])"),
+    # "Authorization: Bearer abc123…", the header as pasted. A digit and a length tell a token from
+    # "the bearer of the lease".
+    ("credentials", r"(?<![A-Za-z0-9])(?:authorization\s*[:=]\s*(?:bearer|basic|token)?|bearer)\s*"
+                    r"(?=[^\s,;]*\d)(?P<v>[A-Za-z0-9._~+/=-]{12,})"),
+    # A value with a digit, or a long one: "my API key is stored elsewhere" states none.
+    ("credentials", r"(?<![A-Za-z0-9])(?:api[_ -]?key|secret[_ -]?key|access[_ -]?token|auth[_ -]?token|"
+                    r"bearer\s+token|private[_ -]?key)(?![A-Za-z0-9])"
+                    r"(?:\s+(?:is|was)\s*|\s*[:=：]\s*|\s*(?:是|为)\s*)"
+                    r"(?=[^\s,;]*\d|[^\s,;]{16,})" + _SECRET_VALUE),
+    ("credentials", r"(?:密钥|秘钥|令牌)\s*(?:是|为|[:=：])\s*" + _SECRET_VALUE),
+    # "with password S3cret!pass" has no "is"; a bare word after "password" ("the password
+    # reset page") is only a secret when it carries a digit or a symbol.
+    ("credentials", r"\b(?:password|passcode|passphrase|pwd)\b(?:\s+(?:is|was)\s*|\s*[:=]\s*)" + _SECRET_VALUE),
+    ("credentials", r"\b(?:password|passcode|passphrase|pwd)\s+(?=[^\s,;]*(?:\d|_|[^\s\w]))(?!\[)" + _SECRET_VALUE),
+    ("credentials", r"\b(?:pin|pin\s*code|pin\s*number)\b" + _IS + r"(?P<v>\d{4,8})\b"),
+    ("credentials", r"\b(?:user\s*name|username|login|log-in|user\s*id)(?:\s+(?:is|was)\s*|\s*[:=]\s*)"
+                    r"(?:user\s+)?" + _SECRET_VALUE),
+    ("credentials", r"(?:密码|口令|验证码|PIN码)\s*(?:是|为|:|：)?\s*(?P<v>[^\s，。,;；]{1,64})"),
+    # "My secret code word is PINEAPPLE-77." was kept by the episodic log and read back from
+    # it (R4-09): a code word, a memorable word or a security answer is a credential too.
+    ("credentials", r"\b(?:(?:secret|security|memorable|safe|verbal)\s+(?:code\s*)?(?:word|phrase|code|answer)|"
+                    r"code\s*word|security\s+question\s+answer|answer\s+to\s+(?:my|the)\s+security\s+question)s?\b"
+                    r"(?:\s+(?:is|was)\s*|\s*[:=]\s*)" + _SECRET_VALUE),
+    ("credentials", r"(?:暗号|密语|安全问题(?:的)?答案|安全码)\s*(?:是|为|:|：)?\s*(?P<v>[^\s，。,;；]{1,64})"),
+    ("payment", r"\b(?:cvv2?|cvc2?|cv2|csc|security\s+code)\b" + _IS + r"(?P<v>\d{3,4})\b"),
+    ("payment", r"\b(?:exp(?:iry|ires|iration)?(?:\s+date)?|valid\s+(?:thru|through|until))\b" + _IS
+                + r"(?P<v>(?:0?[1-9]|1[0-2])\s*[/-]\s*(?:\d{4}|\d{2}))\b"),
+    ("payment", r"\bsort\s*code\b" + _IS + r"(?P<v>\d{2}\s*-?\s*\d{2}\s*-?\s*\d{2})\b"),
+    ("payment", r"\baccount\s*(?:number|no\.?)" + _IS + r"(?P<v>\d{6,10})\b"),
+    ("payment", r"(?:银行卡号|信用卡号|卡号|账号)(?:码)?\s*(?:是|为|:|：)?\s*(?P<v>\d[\d\s-]{6,21}\d)"),
+    ("government_id", r"\bpassport\s*(?:number|no\.?|#)?" + _IS
+                      + r"(?P<v>(?=[A-Z0-9]{0,9}\d)[A-Z0-9]{6,10})\b"),
+    # A National Insurance number, labelled or on its own: two letters, six digits, A-D.
+    ("government_id", r"(?<![A-Z0-9])(?P<v>[A-Z]{2}\s?\d{2}\s?\d{2}\s?\d{2}\s?[A-D])\b"),
+    ("government_id", r"\bdriv(?:ing|er'?s?)\s+licen[cs]e\s*(?:number|no\.?)?" + _IS
+                      + r"(?P<v>(?=[A-Z0-9]{0,17}\d)[A-Z0-9]{5,18})\b"),
+    ("government_id", r"(?:护照|身份证|驾照|驾驶证)(?:号码?|编号)\s*(?:是|为|:|：)?\s*(?P<v>[A-Za-z0-9]{6,20})"),
+))
+# A payment card number written without a label: 13-19 digits (spaces or dashes between
+# groups) that pass the Luhn check, so a price, a phone number or a reference does not.
+_CARD_NUMBER_RE = re.compile(r"(?<![\d£$])\d(?:[ -]?\d){12,18}(?!\d)")
+
+
+def _luhn_valid(digits: str) -> bool:
+    total, parity = 0, len(digits) % 2
+    for index, char in enumerate(digits):
+        value = int(char)
+        if index % 2 == parity:
+            value *= 2
+            if value > 9:
+                value -= 9
+        total += value
+    return total % 10 == 0
+
+
+def redact_secrets(text: str) -> tuple[str, list[str]]:
+    """``text`` with credentials, payment card details and government id numbers replaced
+    by a marker, and the categories found. Applied to every memory row and to the explicit
+    remember path (R1-05). Never raises."""
+    try:
+        value = str(text or "")
+        found: list[str] = []
+
+        def _card(match):
+            digits = re.sub(r"\D", "", match.group())
+            if 13 <= len(digits) <= 19 and _luhn_valid(digits):
+                if "payment" not in found:
+                    found.append("payment")
+                return _SECRET_MARKER
+            return match.group()
+
+        value = _CARD_NUMBER_RE.sub(_card, value)
+        for name, pattern in _SECRET_PATTERNS:
+            def _value(match, name=name):
+                secret = match.group("v")
+                if secret.strip("\"'") and _SECRET_MARKER.startswith(secret.strip("\"'")):
+                    return match.group()      # already replaced by an earlier pattern
+                if name not in found:
+                    found.append(name)
+                start, end = match.span("v")
+                return match.string[match.start():start] + _SECRET_MARKER + match.string[end:match.end()]
+            value = pattern.sub(_value, value)
+        return value, found
+    except Exception:
+        return "", ["unparsed"]
+
+
+# ── A street-level HOME address in automatic memory (R1-06) ──────────────────────────────
+# "I currently live at <number> <street>, Hackney <postcode>" was kept by the episodic log, the
+# extracted facts and a reflection, while the assistant told the user it had not saved their
+# address. Like a phone number, the street address is replaced; the area and the postcode
+# district stay (they are what the search uses). Bound to a residence cue, so a listing
+# address the user asks about ("tell me about 12 Sample Grove") is not touched.
+_ADDRESS_MARKER = "[home address not stored]"
+_STREET_WORD_RE = (
+    r"(?:road|rd|street|st|avenue|ave|lane|ln|close|drive|dr|way|place|pl|gardens|gdns|grove|"
+    r"terrace|crescent|court|ct|square|sq|mews|row|hill|park|walk|rise|parade|green|vale|view|"
+    r"yard|gate|wharf|parkway|boulevard|embankment|estate|house|mansions|buildings)")
+_HOME_ADDRESS_RE = re.compile(
+    r"(?P<cue>\b(?:live|living|lives|lived|stay|staying|based|reside|residing)\s+(?:at|in)\s+"
+    r"|\b(?:home\s+|current\s+|my\s+)?address\s*(?:is|:|=)?\s*"
+    r"|\bmy\s+(?:home|flat|house|place)\s+is\s+(?:at|on)\s+)"
+    r"(?P<addr>(?:(?:flat|apartment|apt|unit|room)\s*\d+[a-z]?\s*,?\s*)?\d{1,4}[a-z]?"
+    r"(?:\s*-\s*\d{1,4})?\s*,?\s+(?:[a-z][\w'’-]*\s+){0,3}?" + _STREET_WORD_RE + r"\b\.?)", re.I)
+_ZH_HOME_ADDRESS_RE = re.compile(
+    r"(?P<cue>(?:我)?(?:现在|目前)?(?:住在|家在|地址(?:是|为|：|:)))"
+    r"(?P<addr>[^，。,;；!?！？]{0,30}?\d+\s*(?:号|弄|栋|室))")
+_FULL_POSTCODE_RE = re.compile(r"\b([A-Z]{1,2}\d[A-Z\d]?)\s*\d[A-Z]{2}\b", re.I)
+
+
+def redact_home_address(text: str) -> tuple[str, bool]:
+    """``text`` with a stated home street address replaced (postcode reduced to its
+    district), and whether one was found. Never raises."""
+    try:
+        value = str(text or "")
+        hit = False
+        for pattern in (_HOME_ADDRESS_RE, _ZH_HOME_ADDRESS_RE):
+            out, position = [], 0
+            for match in pattern.finditer(value):
+                hit = True
+                out.append(value[position:match.start("addr")] + _ADDRESS_MARKER)
+                position = match.end("addr")
+                # The full postcode that follows within the address keeps its district only.
+                tail = value[position:position + 60]
+                postcode = _FULL_POSTCODE_RE.search(tail)
+                if postcode and not re.search(r"[.;!?。；！？]", tail[:postcode.start()]):
+                    out.append(tail[:postcode.start()] + postcode.group(1).upper())
+                    position += postcode.end()
+            out.append(value[position:])
+            value = "".join(out)
+        return value, hit
+    except Exception:
+        return "", True
+
+
+# An explicit save request that carries contact details or a home address is the remember
+# tool's to store, after the user confirms it; the automatic layers kept "home address is in
+# N1" from "Also remember that ... my home address is <street>, N1." while the reply asked the
+# user to confirm first, and still after the user said no (R3-09).
+_SAVE_REQUEST_CLAUSE = re.compile(
+    r"(?:\b(?:please\s+|also\s+|and\s+)*(?:remember|note|keep\s+in\s+mind|don'?t\s+forget|save)\b"
+    r"|(?:请|帮我|也)?(?:记住|记一下|记下|别忘了|保存))[^.!?;\n。！？；]*", re.I)
+_WITHHELD_SAVE_REQUEST = "[personal details in a save request: kept only if the user confirms]"
+
+
+def _withhold_personal_save_requests(text: str) -> str:
+    def withhold(match):
+        clause = match.group(0)
+        if (_ADDRESS_MARKER in clause or "[contact detail not stored]" in clause
+                or dict(_SENSITIVE_CLAUSE_PATTERNS)["identity"].search(clause)):
+            return _WITHHELD_SAVE_REQUEST
+        return clause
+    return _SAVE_REQUEST_CLAUSE.sub(withhold, text)
+
+
+# "Please remember that my name is Priya" became "she prefers ..." and a name read as male
+# became "he ..." in the extracted facts and reflections (R3-20): a first name says nothing
+# about how the user refers to themselves. A gendered pronoun in a fact about the user is
+# replaced by "the user"; a fact about someone else ("my sister ... she") is left alone, as
+# is any pronoun the user used in their own words.
+_GENDERED = re.compile(r"\b(?:she|he|her|him|his|hers|herself|himself)\b", re.I)
+_OTHER_PERSON = re.compile(
+    r"\b(?:partner|wife|husband|spouse|son|daughter|child|kids?|friend|mother|mum|mom|father|"
+    r"dad|parents?|brother|sister|colleague|flatmate|roommate|housemate|girlfriend|boyfriend|"
+    r"landlord|landlady|agent|boss|manager|neighbou?r)\b", re.I)
+_PRONOUN_SWAP = (
+    (re.compile(r"\b(?:herself|himself)\b", re.I), "themselves"),
+    (re.compile(r"\b(?:his|hers)\b", re.I), "the user's"),
+    (re.compile(r"\bher(?=\s+[a-z])", re.I), "the user's"),
+    (re.compile(r"\b(?:she|he|her|him)\b", re.I), "the user"),
+)
+
+
+def neutral_user_pronouns(text: str, user_words: str = "") -> str:
+    value = str(text or "")
+    if not _GENDERED.search(value) or _OTHER_PERSON.search(value) or _GENDERED.search(str(user_words or "")):
+        return value
+    for pattern, replacement in _PRONOUN_SWAP:
+        value = pattern.sub(replacement, value)
+    value = re.sub(r"(^|[.!?]\s+)the user", lambda m: m.group(1) + "The user", value)
+    return value
+
 
 def redact_sensitive(text: str) -> tuple[str, list[str]]:
     """``text`` with income, immigration, health and contact details removed.
@@ -857,15 +1536,34 @@ def redact_sensitive(text: str) -> tuple[str, list[str]]:
     metadata). Never raises."""
     try:
         value = str(text or "")[:_REDACT_MAX_CHARS]
-        found: list[str] = []
+        # Secrets (R1-05) and a stated home street address (R1-06) are replaced in place,
+        # like a phone number: the rest of the clause is still a usable housing statement.
+        value, found = redact_secrets(value)
+        value, home_address = redact_home_address(value)
+        if home_address:
+            found.append("address")
         if _EMAIL_RE.search(value) or _PHONE_RE.search(value):
             found.append("contact")
             value = _PHONE_RE.sub("[contact detail not stored]",
                                   _EMAIL_RE.sub("[contact detail not stored]", value))
+        if found or dict(_SENSITIVE_CLAUSE_PATTERNS)["identity"].search(value):
+            withheld = _withhold_personal_save_requests(value)
+            if withheld != value:
+                value = withheld
+                if "identity" not in found:
+                    found.append("identity")
         if _CHILD_NAME_RE.search(value):
             # "Has a son, Tom, who …": the name sits in its own comma clause (R4-08).
             found.append("children")
             value = _CHILD_NAME_RE.sub(lambda m: m.group(1) + " " + _SENSITIVE_MARKER, value)
+        if _SELF_INTRODUCTION.search(value):
+            # The name goes, not its clause: "Hi I'm <Name> looking for a 1-bed" keeps the rest.
+            if "identity" not in found:
+                found.append("identity")
+            value = _SELF_INTRODUCTION.pattern.sub(
+                lambda m: m.group(0) if _introduces_a_place(m) else (
+                    (m.group("cue") or m.group("cue2") or m.group("cue3")
+                     or m.group("cue4") or "") + _SENSITIVE_MARKER), value)
         out: list[str] = []
         start = 0
         bounds = [(m.start(), m.end()) for m in _CLAUSE_BOUNDARY.finditer(value)]
@@ -938,8 +1636,31 @@ def strip_health_reason(text: str) -> str | None:
         return None
 
 
+# "close to 7 Sample Street, Hackney E8 1AA" stayed in the conversation's soft preferences and
+# was sent with every search (R2-16): a preference keeps the area and postcode district, never
+# the house number and street.
+_PREFERENCE_STREET_RE = re.compile(
+    r"(?:(?:flat|apartment|apt|unit|room)\s*\d+[a-z]?\s*,?\s*)?\b\d{1,4}[a-z]?(?:\s*-\s*\d{1,4})?"
+    # "2 bed near Victoria Park" is a size, not a house number.
+    r"(?!\s*(?:-\s*)?(?:bed|beds|bedrooms?|br|minutes?|mins?|miles?|km|people|persons?|days?|"
+    r"weeks?|months?|years?|floors?|storeys?|stops?|zones?)\b)"
+    r"\s*,?\s+(?:[a-z][\w'’-]*\s+){0,3}?" + _STREET_WORD_RE + r"\b\.?\s*,?\s*", re.I)
+
+
+def strip_street_address(text: str) -> str:
+    """``text`` without a house number and street, a full postcode cut to its district."""
+    value = str(text or "")
+    if not _PREFERENCE_STREET_RE.search(value):
+        return value
+    value = _PREFERENCE_STREET_RE.sub("", value)
+    value = _FULL_POSTCODE_RE.sub(lambda m: m.group(1).upper(), value)
+    value = re.sub(r"\s{2,}", " ", re.sub(r"\s+,", ",", value)).strip(" ,")
+    return re.sub(r"\s+(?:at|in|on|near|to|by|from|of)$", "", value, flags=re.I).strip(" ,")
+
+
 def sanitize_soft_preferences(values) -> list:
-    """Each stored soft preference with any health reason removed (order kept, empties gone)."""
+    """Each stored soft preference with any health reason and street address removed (order
+    kept, empties gone)."""
     if isinstance(values, str):
         values = [values]
     out: list = []
@@ -947,10 +1668,21 @@ def sanitize_soft_preferences(values) -> list:
         if not isinstance(item, str):
             out.append(item)
             continue
-        cleaned = strip_health_reason(item)
+        cleaned = strip_street_address(strip_health_reason(item))
+        if cleaned and _DISMISSED_PREFERENCE.search(cleaned):
+            continue      # "garden not needed" is not a preference (K-06)
         if cleaned and cleaned not in out:
             out.append(cleaned)
     return out
+
+
+# "A garden doesn't matter, but I need a balcony." stored the literal "garden not needed" as
+# a soft preference, in the criteria and the search arguments (K-06). A dismissed item is
+# the absence of a preference.
+_DISMISSED_PREFERENCE = re.compile(
+    # "nice but not essential" / "optional" are still (soft) preferences and stay.
+    r"\b(?:not\s+(?:needed|required|necessary)|(?:doesn.t|does\s+not)\s+matter|"
+    r"(?:don.t|do\s+not)\s+care|no\s+need|unnecessary|irrelevant)\b|不需要|无所谓|不必", re.I)
 
 
 # A reflection is an INFERENCE about the person, not something they said. "Needs a lift ->
@@ -1173,6 +1905,31 @@ class AgentMemory:
         # Report of the most recent targeted erasure — a value that is COMPUTED and
         # ASSERTED ON (tests pin it), not merely logged.
         self.last_erasure_report = None
+        # user_id -> {field: epoch seconds of the last erasure of that field} (R4-01).
+        self._erasures = {}
+        self._erasure_lock = threading.Lock()
+        # user_id -> turns an edit took out: their late jobs keep no facts (W-08).
+        self._retired_turns = {}
+
+    def erased_fields_since(self, user_id, started_at) -> tuple:
+        """Fields erased for ``user_id`` at or after ``started_at`` (ISO or epoch seconds)."""
+        uid = _valid_user_id(user_id)
+        if uid is None or started_at in (None, ""):
+            return ()
+        try:
+            if isinstance(started_at, (int, float)):
+                start = float(started_at)
+            else:
+                import datetime as _dt
+                parsed = _dt.datetime.fromisoformat(str(started_at).replace("Z", "+00:00"))
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=_dt.timezone.utc)
+                start = parsed.timestamp()
+        except (TypeError, ValueError):
+            return ()
+        with self._erasure_lock:
+            erased = dict(self._erasures.get(uid) or {})
+        return tuple(f for f, at in erased.items() if at >= start)
 
     # ------------------------------------------------------------------ writing
     def add(self, text, mtype, session_id="default", user_id=None,
@@ -1234,7 +1991,8 @@ class AgentMemory:
         honest partial-deletion signal for the caller to surface.
         """
         empty = {"user_id": None, "fields": (), "deleted": 0, "deleted_ids": (),
-                 "by_layer": {}, "retained_mentions": 0, "residual_ids": (),
+                 "by_layer": {}, "rewritten": 0, "rewritten_ids": (),
+                 "retained_mentions": 0, "residual_ids": (),
                  "legacy_residual_ids": (), "complete": True}
         uid = _valid_user_id(user_id)
         if uid is None:
@@ -1248,7 +2006,7 @@ class AgentMemory:
             self.last_erasure_report = out
             return out
 
-        def _scan():
+        def _scan(rewrites=None):
             got = self.col.get(where={"user_id": uid})
             ids = list(got.get("ids") or [])
             docs = list(got.get("documents") or [])
@@ -1256,21 +2014,43 @@ class AgentMemory:
             doomed, by_layer, retained = [], {}, 0
             for i, rid in enumerate(ids):
                 doc = docs[i] if i < len(docs) else ""
-                mtype = ((metas[i] if i < len(metas) else None) or {}).get("mtype", "")
+                meta = (metas[i] if i < len(metas) else None) or {}
+                mtype = meta.get("mtype", "")
                 if any(_states_field_value(doc, f, mtype) for f in wanted):
-                    doomed.append(rid)
+                    rest = doc
+                    for f in wanted:
+                        rest = _without_field_clauses(rest, f) if rest else ""
+                    if rewrites is not None and rest and meta.get("user_id"):
+                        # The row says other things too: keep them, minus the field (R4-01).
+                        rewrites.append((rid, rest, dict(meta)))
+                    else:
+                        doomed.append(rid)
                     by_layer[mtype or "unknown"] = by_layer.get(mtype or "unknown", 0) + 1
                 elif any(_mentions_field(doc, f) for f in wanted):
                     retained += 1
             return doomed, by_layer, retained
 
         deleted_ids, by_layer, retained, residual = [], {}, 0, []
-        legacy_residual = []
+        legacy_residual, rewritten = [], []
         with self._lock:
             try:
-                deleted_ids, by_layer, retained = _scan()
+                deleted_ids, by_layer, retained = _scan(rewritten)
                 if deleted_ids:
                     self.col.delete(ids=deleted_ids)
+                for rid, rest, meta in rewritten:
+                    meta["updated_at"] = _now_iso()
+                    if meta.get("hash") is not None:
+                        meta["hash"] = hashlib.md5(
+                            f"{meta.get('mtype') or 'semantic'}|{meta['user_id']}|{rest}"
+                            .encode("utf-8")).hexdigest()
+                    self.col.update(ids=[rid], documents=[rest], metadatas=[meta])
+                # A job of a turn that started before this erasure must not write the value
+                # back (R4-01: the remember turn's own memory job landed after the forget).
+                stamp = time.time()
+                with self._erasure_lock:
+                    erased = self._erasures.setdefault(uid, {})
+                    for f in wanted:
+                        erased[f] = stamp
                 # Verification pass: assert the scrub actually happened.
                 residual, _, retained = _scan()
                 duplicate = self.col.legacy_residual_records(
@@ -1294,6 +2074,8 @@ class AgentMemory:
         report = {
             "user_id": uid, "fields": wanted, "deleted": len(deleted_ids),
             "deleted_ids": tuple(deleted_ids), "by_layer": by_layer,
+            "rewritten": len(rewritten),
+            "rewritten_ids": tuple(rid for rid, _rest, _meta in rewritten),
             "retained_mentions": retained,
             "residual_ids": tuple(residual),
             "legacy_residual_ids": tuple(legacy_residual),
@@ -1317,7 +2099,10 @@ class AgentMemory:
         if user_id is None:
             print("[memory] add rejected: missing/shared user_id (memory must be per-user)")
             return None
-        text = (text or "").strip()
+        # The one sink every layer writes through: whatever path produced the row (explicit
+        # remember, an extracted fact, a consolidation, a reflection), a password, a card
+        # number or an id number never reaches the store (R1-05).
+        text = redact_secrets((text or "").strip())[0].strip()
         if not text:
             return None
         h = hashlib.md5(f"{mtype}|{user_id}|{text}".encode("utf-8")).hexdigest()
@@ -1419,7 +2204,8 @@ class AgentMemory:
             "(budget, destination/university, commute limit, must-have amenities, areas to avoid, "
             "who they live with, etc.), worded as close to the user's words as possible. Never add "
             "a reason, priority or rationale the user did not say (no 'to live close to work', "
-            "no 'dealbreaker', no 'key requirement'). Do NOT include greetings, questions, or "
+            "no 'dealbreaker', no 'key requirement'). Refer to the user as 'the user'; never infer "
+            "gender from a name and never use he/she/his/her for the user. Do NOT include greetings, questions, or "
             'chit-chat. If the user stated nothing durable, return {"facts": []}.\n\n'
             + (_resolved_criteria_block(changes) if changes else "")
             + f"User: {user_msg}\n\nJSON: "
@@ -1433,7 +2219,7 @@ class AgentMemory:
             for fact in facts:
                 if not isinstance(fact, str) or not fact.strip() or contains_sensitive(fact):
                     continue
-                cleaned = strip_unstated_rationale(fact, user_msg)
+                cleaned = neutral_user_pronouns(strip_unstated_rationale(fact, user_msg), user_msg)
                 if cleaned:
                     out.append(cleaned)
             return out[:8]
@@ -1441,6 +2227,8 @@ class AgentMemory:
             return []
 
     def _consolidate(self, facts, session_id, user_id, changes=None, user_msg=""):
+        # An extracted "fact" that reads as an instruction is not kept either (R2-13).
+        facts = [fact for fact in facts or [] if not _instruction_shaped(fact)]
         if not facts:
             return
         existing, seen, protected = [], set(), set()
@@ -1498,7 +2286,7 @@ class AgentMemory:
                     # into an UPDATE of it is still added beside it, verbatim (R4-02).
                     if ev == "UPDATE" and text in facts:
                         self.add(text, "semantic", session_id, user_id, importance=7,
-                                 extra_meta={"source": SOURCE_AUTO})
+                                 extra_meta=self._auto_row_meta())
                     continue
                 loosened = None
                 if ev in ("UPDATE", "DELETE") and oid in texts:
@@ -1513,11 +2301,11 @@ class AgentMemory:
                     for fact in facts:
                         if loosened in _row_bounds(fact):
                             self.add(fact, "semantic", session_id, user_id, importance=7,
-                                     extra_meta={"source": SOURCE_AUTO})
+                                     extra_meta=self._auto_row_meta())
                     continue
                 if ev == "ADD" and text:
                     self.add(text, "semantic", session_id, user_id, importance=7,
-                             extra_meta={"source": SOURCE_AUTO})
+                             extra_meta=self._auto_row_meta())
                 elif ev == "UPDATE" and oid and text:
                     update_failed = not self._update_semantic(oid, text, turn_ref)
                     if update_failed:
@@ -1525,7 +2313,7 @@ class AgentMemory:
                         # releasing the non-reentrant lock above, otherwise an UPDATE
                         # failure deadlocks the durable outbox worker forever.
                         self.add(text, "semantic", session_id, user_id, importance=7,
-                                 extra_meta={"source": SOURCE_AUTO})
+                                 extra_meta=self._auto_row_meta())
                 elif ev == "DELETE" and oid:
                     with self._lock:
                         try:
@@ -1534,6 +2322,14 @@ class AgentMemory:
                             pass
         except Exception as e:
             print(f"[memory] consolidate error_type={type(e).__name__}")
+
+    def _auto_row_meta(self) -> dict:
+        """Provenance of an auto-extracted row: where it came from, so a withdrawal or an edit
+        can take it back (W-08). The keys are not the episodic ``conversation_id`` and
+        ``turn_id``, which scope a row to a branch: semantic rows stay user-global."""
+        return {"source": SOURCE_AUTO,
+                "origin_conversation_id": getattr(self._turn_local, "conversation_id", None),
+                "origin_turn_id": getattr(self._turn_local, "turn_id", None)}
 
     def _update_semantic(self, oid, text, turn_ref=None) -> bool:
         """Rewrite one semantic row in place, recording WHEN and by which turn.
@@ -1548,6 +2344,7 @@ class AgentMemory:
                     meta = dict(((current.get("metadatas") or [None])[0]) or {})
                 except Exception:
                     meta = {}
+                text = redact_secrets(text)[0]     # same rule as _add_record (R1-05)
                 meta["updated_at"] = _now_iso()
                 if turn_ref:
                     meta["updated_turn_id"] = str(turn_ref)[:80]
@@ -1594,10 +2391,99 @@ class AgentMemory:
                 rewritten += 1
         return rewritten
 
+    def retire_withdrawn_requirements(self, user_id, labels) -> int:
+        """Remove what the extractor kept of requirements the user withdrew (W-08).
+
+        "The user wants a balcony" outlived "Remove the balcony requirement", and the next recall
+        listed it. Only an auto-extracted row or a reflection that states the requirement goes:
+        never an explicit "please remember" row, a row of unknown origin, or a fact about another
+        person. "The user has a cat" states no requirement and stays. A row with another fact
+        beside the requirement loses that part only."""
+        uid = _valid_user_id(user_id)
+        patterns = [_REQUIREMENT_TOPICS[label] for label in labels or () if label in _REQUIREMENT_TOPICS]
+        if uid is None or not patterns:
+            return 0
+        retired = 0
+        for mtype in ("semantic", "reflection"):
+            try:
+                rows = self.col.get(where={"$and": [{"user_id": uid}, {"mtype": mtype}]})
+            except Exception:
+                continue
+            metas = rows.get("metadatas") or []
+            for index, (oid, doc) in enumerate(zip(rows.get("ids") or [], rows.get("documents") or [])):
+                meta = (metas[index] if index < len(metas) else None) or {}
+                if mtype == "semantic" and meta.get("source") != SOURCE_AUTO:
+                    continue
+                if _THIRD_PARTY.search(doc) or not any(_states_requirement(doc, p) for p in patterns):
+                    continue
+                kept = _without_requirement(doc, patterns)
+                if kept and mtype == "semantic" and self._update_semantic(oid, kept):
+                    retired += 1
+                    continue
+                with self._lock:
+                    try:
+                        self.col.delete(ids=[oid])
+                        retired += 1
+                    except Exception:
+                        pass
+        if retired:
+            print(f"[memory] retired_withdrawn_requirements rows={retired}")
+        return retired
+
+    def retire_turn_rows(self, user_id, conversation_id, turn_ids) -> int:
+        """Remove the auto-extracted rows and reflections that came from turns an edit took out
+        (W-08, G-12). A row with no provenance stays, and an explicit "please remember" row is
+        never touched. A job of such a turn that runs later keeps no facts either."""
+        uid = _valid_user_id(user_id)
+        turns = {str(turn) for turn in turn_ids or () if turn}
+        if uid is None or not conversation_id or not turns:
+            return 0
+        with self._erasure_lock:
+            self._retired_turns.setdefault(uid, set()).update(turns)
+        try:
+            rows = self.col.get(where={"$and": [{"user_id": uid}, {"mtype": "semantic"}]})
+            log = self.col.get(where={"$and": [{"user_id": uid}, {"mtype": "episodic"}]})
+            inferred = self.col.get(where={"$and": [{"user_id": uid}, {"mtype": "reflection"}]})
+        except Exception:
+            return 0
+        doomed = []
+        metas = rows.get("metadatas") or []
+        for index, oid in enumerate(rows.get("ids") or []):
+            meta = (metas[index] if index < len(metas) else None) or {}
+            if meta.get("source") != SOURCE_AUTO:
+                continue
+            if meta.get("origin_conversation_id") == str(conversation_id) and (
+                    meta.get("origin_turn_id") in turns or meta.get("updated_turn_id") in turns):
+                doomed.append(oid)
+        # The "User asked: ..." log of those turns carries its own conversation and turn (r06).
+        metas = log.get("metadatas") or []
+        for index, oid in enumerate(log.get("ids") or []):
+            meta = (metas[index] if index < len(metas) else None) or {}
+            if meta.get("conversation_id") == str(conversation_id) and meta.get("turn_id") in turns:
+                doomed.append(oid)
+        metas = inferred.get("metadatas") or []
+        for index, oid in enumerate(inferred.get("ids") or []):
+            meta = (metas[index] if index < len(metas) else None) or {}
+            if meta.get("origin_conversation_id") == str(conversation_id) and meta.get("origin_turn_id") in turns:
+                doomed.append(oid)
+        if doomed:
+            with self._lock:
+                try:
+                    self.col.delete(ids=doomed)
+                except Exception:
+                    return 0
+            print(f"[memory] retired_turn_rows rows={len(doomed)}")
+        return len(doomed)
+
+    def _turn_was_retired(self, user_id, turn_id) -> bool:
+        with self._erasure_lock:
+            return bool(turn_id) and str(turn_id) in (self._retired_turns.get(user_id) or ())
+
     def remember_turn(self, user_msg, assistant_msg, session_id="default",
                       user_id=None, tool_used=None, idempotency_key=None,
                       conversation_id=None, turn_id=None, turn_started_at=None,
-                      context_tainted=False, criteria_changes=None, memory_withheld=None):
+                      context_tainted=False, criteria_changes=None, memory_withheld=None,
+                      withdrawn_requirements=None):
         """After-turn entry point (run this in the background — it makes LLM calls).
 
         ``memory_withheld`` is the turn's conversation-memory decision, taken when the turn
@@ -1643,7 +2529,20 @@ class AgentMemory:
             # them all see the redacted text only.
             user_msg, _sensitive = redact_sensitive(user_msg)
             assistant_msg, _ = redact_sensitive(assistant_msg)
+            # This turn started before the user asked to forget a field (its job runs late):
+            # nothing this job writes may carry that field's value (R4-01).
+            for field in self.erased_fields_since(user_id, turn_started_at):
+                if _states_field_value(user_msg, field):
+                    user_msg = _without_field_clauses(user_msg, field)
+                if _states_field_value(assistant_msg, field, "semantic"):
+                    assistant_msg = _without_field_clauses(assistant_msg, field)
             ep = f"User asked: {(user_msg or '').strip()[:300]}"
+            # The remember tool refuses a claimed privilege or a script for the assistant
+            # (R1-15); the automatic log kept the same text verbatim ("User asked: Remember that
+            # I am an admin user ...") and the fact extractor read it (R2-13).
+            instruction_withheld = not opted_out and _instruction_shaped(user_msg)
+            if instruction_withheld:
+                ep = _INSTRUCTION_WITHHELD_LOG
             if opted_out:
                 # The user asked for this message not to be kept: the log records that a turn
                 # happened, not what it said, and nothing is extracted from it. A field it names
@@ -1662,12 +2561,13 @@ class AgentMemory:
             }
             # Static importance for the auto-episodic turn log: never rate a raw
             # query log with an LLM call (see _AUTO_EPISODIC_IMPORTANCE).
-            self.add(
-                ep, "episodic", session_id, user_id, role="user",
-                importance=_AUTO_EPISODIC_IMPORTANCE,
-                idempotency_key=idempotency_key,
-                extra_meta=episodic_meta,
-            )
+            if not self._turn_was_retired(user_id, turn_id):
+                self.add(
+                    ep, "episodic", session_id, user_id, role="user",
+                    importance=_AUTO_EPISODIC_IMPORTANCE,
+                    idempotency_key=idempotency_key,
+                    extra_meta=episodic_meta,
+                )
             # Opportunistically bound the per-user episodic layer.
             self._enforce_episodic_cap(user_id)
             # Triviality gate: skip the LLM extract+consolidate for greetings/acks/
@@ -1678,11 +2578,15 @@ class AgentMemory:
             # Only a change the user's message states as their own criterion supersedes what
             # memory holds (stress A-08: "my friend lives in Peckham" is not a new area).
             changes = user_stated_changes(_sanitize_changes(criteria_changes), user_msg)
+            self.retire_withdrawn_requirements(user_id, withdrawn_requirements)
             self._turn_local.turn_id = turn_id
+            self._turn_local.conversation_id = conversation_id
             try:
                 if changes and not opted_out:
                     self._supersede_slot_facts(changes, user_id, turn_id)
-                if not opted_out and not _is_trivial_for_extraction(user_msg):
+                if (not opted_out and not instruction_withheld
+                        and not self._turn_was_retired(user_id, turn_id)
+                        and not _is_trivial_for_extraction(user_msg)):
                     # Semantic facts come from the USER message only, on every turn (R2-06):
                     # the assistant's text — a recall answer, a reflection it quoted, a
                     # suggestion — is never a statement by the user. (Taint A+ asked for this
@@ -1693,12 +2597,19 @@ class AgentMemory:
                     else:
                         self._consolidate(self._extract_facts(user_msg, ""), session_id, user_id,
                                           user_msg=user_msg)
+                # An edit can take the turn out while its extraction is running: the check above
+                # had passed, and "The user needs a garden." was written 9 seconds after the edit
+                # that removed it (r06 258a8e5f).
+                if self._turn_was_retired(user_id, turn_id):
+                    self.retire_turn_rows(user_id, conversation_id, [turn_id])
             finally:
                 self._turn_local.turn_id = None
+                self._turn_local.conversation_id = None
             if not opted_out:
                 # A withheld turn triggers no reflection: nothing new is inferred about a user
                 # while they asked not to be remembered (r6-M1).
-                self.maybe_reflect(session_id, user_id)
+                self.maybe_reflect(session_id, user_id, conversation_id=conversation_id,
+                                   turn_id=turn_id)
             return True
         except Exception as e:
             print(f"[memory] remember_turn error_type={type(e).__name__}")
@@ -1740,7 +2651,10 @@ class AgentMemory:
 
         spawn_observed_thread(self.remember_turn, args=args, kwargs=kwargs)
 
-    def maybe_reflect(self, session_id, user_id):
+    def maybe_reflect(self, session_id, user_id, conversation_id=None, turn_id=None):
+        """Write what this turn's memories suggest. A new reflection records the conversation and
+        turn that made it, so an edit of that turn takes it back; the reflections of a turn have
+        no other provenance (G-12). Rows from before this carry none and stay."""
         user_id = _valid_user_id(user_id)
         if user_id is None:
             return
@@ -1787,19 +2701,24 @@ class AgentMemory:
                 "must, firm, strict, essential, hard constraint or top priority, and never call a "
                 "stated limit flexible, negotiable or stretchable, unless the user used that word "
                 "themselves. Never write that the user said, stated, insisted on or asked for "
-                "something. Keep every number exactly as the user gave it, and never combine an "
+                "something. Refer to the user as 'the user' and never infer gender from a name "
+                "(no he/she/his/her). Keep every number exactly as the user gave it, and never combine an "
                 'older value with a newer one. Return STRICT JSON: {"insights": ["..."]}.\n\n'
                 f"{corpus}\n\nJSON: "
             )
             data = _extract_json(call_ollama(prompt, timeout=60) or "") or {}
+            if self._turn_was_retired(user_id, turn_id):
+                return      # the edit landed while the model was writing
             rejected = 0
+            origin = {"origin_conversation_id": conversation_id, "origin_turn_id": turn_id}
             for ins in (data.get("insights") or [])[:3]:
                 if (isinstance(ins, str) and ins.strip() and not contains_sensitive(ins)
                         and not _SENSITIVE_INFERENCE_RE.search(ins)):
                     if reflection_rejection(ins, user_words):
                         rejected += 1
                         continue
-                    self.add(ins.strip(), "reflection", session_id, user_id, importance=8)
+                    self.add(neutral_user_pronouns(ins.strip(), user_words), "reflection",
+                             session_id, user_id, importance=8, extra_meta=origin)
             if rejected:
                 print(f"[memory] reflect rejected_wording={rejected}")
         except Exception as e:
@@ -1854,7 +2773,8 @@ class AgentMemory:
             if not isinstance(metadata, dict) or metadata.get('user_id') != uid or metadata.get('mtype') != 'semantic':
                 continue
             records.append({'id': record_id, 'text': document, 'mtype': 'semantic',
-                            'created_at': metadata.get('created_at')})
+                            'created_at': metadata.get('created_at'),
+                            **({'source': metadata['source']} if metadata.get('source') else {})})
         return sorted(records, key=lambda m: str(m.get('created_at') or ''), reverse=True)
 
     def retrieve(self, query, session_id="default", user_id=None, n=6,
@@ -1909,7 +2829,10 @@ class AgentMemory:
         self._touch([t[1] for t in top])
         return [{"id": t[1], "text": t[2], "mtype": t[3].get("mtype"),
                  "importance": t[3].get("importance"), "score": round(t[0], 3),
-                 "created_at": t[3].get('created_at')} for t in top]
+                 "created_at": t[3].get('created_at'),
+                 **({"source": t[3]["source"]} if t[3].get("source") else {}),
+                 **({"from_conversation": _row_conversation(t[3])} if _row_conversation(t[3]) else {})}
+                for t in top]
 
     def _touch(self, ids):
         if not ids:

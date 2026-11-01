@@ -181,7 +181,7 @@ def test_safety_and_weather_do_not_log_location_or_exception_text(
     weather_result = weather.get_weather_impl(SENTINEL)
 
     assert safety_result["error"] == "Safety data lookup failed"
-    assert weather_result["error"] == "天气查询失败"
+    assert weather_result["error"] == "The weather lookup failed."
     _assert_not_logged(SENTINEL, capsys, caplog)
 
 

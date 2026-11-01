@@ -146,6 +146,14 @@ _WIDEN_RE = re.compile(
     r'提高预算|预算(?:提高|涨到|加到|放宽)|放宽预算',
     re.IGNORECASE)
 
+# "Change the area to Poplar" moves the search. A shown listing with Poplar in its address made it
+# a subset of the cards, so nothing was searched and the reply said no listing fit (G-03). A subset
+# says so: "only the ones in Poplar", "just Poplar".
+_AREA_CHANGE_RE = re.compile(
+    r'\b(?:change|switch|swap|move|shift)\b[^.!?;]{0,30}?\bto\b|\b(?:go(?:ing)?\s+)?back\s+to\b|\bmake\s+it\b|'
+    r'换到|换成|改到|改成|改为|切换到|回到', re.IGNORECASE)
+_AREA_SUBSET_WORD_RE = re.compile(r'\b(?:only|just|ones?|those|these)\b|只|仅|其中|这些', re.IGNORECASE)
+
 # ── price ──────────────────────────────────────────────────────────
 _AMOUNT = r'£?\s?(\d[\d,]{2,6})'
 _DROP_VERB = (r'(?:drop|remove|exclude|filter\s+out|get\s+rid\s+of|ditch|lose|cut|'
@@ -396,6 +404,29 @@ def _parse_limit(text: str) -> Optional[int]:
 # Spec building + application
 # ═══════════════════════════════════════════════════════════════════
 
+def _ceiling_covers_shown_set(text: str, previous: List[dict], max_price: Optional[int]) -> bool:
+    """True when the message states a rent ceiling that no shown listing exceeds (R2-07)."""
+    ceiling = max_price
+    if ceiling is None:
+        from core.tools.search_properties import _extract_budget, monthly_from_weekly
+        amount, period = _extract_budget(text)
+        if amount is None:
+            return False
+        ceiling = monthly_from_weekly(amount) if period == 'week' else amount
+    prices = [p for p in (record_price(r) for r in previous) if p is not None]
+    try:
+        return bool(prices) and max(prices) <= float(ceiling)
+    except (TypeError, ValueError):
+        return False
+
+
+_EARLIER_SEARCH = re.compile(
+    r"\bfirst\s+(?:search|results|listings|batch|round|set)\b"
+    r"|\b(?:earlier|previous|original|initial)\s+(?:search|results?|listings?|batch|round|set)\b"
+    r"|\b(?:search|results?|listings?)\s+(?:you\s+)?(?:\w+\s+)?(?:earlier|before)\b"
+    r"|(?:第一次|首次|上一次|上次|之前|前面|最开始|一开始|刚才|先前)的?(?:搜索|搜的|结果|那批|那次|找的|查的|搜到)", re.I)
+
+
 def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, Any]]:
     """Parse ``message`` into a refinement spec, or None when it is not a pure narrowing.
 
@@ -409,8 +440,8 @@ def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, A
     if not text:
         return None
 
-    from core.constraint_updates import is_criteria_consultation, is_hypothetical
-    if is_criteria_consultation(text) or is_hypothetical(text):
+    from core.constraint_updates import asks_for_homes, is_criteria_consultation, is_hypothetical
+    if is_criteria_consultation(text) or is_hypothetical(text) or asks_for_homes(text):
         return None
 
     # A comparison/details request must reach the tools even when it repeats a
@@ -419,6 +450,11 @@ def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, A
     if re.search(r'\b(?:compare|comparison|measurements?|written\s+(?:cat\s+)?permission|'
                  r'actual\s+details|what\s+.*(?:confirm|unknown)|details\s+for)\b|'
                  r'比较|对比|尺寸|书面许可|房源详情|实际确认', text, re.I):
+        return None
+    # "What was the cheapest result in your first search?" asks about another set: re-sorting the
+    # current one left it unanswered (r06 1e81a113). The model answers from history or says it can't.
+    from core.constraint_updates import without_shown_results_questions
+    if _EARLIER_SEARCH.search(text) or not without_shown_results_questions(text).strip():
         return None
     # "Tell me more about Arbutus Street in Haggerston" asks about one listing; filtering
     # the shown set by its area label would answer a question nobody asked (r6d).
@@ -439,14 +475,39 @@ def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, A
                          clause, re.I):
             return None
 
+    # A question about getting around ("What are the fares and zones for Clapham to Canary
+    # Wharf?", "How is Hackney connected by tube?") names an area without asking to narrow the
+    # list: it shrank the cards 10 -> 5 and got no answer (R4-02b). Any other question that
+    # does not ask to narrow ("only", "which of these", "keep", "what about X?") goes to the
+    # model too.
+    narrowing = re.search(
+        r'\b(?:only|just|keep|filter|remove|drop|exclude|hide|sort|order|rank|narrow|cheapest|'
+        r'under|over|below|above|which\s+(?:of\s+)?(?:these|those|them|ones)|any\s+of\s+(?:these|them))\b|'
+        r'只|仅|保留|筛选|去掉|排除|排序|其中|这些', text, re.I)
+    if not narrowing and re.search(
+            r'\b(?:fares?|zones?|travel\s*cards?|oyster|transport|connected|connections?|links?|'
+            r'tube|underground|overground|dlr|trains?|buses|bus|commut\w*|stations?|'
+            r'how\s+(?:far|long|do\s+i\s+get)|get\s+(?:to|from))\b|'
+            r'交通|地铁|通勤|几区|怎么去|多远|多久|公交|火车', text, re.I):
+        return None
+    if (not narrowing and text.rstrip().endswith(('?', '？'))
+            and not re.match(r'\s*(?:and\s+)?(?:what|how)\s+about\b', text, re.I)
+            and re.search(r'^\s*(?:what|which|how|is|are|does|do|where|when|why|who|can|could)\b|'
+                          r'吗[?？]?\s*$|[什怎哪]', text, re.I)):
+        return None
     # Hard bail-outs: this is a new/wider search, not a narrowing of what is shown.
     if _NEW_SEARCH_RE.search(text) or _WIDEN_RE.search(text):
+        return None
+    # Withdrawing or widening the area ("anywhere in London") needs new data (R4-02).
+    from core.constraint_updates import withdrawn_topics
+    if withdrawn_topics(text):
         return None
     from core.tools.search_properties import _extract_area, _extract_budget_clear
     if _extract_budget_clear(text):
         return None
 
     filters: List[Dict[str, Any]] = []
+    moves_area = bool(_AREA_CHANGE_RE.search(text) and not _AREA_SUBSET_WORD_RE.search(text))
 
     # A named area is a SUBSET filter when the shown set already covers it, and a
     # change-of-area (fresh search) when it does not.
@@ -455,6 +516,10 @@ def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, A
     if named_area and names_place_as_workplace(text, named_area):
         # "I also work in Shoreditch" names a commute destination, not a subset (r18).
         named_area = None
+    if named_area and named_area.strip().lower() == 'london' and not any(
+            str(r.get('area') or '').strip().lower() == 'london' for r in previous if isinstance(r, dict)):
+        # The whole city covers the boroughs on screen: a wider search, not a subset (R4-02).
+        return None
     if named_area:
         if re.search(r'\b(?:and|or)\b|和|及|、', text, re.I):
             labels = {str(r.get('area')).strip().lower()
@@ -462,7 +527,7 @@ def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, A
             hits = [label for label in labels if re.search(r'\b' + re.escape(label) + r'\b', text, re.I)]
             if hits and any(label not in max(hits, key=len) for label in hits):
                 return None
-        if not any(named_area.lower() in _record_areas(r) for r in previous):
+        if moves_area or not any(named_area.lower() in _record_areas(r) for r in previous):
             return None
         filters.append({'kind': 'area', 'value': named_area})
     else:
@@ -470,6 +535,8 @@ def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, A
         # a bare subset phrasing ("only the Camden ones") is caught by matching the shown
         # set's OWN area labels, which by construction cannot be a change of area.
         subset_area, exclude_area = _parse_area_subset(text, previous)
+        if subset_area and moves_area:
+            return None
         if subset_area:
             filters.append({'kind': 'area', 'value': subset_area})
         elif exclude_area:
@@ -497,6 +564,12 @@ def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, A
         beds = next((int(g) for g in m.groups() if g), None)
         if beds is not None:
             filters.append({'kind': 'bedrooms', 'value': beds})
+
+    # A stated ceiling that every shown listing already meets ("Go back to the original
+    # £3,000 budget ... sorted cheapest first" after a £2,500 search) widens or restates the
+    # search: re-sorting the narrower set answered it with "All 3 still match" (R2-07).
+    if _ceiling_covers_shown_set(text, previous, max_price):
+        return None
 
     sort, unsupported_sort = _parse_sort(text)
     limit = _parse_limit(text)

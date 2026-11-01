@@ -35,7 +35,8 @@ from pathlib import Path
 from werkzeug.security import check_password_hash, generate_password_hash
 
 # username: 3–32 chars of letters/digits/underscore/dot/hyphen (contract-fixed).
-USERNAME_RE = re.compile(r"^[A-Za-z0-9_.\-]{3,32}$")
+# \Z, not $: "$" also matches before a trailing newline, which let "name\n" register (U-07).
+USERNAME_RE = re.compile(r"[A-Za-z0-9_.\-]{3,32}\Z")
 PASSWORD_MIN = 6
 PASSWORD_MAX = 128
 DISPLAY_NAME_MAX = 64
@@ -223,6 +224,9 @@ class AuthStore:
             raise WeakPassword(
                 f"password must be {PASSWORD_MIN}–{PASSWORD_MAX} characters"
             )
+        if display_name is not None and not isinstance(display_name, str):
+            # A number, list or object reached .strip() and answered 500 (U-07).
+            raise AuthError("display_name must be a string")
         display = (display_name or username).strip()[:DISPLAY_NAME_MAX] or username
 
         record = {

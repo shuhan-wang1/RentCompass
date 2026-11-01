@@ -22,11 +22,17 @@ def test_r2_22_replay_of_an_interrupted_request_is_terminal(tmp_path, monkeypatc
     old.close()
 
     new = _store(tmp_path / "c.sqlite3", "new-process", monkeypatch)
-    replay = new.start_request_turn("u_rs", cid, "rs-req-0", "find me a flat in Camden")
-    assert replay["replayed"] is True and replay["id"] == turn["id"]
-    assert replay["status"] == "failed"
+    retry = new.start_request_turn("u_rs", cid, "rs-req-0", "find me a flat in Camden")
+    # The dead turn is closed as interrupted, and the retry RUNS the message again rather
+    # than replaying "please send it again" forever (R1-11).
     payload = new.get_turn_response("u_rs", turn["id"])
     assert payload["response_type"] == "error" and payload["interrupted"] is True
+    assert retry["replayed"] is False and retry["id"] != turn["id"]
+    assert retry["status"] == "running" and retry["conversation_id"] == cid
+    new.finalize_request_turn("u_rs", retry["id"], status="completed", assistant_content="Here.",
+                               snapshot={})
+    again = new.start_request_turn("u_rs", cid, "rs-req-0", "find me a flat in Camden")
+    assert again["replayed"] is True and again["id"] == retry["id"]
     # The conversation is free for a new request.
     fresh = new.start_request_turn("u_rs", cid, "rs-req-1", "try again")
     assert fresh["status"] == "running"

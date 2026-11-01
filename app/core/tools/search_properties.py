@@ -35,6 +35,7 @@ from uk_rent_agent.domain import constants as C
 from core.tenancy_reference import monthly_from_weekly
 from core.source_status import source_failure_summary, FAILED_SOURCE_STATES
 from core.constraint_updates import (
+    zh_money_digits,
     scoped_update_text, mention_is_requirement, is_hypothetical, clause_at, date_is_cleared,
     is_criteria_consultation,
 )
@@ -133,7 +134,8 @@ def _extract_no_commute(text: str) -> bool:
                                 r'每周[^。;；]{0,15}(?:到公司|到岗)|(?:需要|要|仍然)通勤', positive_t, re.I)
     if attendance or explicit_travel:
         return False
-    return any(p in t for p in _NO_COMMUTE_PHRASES)
+    from core.constraint_updates import commute_disowned
+    return any(p in t for p in _NO_COMMUTE_PHRASES) or commute_disowned(t)
 
 
 # Room-type synonyms -> canonical value ('studio' | 'ensuite' | 'shared'). Substring
@@ -464,12 +466,14 @@ def _amount_role(text: str, lo: int, hi: int) -> str:
     "total cap ... and rent ceiling" does not inherit the earlier total role.
     """
     punctuation = r'[。!?;；\n，,]|(?<!\d)\.(?!\d)'
-    before = re.split(punctuation, text[:lo])[-1][-110:]
+    # Runs once per amount, so the whole prefix made a long unpunctuated paste quadratic. Only the
+    # last 110 characters of the clause are read, so a bounded window gives the same result.
+    before = re.split(punctuation, text[max(0, lo - 400):lo])[-1][-110:]
     before = re.split(r'(?:£\s*)?(?<![\d.])\d[\d,]*(?:\.\d+)?', before)[-1]
     before = re.split(r'\b(?:separate from|apart from|as distinct from|versus|rather than)\b', before, flags=re.I)[-1]
     if re.search(r'(?:\b(?:and|but|while|whereas)\b|和|以及|而)\s*£?\s*$', before, re.I):
         before = ''  # Amount-first phrase after an explicit quantity coordinator.
-    tail = re.split(punctuation, text[hi:])[0]
+    tail = re.split(punctuation, text[hi:hi + 400])[0]
     after = re.split(r'£|\b(?:while|whereas)\b', tail, flags=re.I)[0][:110]
     if '£' in tail:
         # The last coordinator before the next amount starts that quantity's
@@ -501,10 +505,17 @@ def _amount_role(text: str, lo: int, hi: int) -> str:
     return role(before) or role(after, trailing=True) or 'budget'
 
 
+def _plain_figures(text: str) -> str:
+    """``text`` with £ in its one spelling and no thousands separators. No \\b after the digits:
+    a CJK letter counts as a word character, so 「£2,500以内」 kept its comma and the amount
+    patterns read 500 (V-04)."""
+    return re.sub(r'(?<=\d),(?=\d{3}(?!\d))', '', str(text or '').replace('￡', '£'))
+
+
 def _extract_total_budget(text: str):
     if not text or is_criteria_consultation(text):
         return None
-    t = re.sub(r'(?<=\d),(?=\d{3}\b)', '', scoped_update_text(text).lower())
+    t = _plain_figures(scoped_update_text(text).lower())
     matches = [m for m in re.finditer(r'£\s*(\d{3,5}(?:\.\d{1,2})?)(?![\d.])', t)
                if _amount_role(t, m.start(), m.end()) == 'total'
                and not is_hypothetical(clause_at(t, m.start(), m.end()))]
@@ -560,9 +571,9 @@ _YEAR_MONEY_BEFORE = re.compile(
     # 「预算改成2000」 masked 2000 as a calendar year (R4-05): a budget verb between the
     # budget noun and the figure keeps it money.
     r'(?:预算|月租|租金|房租|上限)(?:改成|改为|调到|调整为|调整到|提高到|提到|降到|降低到|是|为|设为|设成)?|'
-    r'最多|最高|不超过)\s*$', re.I)
+    r'最多|最高|不超过|不高于|不多于|低于|小于|至多|顶多)\s*$', re.I)
 _YEAR_MONEY_AFTER = re.compile(
-    r'\s*(?:pcm|pm|pw|p/?m|per\b|a\s+(?:month|week)|/|镑|英镑|块|元|以内|以下|左右|'
+    r'\s*(?:pcm|pm|pw|p/?m|per\b|a\s+(?:month|week)|/|镑|英镑|块|元|以内|以下|之内|封顶|左右|'
     r'max(?:imum)?\b|budget\b|ceiling\b|pounds?\b|gbp\b|or\s+(?:less|under|below)\b)', re.I)
 
 
@@ -606,6 +617,112 @@ def _prices_a_place(t: str, match) -> bool:
                 and _PLACE_PRICE_AFTER.match(t, match.end()))
 
 
+# A question whether an amount is enough ("1500预算够吗？", "is £1,500 enough?") asks about
+# the figure; it does not set it (S-01).
+_SUFFICIENCY_QUESTION = re.compile(
+    r'够[吗么不嘛]|够用|足够|行不行|行吗|现实吗|合理吗|太[少低]了?吗|'
+    r'\b(?:enough|sufficient|reasonable|realistic)\b', re.I)
+
+
+def _asks_if_amount_suffices(t: str, start: int, end: int) -> bool:
+    """True when the amount at ``t[start:end]`` sits in a question about whether it suffices.
+
+    The sufficiency word must follow the amount closely: "a 2-bed with enough storage under
+    £2,000?" asks for a search at £2,000."""
+    lo = max([m.end() for m in re.finditer(r'[。.!?！？;；\n](?!\d)', t[:start])] or [0])
+    stop = re.search(r'[。!?！？;；\n]|(?<!\d)\.(?!\d)', t[end:])
+    hi = end + stop.end() if stop else len(t)
+    sentence = t[lo:hi]
+    return bool(_SUFFICIENCY_QUESTION.search(t[end:min(hi, end + 24)])
+                and (sentence.rstrip().endswith(('?', '？')) or '吗' in sentence))
+
+
+# A figure measured in metres, kilometres, minutes or square feet is not money.
+_MEASURE_AFTER_FIGURE = re.compile(
+    r'\s*(?:米|公里|千米|分钟|小时|平|尺|metres?|meters?|m\b|km\b|kilomet\w*|miles?\b|'
+    r'mins?\b|minutes?\b|hours?\b|sq\b|square\b|ft\b|feet\b)', re.I)
+
+
+# "1.5k budget", "£2k max": thousands written with a k (S-01).
+_THOUSANDS_K = re.compile(r'(?<![a-z0-9_.])(£\s*)?(\d{1,2}(?:\.\d{1,3})?)\s*k\b(?!m)', re.I)
+
+
+def _expand_thousands(t: str) -> str:
+    def _expand(match):
+        from decimal import Decimal
+        value = Decimal(match.group(2)) * 1000
+        if value != value.to_integral_value():
+            return match.group()
+        return f"{match.group(1) or ''}{int(value)}"
+    return _THOUSANDS_K.sub(_expand, t)
+
+
+# "budget £1,800-2,500" searched at £1,800 while the reply spoke of £2,500 (V-04): the ceiling of
+# a range is its top.
+_BUDGET_RANGE = re.compile(
+    r'(?:\bbetween\s+)?£?(?<![\d.])(\d{3,5})(?!\d|\.\d)\s*(?:-|–|—|~|～|到|至|\bto\b|(?<=\s)and\b)\s*'
+    r'(£?\s*)(\d{3,5})(?!\d|\.\d)')
+
+
+def _range_ceiling(match) -> str:
+    low, high = int(match.group(1)), int(match.group(3))
+    if high <= low or (' and' in match.group(0) and 'between' not in match.group(0)):
+        return match.group(0)
+    # "between 1800 and 2500" has no other money word, so it gave no budget at all (W-06).
+    money = '£' in match.group(0) or ('between' in match.group(0) and not (
+        1900 <= low <= high <= 2100 or _MEASURE_AFTER_FIGURE.match(match.string, match.end())))
+    return f"£{high}" if money else str(high)
+
+
+# "at least £1,800" stored a floor as the ceiling, so nothing above it was ever searched (W-06). No
+# slot holds a floor: the figure stays out of the ceiling and the state node keeps it as a note.
+_BUDGET_FLOOR = re.compile(
+    r"\b(?:at\s+least|no\s+less\s+than|not\s+less\s+than|minimum(?:\s+of)?|min\.?(?=\s*£))"
+    r"(?:\s+(?:budget|rent|price))?(?:\s+(?:of|is))?\s*£?\s*\d{3,5}(?:\.\d{1,2})?(?!\d)"
+    r"|£?\s*(?<![\d.])\d{3,5}(?:\.\d{1,2})?(?!\d)\s*(?:(?:pcm|a\s+month|per\s+month)\s+)?"
+    r"(?:or\s+more|minimum\b|min\b)"
+    r"|(?:至少|起码|最少|不低于|不少于)\s*(?:每月|月租|预算)?\s*£?\s*\d{3,5}(?!\d)"
+    r"|(?<![\d.])\d{3,5}\s*(?:镑|英镑|块)?\s*以上", re.I)
+
+
+def budget_floor_notes(text: str) -> list[str]:
+    """The user's own floor phrases ("at least £1,800"), kept as soft notes beside the ceiling."""
+    t = zh_money_digits(_plain_figures(scoped_update_text(str(text or ''))))
+    return [" ".join(match.group().split())[:60] for match in _BUDGET_FLOOR.finditer(t)
+            if not is_hypothetical(clause_at(t, match.start(), match.end()))
+            and not _MEASURE_AFTER_FIGURE.match(t, match.end())]
+
+
+# A correction that names a figure and nothing else: "make it 2500", "Actually make it 2500" and
+# "actually 2500 please" kept the old ceiling while the reply said the budget had moved (D-05). The
+# whole sentence has to be the edit, and 3 digits are the least: "make it 2" and "make it 2
+# bedrooms" are not budgets.
+_BARE_BUDGET_EDIT = re.compile(
+    r"^\W*(?P<lead>(?:(?:no|ok(?:ay)?|sorry|hmm+|wait|yes|yeah|well|right|actually|then)\W+)*)"
+    r"(?P<cue>(?:let['’]?s\s+)?(?:(?:make|set|change|put|raise|lower|bump|drop|up|increase|reduce|move)\s+"
+    r"(?:it|that|this)(?:\s+(?:up|down))?(?:\s+to)?\s+|(?:say|try|go\s+(?:with|for)|how\s+about|what\s+about)\s+)"
+    r"|改成\s*|改为\s*|换成\s*|调到\s*|调成\s*|提到\s*|降到\s*)?"
+    r"£?\s*(?P<amount>\d{3,5}(?:\.\d{1,2})?)\s*(?:(?:pcm|a\s+month|per\s+month|pounds?)\b\s*|镑\s*|英镑\s*)?"
+    r"(?P<tail>(?:(?:please|then|instead|now|thanks|thank\s+you|max(?:imum)?)\b|吧|了|[\s.,!?。！？])*)$", re.I)
+
+
+def _bare_budget_edit(t: str):
+    for sentence in re.split(r"(?<=[.!?。！？])\s+", t.strip()):
+        match = _BARE_BUDGET_EDIT.match(sentence)
+        if match and (match.group('lead') or match.group('cue') or re.search(r'[^\W\d_]', match.group('tail'))):
+            return match
+    return None
+
+
+# "p.w." and "p.c.m." end in the full stop that closes the period search of _budget_period_near, so
+# the marker fell outside the amount's own sentence.
+_DOTTED_PERIOD = re.compile(r'(?<![a-z.])p\.\s?(?:c\.\s?(?P<unit>[mw])|(?P<week>w))\b\.?')
+
+
+def _undotted_periods(t: str) -> str:
+    return _DOTTED_PERIOD.sub(lambda m: f"pc{m.group('unit')}" if m.group('unit') else 'pw', t)
+
+
 def _extract_budget(text: str):
     """Pull an explicit monthly/weekly budget out of the *current* user message.
     Returns (amount:number, period:'week'|'month') or (None, None). Deterministic regex
@@ -616,8 +733,14 @@ def _extract_budget(text: str):
     # A conditional stretch ("could stretch to £2,100 for the right place") is not a ceiling
     # (stress A-08); the state node keeps it as a soft note instead.
     from core.constraint_updates import without_conditional_stretch
-    t = without_conditional_stretch(scoped_update_text(text)).lower()
-    t = re.sub(r'(?<=\d),(?=\d{3}\b)', '', t)
+    t = zh_money_digits(_plain_figures(without_conditional_stretch(scoped_update_text(text)).lower()))
+    t = _undotted_periods(_expand_thousands(t))
+    t = _BUDGET_FLOOR.sub(lambda match: ' ' * len(match.group()), t)
+    t = _BUDGET_RANGE.sub(_range_ceiling, t)
+    # "budget -500" became a £500 ceiling and was quoted back as the user's budget (R3-16):
+    # a negative amount is no budget at all. A range's dash ("£1500-2000") follows a digit.
+    t = re.sub(r'(?<![\w£.])-£?\d[\d.]*|£\s*-\s*\d[\d.]*|\bminus\s+£?\s*\d[\d.]*', ' ', t)
+    bare_edit = _bare_budget_edit(t)
     t = _mask_years(t)
     if (re.search(r'not\s+(?:yet\s+)?(?:chosen|decided)|haven.t (?:yet )?chosen|尚未(?:选择|决定)|还没选|未确定', t, re.I)
             and re.search(r'\bor\b|还是|或者', t, re.I)
@@ -679,17 +802,31 @@ def _extract_budget(text: str):
     # examples and property details are not changes to the household's budget.
     explicit = []
     for pattern in (
-        r'(?:budget\b|ceiling\b|最多|预算|上限)[^£\d。;；]{0,30}£?\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)',
-        r'(?:under|below|up\s+to|no\s+more\s+than|max(?:imum)?)\s*£?\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)',
+        r'(?:budget\b|ceiling\b|最多|预算|上限|不超过|不高于|不多于|小于|低于|少于|至多|顶多)'
+        r'[^£\d。;；]{0,30}£?\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)',
+        r'(?:under|below|up\s+to|no\s+more\s+than|at\s+most|max(?:imum)?)\s*£?\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)',
         # "What about Camden at £900?" / "3 bedrooms in Edinburgh at £900" names the price
         # point of the search (R4-05) — only with an area/search/bedroom word before it,
         # so a listing's "at £2,000" in a question about that listing is not a budget.
         r'(?:(?:what|how)\s+about|search(?:ing)?|find|show(?:\s+me)?|look(?:ing)?\s+for)\b'
         r'[^£。;；?？]{0,40}?\bat\s+£\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)',
-        r'£?\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)[^。;；]{0,12}(?:ceiling|budget|以内|以下)',
+        r'£?\s*(\d{3,5}(?:\.\d{1,2})?)(?!\d)[^。;；]{0,12}(?:ceiling|budget|以内|以下|之内|封顶)',
+        # The figure before the budget noun: 「改成1500预算」「1500的预算」「换成1500镑的预算」 kept
+        # the old ceiling (S-01, 4/4). Only a unit word and 的 may sit between them.
+        r'(?<![\d.])(\d{3,5}(?:\.\d{1,2})?)(?!\d)\s*(?:£|镑|英镑|块|元)?\s*(?:每月|一个月|每个月)?\s*'
+        r'(?:的|之)?\s*(?:月租|租金|房租)?\s*(?:预算|上限)',
+        # "2,000 max now", "1500 tops": a ceiling word right after the figure.
+        r'(?<![\d.])(\d{3,5}(?:\.\d{1,2})?)(?!\d)\s*(?:pcm|a\s+month|per\s+month)?\s*'
+        r'(?:max(?:imum)?|tops|at\s+most)\b',
     ):
         for candidate in re.finditer(pattern, t):
             clause = clause_at(t, candidate.start(), candidate.end())
+            if _asks_if_amount_suffices(t, candidate.start(1), candidate.end(1)):
+                continue
+            if _MEASURE_AFTER_FIGURE.match(t, candidate.end(1)):
+                continue  # 「离车站1500米以内」 is a distance, not a rent ceiling.
+            if re.search(r'押金|保证金', t[max(0, candidate.start() - 8):candidate.end(1)]):
+                continue
             if (_amount_role(t, candidate.start(1), candidate.end(1)) not in ('per_person', 'total')
                     and not is_hypothetical(clause) and not re.search(r'是否|会怎样|what if|would .*budget', clause)):
                 explicit.append(candidate)
@@ -697,28 +834,37 @@ def _extract_budget(text: str):
         m = max(explicit, key=lambda item: item.start())
         val = _money_value(m.group(1))
         return valid_amount(val, _budget_period_near(t, m.start(1), m.end(1)))
+    if bare_edit:
+        return valid_amount(_money_value(bare_edit.group('amount')), 'month')
+    # A question in a sentence of its own that names no figure does not make the stated
+    # amount a question: "Make it £2,800. Also what do you remember about me?" kept the old
+    # ceiling (R3-06).
+    t = ' '.join(sentence for sentence in re.split(r'(?<=[!?？。])\s*|(?<=\.)\s+', t)
+                 if not (sentence.rstrip().endswith(('?', '？')) and not re.search(r'\d', sentence)))
     if is_hypothetical(t) or re.search(r'比较|房源|\bcompare\b|budget unchanged|listing|property\s*(?:id|#)|\bat £|\bpriced?\b|[?？]', t):
         return None, None
     amount = None
     # 1) currency-tagged amount: "£1800", "£ 1800"
-    m = re.search(r'£\s?(\d{3,5}(?:\.\d{1,2})?)\b', t)
+    m = re.search(r'£\s?(\d{3,5}(?:\.\d{1,2})?)(?!\d|\.\d)', t)
     # 2) amount followed by a budget unit: "1800 pcm", "1800 per month", "1800 a week"
     if not m:
-        m = re.search(r'\b(\d{3,5}(?:\.\d{1,2})?)\s*(?:pcm|pm|pw|/\s*(?:month|week|wk)|per\s+(?:month|week)|a\s+(?:month|week)|pounds?)\b', t)
+        m = re.search(r'(?<![a-z\d.])(\d{3,5}(?:\.\d{1,2})?)\s*(?:pcm|pm|pw|pcw|p/w|weekly|/\s*(?:month|week|wk)|per\s+(?:month|week|wk)|a\s+(?:month|week|wk)|pounds?)\b', t)
     # 3) budget keyword + amount: "budget is now 1800", "budget of 1800", "max budget 1800"
     if not m:
-        m = re.search(r'budget\b[^£\d]{0,20}£?\s?(\d{3,5}(?:\.\d{1,2})?)\b', t)
+        m = re.search(r'budget\b[^£\d]{0,20}£?\s?(\d{3,5}(?:\.\d{1,2})?)(?!\d|\.\d)', t)
     # 4) budget-INTENT phrasing (esp. clarification answers): "under 1000", "up to 1200",
     #    "max 900", "around 1500", and Chinese "1000以内/以下/左右", "预算1000", "月租1000".
     if not m:
-        m = re.search(r'\b(?:under|below|max(?:imum)?|up\s+to|around|about|no\s+more\s+than|less\s+than)\s*£?\s?(\d{3,5}(?:\.\d{1,2})?)\b', t)
+        m = re.search(r'\b(?:under|below|max(?:imum)?|up\s+to|around|about|no\s+more\s+than|less\s+than)\s*£?\s?(\d{3,5}(?:\.\d{1,2})?)(?!\d|\.\d)', t)
     if not m:
-        m = re.search(r'(\d{3,5}(?:\.\d{1,2})?)\s*(?:以内|以下|左右|块|镑|元|英镑)', t)
+        m = re.search(r'(\d{3,5}(?:\.\d{1,2})?)\s*(?:以内|以下|之内|封顶|左右|块|镑|元|英镑)', t)
     if not m:
         m = re.search(r'(?:预算|月租|租金|房租)\s*[^\d]{0,6}(\d{3,5}(?:\.\d{1,2})?)', t)
     if m:
         if _amount_role(t, m.start(1), m.end(1)) in ('per_person', 'total'):
             return None, None
+        if re.search(r'押金|保证金|工资|收入|月薪|年薪', t[max(0, m.start(1) - 8):m.end(1) + 8]):
+            return None, None       # 「我有两千块押金」 is no ceiling
         val = _money_value(m.group(1))
         return valid_amount(val, _budget_period_near(t, m.start(1), m.end(1)))
     if amount is None:
@@ -735,8 +881,13 @@ def _extract_budget(text: str):
 # The `/wk` branch deliberately has no leading \b: there is no word boundary between a
 # space and a slash, so the old `\b(?:...|/\s*w(?:k|eek)?|...)` could never match "350 /wk"
 # either. Same line, same defect, both languages.
+#
+# "pw" and "pcw" have no \b either: a digit is a word character, so "£450pw" read as £450 a MONTH
+# and the re-extraction then overrode the model's correct conversion (G-01). "weekly" alone is an
+# adverb ("the gym weekly"), so it has to touch the figure or name the rent.
 _WEEKLY_MARKER = re.compile(
-    r'\bpw\b|\bper\s+week\b|\ba\s+week\b|/\s*w(?:k|eek)?\b'
+    r'(?<![a-z])pc?w(?![a-z])|\bper\s+w(?:ee)?k\b|\ba\s+w(?:ee)?k\b|/\s*w(?:k|eek)?\b'
+    r'|\d\s*(?:max(?:imum)?\s+)?weekly\b|\bweekly\s+(?:rent|budget|max(?:imum)?|limit|cap|ceiling)\b'
     r'|每\s*[个個]?\s*(?:周|週|星期)|[周週]\s*租|按\s*[周週]|/\s*[周週]'
 )
 _MONTHLY_MARKER = re.compile(
@@ -762,7 +913,7 @@ def _budget_period_near(text: str, lo: int, hi: int) -> str:
         for mk in pattern.finditer(text):
             if mk.start() < left or mk.end() > right:
                 continue
-            if pattern is _WEEKLY_MARKER and re.search(r'\b(?:days?|times?|trips?)\s*$|[天次]\s*$', text[max(left, mk.start()-12):mk.start()]):
+            if pattern is _WEEKLY_MARKER and re.search(r'\b(?:days?|times?|trips?|once|twice)\s*$|[天次]\s*$', text[max(left, mk.start()-12):mk.start()]):
                 continue
             if mk.end() <= lo:
                 best = min(best, lo - mk.end())      # marker before the amount
@@ -773,6 +924,27 @@ def _budget_period_near(text: str, lo: int, hi: int) -> str:
         return best
 
     return 'week' if _nearest(_WEEKLY_MARKER) < _nearest(_MONTHLY_MARKER) else 'month'
+
+
+_AMENITY_WORDS = (
+    r"supermarkets?|grocer(?:y|ies)|groceries|shops?|shopping|high\s+street|gyms?|parks?|"
+    r"green\s+space|stations?|tube|underground|overground|bus\s+stops?|schools?|nursery|"
+    r"gp|doctors?|surgery|pharmacy|chemist|cafes?|restaurants?|pubs?|library|tesco|"
+    r"sainsbury'?s|waitrose|lidl|aldi|co-?op|m&s|market|playground|pool|leisure\s+centre")
+_AMENITY_AFTER_MINUTES = re.compile(
+    r"^['’]?s?\s*(?:(?:on\s+)?(?:walk(?:ing)?|stroll|drive|driving|cycle|cycling|bike|ride)\s+)?"
+    r"(?:distance\s+)?(?:of|to|from|away\s+from|for)\s+"
+    r"(?:(?:a|an|the|my|some|any|good|big|local|nearest|nearby|decent|large)\s+){0,3}"
+    r"(?:" + _AMENITY_WORDS + r")\b", re.I)
+_AMENITY_BEFORE_MINUTES = re.compile(
+    r"(?:超市|商店|健身房|公园|车站|地铁站?|公交站|学校|医院|药店|菜市场)"
+    r"[^，,。.;；]{0,6}?(?:步行|走路|骑车|开车)?\s*(?:约|大约|不超过|以内)?\s*$")
+
+
+def _minutes_bound_to_amenity(text: str, match) -> bool:
+    """True when the minute figure at ``match`` measures a distance to an amenity (R1-13)."""
+    return bool(_AMENITY_AFTER_MINUTES.match(text[match.end():match.end() + 80])
+                or _AMENITY_BEFORE_MINUTES.search(text[max(0, match.start() - 16):match.start()]))
 
 
 def _extract_commute_minutes(text: str):
@@ -788,11 +960,13 @@ def _extract_commute_minutes(text: str):
         return 30
     if re.search(r'\b(?:an?|1)\s+hour\b', t):
         return 60
-    m = re.search(
+    # The first minute figure that is not a distance to an AMENITY: "within 10 minutes' walk
+    # of a supermarket" set max_travel_time 10 and the reply reported a 10-minute commute
+    # limit (R1-13). A walk to a shop, gym, park or station is a nearby-amenity wish.
+    m = next((match for match in re.finditer(
         r'(?<![a-z0-9])(\d{1,3})\s*(?:-)?\s*'
         r'(?:(?:min|mins|minute|minutes)(?![a-z])|(?:分钟|分鐘))',
-        t,
-    )
+        t) if not _minutes_bound_to_amenity(t, match)), None)
     if not m:
         m = re.search(
             r'(?<![a-z0-9])(\d{1,3})\s*(?:hours?(?![a-z])|小时|小時)',
@@ -835,7 +1009,21 @@ def _extract_bedrooms(text: str):
     t = scoped_update_text(text).lower()
     nums = {'零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, 'six': 6, **_WORD_NUMS}
     t = re.sub(r'\bminimum bedroom count\s+(?:with|to|of|is)\s+([0-6]|one|two|three|four|five|six)\b', r'at least \1 bedrooms', t)
-    pattern = r'(?<!\d)([0-6零一二两三四五六]|one|two|three|four|five|six)\s*-?\s*(?:bed(?:room)?s?\b|(?:间)?(?:独立)?卧(?:室)?|居(?:室)?)'
+    # The field named before its value: "Set bedrooms to 3", "the bedrooms to 2", "beds: 2",
+    # 「把卧室数改成两间」「房间数改成3」 kept the old count (R4-04, 9/9).
+    t = re.sub(r'\b(?:number\s+of\s+bed(?:room)?s|bed(?:room)?\s+count|bed(?:room)?s?)\s*'
+               r'(?:(?:to|at|=|:)\s*|(?:is|are)\s+now\s+|now\s+)'
+               r'([0-6]|one|two|three|four|five|six)\b(?!\s*(?:bed|mins?\b|minutes?|hours?|%|pm\b|am\b|:\d|\.\d))',
+               r'\1 bedrooms', t)
+    t = re.sub(r'(?:卧室(?:数量?|个数)?|房间(?:数量?|个数)|居室数?)\s*'
+               r'(?:改成|改为|改到|设为|设成|调到|调整为|调整到|换成|变成|要|[=:：])\s*'
+               r'([0-6一二两三四五六])\s*(?:个|间|室)?',
+               r'\1间卧室', t)
+    # 「改成2个卧室」「两个卧室」「两室一厅」 (S-01): a measure word may sit before 卧室, and 室 on
+    # its own is a bedroom when it ends the phrase or comes before 厅/卫.
+    pattern = (r'(?<!\d)([0-6零一二两三四五六]|one|two|three|four|five|six)\s*-?\s*(?:bed(?:room)?s?\b|'
+               r'(?:[个個间間])?(?:独立)?卧(?:室)?|居(?:室)?|'
+               r'室(?=[一二两三0-9]?[厅廳卫衛]|[，,。.!！?？、\s的]|$))')
     candidates = []
     for m in re.finditer(pattern, t):
         clause = clause_at(t, m.start(), m.end())
@@ -861,7 +1049,11 @@ def _extract_bedrooms(text: str):
             continue
         n = int(m.group(1)) if m.group(1).isdigit() else nums[m.group(1)]
         minimum = bool(re.search(r'(?:至少|最少|at least|minimum|min\.?)[^，。;；]{0,10}$', before))
-        minimum = minimum or bool(re.match(r'\s*(?:minimum|or more|以上)', after, re.I))
+        # A filler word may sit between the count and its qualifier: "I want 2 bedrooms
+        # again minimum." read as exactly 2 (R1-18).
+        minimum = minimum or bool(re.match(
+            r'\s*(?:(?:again|too|then|now|please|at|as\s+a)\s+){0,2}(?:minimum|min\b|or more|at least|以上)',
+            after, re.I))
         total = bool(re.search(r'正好|恰好|总共|总计|合计|整套|整租|\b(?:exactly|total(?: of)?|whole (?:home|property|flat))\b', before, re.I))
         candidates.append((int(total), m.start(), (n, 6 if minimum else n)))
     if candidates:
@@ -1129,7 +1321,7 @@ _ZH_AREA_MAP = {
     "\u5927\u8c61\u57ce\u5821": "Elephant and Castle",
     "曼彻斯特": "Manchester", "曼城": "Manchester", "伦敦": "London",
     "利兹": "Leeds", "爱丁堡": "Edinburgh", "布里斯托尔": "Bristol",
-    "布里斯托": "Bristol", "格拉斯哥": "Glasgow", "卡迪夫": "Cardiff",
+    "布里斯托": "Bristol", "格拉斯哥": "Glasgow", "卡迪夫": "Cardiff", "加的夫": "Cardiff",
     "伯明翰": "Birmingham", "利物浦": "Liverpool", "谢菲尔德": "Sheffield",
     "纽卡斯尔": "Newcastle", "诺丁汉": "Nottingham", "莱斯特": "Leicester",
     "考文垂": "Coventry", "牛津": "Oxford", "剑桥": "Cambridge",
@@ -1161,6 +1353,10 @@ _ZH_AREA_MAP = {
     "阿克顿": "Acton", "伯蒙德西": "Bermondsey", "海格特": "Highgate",
     "海布里": "Highbury", "芬斯伯里公园": "Finsbury Park", "沃尔瑟姆斯托": "Walthamstow",
     "迈尔恩德": "Mile End", "金斯顿": "Kingston", "肯特镇": "Kentish Town",
+    # "帮我找贝斯沃特的两居室" kept Hackney/Clapham, and "伦敦玛丽女王大学附近的房子" kept Bristol
+    # (R4-06): homes near Queen Mary are a Mile End search.
+    "贝斯沃特": "Bayswater", "贝斯沃特尔": "Bayswater",
+    "伦敦玛丽女王大学": "Mile End", "玛丽女王大学": "Mile End",
 }
 
 # Curated set of well-known UK cities + London boroughs/areas (canonical spelling).
@@ -1288,6 +1484,13 @@ def borough_for_postcode(text: str) -> str | None:
         return None
 
 
+_STREET_NAME_SUFFIX = (
+    r"(?!\s+(?:road|rd|street|st|lane|ln|avenue|ave|grove|place|pl|way|terrace|close|crescent|"
+    r"gardens|gdns|square|sq|hill|park|row|walk|court|ct|drive|dr|mews|wick|downs|marshes|central|"
+    r"village|town|green|high|wharf|gate|rise|parade|yard|bridge|common|fields|embankment|"
+    r"house|buildings|estate|broadway|passage|circus|quay|reach|heights)\b)")
+
+
 def reconcile_area_label(address: object) -> str:
     """Replace a listing string's BOROUGH word when its own postcode contradicts it.
 
@@ -1325,7 +1528,11 @@ def reconcile_area_label(address: object) -> str:
             for claimed_lower, claimed in _LONDON_BOROUGH_NAMES.items():
                 if claimed == borough:
                     continue
-                pattern = re.compile(r"\b" + re.escape(claimed) + r"\b", re.IGNORECASE)
+                # A borough word that opens a street or place name ("Hackney Road E2") is not
+                # a borough claim: "Tower Hamlets Road E2" named a street that does not exist
+                # (R2-06).
+                pattern = re.compile(r"\b" + re.escape(claimed) + r"\b" + _STREET_NAME_SUFFIX,
+                                     re.IGNORECASE)
                 if pattern.search(part):
                     part = pattern.sub(borough, part)
                     changed = True
@@ -1464,6 +1671,54 @@ def _area_switch_target(text: str) -> str | None:
     return None
 
 
+# "No wait, Islington was better. Go back." searched Camden again under a verified header
+# (U-02): a statement that an area was/is the better one is a switch back to it.
+_PREFERRED_AREA = re.compile(
+    r"([a-z][a-z’'\-\s]{1,30}?)\s+(?:was|is|’s|'s|seemed|seems|looked|looks|sounds|sounded)\s+"
+    r"(?:(?:much|way|a\s+lot|actually|definitely|really|clearly|the)\s+)*"
+    r"(?:better|nicer|best|preferable)\b(?!\s*(?:than|for|at|in|if|when|value|on|off|with)\b)", re.I)
+_PREFERRED_AREA_ZH = re.compile(r"(?:还是|觉得)\s*(.{1,20}?)\s*(?:更好|比较好|好一些|好点|好)")
+
+
+def preferred_area_switch(text: str) -> str | None:
+    """The area a "<Area> was better" / 还是<Area>好 statement switches back to, else None.
+
+    A question ("Is Islington better?") or a comparison with "than" names no switch."""
+    for clause in re.split(r"[.;!\n。；！]", str(text or "")[:2000]):
+        if not clause.strip() or "?" in clause or "？" in clause:
+            continue
+        if re.match(r"\s*(?:is|was|would|do|does|which|whether)\b", clause, re.I):
+            continue
+        match = _PREFERRED_AREA.search(clause) or _PREFERRED_AREA_ZH.search(clause)
+        if match:
+            area = _match_known_area(match.group(1))
+            if area:
+                return area
+    return None
+
+
+# "Compare the cheapest listing from Bethnal Green with the cheapest in Angel you showed
+# earlier." made Angel the search area (U-03). A comparison of places or shown listings
+# changes no criteria unless it also asks for a search.
+_COMPARISON_CUE = re.compile(
+    r"\b(?:compare|comparing|comparison|versus|vs\.?)\b"
+    r"|\bwhich\b[^.?!\n]{0,60}\b(?:cheaper|better|closer|safer|nicer|quieter|bigger|best|cheapest)\b"
+    r"[^.?!\n]{0,60}\bor\b"
+    r"|\bwhich\b[^.?!\n]{0,40}\bor\b[^.?!\n]{0,60}\b(?:cheaper|better|closer|safer|nicer|quieter)\b"
+    r"|比较|对比|哪个(?:更|比较)|哪里(?:更|比较)", re.I)
+_COMPARISON_SEARCH_ASK = re.compile(
+    r"\b(?:switch|move|change)\b[^.?!\n]{0,30}\b(?:to|search|area)\b"
+    r"|\b(?:find|search|show|look\s+for|get)\b[^.?!\n]{0,30}\b(?:flats?|homes?|houses?|properties|"
+    r"listings|places|studios|rooms)\b|找房|搜索|换到|改成", re.I)
+
+
+def compares_areas_only(text: str) -> bool:
+    """True when the message compares places or shown listings and asks for no search."""
+    source = str(text or "")[:2000]
+    return ((bool(_COMPARISON_CUE.search(source)) or len(comparison_areas(source)) > 1)
+            and not _COMPARISON_SEARCH_ASK.search(source))
+
+
 def _drop_city_qualifier(areas: list[str], phrase: str) -> list[str]:
     """"Hackney, London" is ONE place: a London area qualified by its city, not two search
     areas. Restoring a saved default "1-bed in Hackney, London" searched all of London and
@@ -1480,6 +1735,66 @@ def _drop_city_qualifier(areas: list[str], phrase: str) -> list[str]:
     return areas
 
 
+_COMPARE_NEGATED = re.compile(r"\b(?:don.t|do\s+not|no\s+need\s+to|never|not)\s+(?:\w+\s+){0,2}compar|不用比|不要比|别比", re.I)
+_COMPARE_LIST_JOIN = r"\s*(?:,\s*(?:and\s+)?|、|&|\band\b|\bwith\b|\bto\b|\bagainst\b|\bvs\.?|\bversus\b|和|与|跟|同|及)\s*"
+_COMPARE_ZH_JOIN = r"\s*(?:、|和|与|跟|同|及)\s*"
+
+
+def comparison_areas(text: str, standing: list | None = None) -> list[str]:
+    """The places a message asks to compare, in order; fewer than two means no comparison.
+
+    "Compare A with B", "A vs B" and 「比较A和B」 name both. "Compare with B" compares ``standing``
+    with B. A comparison searches these places and stores none of them, so nothing here says
+    what the search area is. Only a place directly governed by the comparison counts:
+    "Compare the cheapest from Bethnal Green with the one in Angel you showed" asks about
+    shown listings (U-03) and returns nothing."""
+    source = str(text or "")[:2000]
+    if not _COMPARISON_CUE.search(source) and not re.search(r"\bcompared\b|相比|比一比|比一下|哪(?:个|里|边)", source, re.I):
+        return []
+    if _COMPARE_NEGATED.search(source):
+        return []
+    standing = [a for a in (standing or []) if isinstance(a, str) and a.strip()]
+    names = {**_KNOWN_AREAS, **_ZH_AREA_MAP, **_CUE_ONLY_AREAS}
+    for area in standing:
+        names.setdefault(re.sub(r"[’']", '', area.lower()), area)
+    alternatives = '|'.join(re.escape(n) for n in sorted(names, key=len, reverse=True))
+    one = rf"(?<![a-z])(?:{alternatives})(?![a-z])(?:,\s*london\b)?"
+    place = re.compile(one, re.I)
+    text_form = re.sub(r"[’']", "", source)
+
+    def canonical(phrase: str) -> list[str]:
+        found = []
+        for match in place.finditer(phrase):
+            key = re.sub(r",\s*london$", "", match.group().lower())
+            area = names.get(match.group()) or names.get(key)
+            if area and area not in found:
+                found.append(area)
+        return found
+
+    def with_standing(phrase: str) -> list[str]:
+        found = list(standing)
+        for area in canonical(phrase):
+            if area.lower() not in {a.lower() for a in found}:
+                found.append(area)
+        return found
+
+    home_noun = r"(?:(?:the\s+)?(?:rents?|prices?|costs?|flats?|homes?|listings?|areas?)\s+(?:in\s+|of\s+|for\s+|between\s+)?|between\s+)?"
+    both = re.search(rf"(?:\bcompar(?:e|ing)\s+{home_noun}|比较|对比|比一比|比一下)(?:一下|下)?\s*(?:看看\s*)?"
+                     rf"({one}(?:{_COMPARE_LIST_JOIN}{one})+)", text_form, re.I)
+    both = both or re.search(rf"({one}(?:\s*(?:vs\.?|versus|v\.)\s*{one})+)", text_form, re.I)
+    both = both or re.search(rf"({one}\s+compare[sd]?\s+(?:to|with|against)\s+{one})", text_form, re.I)
+    both = both or re.search(rf"({one}(?:{_COMPARE_ZH_JOIN}{one})+)\s*的?[^，。？！?!；;]{{0,8}}?"
+                             r"(?:比较|对比|比一比|比一下|相比|哪个|哪里|哪边)", text_form, re.I)
+    if both:
+        return canonical(both.group(1))
+    other = re.search(rf"\bcompar(?:e|ed|ing)\s+(?:(?:it|this|that|these|them|those|the\s+(?:search|results?|area|listings?)"
+                      rf"|my\s+(?:search|area))\s+)?(?:(?:to|with|against)\s+)({one}(?:{_COMPARE_LIST_JOIN}{one})*)",
+                      text_form, re.I)
+    other = other or re.search(rf"\bcompar(?:e|ing)\s+({one})\s*(?:too\b|as\s+well\b|also\b|[,.!?]|$)", text_form, re.I)
+    other = other or re.search(rf"(?:和|跟|与|同)\s*({one})\s*(?:比较|对比|比一比|比一下)", text_form, re.I)
+    return with_standing(other.group(1)) if other else []
+
+
 # Edits to the CURRENT area list (R1-02 / ledger A-05). "Add Islington as well.",
 # "Drop Hackney, just Islington.", "Add Camden to the search too." and "Remove Stratford."
 # all left the stored areas and the search arguments on the old place while the answer
@@ -1487,14 +1802,18 @@ def _drop_city_qualifier(areas: list[str], phrase: str) -> list[str]:
 _AREA_ADD_BEFORE = re.compile(
     r"(?:\badd(?:ing)?|\balso\s+(?:include|search|look|check|cover|consider|show)(?:\s+(?:in|at|around))?"
     r"|\b(?:please|can you|could you)\s+(?:also\s+)?include|\bas\s+well\s+as|\bplus"
-    r"|(?:加上|添加|增加|加入|也看看?|也搜(?:索|一下)?|也找(?:找)?|再加(?:上)?))\s*(?:in\s+)?$", re.I)
-_AREA_ADD_AFTER = re.compile(r"\s*(?:(?:as\s+well|too)\b|也?(?:加上|加进来?|加入|添加|算上))", re.I)
+    # 「再看看Islington，Camden也保留」 keeps both (R3-13).
+    r"|(?:加上|添加|增加|加入|也看看?|再看看|也搜(?:索|一下)?|也找(?:找)?|再加(?:上)?))\s*(?:in\s+)?$", re.I)
+_AREA_ADD_AFTER = re.compile(r"\s*(?:(?:as\s+well|too)\b|也?(?:加上|加进来?|加入|添加|算上|保留|留着))", re.I)
 _AREA_INCLUDE_BEFORE = re.compile(r"\binclude\s+$", re.I)
 _AREA_INCLUDE_AFTER = re.compile(r"\s*(?:too|as\s+well|in\s+(?:the|my)\s+search)\b", re.I)
 _AREA_REMOVE_BEFORE = re.compile(
-    r"(?:\b(?:remove|drop|exclude|delete|skip|forget(?:\s+about)?|take(?:\s+out)?|cross\s+off|no\s+more"
-    r"|no\s+longer\s+(?:want|consider|search(?:\s+in)?)|without|not)"
-    r"|(?:去掉|删除|删掉|移除|排除|不要|不看|不考虑|不再考虑|取消))\s*(?:the\s+)?$", re.I)
+    r"(?:\b(?:remove|drop|exclude|delete|skip|forget(?:\s+about)?|never\s*mind(?:\s+about)?|scrap|ditch|"
+    r"take(?:\s+out)?|cross\s+off|no\s+more"
+    r"|no\s+longer\s+(?:want|consider|search(?:\s+in)?)|without|not"
+    # "Also check Angel instead of Camden" replaces Camden (R3-13).
+    r"|instead\s+of|rather\s+than)"
+    r"|(?:去掉|删除|删掉|移除|排除|不要|不看|不考虑|不再考虑|取消|忘掉|忘记|别管))\s*(?:the\s+)?$", re.I)
 _AREA_REMOVE_AFTER = re.compile(
     r"\s*(?:(?:out|off)\b(?!\s+of\s+(?:the\s+)?(?:question|budget))|from\s+(?:the|my)\s+(?:search|list|areas?)\b"
     r"|(?:也)?(?:去掉|删掉|删除|移除|排除|不要了|不看了))", re.I)
@@ -1506,6 +1825,16 @@ _AREA_ONLY_BEFORE = re.compile(
     r"|move\s+(?:it\s+|the\s+search\s+)?to|go(?:ing)?\s+back\s+to|back\s+to)"
     r"|(?:只看|只要|只搜(?:索)?|只在|仅看|仅在|只考虑|换成|改成|改为|切换到|回到))\s*$", re.I)
 _AREA_ONLY_AFTER = re.compile(r"\s*(?:only\b|就好|就行|就可以)", re.I)
+# The place that takes over from a removed one: "forget Stratford, use Poplar", "Forget about
+# Stratford and search Poplar", "Never mind Stratford, Poplar please". The removal alone left no
+# area at all, while the reply said the search had moved (G-02). These mean nothing without a
+# removal in the message, and a bare place has to fill its part: "Remove Stratford, Canary Wharf
+# is too far" names no replacement.
+_AREA_SUCCESSOR_BEFORE = re.compile(
+    r"(?:\b(?:use|using|search(?:ing)?|try|look(?:ing)?|go\s+(?:with|for)|make\s+it|how\s+about)"
+    r"(?:\s+(?:in|at|around|near))?|(?:用|搜(?:索)?|看(?:看)?|找(?:找)?))\s*$", re.I)
+_AREA_BARE_SUCCESSOR_BEFORE = re.compile(r"\s*(?:(?:then|now|please|maybe)\s+)?", re.I)
+_AREA_BARE_SUCCESSOR_AFTER = re.compile(r"\s*(?:(?:please|instead|now|then|thanks|thank\s+you)\b\s*)*$", re.I)
 _AREA_NAMED_ADD = re.compile(
     r"\b(?i:add)\s+((?:[A-Z][a-z’'\-]+)(?:\s+[A-Z][a-z’'\-]+){0,2})\s+"
     r"(?:as\s+(?:a|an(?:other)?|my)\s+(?:second\s+|third\s+|new\s+|extra\s+|additional\s+)?(?:search\s+)?area"
@@ -1552,7 +1881,7 @@ def area_list_edit(text: str, current: list | None) -> list[str] | None:
         names.setdefault(re.sub(r"[’']", '', area.lower()), area)
     alternatives = '|'.join(re.escape(n) for n in sorted(names, key=len, reverse=True))
     place = re.compile(rf"(?<![a-z])(?:{alternatives})(?![a-z])", re.I)
-    adds, removes, only = [], [], []
+    adds, removes, only, replaced, successors = [], [], [], [], []
     for clause_match in re.finditer(r"[^.;!?\n。；！？]+", source):
         clause = clause_match.group()
         if is_hypothetical(clause) or re.search(r"\b(?:don.t|do not|never|shouldn.t)\s+(?:\w+\s+){0,2}"
@@ -1571,11 +1900,18 @@ def area_list_edit(text: str, current: list | None) -> list[str] | None:
             after = clause[found.end():found.end() + 40]
             if _AREA_REMOVE_BEFORE.search(before, pos) or _AREA_REMOVE_AFTER.match(after):
                 removes.append(canonical)
+                if re.search(r"(?:instead\s+of|rather\s+than)\s*(?:the\s+)?$", before, re.I):
+                    replaced.append(canonical)
             elif _AREA_ONLY_BEFORE.search(before, pos) or _AREA_ONLY_AFTER.match(after):
                 only.append(canonical)
             elif (_AREA_ADD_BEFORE.search(before, pos) or _AREA_ADD_AFTER.match(after)
                   or (_AREA_INCLUDE_BEFORE.search(before, pos) and _AREA_INCLUDE_AFTER.match(after))):
                 adds.append(canonical)
+            elif (_AREA_SUCCESSOR_BEFORE.search(before, pos)
+                  or ((at < 0 or clause[separator_ends[at] - 1] in ',，')
+                      and _AREA_BARE_SUCCESSOR_BEFORE.fullmatch(before)
+                      and _AREA_BARE_SUCCESSOR_AFTER.match(re.split(r'[,，]', after)[0]))):
+                successors.append(canonical)
         for named in _AREA_NAMED_ADD.finditer(clause):
             # "Add Angel as a second area": a place outside the curated table, named with
             # explicit area wording. The curated table deliberately omits Angel/Bow/Kew.
@@ -1586,6 +1922,14 @@ def area_list_edit(text: str, current: list | None) -> list[str] | None:
     def _key(value):
         return re.sub(r"[’']", '', value.lower())
 
+    if replaced and not (adds or only):
+        # "Search Angel instead of Camden" is a switch for the caller's own logic, not a
+        # removal that leaves no area.
+        removes = [area for area in removes if area not in replaced]
+    if removes and successors and not ({_key(a) for a in removes} & {_key(a) for a in current}):
+        only = only or successors       # the place to forget was not in the list: only the new one counts
+    elif removes:
+        adds = adds + successors
     # With no standing list, a removal alone edits nothing ("在Camden找，不要伦敦其他地方"
     # negates the wider city on a first turn; it must not read as "no area").
     if not (adds or only or (removes and current)):
@@ -1721,14 +2065,37 @@ def workplace_place_at(text: str, start: int) -> bool:
     return bool(_WORKPLACE_BEFORE_PLACE.search(before))
 
 
+_TRAVEL_BEFORE_PLACE = re.compile(
+    r"\b(?:commut\w*|travel\w*|journey|journeys|trip|route|routes|directions?|get(?:ting)?|fares?)\b"
+    r"(?:\s+[\w'’]+){0,3}?\s+(?:to|from|into)\s+(?:the\s+)?$", re.I)
+
+
+def travel_target_at(text: str, start: int) -> bool:
+    """True when the place at ``start`` is the end of a journey ("the commute to X",
+    "travel time from X"), not a place to live (R2-02)."""
+    before = re.split(r"[.;!?,，。；！？\n]|\b(?:and|but|so|or|while)\b",
+                      str(text or "")[max(0, start - 60):start], flags=re.I)[-1]
+    return bool(_TRAVEL_BEFORE_PLACE.search(before))
+
+
+# "Make it Canary Wharf as the workplace instead", "Make Bank my workplace", "Stratford is now my
+# office": the place comes first (W-03).
+WORKPLACE_AFTER_PLACE = (
+    r"\s+(?:as\s+(?:the\s+|my\s+|our\s+)?(?:new\s+)?|(?:is\s+)?(?:now\s+)?my\s+(?:new\s+)?)"
+    r"(?:workplace|office|place\s+of\s+work|commute\s+destination|commute|destination)\b")
+_WORKPLACE_AFTER_PLACE = re.compile(WORKPLACE_AFTER_PLACE, re.I)
+
+
 def names_place_as_workplace(text: str, place: str) -> bool:
-    """True when every mention of ``place`` in ``text`` is introduced as a workplace."""
+    """True when every mention of ``place`` in ``text`` is introduced as a workplace or as the
+    end of the commute."""
     source = re.sub(r"[’']", "", str(text or ""))
     key = re.sub(r"[’']", "", str(place or "")).strip()
     if not key:
         return False
-    starts = [m.start() for m in re.finditer(r"(?<![a-z])" + re.escape(key) + r"(?![a-z])", source, re.I)]
-    return bool(starts) and all(workplace_place_at(source, start) for start in starts)
+    found = list(re.finditer(r"(?<![a-z])" + re.escape(key) + r"(?![a-z])", source, re.I))
+    return bool(found) and all(workplace_place_at(source, m.start()) or travel_target_at(source, m.start())
+                               or _WORKPLACE_AFTER_PLACE.match(source, m.end()) for m in found)
 
 
 # "Tell me more about Arbutus Street in Haggerston." changed the search area Hackney ->
@@ -1780,6 +2147,109 @@ def _listing_reference_cue(text: str, match) -> bool:
                 or _LISTING_DETAIL_QUESTION.match(clause))
 
 
+_COMPARISON_QUESTION = re.compile(
+    r"(?:和|跟|与|同)[^，。？！?!；;]{1,40}?(?:比|相比|对比|比较)|"
+    r"(?:比起来|相比(?:之下)?|对比)[^。！!]{0,20}(?:哪|谁|更|还是)|哪(?:个|里|儿|边)(?:更|比较)|"
+    r"\b(?:compared?\s+(?:to|with)|versus|vs\.?)\s|"
+    r"\bwhich\s+(?:one\s+|area\s+|place\s+)?(?:is|would\s+be)\s+(?:safer|cheaper|better|closer|quieter|nicer)\b",
+    re.I)
+_COMPARISON_SEARCH_CUE = re.compile(
+    r"找|搜|租房|住在|换成|换到|改为|改成|切换|房子|房源|一居|两居|单间|公寓|"
+    r"\b(?:search|find|show\s+me|switch|move\s+to|instead|look\s+in|listings?|flats?\s+in)\b", re.I)
+
+
+# 「牛津大学附近有房吗」 asks for homes near the university, unlike 「到牛津大学要多久」: the R1-04
+# rule below kept the old area for both (U-09). The phrase after 附近 tells them apart.
+_ZH_CLAUSE_END = r"(?=[，。！？!?;；,\n]|$)"
+_ZH_NEAR_HOME = re.compile(
+    r"(?P<place>[^，。！？!?;；,:：\n]{2,24}?)\s*(?:附近|周边|一带|旁边|边上)\s*(?:"
+    r"(?:有没有|有|的|找|租|住|看看?|搜)\s*(?:个|一[个套间]|套|间)?\s*"
+    r"(?:房(?![租价东])|公寓|住处|住宅|单间|studio|flat|[一二两三四五1-5]\s*(?:居|室|卧|bed))"
+    r"|(?:租|住)\s*(?:吧|呢|吗|啊)?\s*" + _ZH_CLAUSE_END +
+    r"|(?P<bare>(?:吧|呢|吗|啊)?\s*" + _ZH_CLAUSE_END + r"))", re.I)
+_ZH_PRICE_QUESTION = re.compile(r"价格|租金|房价|多少钱|贵吗|贵不贵")
+_ZH_PLACE_FILLER = re.compile(
+    r"^(?:那么?|请|麻烦|帮我|帮忙|我想|我要|想要?|要|搜索?|找一?下?|看一?看|看|换到|改到|换成|改成|在|住在|还有|另外|也)+")
+# Not a place: a listing, the user's own home or a kind of place inside the current area.
+_ZH_NOT_A_PLACE = re.compile(
+    r"[我你他她这那哪第套个某些的]|^(?:地铁站?|车站|火车站?|公交站?|公交车站|学校|大学|学院|公司|单位|医院|公园|"
+    r"超市|商场|市中心|市区|市内|城区|郊区|区域|地区|地方|当地|河边|海边|办公室|图书馆|健身房|教堂)$"
+    # A street or a station inside the search area (R2-11): 「剑桥路附近的公寓」.
+    r"|(?:大街|街|路|道|巷|广场|车站|地铁站|站)$")
+
+
+def _zh_place_negated(text: str, start: int, end: int) -> bool:
+    from core.constraint_updates import clause_at, is_hypothetical
+    prefix = re.split(r'[。！？!?;；\n，,:：]', text[:start])[-1][-45:]
+    return bool(is_hypothetical(clause_at(text, start, end)) or re.search(
+        r'(?:不(?:要|是|需要|想|考虑)|取消|删除|移除|去掉|排除)[^，。；;!?]{0,14}$', prefix))
+
+
+def _zh_near_home_place(text: str):
+    """(place text, bare) of the first zh home search near a named place, else None.
+    "Bare" is 「<place>附近」 with nothing after it, which only counts as the whole request."""
+    for match in _ZH_NEAR_HOME.finditer(text or ""):
+        rest = re.split(r'[。！？!?;；\n，,:：]', text[match.end():])[0]
+        if _ZH_PRICE_QUESTION.search(rest) or _zh_place_negated(text, match.end("place"), match.end("place")):
+            continue
+        place = match.group("place").strip()
+        bare = match.group("bare") is not None
+        if bare and _ZH_NOT_A_PLACE.search(_ZH_PLACE_FILLER.sub("", place)):
+            continue
+        return place, bare
+    return None
+
+
+def _zh_institution_area(place: str, bare: bool) -> str | None:
+    """The searchable area around a zh institution name ending ``place``, else None. Only names
+    in the curated alias table reach classify_place, so this never touches the network."""
+    from core.scraping.on_demand import _ZH_ALIAS_KEYS, classify_place, is_destination
+    for key in _ZH_ALIAS_KEYS:
+        at = place.rfind(key)
+        if at < 0:
+            continue
+        tail = place[at + len(key):]
+        if not re.fullmatch(r"(?:大学|学院|校区)?", tail):
+            continue
+        if bare and _ZH_PLACE_FILLER.sub("", place[:at]):
+            return None
+        info = classify_place(place[at:])
+        words = str(info.get("slug") or "").replace("-", " ")
+        if not words or not (tail or is_destination(info)):
+            return None
+        return (LONDON_AREAS.get(words) or _KNOWN_AREAS.get(words)
+                or _CUE_ONLY_AREAS.get(words) or words.title())
+    return None
+
+
+def _zh_named_home_area(place: str, bare: bool) -> str | None:
+    """The known area closing ``place``: in 「找一个Angel附近的一居室…还有去国王十字的车费」 it is the
+    home, whatever else the message names (V-16)."""
+    if bare:
+        return None
+    latin = re.search(r"[a-z][a-z’'\-\s]{1,35}$", place, re.I)
+    if latin:
+        return _match_known_area(latin.group())
+    for zh, canon in _ZH_AREA_MAP.items():
+        if place.endswith(zh):
+            return canon
+    return None
+
+
+def unresolved_zh_search_place(text: str) -> str | None:
+    """The place a zh home search names when no area could be read from it: the standing area
+    must not be searched in its place (U-09). None for a kind of place ("地铁站附近的房子")."""
+    from core.constraint_updates import housing_update_text
+    source = housing_update_text(text or '')
+    if not source or (_COMPARISON_QUESTION.search(source) and not _COMPARISON_SEARCH_CUE.search(source)):
+        return None
+    found = _zh_near_home_place(source)
+    if not found:
+        return None
+    place = _ZH_PLACE_FILLER.sub("", found[0])
+    return place if len(place) >= 2 and not _ZH_NOT_A_PLACE.search(place) else None
+
+
 def _extract_area(text: str) -> str | None:
     """A NEW area/city the user is switching to (canonical ENGLISH name), else None.
 
@@ -1795,13 +2265,21 @@ def _extract_area(text: str) -> str | None:
     text = housing_update_text(text)
     if not text or not text.strip():
         return None
+    if _COMPARISON_QUESTION.search(text) and not _COMPARISON_SEARCH_CUE.search(text):
+        # "和Stratford比起来哪个更安全？" weighs the search area against another place; it
+        # names no new home area (R2-05).
+        return None
     switched = _area_switch_target(text)
     if switched:
         return switched
     # Coordinated residential alternatives belong to the list extractor.
     for clause in re.split(r'[。.!?;；\n]', text):
         if re.search(r'\b(?:search|find|keep|live|flats?)\b|找|住|搜', clause, re.I):
-            found = [name for name in _KNOWN_AREAS if re.search(r'(?<![a-z])' + re.escape(name) + r'(?![a-z])', clause, re.I)]
+            # A commute target or workplace is no alternative: "a studio in Hackney ... and the
+            # commute to Canary Wharf" kept the previous city for the whole turn (R2-02).
+            found = [name for name in _KNOWN_AREAS
+                     if any(not travel_target_at(clause, m.start()) and not workplace_place_at(clause, m.start())
+                            for m in re.finditer(r'(?<![a-z])' + re.escape(name) + r'(?![a-z])', clause, re.I))]
             if len(found) > 1 and re.search(r'\band\b|\bor\b|或|和|、', clause, re.I):
                 return None
     # Chinese places can govern a trailing residential predicate: "在Camden找个
@@ -1854,15 +2332,38 @@ def _extract_area(text: str) -> str | None:
     # actually asked for — a Camden request then searched all of London. A London
     # area/borough beats a bare city; within a level the longest key wins.
     _zh_london = _zh_city = None
+    near_home = _zh_near_home_place(text)
+    if near_home:
+        institution_area = _zh_institution_area(*near_home) or _zh_named_home_area(*near_home)
+        if institution_area:
+            return institution_area
 
     def _zh_place_skipped(start: int, end: int) -> bool:
         prefix = re.split(r'[。！？!?;；\n，,:：]', text[:start])[-1][-45:]
-        if is_hypothetical(clause_at(text, start, end)) or re.search(
-                r'(?:不(?:要|是|需要|想|考虑)|取消|删除|移除|去掉|排除)[^，。；;!?]{0,14}$', prefix):
+        if _zh_place_negated(text, start, end):
             return True
         # A workplace / school named in the same clause is a destination, not a home
         # area: "我在金丝雀码头上班，想在伦敦找房" must not search Canary Wharf.
         suffix = re.split(r'[。！？!?;；\n，,:：]', text[end:])[0][:10]
+        # A street, square or station named after a city is not that city: "牛津街附近的地铁
+        # 线路" stored the area Oxford and a later Cardiff search ran in Oxford (R2-11).
+        if re.match(r'(?:大街|街|路|道|巷|广场|马戏团)', suffix):
+            return True
+        # "第一套离国王十字远吗？" asks how far a listing is from the place; it moved the search
+        # area to King's Cross (R3-10).
+        if re.search(r'(?:离|距离|到)\s*$', prefix) and re.match(
+                # A question only: 「离国王十字近一点的房子」 still asks to live near it.
+                r'\s*(?:有|大概|大约)?(?:多远|多近|要多久|多久|多长时间|几分钟|(?:远|近)(?:吗|不|么|嘛|[？?]))', suffix):
+            return True
+        # The city word that opens an institution's name is not a home area: "从第一个到
+        # 伦敦大学学院要多久?" (UCL) switched a King's Cross search to all of London (R1-04).
+        # A verb or 的 before 大学 ("在伦敦读大学", "伦敦的大学") keeps the city.
+        if re.match(r'(?:(?![读上念考去在的找住租和与])[一-鿿]){0,6}?(?:大学|学院|医院)', suffix):
+            return True
+        # 「去国王十字的车费」 names where the journey ends (V-16).
+        if re.search(r'(?:去|到|至|往)\s*$', prefix) and re.match(
+                r'\s*(?:的)?(?:车费|票价|路费|路线|交通费|地铁|怎么走|要多久|多久|多长时间)', suffix):
+            return True
         return bool(re.match(r'\s*(?:附近)?(?:找(?=工作|实习))?(?:上班|工作|实习|上学|读书|上课|办公|通勤)', suffix)
                     or re.search(r'(?:通勤|上班|上学)(?:到|去)\s*$', prefix))
 
@@ -1894,6 +2395,9 @@ def _extract_area(text: str) -> str | None:
             if re.search(r'(?<![a-z])' + re.escape(key) + r'(?![a-z])', t):
                 return _KNOWN_AREAS[key]
     # (b) explicit switch / location cue + a VALIDATED known place.
+    named_home = _home_search_place(text)
+    if named_home:
+        return named_home
     for m in _AREA_CUE_RE.finditer(t):
         if _listing_reference_cue(t, m):
             continue
@@ -1923,12 +2427,85 @@ _CUE_ONLY_AREAS = {
     "canning town": "Canning Town", "poplar": "Poplar", "chessington": "Chessington",
     "inverness": "Inverness",
 }
+# Cities whose name is also a common word, which is why the curated table leaves them out. In a
+# home search and capitalised they are places: "Show me flats in Reading under £1,500" kept Camden,
+# while 雷丁 and 巴斯 always worked (W-04).
+_HOME_SEARCH_ONLY_AREAS = {"reading": "Reading", "bath": "Bath"}
+_HOME_SEARCH_PLACE = re.compile(
+    r"\b(?:flats?|apartments?|studios?|houses?|homes?|rooms?|maisonettes?|propert(?:y|ies)|places?|"
+    r"accommodation|rentals?|beds?|bedrooms?|somewhere|something|anything)"
+    r"(?:\s+(?:to\s+rent|for\s+rent|available))?\s+(?:in|around)\s+"
+    r"(?P<place>[a-z][a-z’'\-]+(?:\s+[a-z][a-z’'\-]+)?)", re.I)
+
+
+def _home_search_place(text: str) -> str | None:
+    """The place outside the curated table that a home search names ("Find a 2 bed in Inverness"
+    kept the old area, and the search ran there), else None. The state node, the tool and the
+    executor all read it through _extract_area, so they cannot disagree."""
+    from core.constraint_updates import is_hypothetical, mention_is_requirement
+    for match in _HOME_SEARCH_PLACE.finditer(text or ""):
+        words = re.sub(r"[’']", "", match.group("place"))
+        for candidate in (words, words.split()[0]):
+            key = candidate.lower()
+            area = _CUE_ONLY_AREAS.get(key) or (_HOME_SEARCH_ONLY_AREAS.get(key) if candidate[0].isupper() else None)
+            if (area and not is_hypothetical(clause_at(text, match.start("place"), match.end("place")))
+                    and mention_is_requirement(text, match.start("place"), match.end("place"))):
+                return area
+    return None
+
+
+_NEAR_INSTITUTION = re.compile(
+    r"\b(?i:near|around|close\s+to|next\s+to|beside|by)\s+(?:(?i:the)\s+)?"
+    r"(?P<name>[A-Z][\w'’&.\-]*(?:\s+(?:(?i:of)\s+)?[A-Z][\w'’&.\-]*){0,4})")
+_HOME_SEARCH_WORD = re.compile(
+    r"\b(?:flats?|apartments?|studios?|houses?|homes?|rooms?|accommodation|bed(?:room)?s?|"
+    r"propert(?:y|ies)|find|search|look(?:ing)?\s+for|rent|live|living)\b", re.I)
+_NEAR_FOLLOW_UP = re.compile(
+    r"\s*(?:(?:and|or|ok(?:ay)?|then|so|actually|now)\s+)*(?:(?:what|how)\s+about\s+)?(?:somewhere\s+)?", re.I)
+_NEAR_FOLLOW_UP_END = re.compile(r"\s*(?:instead|please|then|too|as\s+well)?\s*(?:[?.!]+(?:\s|$)|$)", re.I)
+
+
+def institution_home_area(text: str, *, follow_up_only: bool = False) -> str | None:
+    """The area around a curated university a home search asks to be near, else None: "Find a
+    flat near UCL ..." after a Manchester search kept Manchester and showed commutes of 1023
+    minutes, where a new conversation searched Bloomsbury (W-04). A short follow-up asks the
+    same: "What about near the University of Edinburgh?" repeated London listings (r06
+    bb737fc7). Curated names only, so this never touches the network."""
+    from core.scraping.on_demand import UNIVERSITY_KEYS, _match_location
+    source = str(text or "")[:2000]
+    for match in _NEAR_INSTITUTION.finditer(source):
+        # The whole sentence is the place: "Near UCL there's a bakery I like" asks for nothing.
+        follow_up = bool(_NEAR_FOLLOW_UP.fullmatch(re.split(r"[.!?;\n]", source[:match.start()])[-1])
+                         and _NEAR_FOLLOW_UP_END.match(source, match.end()))
+        if not follow_up and (follow_up_only or not _HOME_SEARCH_WORD.search(
+                clause_at(source, match.start(), match.end()))):
+            continue
+        slug, _city, key, kind = _match_location(match.group("name"))
+        if kind == "landmark" and key in UNIVERSITY_KEYS:
+            words = str(slug or "").replace("-", " ")
+            return (LONDON_AREAS.get(words) or _KNOWN_AREAS.get(words)
+                    or _CUE_ONLY_AREAS.get(words) or words.title() or None)
+    return None
+
+
 # An explicit switch / short follow-up: "switch to X", "make that X", "how about X?", "what
 # about X?", "go back to X", "and X?", "X instead". Clause-local, read on lower-cased text.
 _FOLLOW_UP_CUE_BEFORE = re.compile(
-    r"(?:\b(?:switch(?:ing)?\s+(?:the\s+search\s+|it\s+|over\s+)?to|change\s+(?:it\s+|the\s+(?:area|search)\s+)?to"
-    r"|move\s+(?:it\s+|the\s+search\s+)?to|make\s+(?:it|that)|how\s+about|what\s+about"
-    r"|go(?:ing)?\s+back\s+to|back\s+to|let'?s\s+(?:try|do)|try|search\s+in|look\s+in)\s+$)")
+    r"(?:\b(?:switch(?:ing)?\s+(?:(?:the\s+|my\s+)?(?:search|area|location)\s+|it\s+|over\s+)?to"
+    r"|change\s+(?:it\s+|(?:the\s+|my\s+)?(?:area|search|location)\s+)?to"
+    r"|move\s+(?:it\s+|(?:the\s+|my\s+)?(?:area|search|location)\s+)?to|make\s+(?:it|that)|how\s+about|what\s+about"
+    r"|go(?:ing)?\s+back\s+to|back\s+to|let'?s\s+(?:try|do)|try|search\s+in|look\s+in"
+    # "ok show Hackney" / "show listings in Camden" (R3-02).
+    r"|show(?:\s+me)?(?:\s+(?:flats?|places?|listings?|homes?|properties|options|results)\s+(?:in|for|around))?"
+    # "Change area to Clapham and budget to £3,200", "Set budget to £2,400 and area to
+    # Camden", "Budget £2,600 and area Camden": the area slot named in a combined change
+    # kept the old area while the budget moved (R3-01). "from this area to X" is a route.
+    r"|(?:^|\b(?:and|also|plus|then|set|update|put|make))\s*(?:the\s+|my\s+)?(?:search\s+)?area"
+    r"(?:\s+(?:to|as))?|^\s*area\s*[:=])\s+$)")
+# "actually make it 2 bedrooms and Clapham": a correction listing the place after another slot
+# changed the bedrooms and kept the area (V-06). The place has to close the clause.
+_SLOT_THEN_PLACE = re.compile(
+    r"(?:\b\d\s*-?\s*bed(?:room)?s?(?:\s+(?:flat|apartment|house))?|\bstudio|\b\d{3,5}k?)\s+and\s+$")
 # A bare follow-up ("and Chelsea?", "Bow?") is the WHOLE clause: "Angel investors are nice"
 # names no area.
 _FOLLOW_UP_BARE_BEFORE = re.compile(r"^\s*(?:and|or|ok(?:ay)?|actually|then)?\s*$")
@@ -1969,11 +2546,14 @@ def _in_place_list(text: str, start: int, end: int) -> bool:
 def _follow_up_cue(text: str, start: int, end: int) -> bool:
     if _in_place_list(text, start, end):
         return False
-    before = re.split(r"[.;!?,，。；！？\n]", text[max(0, start - 40):start])[-1]
+    # Leading spaces are dropped so the clause-start cue "area X" also matches after a comma:
+    # "Set bedrooms to 3, area Shoreditch, budget £3,500." kept Camden (R4-04).
+    before = re.split(r"[.;!?,，。；！？\n]", text[max(0, start - 40):start])[-1].lstrip()
     after = text[end:end + 30]
     if _FOLLOW_UP_CUE_BEFORE.search(before) or re.match(r"\s+instead\b", after):
         return True
-    return bool(_FOLLOW_UP_BARE_BEFORE.match(before) and _FOLLOW_UP_BARE_AFTER.match(after))
+    return bool((_FOLLOW_UP_BARE_BEFORE.match(before) or _SLOT_THEN_PLACE.search(before))
+                and _FOLLOW_UP_BARE_AFTER.match(after))
 
 
 def _follow_up_switch_area(text: str) -> str | None:
@@ -1996,7 +2576,41 @@ def _follow_up_switch_area(text: str) -> str | None:
             rank = (found.start(), len(key))
             if best is None or rank > best[0]:
                 best = (rank, canon)
-    return best[1] if best else None
+    return best[1] if best else _misspelled_follow_up_area(t)
+
+
+# The words a follow-up switch names, up to the end of its clause: "make that Eustan, and
+# budget 1400" -> "eustan", "How about Camdn instead?" -> "camdn".
+_FOLLOW_UP_PLACE_WORDS = re.compile(
+    r"([a-z][a-z\-]{2,}(?:\s+(?!(?:instead|please|then|too)\b)[a-z][a-z\-]{2,})?)"
+    r"\s*(?:instead|please|then|too)?\s*[?.!]*\s*(?:$|[,;\n]|\band\b)")
+
+
+def _misspelled_follow_up_area(text: str) -> str | None:
+    """The known area a close misspelling after an explicit switch cue names, else None.
+
+    "actually make that Eustan, and budget 1400" and "make that Bethnal Grean" searched the
+    OLD area again under a verified header (R3-02, 13/13). Only the words right after a
+    switch cue are read, the whole clause must be the place, and the match must be close
+    (same first letter, similarity >= 0.8) so ordinary words ("make it cheaper", "what
+    about parking") never become a place. ``text`` is lower-cased without apostrophes."""
+    import difflib
+    names = {**_KNOWN_AREAS, **_CUE_ONLY_AREAS}
+    for clause in re.split(r"[.;!?\n]", text):
+        for cue in re.finditer(r"\b(?:switch(?:ing)?\s+to|change\s+(?:it\s+|(?:the\s+)?area\s+)?to|"
+                               r"move\s+(?:it\s+)?to|make\s+(?:it|that)|how\s+about|what\s+about|"
+                               r"(?:the\s+)?area\s+to|search\s+in|look\s+in|show(?:\s+me)?)\s+", clause):
+            found = _FOLLOW_UP_PLACE_WORDS.match(clause, cue.end())
+            if not found:
+                continue
+            word = found.group(1)
+            if word in names or len(word) < 4:
+                continue
+            close = [name for name in difflib.get_close_matches(word, list(names), n=3, cutoff=0.8)
+                     if name[0] == word[0] and abs(len(name) - len(word)) <= 2]
+            if close:
+                return names[close[0]]
+    return None
 
 
 def canonical_requested_area(value) -> str | None:
@@ -2073,6 +2687,20 @@ _BUDGET_CLEAR_PATTERNS = (
     r"\b(?:budget|price|rent)\b[^.!?]*\bno\s+(?:maximum|max|upper\s+limit|ceiling)\b(?!\s+(?:commute|travel))",
 )
 
+# "Forget everything about the budget." kept max_budget 2000 and the next search still
+# filtered on it (R1-03): the phrase list above only knew "forget (about) the budget". A
+# removal verb, an optional "everything/all about", then the budget itself. Read per
+# sentence, and a question about the budget ("Should I drop my budget?", "what if I removed
+# the budget?") is a consultation, not an instruction.
+_BUDGET_REMOVAL_INSTRUCTION = re.compile(
+    r"\b(?:forget|drop|remove|ignore|scrap|ditch|cancel|clear|delete|disregard|lose|"
+    r"get\s+rid\s+of|never\s*mind)\s+(?:about\s+)?"
+    r"(?:(?:everything|all|anything)\s+(?:about|regarding|re|on)\s+)?"
+    r"(?:the\s+|my\s+|any\s+|that\s+|this\s+)?(?:(?:max(?:imum)?|rent|monthly|price)\s+)?"
+    r"(?:budget|price\s+(?:limit|cap|ceiling)|rent\s+(?:limit|cap|ceiling)|spending\s+limit)\b")
+_BUDGET_REMOVAL_QUESTION = re.compile(
+    r"^\s*(?:should|would|what|why|how|is|are|does|do|if|whether|shall)\b|\bwhat\s+if\b|\bif\s+i\b")
+
 
 def _extract_budget_clear(text: str) -> bool:
     """True when the user asks to REMOVE/CLEAR any budget limit ("no budget",
@@ -2084,7 +2712,19 @@ def _extract_budget_clear(text: str) -> bool:
     t = text.lower()
     if any(p in t for p in _BUDGET_CLEAR_PHRASES):
         return True
-    return any(re.search(p, t) for p in _BUDGET_CLEAR_PATTERNS)
+    if any(re.search(p, t) for p in _BUDGET_CLEAR_PATTERNS):
+        return True
+    if re.search(r"[\u4e00-\u9fff]", t):
+        # 「删除我的预算」 left the ceiling in the search while the reply said it would not be
+        # used again (U-10b): the erasure's own reading decides, clause rule included.
+        from rag.agent_memory import erasure_request_fields
+        if "budget" in erasure_request_fields(text):
+            return True
+    for sentence in re.split(r"(?<=[.!?;])\s+|\n", t):
+        if _BUDGET_REMOVAL_INSTRUCTION.search(sentence) and not (
+                sentence.rstrip().endswith("?") and _BUDGET_REMOVAL_QUESTION.search(sentence)):
+            return True
+    return False
 
 
 # Hard filters a model is NOT allowed to originate. Each maps to the deterministic
@@ -2124,7 +2764,7 @@ def _states_relative_budget_edit(text) -> bool:
         delta = detect_relative_budget_delta(text)
         if delta is None:
             return False
-        for match in _BUDGET_CEILING_MARKER.finditer(str(text or "")):
+        for match in _BUDGET_CEILING_MARKER.finditer(zh_money_digits(text)):
             raw = (match.group(1) or match.group(2) or "").replace(",", "")
             try:
                 if abs(float(raw) - abs(float(delta))) < 1e-9:
@@ -2328,7 +2968,35 @@ def _price_stats(results):
                     if isinstance(p, dict) and p.get('price'))
     if not prices:
         return None
-    return prices[0], prices[len(prices) // 2], prices[-1]
+    # A true median: for an even count, the mean of the two middle prices. prices[n // 2] was
+    # the UPPER median, so four listings at 2,500/2,600/2,750/2,900 read "median ~£2,750"
+    # (R1-12). Whole pounds, half up, as the headline formats it.
+    middle = len(prices) // 2
+    median = (prices[middle] if len(prices) % 2
+              else int((prices[middle - 1] + prices[middle]) / 2 + 0.5))
+    return prices[0], median, prices[-1]
+
+
+def _sample_note(held: int, areas: list, is_cjk: bool) -> str:
+    """"Show me every listing in Camden" got "that is everything for the area" from 12 rows of a
+    bounded sample (G-05). The search says what it read."""
+    names = ('、' if is_cjk else ', ').join(str(area) for area in areas)
+    if is_cjk:
+        return f"这些结果来自为 {names} 保存的 {held} 套样本，并非市场上的全部房源。"
+    return f"These come from a bounded sample of {held} listings held for {names}, not every listing on the market."
+
+
+def _empty_sample_note(held: int, cheapest, outside: int, is_cjk: bool) -> str:
+    """What an empty band has to say about a sample that held rows (G-05): they were read and none
+    fit, which is not "nothing was retrieved"."""
+    if is_cjk:
+        away = f"（其中 {outside} 套符合价格和房型，但不在搜索范围内）" if outside else ""
+        floor = f"样本里这个户型最便宜的是 £{cheapest:,.0f}/月。" if cheapest else ""
+        return f"我为这个区域保存了 {held} 套房源，这只是有限样本，其中没有符合条件的{away}。{floor}这不代表市场上没有房源。"
+    away = f" ({outside} fit the price and size but lie outside the search radius)" if outside else ""
+    floor = f" The cheapest of the requested size in that sample is £{cheapest:,.0f}/month." if cheapest else ""
+    return (f"I hold {held} listings for this area in a bounded sample, and none of them fit{away}.{floor} "
+            "This does not establish that the market is empty.")
 
 
 def _found_summary(results, n_perfect: int, n_soft: int, max_budget, max_commute_time,
@@ -3242,6 +3910,8 @@ async def search_properties_impl(
         fresh_areas = edited_areas if edited_areas is not None else _extract_areas(msg_for_extraction)
         if len(fresh_areas) == 1 and bare_city_downgrades(fresh_areas[0], search_area):
             fresh_areas = []    # a bare "London" never widens a finer requested area (R1-01)
+        if len(comparison_areas(msg_for_extraction, req_areas)) > 1:
+            fresh_areas = []    # both places were passed; one read from the words would replace them
         if (search_area and fresh_areas and edited_areas is None
                 and all(names_place_as_workplace(msg_for_extraction, a) for a in fresh_areas)):
             # "I also work in Shoreditch" names the commute destination; the requested home
@@ -3377,8 +4047,21 @@ async def search_properties_impl(
         # 目标。此处在 memory-stripped 的本轮原始消息上做保守的目的地扫描（仅当 classify_place
         # 确认为 university/workplace 才命中；纯居住区/裸城市绝不命中），命中即锁为通勤目标。
         # 仅在用户未显式给出 commute_destination 且未声明 no_commute 时运行。
+        def _curated_home_key(value):
+            return re.sub(r"[’']", "", str(value or "").split(",")[0].strip().lower())
+
         if (not no_commute and not commute_destination and msg_for_extraction):
             _msg_dest = extract_destination_from_text(msg_for_extraction)
+            _named_key = _curated_home_key((_msg_dest or {}).get("name"))
+            if (_msg_dest and search_area and _named_key == _curated_home_key(search_area)
+                    and (_named_key in LONDON_AREAS or _named_key in _KNOWN_AREAS
+                         or _named_key in _CUE_ONLY_AREAS)
+                    and not names_place_as_workplace(msg_for_extraction, _msg_dest.get("name"))
+                    and not re.search(r"\b(?:job|work|office|stud(?:y|ying)|commut\w*)\b|上班|工作|上学|通勤",
+                                      msg_for_extraction, re.I)):
+                # "actually make that Euston" names the curated home area being searched, not a
+                # workplace (S-05).
+                _msg_dest = None
             if _msg_dest and is_destination(_msg_dest):
                 _dest_name = _msg_dest.get("name") or search_area or "your destination"
                 commute_destination = _msg_dest.get("address") or _dest_name
@@ -3414,7 +4097,19 @@ async def search_properties_impl(
 
         # 步骤 1.4b: 若"想住的区域"其实是一个目的地 token（用户把 UCL/某公司当住哪说），
         # 且上面 1.4a 尚未锁定，则在此重分类为通勤目标。
-        if not locked_commute_dest and search_area and not search_area_from_commute_dest:
+        # A curated home area the user named ("make that Euston") is where they want to live: a
+        # live classification of its station made it the commute destination, which then rode
+        # along on the next search of another area (S-05).
+        _home_key = _curated_home_key(_clean_area(search_area))
+        # "And near SW1A 1AA postcode?" searched that postcode as the home area, and its live
+        # classification locked it as the commute destination too (T-02). A full postcode is a
+        # place to live unless the message names it as a workplace or study place.
+        _home_postcode = bool(re.fullmatch(r"[a-z]{1,2}[0-9][a-z0-9]?[\s-]*[0-9][a-z]{2}", _home_key)
+                              and not re.search(r"\b(?:job|work|office|stud(?:y|ying)|commut\w*)\b|上班|工作|上学|通勤",
+                                                msg_for_extraction or "", re.I))
+        if (not locked_commute_dest and search_area and not search_area_from_commute_dest
+                and _home_key not in LONDON_AREAS and _home_key not in _KNOWN_AREAS
+                and _home_key not in _CUE_ONLY_AREAS and not _home_postcode):
             _place = classify_place(search_area)
             if is_destination(_place):
                 _token = search_area
@@ -3601,6 +4296,7 @@ async def search_properties_impl(
             return {
                 'success': False,
                 'status': 'need_clarification',
+                'retryable': False,
                 'clarification_kind': 'missing_area',
                 'question': question,
                 'missing_fields': list(hard_readiness.missing_hard),
@@ -3652,7 +4348,9 @@ async def search_properties_impl(
             no_commute=no_commute,
             commute_destination=commute_target,
             criteria_gate_shown=criteria_gate_shown,
-            confirmed=confirmed,
+            # A comparison asks about the areas, so the criteria of one search can wait (B-F7).
+            confirmed=confirmed or (compares_areas_only(msg_for_extraction)
+                                    and len(comparison_areas(msg_for_extraction)) > 1),
             user_message=msg_for_extraction,
             move_in_date=move_in_date,
         )
@@ -3665,6 +4363,7 @@ async def search_properties_impl(
             return {
                 'success': False,
                 'status': 'need_clarification',
+                'retryable': False,
                 'clarification_kind': 'soft_criteria',
                 'question': _soft_gate_question(soft_missing, is_cjk, move_in_missing),
                 'missing_fields': soft_missing,
@@ -3899,7 +4598,9 @@ async def search_properties_impl(
 
         # Per-area served-row counts (pre-filter) drive the crisp per-area status contract:
         # 'results' (complete, had listings) | 'empty' (complete, genuinely none) | 'incomplete'.
+        # Rows the sample held outside this band still count: the area had listings (G-05).
         _area_rowcount = {_a: len(_res_by_area.get(_a, {}).get('rows', []) or [])
+                          or int((_res_by_area.get(_a, {}).get('meta') or {}).get('sample_size') or 0)
                           for _a in search_areas}
         _source_failure = source_failure_summary(_res_by_area, language='zh' if is_cjk else 'en')
         _area_status = {
@@ -3929,6 +4630,9 @@ async def search_properties_impl(
         }
         possibly_outdated = bool(listing_meta.get('stale'))
         data_source = 'OnTheMarket' + (' (cached)' if (_all_cached and not _any_scraped) else '')
+        _sample_held = sum(int(m.get('sample_size') or 0) for m in _metas)
+        _sample_prices = [m['sample_cheapest'] for m in _metas if m.get('sample_cheapest')]
+        _bounded_sample = any((m.get('coverage') or {}).get('exhaustive') is False for m in _metas)
         print(f"   ✅ 实时房源 {listing_meta.get('count', 0)} 个 "
               f"(areas={len(search_areas)}, cached={_all_cached})")
 
@@ -4023,16 +4727,23 @@ async def search_properties_impl(
             out['partial_note'] = _partial_note(incomplete_areas, is_cjk) if incomplete_areas else ""
             out['cache_stats'] = {"hits": cache_hits, "misses": cache_misses}
             out['area_status'] = dict(_area_status)
+            if _bounded_sample:
+                out['coverage'] = {'scope': 'bounded_area_sample', 'exhaustive': False,
+                                   'rows_held': _sample_held}
             out.update(_source_failure)
             out['retrieval_outcome'] = (
                 'source_unavailable' if _source_failure and not live_rows else
                 'stale_fallback' if _source_failure and live_rows else
                 'incomplete' if incomplete_areas else
-                'no_matching_candidates' if payload.get('status') == 'no_results' and live_rows else
+                'no_matching_candidates' if payload.get('status') == 'no_results' and (live_rows or _sample_held) else
                 'no_source_candidates' if payload.get('status') == 'no_results' else 'candidates_returned')
             if _source_failure:
                 out['message'] = _source_failure['source_message']
                 out['partial_note'] = _source_failure['source_message']
+            elif payload.get('status') == 'no_results' and not incomplete_areas and _sample_held:
+                note = _empty_sample_note(_sample_held, min(_sample_prices, default=None),
+                                          len(geo_rejected), is_cjk)
+                out['message'] = f"{out.get('message') or ''} {note}".strip()
             elif payload.get('status') == 'no_results' and not incomplete_areas:
                 note = ('未获得可用候选数据，不能据此判断市场上没有房源。' if not live_rows else
                         '本次候选中没有满足当前筛选的房源；这不代表市场上没有房源。') if is_cjk else (
@@ -4846,6 +5557,8 @@ async def search_properties_impl(
                                   max_commute_time if commute_filter_enabled else None,
                                   search_area, commute_target, room_type, is_cjk,
                                   move_in_date, area_counts=_area_counts)
+        if _bounded_sample and _sample_held:
+            _summary += " " + _sample_note(_sample_held, search_areas, is_cjk)
         if possibly_outdated:
             _summary += (" （部分为近期缓存房源，实时刷新暂不可用，可能已过期。）" if is_cjk
                          else " (Showing recent cached listings — a live refresh wasn't "

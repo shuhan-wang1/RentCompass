@@ -6,9 +6,11 @@ Added 2026-07 after OpenRent put its listing pages behind an AWS WAF
 with a bot-challenge interstitial), which killed the plain-requests OpenRent
 path. OnTheMarket is the replacement primary source:
 
-  * robots.txt permits plain /to-rent/property/<area>/ listing pages, but denies
-    price/bedroom/radius/type query facets. We use only the plain area path and
-    permitted pagination, then apply budget and bedroom filters locally.
+  * robots.txt denies the price/bedroom/sort/radius query facets and the flat and
+    apartment paths, but leaves the area pages open on several path channels: all
+    property, studio, 1-5 bed, house and flat share, and student. Asking the channel
+    that matches the request is what makes a page of ~30 rows useful: a studio search
+    on the all-property page keeps about one row in five. Budget filters stay local.
   * The search page is a Next.js app whose server-rendered <script
     id="__NEXT_DATA__"> JSON already carries a fully structured list of ~30
     listings per page: price, address, title, property type, beds/baths, exact
@@ -38,7 +40,21 @@ from . import otm_access
 logger = logging.getLogger(__name__)
 
 BASE = "https://www.onthemarket.com"
-SEARCH_URL = BASE + "/to-rent/property/{slug}/"
+# Every path here must also pass otm_access.validate_url.
+CHANNEL_PATHS = {
+    "property": "/to-rent/property/{slug}/",
+    "studio": "/to-rent/studio/{slug}/",
+    "house-flat-share": "/to-rent/house-flat-share/{slug}/",
+    "student": "/student/property/{slug}/",
+    **{f"{beds}-bed-property": f"/to-rent/{beds}-bed-property/{{slug}}/" for beds in range(1, 6)},
+}
+SEARCH_URL = BASE + CHANNEL_PATHS["property"]
+# Pages read per channel. The live page holds 30 rows and requests are paced at 1.2s, so
+# this bounds the sample rather than the time; `deep_budget_s` bounds the time.
+DEFAULT_PAGE_DEPTH = 4
+MAX_PAGE_DEPTH = 8
+# 52 weeks over 12 months, the conversion the site itself prints beside each rent.
+_WEEKS_PER_MONTH = 52 / 12
 
 _HEADERS = {
     "User-Agent": otm_access.user_agent(),
@@ -352,20 +368,69 @@ def _extract_listings(html: str) -> list[dict]:
 class OTMHarvest(list):
     """List-compatible bounded harvest, with completeness and sampling evidence."""
 
-    def __init__(self, rows=(), *, pages_fetched=0, rows_sampled=0, exhausted=False):
+    def __init__(self, rows=(), *, pages_fetched=0, rows_sampled=0, exhausted=False,
+                 channels=(), source_total=None, stopped_early=False):
         super().__init__(rows)
         self.coverage = {"scope": "bounded_area_sample", "exhaustive": bool(exhausted),
                          "pages_fetched": pages_fetched, "rows_sampled": rows_sampled,
-                         "filtering": "local_price_and_bedrooms"}
+                         "filtering": "local_price_and_bedrooms",
+                         "channels": list(channels), "source_total": dict(source_total or {}),
+                         "stopped_early": bool(stopped_early)}
         self.retrieval_complete = True
 
 
-def _pcm_price(raw) -> str:
-    """'£2,650 pcm (£612 pw)' -> '£2,650 pcm'."""
+def _weekly_rent(raw):
+    """(amount, per_person) for a rent quoted only by the week, else None."""
+    text = str(raw or "")
+    if re.search(r"£[\d,]+\s*pcm", text, re.I):
+        return None
+    match = re.search(r"£([\d,]+(?:\.\d+)?)\s*(pppw|pw)\b", text, re.I)
+    if not match:
+        return None
+    return float(match.group(1).replace(",", "")), match.group(2).lower() == "pppw"
+
+
+def _let_size(bedrooms) -> int:
+    """People a per-person rent covers: one per bedroom, one when the count is unknown."""
+    return bedrooms if isinstance(bedrooms, int) and bedrooms > 1 else 1
+
+
+def _pcm_price(raw, bedrooms=None) -> str:
+    """The whole let's monthly rent: '£2,650 pcm (£612 pw)' -> '£2,650 pcm'.
+
+    Student pages quote by the week, and every price consumer reads the first number on
+    the line as a monthly rent, so '£358 pw' must never pass through unconverted. A per
+    person rent becomes the total for all the bedrooms, because that is what the let
+    costs; the per-person figure goes into Payment_Rules (see _rent_note)."""
     if not raw:
         return ""
     m = re.search(r"£[\d,]+\s*pcm", str(raw), re.I)
-    return m.group(0) if m else str(raw).strip()
+    if m:
+        return m.group(0)
+    weekly = _weekly_rent(raw)
+    if weekly:
+        amount, per_person = weekly
+        total = amount * (_let_size(bedrooms) if per_person else 1)
+        return f"£{round(total * _WEEKS_PER_MONTH):,} pcm"
+    return str(raw).strip()
+
+
+def _rent_note(raw, bedrooms, channel: str) -> str:
+    """What the monthly figure hides: how the rent is quoted, and that it is a student let."""
+    notes = ["Listed as a student let"] if channel == "student" else []
+    weekly = _weekly_rent(raw)
+    if weekly:
+        amount, per_person = weekly
+        size = _let_size(bedrooms)
+        each = f"£{round(amount * _WEEKS_PER_MONTH):,} pcm"
+        if per_person and size > 1:
+            notes.append(f"Asking rent is £{amount:g} per person per week: about {each} each, "
+                         f"£{round(amount * size * _WEEKS_PER_MONTH):,} pcm for all {size} bedrooms")
+        elif per_person:
+            notes.append(f"Asking rent is £{amount:g} per person per week: about {each}")
+        else:
+            notes.append(f"Asking rent is £{amount:g} per week: about {each}")
+    return "; ".join(notes)
 
 
 def _room_type(beds, prop_type: str, title: str) -> str:
@@ -393,7 +458,7 @@ def _images(listing: dict) -> list[str]:
     return out[:6]
 
 
-def _map_listing(listing: dict) -> dict:
+def _map_listing(listing: dict, channel: str = "property") -> dict:
     url_path = listing.get("details-url") or ""
     url = BASE + url_path if url_path.startswith("/") else url_path
 
@@ -436,7 +501,8 @@ def _map_listing(listing: dict) -> dict:
                 break
 
     return {
-        "Price": _pcm_price(listing.get("price")),
+        "Price": _pcm_price(listing.get("price"), beds),
+        "Payment_Rules": _rent_note(listing.get("price"), beds, channel),
         "Address": address or title,
         "Description": description or title,
         "URL": url,
@@ -451,6 +517,36 @@ def _map_listing(listing: dict) -> dict:
     }
 
 
+def _page_depth() -> int:
+    try:
+        depth = int(os.getenv("OTM_SEARCH_PAGE_DEPTH", str(DEFAULT_PAGE_DEPTH)))
+    except ValueError:
+        depth = DEFAULT_PAGE_DEPTH
+    return min(MAX_PAGE_DEPTH, max(1, depth))
+
+
+def _page_facts(page: str) -> tuple[int | None, bool | None]:
+    """(rows the site holds for this search, whether it links a next page). Either is None
+    when the page does not say, so a sparser page shape degrades to paging until empty."""
+    try:
+        results = _redux_state(_next_data(page))["results"]
+    except (OTMSchemaDriftError, KeyError, TypeError):
+        return None, None
+    if not isinstance(results, dict):
+        return None, None
+    total = results.get("totalResults")
+    controls = results.get("paginationControls")
+    following = None
+    if isinstance(controls, dict) and "next" in controls:
+        following = bool((controls.get("next") or {}).get("next-link"))
+    return (total if isinstance(total, int) else None), following
+
+
+def _channel_page_is_missing(error: otm_access.OTMSourceError) -> bool:
+    """The site has no page for this channel and place; refusals are never this."""
+    return error.status_code == 404 or (error.status_code or 0) in range(300, 400)
+
+
 def find_rich_onthemarket(
     slug: str,
     radius: float,
@@ -461,78 +557,125 @@ def find_rich_onthemarket(
     max_bedrooms: int = 2,
     *,
     budget_s: float | None = None,
+    deep_budget_s: float | None = None,
+    channels=("property",),
 ) -> list[dict]:
     """Search OnTheMarket for an area `slug`, paging as needed, and return
     normalised rich-schema dicts. `radius` is accepted for signature parity with
-    the other sources but OnTheMarket area pages already cover a local radius."""
+    the other sources but OnTheMarket area pages already cover a local radius.
+
+    `channels` are visited in turn, one page each, so a thin channel cannot starve the
+    next. A channel the site does not have for this place falls back to the all-property
+    page. `budget_s` bounds the whole harvest; `deep_budget_s` only stops further pages
+    from starting, so a slow search still returns its first pages as a usable sample."""
     session = _new_session()
-    deadline = None if budget_s is None else time.monotonic() + max(0, float(budget_s))
+    started = time.monotonic()
+    deadline = None if budget_s is None else started + max(0, float(budget_s))
+    deep_deadline = None if deep_budget_s is None else started + max(0, float(deep_budget_s))
     results: list[dict] = []
     seen_urls: set[str] = set()
     want = limit if limit else 30
-    page = 1
-    max_pages = min(4, max(1, int(os.getenv("OTM_SEARCH_MAX_PAGES", "2"))))
+    max_pages = _page_depth()
+    next_page = {channel: 1 for channel in (channels or ("property",))}
+    channel_urls = {channel: set() for channel in next_page}
+    visited = list(next_page)
+    source_total: dict = {}
     sampled = 0
     pages_fetched = 0
-    exhausted = False
+    capped = False
+    stopped_early = False
     # The limit caps the sampled inventory, not a promise that a local budget
     # filter can cover all stock in the area. Never send robots-disallowed facets.
-    while sampled < want and page <= max_pages:
-        page_params = {}
-        if page > 1:
-            page_params["page-number"] = page
-        try:
-            remaining = 25 if deadline is None else min(25, deadline - time.monotonic())
-            if remaining <= 0:
-                raise otm_access.OTMSourceError("unavailable", "request_budget_exhausted")
-            resp = otm_access.get(session, SEARCH_URL.format(slug=slug), params=page_params,
-                                  timeout=remaining)
-            pages_fetched += 1
-        except otm_access.OTMSourceError as e:
-            logger.warning(
-                "onthemarket.search_failed page=%d error_type=%s",
-                page, type(e).__name__)
-            e.partial_rows = list(results)
-            raise
-
-        try:
-            listings = _extract_listings(resp.text)
-        except OTMSchemaDriftError:
-            raise OTMSchemaDriftError(partial_rows=results)
-        if not listings:
-            if page == 1:
-                logger.info("onthemarket.empty_first_page")
-            exhausted = True
-            break
-
-        new_this_page = 0
-        for listing in listings:
-            mapped = _map_listing(listing)
-            url = mapped.get("URL", "")
-            if url and url in seen_urls:
-                continue
-            if url:
-                seen_urls.add(url)
-            normalized = normalize_property(mapped)
-            sampled += 1
-            # Import lazily: on_demand imports this module to resolve areas.
-            from .on_demand import _in_band
-            if _in_band(normalized, min_bedrooms, max_bedrooms, min_price, max_price):
-                results.append(normalized)
-            new_this_page += 1
+    while next_page and sampled < want and not stopped_early:
+        for channel in list(next_page):
+            page = next_page[channel]
             if sampled >= want:
                 break
+            if page > max_pages:
+                capped = True
+                del next_page[channel]
+                continue
+            now = time.monotonic()
+            if page > 1 and deep_deadline is not None and now >= deep_deadline:
+                stopped_early = True
+                break
+            page_params = {"page": page} if page > 1 else {}
+            try:
+                remaining = 25 if deadline is None else min(25, deadline - now)
+                if remaining <= 0:
+                    raise otm_access.OTMSourceError("unavailable", "request_budget_exhausted")
+                resp = otm_access.get(session, BASE + CHANNEL_PATHS[channel].format(slug=slug),
+                                      params=page_params, timeout=remaining)
+                pages_fetched += 1
+            except otm_access.OTMSourceError as e:
+                if page == 1 and channel != "property" and _channel_page_is_missing(e):
+                    del next_page[channel]
+                    if not next_page and "property" not in channel_urls:
+                        next_page["property"] = 1
+                        channel_urls["property"] = set()
+                        visited.append("property")
+                    continue
+                if pages_fetched and e.reason == "request_budget_exhausted":
+                    stopped_early = True
+                    break
+                logger.warning(
+                    "onthemarket.search_failed page=%d error_type=%s",
+                    page, type(e).__name__)
+                e.partial_rows = list(results)
+                raise
 
-        if new_this_page == 0:
-            break
-        page += 1
+            try:
+                listings = _extract_listings(resp.text)
+            except OTMSchemaDriftError:
+                raise OTMSchemaDriftError(partial_rows=results)
+            total, has_next = _page_facts(resp.text)
+            if total is not None:
+                source_total.setdefault(channel, total)
+            if not listings:
+                if page == 1:
+                    logger.info("onthemarket.empty_first_page")
+                del next_page[channel]
+                continue
 
-    logger.info("onthemarket.search_complete result_count=%d", len(results))
+            mapped_rows = [_map_listing(listing, channel) for listing in listings]
+            page_urls = {row.get("URL", "") for row in mapped_rows} - {""}
+            advanced = not page_urls or bool(page_urls - channel_urls[channel])
+            channel_urls[channel] |= page_urls
+            for mapped in mapped_rows:
+                url = mapped.get("URL", "")
+                if url and url in seen_urls:
+                    continue
+                if url:
+                    seen_urls.add(url)
+                normalized = normalize_property(mapped)
+                sampled += 1
+                # Import lazily: on_demand imports this module to resolve areas.
+                from .on_demand import _in_band
+                if _in_band(normalized, min_bedrooms, max_bedrooms, min_price, max_price):
+                    results.append(normalized)
+                if sampled >= want:
+                    break
+
+            if not advanced:
+                # Every page returning page 1 again looks like success and silently caps
+                # the product at one page, which is how a dead parameter went unnoticed.
+                logger.warning("onthemarket.pagination_not_advancing page=%d", page)
+                capped = True
+                del next_page[channel]
+            elif has_next is False:
+                del next_page[channel]
+            else:
+                next_page[channel] = page + 1
+
+    if next_page:
+        capped = True
+    logger.info("onthemarket.search_complete result_count=%d pages=%d rows_sampled=%d",
+                len(results), pages_fetched, sampled)
     return OTMHarvest(results, pages_fetched=pages_fetched, rows_sampled=sampled,
-                      exhausted=exhausted)
+                      exhausted=not capped and not stopped_early, channels=visited,
+                      source_total=source_total, stopped_early=stopped_early)
 
 
-# ==========================================================================
 # Detail-page description enrichment
 # --------------------------------------------------------------------------
 # The search-results __NEXT_DATA__ carries only key-feature bullets, not the

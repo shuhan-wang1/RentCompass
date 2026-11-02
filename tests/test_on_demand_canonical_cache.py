@@ -74,14 +74,14 @@ def _counting_scrape(monkeypatch, rows_factory=_canon_rows):
 def test_same_slug_two_bands_scrapes_once(fresh_cache, monkeypatch):
     calls = _counting_scrape(monkeypatch)
 
-    # Band A: 1-bed, £500-1200 -> only the £1000 1-bed row.
-    a = on_demand.get_listings("Manchester", 1, 1, 500, 1200)
+    # Band A: 1-2 beds, £500-1200 -> only the £1000 1-bed row.
+    a = on_demand.get_listings("Manchester", 1, 2, 500, 1200)
     assert a["meta"]["source"] == "scraped"
     assert [r["URL"] for r in a["rows"]] == ["https://www.onthemarket.com/details/2/"]
 
-    # Band B: 2-bed, £500-2000 -> only the £1500 2-bed row, served WARM from the
+    # Band B: 2-3 beds, £500-2000 -> only the £1500 2-bed row, served WARM from the
     # same canonical entry (no second scrape).
-    b = on_demand.get_listings("Manchester", 2, 2, 500, 2000)
+    b = on_demand.get_listings("Manchester", 2, 3, 500, 2000)
     assert b["meta"]["source"] == "hit"
     assert [r["URL"] for r in b["rows"]] == ["https://www.onthemarket.com/details/3/"]
 
@@ -108,19 +108,19 @@ def test_fresh_canonical_empty_band_reuses_sample_without_another_request(fresh_
     calls = _counting_scrape(monkeypatch)
 
     # Populate the canonical entry with a matching band.
-    first = on_demand.get_listings("Manchester", 1, 1, 500, 1200)
+    first = on_demand.get_listings("Manchester", 1, 2, 500, 1200)
     assert first["meta"]["source"] == "scraped" and first["rows"]
 
-    # A band no row can satisfy (5-bed): the canonical pool never asked for 5-beds, so
+    # A band no row can satisfy (4+ beds): the canonical pool never asked for them, so
     # the rescue scrapes AT the band before the empty is believed.
-    empty = on_demand.get_listings("Manchester", 5, 5, 500, 1200)
+    empty = on_demand.get_listings("Manchester", 4, 6, 500, 1200)
     assert empty["rows"] == [] and empty["meta"]["count"] == 0
     assert empty["meta"]["source"] == "hit" and empty["meta"]["band_rescue"] is False
     assert calls["n"] == 1
     assert empty["meta"]["coverage"]["exhaustive"] is False
 
     # Repeat: the empty rescue harvest is cached band-scoped, so no third scrape.
-    again = on_demand.get_listings("Manchester", 5, 5, 500, 1200)
+    again = on_demand.get_listings("Manchester", 4, 6, 500, 1200)
     assert again["rows"] == [] and again["meta"]["source"] == "hit"
     assert calls["n"] == 1
 
@@ -200,10 +200,10 @@ def test_band_rescue_failure_keeps_the_canonical_answer(fresh_cache, monkeypatch
 
     monkeypatch.setattr(om_mod, "find_rich_onthemarket", fake_scrape)
 
-    warm = on_demand.get_listings("Manchester", 1, 1, 500, 1200)   # canonical scrape
+    warm = on_demand.get_listings("Manchester", 1, 2, 500, 1200)   # canonical scrape
     assert warm["rows"] and calls["n"] == 1
 
-    res = on_demand.get_listings("Manchester", 5, 5, 500, 1200)    # rescue raises
+    res = on_demand.get_listings("Manchester", 4, 6, 500, 1200)    # rescue raises
     assert res["rows"] == [] and res["meta"]["source"] == "hit"
     assert res["meta"]["band_rescue"] is False
     assert calls["n"] == 1
@@ -221,10 +221,10 @@ def test_cache_only_miss_when_absent(fresh_cache, monkeypatch):
 
 def test_cache_only_hit_when_fresh_canonical_exists(fresh_cache, monkeypatch):
     calls = _counting_scrape(monkeypatch)
-    on_demand.get_listings("Manchester", 1, 1, 500, 1200)  # warm the canonical entry
+    on_demand.get_listings("Manchester", 1, 2, 500, 1200)  # warm the canonical entry
     assert calls["n"] == 1
 
-    res = on_demand.get_listings("Manchester", 2, 2, 500, 2000, cache_only=True)
+    res = on_demand.get_listings("Manchester", 2, 3, 500, 2000, cache_only=True)
     assert res["meta"]["source"] == "hit"
     assert [r["URL"] for r in res["rows"]] == ["https://www.onthemarket.com/details/3/"]
     assert calls["n"] == 1  # still no scrape
@@ -232,11 +232,11 @@ def test_cache_only_hit_when_fresh_canonical_exists(fresh_cache, monkeypatch):
 
 def test_cache_only_hit_even_when_band_filter_empty(fresh_cache, monkeypatch):
     calls = _counting_scrape(monkeypatch)
-    on_demand.get_listings("Manchester", 1, 1, 500, 1200)  # warm
+    on_demand.get_listings("Manchester", 1, 2, 500, 1200)  # warm
 
-    # Fresh canonical entry exists but the 5-bed band yields nothing: still a HIT
+    # Fresh canonical entry exists but the 4+ bed band yields nothing: still a HIT
     # (fresh entry present), per the cache_only contract.
-    res = on_demand.get_listings("Manchester", 5, 5, 500, 1200, cache_only=True)
+    res = on_demand.get_listings("Manchester", 4, 6, 500, 1200, cache_only=True)
     assert res["meta"]["source"] == "hit"
     assert res["rows"] == [] and res["meta"]["count"] == 0
     assert calls["n"] == 1

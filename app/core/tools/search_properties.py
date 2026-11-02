@@ -232,6 +232,10 @@ def _matches_room_type(prop: dict, room_type: str) -> bool:
     if room_type == 'studio':
         return 'studio' in rt or 'studio' in desc
     if room_type == 'ensuite':
+        # A family flat whose main bedroom has an en-suite is not an en-suite room to rent.
+        if re.search(r'\b[2-9]\s*bed\b', rt) and 'shar' not in rt:
+            return False
+        blob = f"{blob} {prop.get('_full_description', '')}".lower()
         return 'en-suite' in blob or 'ensuite' in blob or 'en suite' in blob
     if room_type == 'shared':
         return 'shar' in rt or 'shar' in desc or 'flatshare' in blob or 'flat share' in blob
@@ -2986,6 +2990,69 @@ def _sample_note(held: int, areas: list, is_cjk: bool) -> str:
     return f"These come from a bounded sample of {held} listings held for {names}, not every listing on the market."
 
 
+async def _settle_within(futures: list, timeout_s: float) -> list:
+    """Each future's result or exception, or None for one still running at the timeout."""
+    tasks = [asyncio.ensure_future(future) for future in futures]
+    try:
+        if tasks:
+            await asyncio.wait(tasks, timeout=max(0.0, timeout_s))
+    except BaseException:
+        # asyncio.wait never cancels its inputs, so a cancelled search must do it here.
+        for task in tasks:
+            task.cancel()
+            task.add_done_callback(_consume_task_exception)
+        raise
+    settled = []
+    for task in tasks:
+        if not task.done():
+            task.cancel()
+            task.add_done_callback(_consume_task_exception)
+            settled.append(None)
+        elif task.cancelled():
+            settled.append(None)
+        else:
+            settled.append(task.exception() or task.result())
+    return settled
+
+
+# Search pages rarely say whether a room is en-suite; its detail page usually does. Each read
+# costs a paced request unless the page is already in the weekly detail cache.
+_ROOM_DESCRIPTION_READS = 8
+
+
+async def _read_room_descriptions(ranked: list, budget_s: float) -> None:
+    """Copy detail-page text onto the top room listings so an en-suite search can see it.
+    Time-boxed: a room not read in time simply stays unconfirmed."""
+    rooms = [prop for prop in ranked
+             if 'shar' in str(prop.get('Room_Type_Category', '')).lower() and prop.get('URL')]
+    rooms = rooms[:_ROOM_DESCRIPTION_READS]
+    if not rooms or budget_s <= 0:
+        return
+    from core.scraping.onthemarket import fetch_listing_details
+
+    loop = asyncio.get_running_loop()
+    details = await _settle_within(
+        [loop.run_in_executor(None, partial(fetch_listing_details, prop['URL'], budget_s=budget_s))
+         for prop in rooms],
+        budget_s)
+    for prop, detail in zip(rooms, details):
+        if isinstance(detail, dict) and detail.get('description'):
+            prop['_full_description'] = detail['description']
+
+
+def _commute_candidate_pool(ranked: list, limit: int = 15) -> list:
+    """The rows that go on to commute checks and final ranking, top `limit` only because
+    each one costs a routing call. Retrieval order is semantic, and listing text says
+    nothing about price, so half the pool is the cheapest of the rest; otherwise a user
+    with no stated budget only ever sees whichever rows read most like the query."""
+    if len(ranked) <= limit:
+        return list(ranked)
+    relevant = limit - limit // 2
+    def _price(prop):
+        return prop.get('parsed_price') or float('inf')
+    return ranked[:relevant] + sorted(ranked[relevant:], key=_price)[:limit - relevant]
+
+
 def _empty_sample_note(held: int, cheapest, outside: int, is_cjk: bool) -> str:
     """What an empty band has to say about a sample that held rows (G-05): they were read and none
     fit, which is not "nothing was retrieved"."""
@@ -4434,8 +4501,10 @@ async def search_properties_impl(
 
         RANK_HEADROOM_S = float(os.getenv("SEARCH_RANK_HEADROOM_S", "1.5"))
         PER_AREA_EST_S = float(os.getenv("SEARCH_PER_AREA_SCRAPE_EST_S", "6.0"))
+        from core.scraping.on_demand import DEEP_PAGE_BUDGET_S as _DEEP_PAGE_BUDGET_S
         from core.scraping.on_demand import SCRAPE_BUDGET_S as _SCRAPE_BUDGET_S
         from core.scraping.on_demand import (
+            curated_destination_area as _curated_destination_area,
             is_unsearchable_city_area as _is_unsearchable_city_area,
         )
 
@@ -4451,14 +4520,24 @@ async def search_properties_impl(
         # 用户写"London，≤20 分钟到 UCL"，真实意图就是"UCL 附近能住的地方"。所以当区域是
         # 一个大到无法整体抓取的城市、且本轮有通勤目标时，改用推荐器解出的目的地邻近区域来搜。
         # 仅限伦敦：Manchester / Edinburgh 这类城市页本身就装得下整城，展开只会把一次能用的
-        # 搜索换成一次更慢的搜索。推荐器没有及时给出结果时静默退回原样，最坏情况就是今天的行为。
+        # 搜索换成一次更慢的搜索。推荐器没有及时给出结果时，退回目的地在 curated 表里的区域
+        # （UCL -> Bloomsbury），不依赖网络；只有查不到这样的区域才搜整座城市。
         _city_expanded_to = []
-        if _reco_task is not None and len(search_areas) == 1 and \
-                _is_unsearchable_city_area(search_areas[0]):
+        _unsearchable_city = (len(search_areas) == 1
+                              and _is_unsearchable_city_area(search_areas[0]))
+        _curated_area = (_curated_destination_area(commute_target)
+                         if commute_target and _unsearchable_city else None)
+        if _reco_task is not None and _unsearchable_city:
             _expand_cap = min(
                 float(os.getenv("SEARCH_CITY_EXPAND_TIMEOUT_S", "20")),
                 max(0.0, _time_left() - RANK_HEADROOM_S - PER_AREA_EST_S),
             )
+            # A cached recommendation answers at once, and a cold one finishes in the
+            # background for the next search. With a curated area in hand there is no
+            # reason to spend the whole tool budget waiting for it.
+            if _curated_area:
+                _expand_cap = min(_expand_cap,
+                                  float(os.getenv("SEARCH_CITY_EXPAND_CURATED_WAIT_S", "4")))
             # asyncio.wait (NOT wait_for): on timeout it leaves the task pending instead of
             # cancelling it, so the area-recommendation collector further down can still
             # await the same task. A cancelled task would raise CancelledError there —
@@ -4494,6 +4573,10 @@ async def search_properties_impl(
                     # otherwise the form keeps saying "London" while every result came
                     # from Bloomsbury, which is the same lie in a different pane.
                     search_area = search_areas[0]
+        if _curated_area and not _city_expanded_to:
+            logger.info("property_search.city_expanded_curated")
+            search_areas = [_curated_area]
+            search_area = _curated_area
 
         # 🆕 多区域 DEADLINE-AWARE 抓取；每行打上来源区域标签（_search_area），合并后统一排序/
         # 标注/过滤。绝不因单个冷缓存区域的慢抓取而让整个工具被 batch 预算 ABANDON（H2）：
@@ -4525,12 +4608,22 @@ async def search_properties_impl(
         cache_misses = 0
         incomplete_areas: list = []
 
+        # The pool every later stage ranks. It must be wider than the final page, or the rows
+        # from deeper pages are cut in site order before anything can compare their prices.
+        _area_row_limit = max(30, int(os.getenv("SEARCH_ROW_POOL", "120")) // len(search_areas or [1]))
+        # Time the commute stage needs after the scrape and the recommendation.
+        try:
+            _COMMUTE_ANNOTATE_EST_S = float(os.getenv("SEARCH_COMMUTE_ANNOTATE_EST_S", "3.0"))
+        except (TypeError, ValueError):
+            _COMMUTE_ANNOTATE_EST_S = 3.0
+
         # Phase 1: cache-only pass (no scrape). Already-cached areas are served for near-free.
         _missed_areas: list = []
         for _a in search_areas:
             _cres = await loop.run_in_executor(
                 None, lambda _x=_a: get_listings(_x, min_beds, max_beds, scrape_min,
-                                                 scrape_max, limit=15, cache_only=True))
+                                                 scrape_max, limit=_area_row_limit,
+                                                 cache_only=True, room_type=room_type))
             if _cres.get('rows'):
                 _res_by_area[_a] = _tag(_a, _cres)
                 cache_hits += 1
@@ -4542,11 +4635,15 @@ async def search_properties_impl(
         _scrape_left = _time_left() - RANK_HEADROOM_S
         if _missed_areas and _scrape_left >= PER_AREA_EST_S:
             _per_area_budget = max(1.0, min(_SCRAPE_BUDGET_S, _scrape_left - 0.3))
+            _deep_page_budget = min(_DEEP_PAGE_BUDGET_S,
+                                    max(0.0, _scrape_left - _COMMUTE_ANNOTATE_EST_S))
             _scrape_tasks = {
                 _a: asyncio.ensure_future(loop.run_in_executor(
                     None, lambda _x=_a: get_listings(_x, min_beds, max_beds, scrape_min,
-                                                     scrape_max, limit=15,
-                                                     budget_s=_per_area_budget)))
+                                                     scrape_max, limit=_area_row_limit,
+                                                     budget_s=_per_area_budget,
+                                                     room_type=room_type,
+                                                     deep_budget_s=_deep_page_budget)))
                 for _a in _missed_areas
             }
             _done, _pending = await asyncio.wait(list(_scrape_tasks.values()),
@@ -4640,8 +4737,11 @@ async def search_properties_impl(
         # 区域推荐把整个工具拖过预算（未完成时 area_recommendations=[]，任务转入后台并落缓存供下次）。
         area_recommendations = []
         if _reco_task is not None:
+            # Waiting for this optional panel must not use up the time the commute stage
+            # needs: running out degrades the whole search to unverified, price-sorted rows.
             _reco_cap = min(float(os.getenv("AREA_RECO_INLINE_TIMEOUT", "30")),
-                            max(0.0, _time_left() - 0.2))
+                            max(0.0, _time_left() - 0.2
+                                - (_COMMUTE_ANNOTATE_EST_S if commute_annotation_enabled else 0.0)))
             try:
                 area_recommendations = await asyncio.wait_for(
                     asyncio.shield(_reco_task), timeout=_reco_cap
@@ -4969,6 +5069,11 @@ async def search_properties_impl(
             else:
                 print(f"   ⚠️ 特征过滤后无结果，保留原始结果并在说明中提及")
 
+        if room_type == 'ensuite' and not degraded:
+            await _read_room_descriptions(ranked_properties, min(
+                float(os.getenv("SEARCH_ROOM_READ_BUDGET_S", "5")),
+                _time_left() - _COMMUTE_ANNOTATE_EST_S - RANK_HEADROOM_S))
+
         # 🆕 根据房型过滤（studio / ensuite / shared）—— 复用 _matches_room_type
         if room_type:
             print(f"\n🔍 [SEARCH] 根据房型过滤 room_type_chars={len(str(room_type))}")
@@ -4996,7 +5101,7 @@ async def search_properties_impl(
                 'area_recommendations': area_recommendations,
             })
 
-        candidates = ranked_properties[:15]
+        candidates = _commute_candidate_pool(ranked_properties)
         dest_coords = None
         london_dest = False
 
@@ -5006,10 +5111,6 @@ async def search_properties_impl(
         # decided — so gate this stage on its OWN conservative estimate too. If the time
         # left no longer covers it, skip annotation + filtering exactly like the degraded
         # path (leave commute unverified) rather than risk overrunning the return margin.
-        try:
-            _COMMUTE_ANNOTATE_EST_S = float(os.getenv("SEARCH_COMMUTE_ANNOTATE_EST_S", "3.0"))
-        except (TypeError, ValueError):
-            _COMMUTE_ANNOTATE_EST_S = 3.0
         if commute_annotation_enabled and not degraded and _time_left() < _COMMUTE_ANNOTATE_EST_S:
             print(f"   ⏱️ 通勤标注余量不足（{_time_left():.1f}s < {_COMMUTE_ANNOTATE_EST_S:.1f}s）→ "
                   f"跳过通勤标注/过滤（通勤未核实）")
@@ -5034,7 +5135,10 @@ async def search_properties_impl(
                     loop.run_in_executor(None, calculate_travel_time, prop.get('Address', ''), commute_target)
                     for prop in candidates
                 ]
-                tfl_times = await asyncio.gather(*travel_time_tasks, return_exceptions=True)
+                # Geocoding and routing have no deadline of their own, and a slow provider
+                # must not carry the tool past the executor's abandon axe. A row still
+                # waiting at the bound keeps its coordinate estimate below.
+                tfl_times = await _settle_within(travel_time_tasks, _time_left() - 0.5)
             else:
                 tfl_times = [None] * len(candidates)
 
@@ -5042,7 +5146,10 @@ async def search_properties_impl(
             # 的同步 calculate_travel_time（逐候选、串行网络调用）都会阻塞事件循环。整段离线到
             # 工作线程（London 的 TfL 时间已在上面 gather 并发取回，此处仅按 tfl_times 装配），
             # 行为逐字不变（相同的净化/回退/过滤顺序）。
+            _commute_known = False
+
             def _annotate():
+                nonlocal _commute_known
                 annotated = []
                 for prop, tfl in zip(candidates, tfl_times):
                     if isinstance(tfl, Exception):
@@ -5066,6 +5173,7 @@ async def search_properties_impl(
                         travel_source = _travel_provenance(
                             prop.get('Address', ''), commute_target, travel_time)
                     if travel_time is not None:
+                        _commute_known = True
                         prop['travel_time_minutes'] = travel_time
                         prop['travel_time'] = travel_time
                         prop['travel_time_source'] = travel_source
@@ -5077,12 +5185,21 @@ async def search_properties_impl(
                         annotated.append(prop)  # 仅标注，不过滤
                 return annotated
 
+            _before_commute = candidates
             candidates = await asyncio.to_thread(_annotate)
-            # The annotation stage ran to completion: commute is now genuinely verified for
-            # the surfaced listings (they carry a real travel_time), so the honesty note is
-            # not needed.
-            commute_verified = True
-            print(f"   ✅ 通勤处理后: {len(candidates)} 个房源 (dest_in_london={london_dest})")
+            if _commute_known or not _before_commute:
+                # The annotation stage ran to completion: commute is now genuinely verified
+                # for the surfaced listings (they carry a real travel_time), so the honesty
+                # note is not needed.
+                commute_verified = True
+                print(f"   ✅ 通勤处理后: {len(candidates)} 个房源 (dest_in_london={london_dest})")
+            else:
+                # Not one row got a time, so the providers failed rather than every home
+                # being too far. Filtering would report a full area as having no listings;
+                # keep the rows, with no commute fields, under the unverified note.
+                print("   ⚠️ 全部候选都没有通勤数据 → 保留房源并标记通勤未核实")
+                candidates = _before_commute
+                commute_filter_enabled = False
 
         # ================================================================
         # 步骤 5: 价格过滤和评分（预算/通勤缺失时相应维度降级为中性）

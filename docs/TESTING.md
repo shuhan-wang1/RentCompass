@@ -84,3 +84,9 @@ the hardened production image; the fc_loop evaluator runs an offline smoke; and
 the supply job runs the pinned secret/dependency/SBOM gates. Normal pytest and
 the evaluator smoke do not call live application providers. Image/dependency
 installation and the vulnerability gate do use their registries/databases.
+
+The vulnerability gate audits the production closure and the gate tooling in one
+step, so a red run names every package to upgrade. It can turn red with no code
+change when a new advisory is published against a pin. It retries only when the
+advisory service gave no answer. A reported vulnerability is never retried, and
+OSV has no fallback service because PyPI's cannot see local `+cpu` versions.

@@ -204,13 +204,16 @@ jobs:
           python -m venv "${RUNNER_TEMP}/rentcompass-supply-tools"
           "${RUNNER_TEMP}/rentcompass-supply-tools/bin/python" -m pip install \
             --require-hashes -r requirements-supply.lock
-          "${RUNNER_TEMP}/rentcompass-supply-tools/bin/python" -m pip_audit \
-            --strict --progress-spinner=off --local \
-            --cache-dir "${RUNNER_TEMP}/rentcompass-supply-audit-cache"
+      # Both audits always run, so one red run lists everything that needs upgrading.
       - name: Dependency vulnerability gate
         run: |
+          audit_python="${RUNNER_TEMP}/rentcompass-supply-tools/bin/python"
+          status=0
           python scripts/audit_installed_dependencies.py \
-            --audit-python "${RUNNER_TEMP}/rentcompass-supply-tools/bin/python"
+            --audit-python "$audit_python" --tooling || status=1
+          python scripts/audit_installed_dependencies.py \
+            --audit-python "$audit_python" || status=1
+          exit "$status"
       - name: Generate and validate SBOM
         run: |
           "${RUNNER_TEMP}/rentcompass-supply-tools/bin/cyclonedx-py" environment \

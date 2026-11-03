@@ -1637,6 +1637,12 @@ _EVIDENCE_CONTENT_KEYS = (
     # and was flagged because the empty recommendations list made the whole result unusable
     # (r18 640bdda0).
     "over_budget_alternatives",
+    # The same rows after candidate validation: when no listing could be verified, the
+    # validator empties ``recommendations`` and files every row under unverified/excluded.
+    # Those rows are still retrieved listings with real prices, so the search stays usable
+    # evidence; without them every listing price the answer quoted was flagged
+    # unsupported_prices and the composite answer was withheld.
+    "unverified_candidates", "excluded_candidates", "similar_properties",
 )
 
 

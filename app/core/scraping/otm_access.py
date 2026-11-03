@@ -1,9 +1,12 @@
 """Identified, robots-compatible OnTheMarket access and shared refusal backoff.
 
-The allowlist reflects robots.txt verified on 2026-10-19. It deliberately admits
-only plain area pages, their page-number pagination and listing details. Search
-facets are applied locally. No proxy, browser impersonation or challenge solving
-is used. Access state is shared by searches/details and by worker processes.
+The allowlist reflects robots.txt verified on 2026-11-02. It admits area pages on
+the path channels robots leaves open (all property, studio, 1-5 bed, house and flat
+share, student), the site's own ``page`` pagination and listing details. Robots
+forbids the price, bedroom, sort and radius query facets and the flat and apartment
+paths, so those filters are applied locally. No proxy, browser impersonation or
+challenge solving is used. Access state is shared by searches/details and by worker
+processes.
 """
 from __future__ import annotations
 
@@ -25,9 +28,13 @@ DEFAULT_USER_AGENT = "RentCompassBot/1.0"
 MIN_INTERVAL_SECONDS = 1.2
 DEFAULT_BLOCK_SECONDS = 3600
 DEFAULT_RATE_LIMIT_SECONDS = 300
-ROBOTS_VERIFIED_AT = "2026-10-19T00:00:00+00:00"
+ROBOTS_VERIFIED_AT = "2026-11-02T00:00:00+00:00"
 ROBOTS_POLICY_TTL_SECONDS = 7 * 24 * 3600
 _ROOT = Path(__file__).resolve().parents[3]
+# Search paths as the site's own sitemaps spell them, limited to what robots leaves open.
+_SEARCH_PATH = re.compile(
+    r"/(?:to-rent/(?:property|studio|house-flat-share|[1-5]-bed-property)|student/property)"
+    r"/[a-z0-9]+(?:-[a-z0-9]+)*/")
 
 
 class OTMSourceError(RuntimeError):
@@ -65,13 +72,13 @@ def validate_url(url: str, params=None) -> None:
     if (parts.scheme != "https" or parts.netloc != "www.onthemarket.com"
             or parts.fragment or parts.username or parts.password):
         raise OTMSourceError("unavailable", "url_not_allowed")
-    area = bool(re.fullmatch(r"/to-rent/property/[a-z0-9]+(?:-[a-z0-9]+)*/", parts.path))
+    area = bool(_SEARCH_PATH.fullmatch(parts.path))
     detail = bool(re.fullmatch(r"/details/[a-zA-Z0-9_-]+/", parts.path))
     pairs = parse_qsl(parts.query, keep_blank_values=True)
     pairs.extend((params or {}).items())
     if not (area or detail) or (detail and pairs):
         raise OTMSourceError("unavailable", "robots_path_not_allowed")
-    if (len(pairs) > 1 or any(key != "page-number" or not re.fullmatch(r"[1-9][0-9]*", str(value))
+    if (len(pairs) > 1 or any(key != "page" or not re.fullmatch(r"[1-9][0-9]*", str(value))
                               for key, value in pairs)):
         raise OTMSourceError("unavailable", "robots_query_not_allowed")
 

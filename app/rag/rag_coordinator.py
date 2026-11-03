@@ -39,7 +39,10 @@ class RAGCoordinator:
 
         # Semantic property search
         print(f"    -> [RAG] Starting semantic search query_chars={len(str(search_query))}")
-        semantic_results = self.property_store.search(search_query, top_k=20)
+        # Recall the whole snapshot of this search. The room-type and price filters run on
+        # what comes back, so a fixed cut here discards rows they would have kept.
+        recall = max(20, len(getattr(self.property_store, "properties", None) or ()))
+        semantic_results = self.property_store.search(search_query, top_k=recall)
         print(f"    -> [RAG] Got {len(semantic_results)} semantic results")
 
         # Hybrid scoring (semantic + rules)

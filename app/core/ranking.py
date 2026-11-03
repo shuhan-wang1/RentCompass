@@ -9,6 +9,7 @@ available objectives, and diversifies the result page.
 from __future__ import annotations
 
 import re
+import statistics
 from typing import Any, Iterable
 
 
@@ -144,11 +145,18 @@ def rank_and_diversify(
     light novelty penalty so a useful, distinct alternative can appear in the
     first page without displacing the best listing.
     """
+    rows = list(properties)
+    # With no stated budget the page's own median stands in. An unknown budget is not
+    # indifference to price: a cheaper listing should still beat an otherwise equal one.
+    prices = [p for p in (_as_float(row.get("price")) for row in rows) if p is not None and p > 0]
+    price_anchor = max_budget
+    if price_anchor is None and prices:
+        price_anchor = statistics.median(prices)
     prepared: list[dict] = []
-    for raw in properties:
+    for raw in rows:
         prop = dict(raw)
         components = {
-            "price": _price_utility(prop.get("price"), max_budget),
+            "price": _price_utility(prop.get("price"), price_anchor),
             "commute": _commute_utility(prop.get("travel_time"), max_commute),
             "semantic": _semantic_utility(prop.get("similarity_score")),
             "features": _feature_utility(prop, requested_features),

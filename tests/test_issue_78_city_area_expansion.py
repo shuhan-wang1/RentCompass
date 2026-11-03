@@ -137,12 +137,24 @@ def test_bare_london_plus_a_commute_target_searches_near_the_destination(monkeyp
     assert res["search_criteria"]["area"].lower() == "bloomsbury"
 
 
-def test_expansion_degrades_to_todays_behaviour_when_the_recommender_is_empty(monkeypatch):
-    """No recommendations in time -> scrape the plain city slug, exactly as before. The
-    fix must never turn a thin result into no result at all."""
+def test_an_empty_recommender_falls_back_to_the_destinations_curated_area(monkeypatch):
+    """Web search or the model being down must not send "near UCL" back to the all-London
+    page: on 2026-11-02 that returned serviced flats from £2,100 across west London while
+    Bloomsbury had studios from £1,127. The curated table needs no network."""
+    scraped = _london_scrape_harness(monkeypatch, recos=[])
+    res = asyncio.run(sp.search_properties_impl(
+        area="London", commute_destination="UCL", max_commute_time=20,
+        confirmed=True, max_budget=3000, bedrooms=1, reply_language="en"))
+    assert {s.lower() for s in scraped} == {"bloomsbury"}
+    assert res["search_criteria"]["area"].lower() == "bloomsbury"
+
+
+def test_expansion_keeps_the_city_when_nothing_names_a_neighbourhood(monkeypatch):
+    """No recommendations and no curated area -> scrape the plain city slug. The fix must
+    never turn a thin result into no result at all."""
     scraped = _london_scrape_harness(monkeypatch, recos=[])
     asyncio.run(sp.search_properties_impl(
-        area="London", commute_destination="UCL", max_commute_time=20,
+        area="London", commute_destination="Acme Widgets HQ", max_commute_time=20,
         confirmed=True, max_budget=3000, bedrooms=1, reply_language="en"))
     assert {s.lower() for s in scraped} == {"london"}
 

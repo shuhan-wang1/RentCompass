@@ -269,7 +269,8 @@ def _looks_empty(snippets: str) -> bool:
 def _extract_candidates(snippets: str, destination: str, city: str | None) -> list[dict]:
     """Call DeepSeek to extract snippet-grounded candidate areas. Blocking.
 
-    Returns a list of ``{"name","reason"}`` (possibly empty). Salvages nothing on a
+    Returns a list of ``{"name","reason"}`` (possibly empty), or None when the model gave
+    no usable reply, which proves nothing about the destination. Salvages nothing on a
     parse failure rather than inventing. Never raises."""
     try:
         resp = _call_deepseek(
@@ -280,7 +281,7 @@ def _extract_candidates(snippets: str, destination: str, city: str | None) -> li
             max_tokens=1200,
         )
         if not resp:
-            return []
+            return None
         data = extract_first_json(resp) or {}
         raw = data.get("areas") or []
         if not isinstance(raw, list):
@@ -303,7 +304,7 @@ def _extract_candidates(snippets: str, destination: str, city: str | None) -> li
         return out
     except Exception as e:  # LLM/parse failure -> ground nothing
         print(f"[AREA_RECO] candidate extraction failed; error_type={type(e).__name__}")
-        return []
+        return None
 
 
 def _validate_one(
@@ -437,6 +438,7 @@ async def generate_candidate_areas(
     no_commute_mode: bool = False,
     budget_s: float | None = None,
     t0: float | None = None,
+    evidence: dict | None = None,
 ) -> list[dict]:
     """Validated residential-area candidates near ``destination``, each carrying a
     ``commute_minutes`` — deduped by slug but NOT sorted, capped, or cached.
@@ -458,6 +460,10 @@ async def generate_candidate_areas(
     destination geocoding, commute routing, and the commute cap entirely; every
     resolved, right-city, non-destination candidate is kept with
     ``commute_minutes=None``.
+
+    ``evidence``, when given, gets ``incomplete=True`` if the result is empty because web
+    search or the model failed. That says nothing about the destination, so the caller must
+    not cache it as an honest empty.
 
     Item shape matches ``_validate_one``: ``{name, slug, city, centroid,
     commute_minutes, reason, source}``. Per-candidate failures never sink the batch;
@@ -520,12 +526,16 @@ async def generate_candidate_areas(
         snippets = "\n\n---\n\n".join(p for p in snippet_parts if p)
         if _looks_empty(snippets):
             print(f"[AREA_RECO] no web snippets; destination_chars={len(str(destination))} -> [] (grounded)")
+            if evidence is not None:
+                evidence["incomplete"] = True
             return []
         if budget_s is not None and (time.time() - t0) > budget_s:
             return []
         candidates = await _run_blocking(
             loop, functools.partial(_extract_candidates, snippets, destination, city)
         )
+        if candidates is None and evidence is not None:
+            evidence["incomplete"] = True
     if not candidates:
         return []
 
@@ -658,6 +668,7 @@ async def recommend_areas(
         # 2b-2e) Web-search -> LLM-extract -> validate -> dedupe (shared core).
         # Destination coords are already resolved above, so the geocode-failure
         # contract (cache an honest empty) stays exactly as before.
+        evidence: dict = {}
         validated = await generate_candidate_areas(
             destination,
             city=city,
@@ -667,20 +678,24 @@ async def recommend_areas(
             exclude_slugs=excludes,
             budget_s=budget_s,
             t0=t0,
+            evidence=evidence,
         )
 
         # 2f) Sort by commute ascending, cap at limit, persist (incl. honest empty).
         # Budget exhaustion inside the shared core is represented as a partial/empty
         # list for API compatibility. Such a result is useful to this caller but is
         # not evidence that the destination has no recommendations, so never cache it.
+        # The same goes for a provider failure: caching one kept searches on the bare city
+        # for hours after web search had recovered.
         final = sorted(validated, key=_commute_key)[:limit]
         budget_exhausted = (
             budget_s is not None and (time.time() - t0) >= budget_s)
-        if not budget_exhausted:
+        cacheable = not budget_exhausted and not evidence.get("incomplete")
+        if cacheable:
             _cache().set(dest_key, final)
         print(f"[AREA_RECO] destination_chars={len(str(destination))}; "
               f"validated_count={len(final)} elapsed_s={time.time() - t0:.1f} "
-              f"cached={not budget_exhausted}")
+              f"cached={cacheable}")
         return final
 
     except Exception as e:  # never poison the cache with a hard error

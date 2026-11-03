@@ -174,9 +174,10 @@ def test_bare_page_and_only_permitted_pagination_are_sent(monkeypatch):
     session = Session([Response(text=page([raw_listing(i) for i in range(1, 31)])),
                        Response(text=page([raw_listing(31), raw_listing(32, "£6,000 pcm", 5)]))])
     monkeypatch.setattr(om, "_new_session", lambda: session)
+    monkeypatch.setenv("OTM_SEARCH_PAGE_DEPTH", "2")
     result = om.find_rich_onthemarket("camden", 3.0, 100, 2000, 40, 1, 2)
     assert len(result) == 31
-    assert [call[1]["params"] for call in session.calls] == [{}, {"page-number": 2}]
+    assert [call[1]["params"] for call in session.calls] == [{}, {"page": 2}]
     assert all(call[1]["allow_redirects"] is False for call in session.calls)
     assert result.coverage["rows_sampled"] == 32
     assert result.coverage["exhaustive"] is False
@@ -273,7 +274,7 @@ def test_new_budget_reuses_sample_even_when_empty_and_keeps_large_homes(monkeypa
     first = on_demand.get_listings("Camden", 0, 2, 100, 1000)
     assert first["rows"] == []
     assert first["meta"]["coverage"]["exhaustive"] is True
-    second = on_demand.get_listings("Camden", 5, 5, 5000, 7000)
+    second = on_demand.get_listings("Camden", 3, 6, 5000, 7000)
     assert len(second["rows"]) == 1
     assert second["meta"]["source"] == "hit"
     assert len(session.calls) == 2  # one harvest: page 1 and its explicit terminal empty page

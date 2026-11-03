@@ -181,3 +181,81 @@ def test_a_neighbourhood_with_a_commute_target_is_left_alone(monkeypatch):
         area="Camden", commute_destination="UCL", max_commute_time=20,
         confirmed=True, max_budget=3000, bedrooms=1, reply_language="en"))
     assert {s.lower() for s in scraped} == {"camden"}
+
+
+# ── an expanded area is geo-checked against the centroid the recommender validated ───
+_KINGS_CROSS_GEO = "51.5308,-0.1238"
+
+
+def _geo_harness(monkeypatch, recos):
+    """Rows for each area sit at that area; the geocoder knows nothing (as Nominatim does
+    for "kings cross"), so a centre can only come from the curated table or the recommender."""
+    geo = {"bloomsbury": _BLOOMSBURY_GEO, "kings-cross": _KINGS_CROSS_GEO}
+    scraped = _london_scrape_harness(monkeypatch, recos=recos)
+
+    def _fake_get_listings(location, *a, **k):
+        scraped.append(location)
+        rows = ([] if location.lower() == "london"
+                else [_row(f"{n} {location} Street", 1500 + n, geo.get(location.lower(), _BLOOMSBURY_GEO))
+                      for n in range(1, 4)])
+        return {"rows": [dict(r) for r in rows],
+                "meta": {"requested_city": "london", "stale": False,
+                         "source": "scraped", "count": len(rows)}}
+
+    monkeypatch.setattr(on_demand, "get_listings", _fake_get_listings)
+    geocoded = []
+    import core.maps_service as maps_service
+
+    def _no_geocode(query, *a, **k):
+        geocoded.append(query)
+        return None
+
+    monkeypatch.setattr(maps_service, "geocode_address", _no_geocode)
+    monkeypatch.setenv("SEARCH_GEO_VALIDATION_ENABLED", "1")
+    return geocoded
+
+
+def _streets(res):
+    return {str(r.get("address") or r.get("Address") or "") for r in res.get("recommendations") or []}
+
+
+def test_a_recommended_area_keeps_its_rows_when_its_name_does_not_geocode(monkeypatch):
+    """2026-11-03 replay: "kings cross" does not geocode, the missing centre failed closed and
+    all of King's Cross's rows were rejected as "not within 2 miles", although the recommender
+    had just validated that area's centroid."""
+    geocoded = _geo_harness(monkeypatch, recos=[
+        {"name": "Bloomsbury", "slug": "bloomsbury", "city": "london", "commute_minutes": 6,
+         "centroid": [51.5215, -0.1255]},
+        {"name": "King's Cross", "slug": "kings-cross", "city": "london", "commute_minutes": 16,
+         "centroid": [51.5308, -0.1238]},
+    ])
+    res = asyncio.run(sp.search_properties_impl(
+        area="London", commute_destination="UCL", confirmed=True, max_budget=3000,
+        bedrooms=1, reply_language="en"))
+    assert any("kings-cross" in s for s in _streets(res)), _streets(res)
+    assert not any("kings" in q.lower() for q in geocoded), geocoded
+
+
+def test_without_a_validated_centroid_the_area_still_fails_closed(monkeypatch):
+    """The fallback is the recommender's own centroid only: an item without one is geocoded
+    as before, and a centre nobody can establish still rejects the rows."""
+    _geo_harness(monkeypatch, recos=[
+        {"name": "Bloomsbury", "slug": "bloomsbury", "city": "london", "commute_minutes": 6},
+        {"name": "King's Cross", "slug": "kings-cross", "city": "london", "commute_minutes": 16},
+    ])
+    res = asyncio.run(sp.search_properties_impl(
+        area="London", commute_destination="UCL", confirmed=True, max_budget=3000,
+        bedrooms=1, reply_language="en"))
+    streets = _streets(res)
+    assert not any("kings-cross" in s for s in streets), streets
+    assert any("bloomsbury" in s for s in streets), streets
+
+
+def test_recommended_centroids_ignore_items_without_a_usable_centre():
+    out = sp._recommended_area_centroids([
+        {"slug": "kings-cross", "name": "King's Cross", "centroid": [51.5308, -0.1238]},
+        {"slug": "nowhere", "centroid": [999, 0]},
+        {"slug": "blank"},
+        "not-a-dict",
+    ])
+    assert out == {"kings-cross": (51.5308, -0.1238), "king's cross": (51.5308, -0.1238)}

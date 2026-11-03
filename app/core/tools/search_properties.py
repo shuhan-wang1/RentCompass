@@ -3180,6 +3180,26 @@ _CHEAPER_RE = re.compile(
 SHOWN_LISTINGS: contextvars.ContextVar = contextvars.ContextVar("shown_listings", default=None)
 
 
+def _recommended_area_centroids(items) -> dict:
+    """``{slug_or_name_lower: (lat, lng)}`` from area-recommender items, whose ``centroid``
+    the recommender computed and validated itself (never model-written). Items without a
+    usable centroid are skipped, so the caller falls back to geocoding as before."""
+    from core.geography import parse_coordinates
+
+    out: dict = {}
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        centre = parse_coordinates(item.get("centroid"))
+        if centre is None:
+            continue
+        for key in (item.get("slug"), item.get("name")):
+            text = str(key or "").strip().lower()
+            if text and text not in out:
+                out[text] = centre
+    return out
+
+
 def shown_listing_records(extracted_context) -> list:
     """url / address / price of every listing the conversation's context holds as shown."""
     ec = extracted_context if isinstance(extracted_context, dict) else {}
@@ -5256,8 +5276,20 @@ async def search_properties_impl(
             )
             from core.maps_service import geocode_address
 
+            # An area the recommender proposed comes with the centroid it already validated
+            # (geocoded, city-guarded, commute-checked). Geocoding the slug again can fail
+            # ("kings cross" returns nothing) or be rate-limited right after the recommender's
+            # own lookups, and a missing centre fails CLOSED: every row of that area was
+            # dropped as "not within 2 miles" although all of them were.
+            _reco_items = list(_city_expanded_to or [])
+            if _reco_task is not None and _reco_task.done() and not _reco_task.cancelled():
+                try:
+                    _reco_items += list(_reco_task.result() or [])
+                except Exception:
+                    pass
+            _reco_centres = _recommended_area_centroids(_reco_items)
             for _idx, _a in enumerate(search_areas + _follow_up_areas):
-                _centre = known_area_centroid(_a)
+                _centre = known_area_centroid(_a) or _reco_centres.get(str(_a).strip().lower())
                 if _centre is None:
                     _city = (_metas[_idx].get('requested_city')
                              if _idx < len(_metas) else None)

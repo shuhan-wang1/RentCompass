@@ -748,6 +748,38 @@ def candidate_reason_text(reason: str, *, language: str = "en") -> str:
             else humanize_requirement_text(str(reason)))
 
 
+def _unknown_status_lines(unknown: list[dict], *, zh: bool) -> list[str]:
+    """One line per address and reason, each with its rent.
+
+    A "Not verified" row used to print only "<address>: cannot verify the commute
+    condition", so five units in one building read as one listing repeated five times and
+    the user saw no rent at all. Rows that share an address and a reason now share a line
+    that names how many listings it covers and each one's rent; different reasons (or
+    different addresses) keep their own lines."""
+    groups: dict[tuple[str, str], dict] = {}
+    for status in unknown:
+        group = groups.setdefault((_address(status), _unknown_reason_text(status, zh=zh)),
+                                  {"count": 0, "prices": []})
+        group["count"] += 1
+        candidate = status.get("candidate") or {}
+        price = (str(candidate.get("price") or candidate.get("Price") or "").strip()
+                 or ("月租未知" if zh else "rent not stated"))
+        if price not in group["prices"]:
+            group["prices"].append(price)
+    lines = []
+    for (address, reason), group in groups.items():
+        count, prices = group["count"], group["prices"]
+        if zh:
+            what = (prices[0] if count == 1 else f"{prices[0]}，共 {count} 套" if len(prices) == 1
+                    else f"共 {count} 套：" + "、".join(prices))
+            lines.append(f"- {address}（{what}）：{reason}")
+        else:
+            what = (prices[0] if count == 1 else f"{count} listings at {prices[0]}" if len(prices) == 1
+                    else f"{count} listings: " + ", ".join(prices))
+            lines.append(f"- {address} ({what}): {reason}")
+    return lines
+
+
 def _cached_listing_note(rows: list[dict], *, zh: bool) -> str:
     cached = any(row.get("possibly_outdated") or "cached" in _norm(row.get("source"))
                  or "缓存" in str(row.get("source") or "") for row in rows)
@@ -781,7 +813,7 @@ def render_candidate_status(validation: dict, *, language: str = "en") -> str:
             lines.extend(dict.fromkeys(f"- {_address(s)}：{'；'.join(_candidate_reason_zh(reason) for reason in s.get('reasons') or ['不满足硬约束'])}" for s in excluded))
         if unknown:
             lines.append("尚未核实：")
-            lines.extend(f"- {_address(s)}：{_unknown_reason_text(s, zh=True)}" for s in unknown)
+            lines.extend(_unknown_status_lines(unknown, zh=True))
         note = _cached_listing_note([s.get("candidate") or {} for s in eligible + excluded + unknown], zh=True)
         if note:
             lines.append(note)
@@ -805,11 +837,129 @@ def render_candidate_status(validation: dict, *, language: str = "en") -> str:
                                    for s in excluded))
     if unknown:
         lines.append("Not verified:")
-        lines.extend(f"- {_address(s)}: {_unknown_reason_text(s)}" for s in unknown)
+        lines.extend(_unknown_status_lines(unknown, zh=False))
     note = _cached_listing_note([s.get("candidate") or {} for s in eligible + excluded + unknown], zh=False)
     if note:
         lines.append(note)
     return "\n".join(lines)
+
+
+_STREET_SUFFIX = (r"(?:Street|St|Road|Rd|Square|Sq|Place|Pl|Avenue|Ave|Lane|Gardens|Court|Crescent|"
+                  r"Terrace|Close|Mews|Row|Way|Walk|Yard|Mansions|House|Wharf|Quay|Grove|Hill|"
+                  r"Building|Hall|Tower|Gate|Green|Drive|Parade|Buildings|Estate|Lodge)")
+_STREET_NAME = re.compile(r"((?:[A-Z][\w'’.-]*\s+){0,2}[A-Z][\w'’.-]*\s+" + _STREET_SUFFIX + r")\b")
+_BRAND_AFTER_AT = re.compile(r"\bat\s+((?:[A-Z][\w'’&.-]*\s*){1,4})")
+# A sentence that says a listing QUALIFIES (passes a condition, is the one to take). Naming a
+# listing is not a claim; "Gravity Co. Marylebone fits your budget and commute" is.
+_LEAD_FIT_CLAIM = re.compile(
+    r"\b(?:meets?|meeting|fits?|fitting|satisf(?:y|ies|ying|ied)|qualif(?:y|ies|ying|ied)|"
+    r"match(?:es|ing)?|eligible|suitable|within|under\s+(?:your|the)|ticks?\s+(?:all|every|the)|"
+    r"checks?\s+(?:all|every)|good\s+(?:fit|match|option|choice)|recommend(?:ed|ation)?|"
+    r"best\s+(?:option|choice|bet|pick|value))\b|[✓✅✔]|符合|满足|以内|之内|范围内|推荐|合适|适合", re.I)
+_TABLE_YES = re.compile(r"\|\s*(?:yes|y|是|✓|✅|✔)\s*(?=\|)", re.I)
+_LEAD_ABBREVIATION = re.compile(r"\b(Co|St|Rd|Ave|Sq|No|Mr|Mrs|Ms|Dr|Ltd|Inc|approx|vs)\.", re.I)
+_LEAD_LIST_ITEM = re.compile(r"^\s*(?:[-•*]|\d{1,3}[.)])\s+")
+
+
+def _lead_key(text: str) -> str:
+    return " ".join(re.sub(r"[^\w\s]", " ", re.sub(r"[’']", "", str(text or "").lower())).split())
+
+
+def _listing_name_keys(candidate: dict) -> set[str]:
+    """Words a reply would use for this listing: its street ("Guilford Street", "Stephens
+    Crescent") and a building or brand it is "at" ("Gravity Co")."""
+    address = str(candidate.get("address") or candidate.get("Address") or "")
+    keys: set[str] = set()
+    for match in _STREET_NAME.finditer(address):
+        words = _lead_key(match.group(1)).split()
+        if len(words) >= 2:
+            keys.add(" ".join(words))
+            keys.add(" ".join(words[-2:]))
+    for match in _BRAND_AFTER_AT.finditer(address.split(",")[0]):
+        words = _lead_key(match.group(1)).split()
+        if words and len(" ".join(words)) >= 5:
+            keys.add(" ".join(words))
+    return {key for key in keys if key not in {"london", "the street", "high street"}}
+
+
+def answer_lead_without_unverified_claims(lead: str, validation: dict, *, language: str = "en") -> str:
+    """The model's answer, minus any sentence or list item that says a listing which is NOT
+    eligible (unverified or excluded) meets the user's conditions.
+
+    Used when the model's answer leads the candidate ledger: the ledger is the authority on
+    which listing qualifies, so the answer keeps what the ledger cannot say (a market range,
+    advice, a verified listing) and loses only claims the ledger contradicts. A sentence that
+    names a street shared by an eligible and a non-eligible listing stays only when every rent
+    it quotes is an eligible listing's. A list heading whose every item went goes too."""
+    text = str(lead or "").strip()
+    statuses = [s for s in (validation.get("statuses") or []) if isinstance(s, dict)]
+    if not text or not statuses:
+        return text
+    rows = []
+    for status in statuses:
+        candidate = status.get("candidate") or {}
+        keys = _listing_name_keys(candidate)
+        if keys:
+            rows.append((keys, status.get("status") == "eligible",
+                         _number(candidate.get("price", candidate.get("Price")))))
+    if not any(not eligible for _keys, eligible, _price in rows):
+        return text
+
+    def _unsupported(unit: str, table_row: bool) -> bool:
+        if not (_LEAD_FIT_CLAIM.search(unit) or (table_row and _TABLE_YES.search(unit + "|"))):
+            return False
+        key_text = f" {_lead_key(unit)} "
+        named = [(eligible, price) for keys, eligible, price in rows
+                 if any(f" {key} " in key_text for key in keys)]
+        bad = [price for eligible, price in named if not eligible]
+        if not bad:
+            return False
+        good = [price for eligible, price in named if eligible]
+        figures = [float(value.replace(",", "")) for value in re.findall(r"[£$€]\s*(\d[\d,]*(?:\.\d+)?)", unit)]
+        return not (good and figures and all(
+            any(price is not None and abs(figure - price) < 1 for price in good) for figure in figures)
+            and not any(price is not None and abs(figure - price) < 1 for figure in figures for price in bad))
+
+    out: list[str] = []
+    dropped: set[int] = set()
+    for line in text.split("\n"):
+        stripped = line.strip()
+        table_row = stripped.startswith("|")
+        if _LEAD_LIST_ITEM.match(line) or table_row:
+            if _unsupported(stripped, table_row):
+                dropped.add(len(out))
+                out.append("")
+                continue
+            out.append(line)
+            continue
+        masked = _LEAD_ABBREVIATION.sub(lambda m: m.group(1) + "․", line)
+        sentences = re.split(r"(?<=[.!?。！？])\s+", masked)
+        kept = [s for s in sentences if not _unsupported(s.replace("․", "."), False)]
+        if len(kept) < len(sentences):
+            if not "".join(kept).strip():
+                dropped.add(len(out))
+                out.append("")
+                continue
+        out.append(" ".join(kept).replace("․", "."))
+    # A heading or lead-in ("Here are the studios I found:") whose every item went goes too.
+    for index, line in enumerate(out):
+        if index in dropped or not line.strip().endswith((":", "：")):
+            continue
+        items = []
+        for following in range(index + 1, len(out)):
+            if following in dropped:
+                items.append(False)
+                continue
+            if not out[following].strip():
+                break
+            if not _LEAD_LIST_ITEM.match(out[following]) and not out[following].lstrip().startswith("|"):
+                break
+            items.append(True)
+        if items and not any(items):
+            dropped.add(index)
+            out[index] = ""
+    cleaned = "\n".join(line for index, line in enumerate(out) if index not in dropped)
+    return _renumbered_list(re.sub(r"\n{3,}", "\n\n", cleaned)).strip()
 
 
 def render_similar_listings(rows: list[dict], *, language: str = "en") -> str:
@@ -3695,6 +3845,26 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 # and the withdrawn clause left "Commute: London E14 5AB." (r07 97b3d456).
                 drop = True
             address_tail_open = False
+            narrowed = _without_commute_qualifier(fragment) if drop else None
+            if narrowed is not None:
+                # Only the journey qualifier goes; the money the clause states stays.
+                trimmed, excised = narrowed
+                removed.extend(excised)
+                withdrawn_values.update(_minute_claim_values(fragment))
+                dropped_in_sentence = True
+                sentence_dropped = True
+                following = parts[index + 2] if index + 2 < len(parts) else ""
+                if (separator.strip() in {",", "，"}
+                        and re.search(r"\b(?:areas?|places?|neighbou?rhoods?|locations?|parts)$", trimmed, re.I)
+                        and re.match(r"\s*(?:such\s+as|like|including)\b", following, re.I)):
+                    separator = " "     # "in areas, such as Camden" -> "in areas such as Camden"
+                kept.append(trimmed + separator)
+                if _SENTENCE_END.search(separator):
+                    withdrawn_this_sentence = False
+                    dropped_in_sentence = False
+                    commute_context = False
+                    _close_sentence()
+                continue
             if drop:
                 address_tail_open = separator.strip() in {",", "，"}
                 withdrawn_this_sentence = not _SENTENCE_END.search(separator)
@@ -3894,6 +4064,53 @@ _CAVEAT_ON_PREVIOUS = re.compile(
 _CONCLUSION_ON_PREVIOUS = re.compile(
     r"^\s*(?:so|therefore|hence|thus)\b[^.;!?]*\b(?:that|this|it|these|those)\b|^\s*(?:所以|因此)", re.I)
 _MONEY_FIGURE = re.compile(r"[£$€]\s*\d")
+# The journey qualifier of a clause whose subject is money: "studio £1,800–£2,600 in areas
+# 25–40 minutes out", "Studios within a 40-minute commute of UCL typically cost £1,800–£2,600".
+# Withdrawing the whole clause for its unverified minutes took the market range with it
+# (2026-11-02, a student's "typical range for an en-suite and a studio" turn), so such a clause
+# loses only the qualifier. "within …" may sit anywhere in the clause; a bare duration only at
+# its end, where removing it cannot leave a dangling verb or preposition (checked below).
+_QUALIFIER_DESTINATION = (r"(?:\s+(?:of|from|to)\s+(?:the\s+)?(?-i:[A-Z][\w'’&.-]*(?:\s+[A-Z][\w'’&.-]*)*))?"
+                          r"(?:\s+(?:by|on|via)\s+(?:the\s+)?(?:tube|bus|train|public\s+transport|"
+                          r"underground|overground|rail|transit|bike|foot))?")
+_WITHIN_QUALIFIER = re.compile(
+    r"\s*\bwithin\s+(?:a|an|the|your)?\s*(?:(?:about|around|roughly|approximately)\s+)?"
+    r"\d+(?:\s*(?:[–-]|to)\s*\d+)?[\s-]*(?:minutes?|mins?)\b"
+    r"(?:[\s-]+(?:commute|journey|ride|trip|travel(?:\s+time)?))?" + _QUALIFIER_DESTINATION, re.I)
+_TRAILING_DURATION = re.compile(
+    r"\s*(?:(?:about|around|roughly|approximately|~)\s*)?\d+(?:\s*(?:[–-]|to)\s*\d+)?\s*"
+    r"(?:minutes?|mins?)\b(?:\s+(?:out|away))?(?:[\s-]+(?:commute|journey|ride|trip))?"
+    + _QUALIFIER_DESTINATION + r"\s*$", re.I)
+_TRAILING_DURATION_ZH = re.compile(
+    r"[，,]?\s*(?:通勤|车程|路程)?\s*(?:约|大约|大概)?\s*\d+(?:\s*[–\-~至到]\s*\d+)?\s*分钟(?:左右)?"
+    r"(?:的?(?:通勤|车程|路程))?(?:范围内|以内|之内)?\s*$")
+_DANGLING_END = re.compile(
+    r"(?:\b(?:is|are|was|were|be|being|takes?|took|at|from|to|of|by|about|around|roughly|"
+    r"within|under|over|than|just|only|and|or|in|for|with)|[(（\-–—:：])\s*$", re.I)
+
+
+def _without_commute_qualifier(fragment: str) -> tuple[str, list[str]] | None:
+    """``(kept, excised)``: ``fragment`` without its unverified journey qualifier, and the
+    qualifier text taken out, when what is left is a whole statement about money; otherwise
+    ``None`` (the clause is withdrawn whole, as before)."""
+    text = str(fragment or "")
+    if not _MONEY_FIGURE.search(text):
+        return None
+    excised: list[str] = []
+
+    def _cut(match) -> str:
+        excised.append(match.group(0).strip(" ,，"))
+        return ""
+
+    trimmed = _WITHIN_QUALIFIER.sub(_cut, text)
+    trimmed = _TRAILING_DURATION_ZH.sub(_cut, _TRAILING_DURATION.sub(_cut, trimmed))
+    trimmed = re.sub(r"[ \t]{2,}", " ", trimmed)
+    trimmed = re.sub(r"\s+([,.;:!?，。；：！？])", r"\1", trimmed).rstrip()
+    if (not excised or not trimmed.strip() or not _MONEY_FIGURE.search(trimmed)
+            or _MINUTE_TOKEN.search(trimmed) or _DANGLING_END.search(trimmed)
+            or _asserts_commute(trimmed)):
+        return None
+    return trimmed, excised
 _CONDITIONAL_LEAD = re.compile(
     r"^\s*[*_]*\s*(?:if|when|unless|should|whether|assuming|provided)\b[^.!?]*[,，]\s*$", re.I)
 # What is left of a destination split at its comma: "London E14 5AB", "E8", "London".

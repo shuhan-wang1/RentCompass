@@ -3823,6 +3823,13 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     response_text = final_state.get('final_response', '')
     response_type = final_state.get('response_type', 'answer')
     tool_data = final_state.get('tool_data', {})
+    # The model's answer that leads the candidate ledger (format_output_fc's composite), if
+    # any. It is turn-internal: it never ships in the payload.
+    answer_lead = ''
+    if isinstance(tool_data, dict) and 'answer_lead' in tool_data:
+        tool_data = dict(tool_data)
+        answer_lead = str(tool_data.pop('answer_lead') or '')
+        final_state['tool_data'] = tool_data
     if isinstance(tool_data, dict) and 'recommendations' in tool_data:
         # Check the final user constraints again, independently of the tool's echo.
         from core.candidate_validation import validate_candidates, candidate_reason_text
@@ -3856,11 +3863,25 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             checked.append(row)
         tool_data = dict(tool_data, recommendations=checked, search_criteria=actual_criteria)
         if ledger['excluded'] or ledger['unknown']:
-            response_text = render_candidate_status(ledger, language=extracted_context.get('reply_language', 'en'))
-            from core.candidate_validation import render_structured_evidence_fallback
-            evidence = render_structured_evidence_fallback(final_state, language=extracted_context.get('reply_language', 'en'))
-            if evidence:
-                response_text += '\n\n' + evidence
+            _ledger_language = extracted_context.get('reply_language', 'en')
+            ledger_text = render_candidate_status(ledger, language=_ledger_language)
+            # The ledger rebuilt from this re-check is the authority on which listing
+            # qualifies, but it answers only "which listings qualify". When the model answered
+            # something the ledger cannot (a market range, availability, a comparison) and
+            # format_output_fc let that answer lead, the answer still leads — minus any claim
+            # that a listing this re-check did not find eligible meets the conditions — and
+            # the re-checked ledger follows. Otherwise the ledger stands alone, as before.
+            from core.candidate_validation import answer_lead_without_unverified_claims
+            lead = (answer_lead_without_unverified_claims(answer_lead, ledger, language=_ledger_language)
+                    if answer_lead.strip() else '')
+            if lead:
+                response_text = f"{lead}\n\n{ledger_text}"
+            else:
+                response_text = ledger_text
+                from core.candidate_validation import render_structured_evidence_fallback
+                evidence = render_structured_evidence_fallback(final_state, language=_ledger_language)
+                if evidence:
+                    response_text += '\n\n' + evidence
         final_state['tool_data'] = tool_data
     from core.memory_contract import (strip_saved_content_quote,
                                       compose_memory_contract_response)

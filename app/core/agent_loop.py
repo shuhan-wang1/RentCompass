@@ -6089,8 +6089,18 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         re.I)
     # Questions the candidate ledger does not answer: whether the listings can still be had,
     # what moving in costs, how they compare (r22 c9faf055: "这些房源现在还能租吗？" got the
-    # ledger instead of the grounded, honest answer).
+    # ledger instead of the grounded, honest answer), and what the market charges: "could you
+    # first help me to establish a typical range for an ensuite and a studio" got six
+    # "cannot verify the commute condition" rows and no range at all (2026-11-02).
     _LEDGER_UNANSWERED = re.compile(
+        r"\b(?:typical|usual|average|normal|going|market|realistic)\s+(?:monthly\s+)?"
+        r"(?:price\s+|rent(?:al)?\s+|cost\s+|budget\s+)?(?:range|rate|rent|price|cost)s?\b|"
+        r"\b(?:price|rent(?:al)?|budget|cost)\s+range\b|\bballpark\b|"
+        r"\bhow\s+much\s+(?:does|do|did|would|will|should|might|could|is|are)\b|"
+        r"\bwhat\s+(?:should|would|could|do|might)\s+(?:i|we)\s+(?:budget|expect\s+to\s+(?:pay|spend)|pay|spend)\b|"
+        r"\b(?:establish|figure\s+out|work\s+out)\s+(?:a|the|my|our)?\s*(?:typical\s+|realistic\s+)?"
+        r"(?:budget|range)\b|"
+        r"价格区间|价格范围|租金范围|租金区间|预算范围|预算区间|大概多少|一般多少|行情|均价|平均租金|租金水平|什么价位|"
         r"\bstill\s+(?:available|free|on\s+the\s+market|to\s+let|for\s+rent|up)\b|"
         r"\b(?:is|are)\s+(?:it|this|that|they|these|those|any)\s+(?:\w+\s+){0,2}?(?:available|free|let)\b|"
         r"\bcan\s+(?:i|we)\s+(?:still\s+)?(?:rent|get|book|view|have|move\s+in)\b|\bavailability\b|"
@@ -6290,7 +6300,22 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     and _LEDGER_UNANSWERED.search(_cm)):
                 composite_answer = True
             if composite_answer:
-                response = f"{str(final_response).strip()}\n\n{response}"
+                # The ledger below is the authority on which listing qualifies; the answer
+                # that leads it loses any claim that an unverified or excluded listing meets
+                # the conditions (a market range, advice and verified listings stay).
+                from core.candidate_validation import answer_lead_without_unverified_claims
+                lead = answer_lead_without_unverified_claims(
+                    str(final_response).strip(), validation, language=language)
+                composite_answer = bool(lead)
+            if composite_answer:
+                response = f"{lead}\n\n{response}"
+                # app.py re-checks the listings against the final criteria and, when any row
+                # is not eligible, rebuilds the ledger from that re-check. It used to rebuild
+                # the WHOLE reply from it, so every composite above reached the user as the
+                # ledger alone. The answer that leads travels with the turn's tool_data (which
+                # is rebuilt every turn, so it cannot leak into the next one) and app.py pops
+                # it before the payload ships.
+                tool_data["answer_lead"] = lead
             if search_found.get('source_message') and search_found['source_message'] not in response:
                 response = search_found['source_message'] + '\n\n' + response
             if (requires_status or len(artifacts) > 1) and not composite_answer:

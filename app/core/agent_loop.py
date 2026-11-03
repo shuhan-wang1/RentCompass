@@ -1281,6 +1281,21 @@ def _with_reply_language(node):
     return wrapped
 
 
+def _with_shown_listings(node):
+    """Run a tool-dispatch node with the listings this conversation already showed in
+    context, so a "find some others" search can leave them out (search_properties reads
+    SHOWN_LISTINGS). Same route as _with_reply_language, for the same reason."""
+    @functools.wraps(node)
+    async def wrapped(state):
+        from core.tools.search_properties import SHOWN_LISTINGS, shown_listing_records
+        token = SHOWN_LISTINGS.set(shown_listing_records(state.get("extracted_context") or {}))
+        try:
+            return await node(state)
+        finally:
+            SHOWN_LISTINGS.reset(token)
+    return wrapped
+
+
 def _inject_focus_url(params: dict, state: AgentState) -> dict:
     """get_property_details executor re-injection: supply the FOCUSED listing's URL when
     the model referenced that listing (or named none) and passed no URL of its own.
@@ -3034,6 +3049,11 @@ def _criteria_room_type_label(criteria: dict) -> Optional[str]:
     rt = criteria.get("room_type")
     if isinstance(rt, str):
         r = rt.strip().lower()
+        if "+" in r:     # several types asked for together, e.g. 'studio+ensuite'
+            labels = [label for label in (_criteria_room_type_label({"room_type": part})
+                                          for part in r.split("+")) if label]
+            if labels:
+                return " or ".join(labels)
         if r == "studio":
             return "studio"
         if r in ("shared", "flatshare", "house share", "houseshare", "room"):
@@ -6427,7 +6447,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
     return {
         "guard": guard_node,
         "agent": agent_node,
-        "execute_tools": _with_reply_language(execute_tools_node),
+        "execute_tools": _with_reply_language(_with_shown_listings(execute_tools_node)),
         "format_output_fc": (format_output_fc_with_contract if specialist_dispatch
                              else format_output_with_notes),
     }

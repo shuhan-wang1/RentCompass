@@ -386,10 +386,25 @@ _WITHDRAWN_BEFORE_MENTION = re.compile(
 
 def withdraws_room_type(text: str, room_type) -> bool:
     """True when ``text`` withdraws the standing ``room_type`` ("never mind studio",
-    "forget the studio", "no longer need a studio", "不要studio了")."""
-    from core.tools.search_properties import _ROOM_TYPE_SYNONYMS
-    needles = dict(_ROOM_TYPE_SYNONYMS).get(str(room_type or ''), ())
+    "forget the studio", "no longer need a studio", "不要studio了"), or one of several."""
+    return bool(withdrawn_room_types(text, room_type))
+
+
+def withdrawn_room_types(text: str, room_type) -> tuple:
+    """The parts of the standing ``room_type`` (one type, or several joined by '+') that
+    ``text`` withdraws; "never mind the studio" against 'studio+ensuite' withdraws only
+    the studio."""
+    from core.tools.search_properties import _ROOM_TYPE_SYNONYMS, room_type_parts
+    synonyms = dict(_ROOM_TYPE_SYNONYMS)
     value = str(text or '')
+    withdrawn = []
+    for part in room_type_parts(room_type) or (str(room_type or ''),):
+        if _mentions_withdrawn(value, synonyms.get(part, ())):
+            withdrawn.append(part)
+    return tuple(withdrawn)
+
+
+def _mentions_withdrawn(value: str, needles) -> bool:
     for needle in needles:
         for found in re.finditer(r'(?<![a-z])' + re.escape(needle) + r'(?![a-z])', value, re.I):
             before = _CLAUSE_BOUNDARY.split(value[max(0, found.start() - 60):found.start()])[-1][-45:]

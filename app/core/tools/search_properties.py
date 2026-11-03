@@ -26,6 +26,8 @@ import os
 import sys
 import threading
 import time
+import statistics
+import contextvars
 from functools import partial
 from pathlib import Path
 from datetime import date
@@ -150,10 +152,98 @@ _ROOM_TYPE_SYNONYMS = (
 )
 
 
+# Canonical order of the room types; a request for several is stored as one value with
+# its parts joined by '+' in this order ("studio+ensuite"), so the accumulated criteria,
+# the constraint sources, undo history and the search panel keep carrying ONE string,
+# and two spellings of the same request compare equal.
+_ROOM_TYPE_ORDER = tuple(canonical for canonical, _needles in _ROOM_TYPE_SYNONYMS)
+
+# What may sit between two room types the user offers as alternatives: "ensuite and
+# studio", "a studio or an en-suite room", "studio/ensuite", 「独卫或者studio」. Anything
+# else between them ("an en-suite room in a shared house", "a studio with en-suite
+# bathroom") describes ONE home, and the first type alone is the request.
+_ROOM_TYPE_JOIN = re.compile(
+    r"^(?:\s|[,/&+、，]|\b(?:and|or|plus|either|also|maybe|perhaps|possibly|as\s+well\s+as|"
+    r"an?|the|rooms?|flats?|apartments?|units?|options?|types?)\b"
+    r"|或者|或是|或|和|还是|以及|及|与|跟|也行|也可以|都行|都可以|房间|房|公寓)*$", re.I)
+
+
+def _room_type_mentions(t: str) -> tuple[list, set]:
+    """(mentions, rejected): (start, end, canonical) for each room-type word stated as a
+    requirement, longest match first where two needles overlap (单间公寓 is a studio, not
+    单间); and the types some other mention negates or only supposes ("不要合租房间")."""
+    spans, rejected = [], set()
+    for canonical, needles in _ROOM_TYPE_SYNONYMS:
+        for needle in needles:
+            for match in re.finditer(re.escape(needle), t):
+                if mention_is_requirement(t, match.start(), match.end()):
+                    spans.append((match.start(), match.end(), canonical))
+                else:
+                    rejected.add(canonical)
+    spans.sort(key=lambda span: (span[0], span[0] - span[1]))
+    kept = []
+    for span in spans:
+        if kept and span[0] < kept[-1][1]:
+            continue
+        kept.append(span)
+    return kept, rejected
+
+
+def _extract_room_types(text: str) -> tuple:
+    """Every room type a message asks for, in canonical order: ('studio', 'ensuite') for
+    "ensuite and studio". One type when the words name a single home. Empty for none."""
+    single = _extract_single_room_type(text)
+    if not single:
+        return ()
+    t = scoped_update_text(text).lower()
+    mentions, rejected = _room_type_mentions(t)
+    offered = set()
+    for left, right in zip(mentions, mentions[1:]):
+        gap = t[left[1]:right[0]]
+        if left[2] != right[2] and len(gap) <= 40 and _ROOM_TYPE_JOIN.match(gap):
+            offered.update((left[2], right[2]))
+    # A type the same message turns down elsewhere ("不要合租房间 … 整租和合租单间只是临时比较")
+    # is never added as an alternative.
+    offered = (offered - rejected) | {single}
+    if len(offered) < 2:
+        return (single,)
+    return tuple(rt for rt in _ROOM_TYPE_ORDER if rt in offered)
+
+
 def _extract_room_type(text: str):
-    """Canonical room type from a message: 'studio' | 'ensuite' | 'shared' | None.
-    Deterministic so a chat answer after the soft gate ("我要ensuite") updates the
-    accumulated room_type even without any 'find'/'search' verb."""
+    """Canonical room type from a message: 'studio' | 'ensuite' | 'shared' | 'whole', several
+    joined by '+' when the user offers alternatives ("ensuite and studio" ->
+    'studio+ensuite'), or None. Deterministic so a chat answer after the soft gate
+    ("我要ensuite") updates the accumulated room_type even without any 'find'/'search' verb."""
+    return join_room_types(_extract_room_types(text))
+
+
+def join_room_types(parts):
+    """One stored value for a set of canonical room types, or None for an empty set."""
+    ordered = [rt for rt in _ROOM_TYPE_ORDER if rt in set(parts or ())]
+    return "+".join(ordered) or None
+
+
+def room_type_parts(value) -> tuple:
+    """The canonical room types a stored value, tool argument or form value names, in
+    canonical order. Accepts one canonical value, a '+'-joined value, a list (an older
+    caller or the form) or free text ('en-suite', 'a studio or ensuite')."""
+    if isinstance(value, (list, tuple, set)):
+        found = {part for item in value for part in room_type_parts(item)}
+    elif isinstance(value, str) and value.strip():
+        found = set()
+        for token in re.split(r"\s*\+\s*", value.strip().lower()):
+            if token in _ROOM_TYPE_ORDER:
+                found.add(token)
+            elif token:
+                found.update(_extract_room_types(token))
+    else:
+        return ()
+    return tuple(rt for rt in _ROOM_TYPE_ORDER if rt in found)
+
+
+def _extract_single_room_type(text: str):
+    """The one room type the words name first (historical behaviour, table order)."""
     if not text or is_criteria_consultation(text):
         return None
     t = scoped_update_text(text).lower()
@@ -189,15 +279,12 @@ _WHOLE_HOME_REQUEST = re.compile(
 
 
 def _normalize_room_type(value):
-    """Coerce an incoming room_type (from the form, accumulated state, or free text)
-    to a canonical value or None. Unknown/free-text values are run through the
-    synonym extractor so 'en-suite' or 'a studio please' still map correctly."""
-    if not isinstance(value, str) or not value.strip():
-        return None
-    v = value.strip().lower()
-    if v in ("studio", "ensuite", "shared", "whole"):
-        return v
-    return _extract_room_type(v)
+    """Coerce an incoming room_type (from the form, accumulated state, a tool call or free
+    text) to its stored value or None: one canonical type, or several joined by '+' in
+    canonical order. Unknown/free-text values are run through the synonym extractor so
+    'en-suite' or 'a studio please' still map correctly, and a list from an older caller
+    is accepted."""
+    return join_room_types(room_type_parts(value))
 
 
 # Display labels for room type, localized (en, zh).
@@ -210,11 +297,34 @@ _ROOM_TYPE_LABELS = {
 
 
 def _room_type_label(room_type, is_cjk: bool) -> str:
+    parts = room_type_parts(room_type) if isinstance(room_type, str) and "+" in room_type else ()
+    if len(parts) > 1:
+        labels = [_room_type_label(part, is_cjk) for part in parts]
+        return "或".join(labels) if is_cjk else " or ".join(labels)
     en, zh = _ROOM_TYPE_LABELS.get(room_type, (room_type, room_type))
     return zh if is_cjk else en
 
 
-def _matches_room_type(prop: dict, room_type: str) -> bool:
+def _matched_room_type(prop: dict, room_type):
+    """The requested room type this listing is, or None: for a request of several types,
+    the first one in canonical order it satisfies, so each row says which of them it is."""
+    for part in room_type_parts(room_type):
+        if _matches_one_room_type(prop, part):
+            return part
+    return None
+
+
+def _matches_room_type(prop: dict, room_type) -> bool:
+    """True when a listing satisfies the requested room type, or any one of several."""
+    if not room_type:
+        return True
+    parts = room_type_parts(room_type)
+    if not parts:
+        return _matches_one_room_type(prop, room_type)
+    return any(_matches_one_room_type(prop, part) for part in parts)
+
+
+def _matches_one_room_type(prop: dict, room_type: str) -> bool:
     """True when a listing satisfies the requested room type, inspecting the scraped
     Room_Type_Category / Description / Detailed_Amenities. Mirrors the data's own
     vocabulary (e.g. 'Studio', 'En-suite Room', 'Room (Shared)', '1 bed Flat share')."""
@@ -3040,6 +3150,178 @@ async def _read_room_descriptions(ranked: list, budget_s: float) -> None:
             prop['_full_description'] = detail['description']
 
 
+# ── Follow-ups that ask for listings other than the ones already shown ─────────────
+# "These are too expensive, could you find some other properties" re-ran the same search
+# and printed the same rows: the cache returned the same sample, nothing knew which rows
+# the user had seen, and the guessed budget the model added was (rightly) dropped because
+# the user never stated a number. Such a follow-up now leaves the shown rows out, and a
+# "too expensive" one puts the cheaper rows first. The cheaper preference is inferred and
+# soft: it never becomes max_budget.
+_OTHER_LISTINGS_RE = re.compile(
+    r"\b(?:other|different|more|new|another|else|alternative|fresh)\s+(?:ones?|options?|"
+    r"propert(?:y|ies)|listings?|places?|flats?|homes?|apartments?|studios?|rooms?|choices?|results?)\b"
+    r"|\b(?:find|show|give|get|search(?:\s+for)?|look\s+for|suggest)\s+(?:me\s+)?(?:some\s+|any\s+)?"
+    r"(?:others|more)\b"
+    r"|\b(?:anything|something)\s+else\b|\bany\s+others\b|\bthe\s+rest\b"
+    r"|换一批|换几[个套]|其他的?(?:房|房源|选择|几套|的)|别的(?:房|房源|选择|的)?|还有(?:别的|其他)|"
+    r"再找(?:几|一些|点)?|更多(?:房源|选择|的房)", re.I)
+_CHEAPER_RE = re.compile(
+    r"(?<!not )(?<!n't )\b(?:too|so|very|quite|really|rather|a\s+bit|bit)\s+"
+    r"(?:expensive|pricey|costly|dear)\b"
+    r"|\bcheaper\b|\bless\s+expensive\b|\blower\s+(?:prices?|rents?|costs?)\b"
+    r"|\bmore\s+affordable\b|\bbudget[- ]friendly\b|\bout\s+of\s+(?:my|our)\s+(?:price\s+range|budget)\b"
+    r"|太贵|有点贵|贵了|便宜(?:一?点|些)|更便宜|实惠一?点|价格低一?点", re.I)
+
+
+# The listings this conversation has already shown, set by the agent loop for the turn's
+# tool dispatch. A context variable, not a tool argument: the specialist boundary refuses
+# every harness-injected argument but the deadline, and the tool workers copy the caller's
+# context (same route as get_property_details.REPLY_LANGUAGE).
+SHOWN_LISTINGS: contextvars.ContextVar = contextvars.ContextVar("shown_listings", default=None)
+
+
+def shown_listing_records(extracted_context) -> list:
+    """url / address / price of every listing the conversation's context holds as shown."""
+    ec = extracted_context if isinstance(extracted_context, dict) else {}
+    out = []
+    for key in ("view_results", "last_results_full", "last_results", "recommended_registry",
+                "shown_alternatives", "focus_stack"):
+        for rec in ec.get(key) or []:
+            if isinstance(rec, dict):
+                out.append({"url": rec.get("url") or rec.get("URL") or "",
+                            "address": rec.get("address") or rec.get("name") or "",
+                            "price": rec.get("price")})
+    return out
+
+
+def listing_follow_up(text) -> dict | None:
+    """{'cheaper': bool} when ``text`` asks for listings other than the ones shown
+    ("find some other properties", "these are too expensive", 「换一批」), else None. A
+    complaint about price asks for other listings too."""
+    value = str(text or "")
+    if not value.strip():
+        return None
+    cheaper = bool(_CHEAPER_RE.search(value))
+    if not (cheaper or _OTHER_LISTINGS_RE.search(value)):
+        return None
+    return {"cheaper": cheaper}
+
+
+def _listing_identity(url, address=None, price=None):
+    """What makes two listing records the same listing: the URL, else address and price."""
+    # The query string only names the channel a listing was reached through.
+    link = str(url or "").strip().lower().split("?", 1)[0].rstrip("/")
+    if link:
+        return ("url", link)
+    place = " ".join(str(address or "").lower().split())
+    amount = _record_price(price)
+    return ("address", place, amount) if place and amount is not None else None
+
+
+def _record_price(value):
+    """A monthly price from a number or a '£1,127/month' label, or None."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return int(value) if value > 0 else None
+    found = re.search(r"\d[\d,]*(?:\.\d+)?", str(value or ""))
+    if not found:
+        return None
+    try:
+        amount = int(float(found.group(0).replace(",", "")))
+    except ValueError:
+        return None
+    return amount if amount > 0 else None
+
+
+def _row_identity(prop: dict):
+    return _listing_identity(prop.get("URL", prop.get("url")),
+                             prop.get("Address", prop.get("address")),
+                             prop.get("parsed_price") or prop.get("price") or prop.get("Price"))
+
+
+def _shown_listing_facts(shown) -> tuple[set, list]:
+    """(identities, monthly prices) of the listings a conversation has already shown."""
+    keys, prices = set(), []
+    for rec in shown or []:
+        if not isinstance(rec, dict):
+            continue
+        key = _listing_identity(rec.get("url"), rec.get("address") or rec.get("name"),
+                                rec.get("price"))
+        if key is None or key in keys:
+            continue
+        keys.add(key)
+        price = _record_price(rec.get("price"))
+        if price is not None:
+            prices.append(price)
+    return keys, prices
+
+
+def _prefer_cheaper(rows: list, below) -> list:
+    """Rows under ``below`` first, cheapest first; the rest keep their ranked order."""
+    if below is None:
+        return rows
+
+    def _price(prop):
+        return _record_price(prop.get("price") or prop.get("parsed_price") or prop.get("Price"))
+
+    cheaper = [row for row in rows if (_price(row) or below) < below]
+    rest = [row for row in rows if not (_price(row) or below) < below]
+    return sorted(cheaper, key=_price) + rest
+
+
+def _all_shown_message(excluded: int, area, is_cjk: bool) -> str:
+    if is_cjk:
+        return (f"符合这些条件的房源（{area or '该区域'}）都已经给您看过了（{excluded} 套），"
+                f"没有新的。可以放宽条件或换一个区域再找。")
+    return (f"Every listing matching these conditions{f' in {area}' if area else ''} has already "
+            f"been shown ({excluded}); there are no new ones. Widening a condition or another "
+            f"area would bring new listings.")
+
+
+def _follow_up_note(excluded: int, cheaper_than, widened, is_cjk: bool, *,
+                    cheaper_found=None) -> str:
+    parts = []
+    if is_cjk:
+        parts.append(f"已排除之前展示过的 {excluded} 套房源。")
+        if cheaper_than:
+            parts.append(f"按您说的“太贵”，低于 £{cheaper_than}/月（之前展示房源的中间价）的排在前面；"
+                         f"这是推断的偏好，不是您设定的预算。")
+            if cheaper_found == 0:
+                parts.append(f"这次没有找到低于 £{cheaper_than}/月 的新房源，这一带最便宜的已经展示过了；"
+                             f"下面是剩下的里面最便宜的。")
+        if widened:
+            parts.append(f"原区域新房源不多，另外看了附近的 {'、'.join(widened)}。")
+        return "".join(parts)
+    parts.append(f"Left out the {excluded} listing{'s' if excluded != 1 else ''} already shown.")
+    if cheaper_than:
+        parts.append(f"Since the last ones were too expensive, listings under £{cheaper_than}/month "
+                     f"(the middle of what was shown) come first; that is inferred, not a budget "
+                     f"you set.")
+        if cheaper_found == 0:
+            parts.append(f"No new listing here is under £{cheaper_than}/month: the cheapest ones in "
+                         f"this area were already shown, so these are the cheapest of the rest.")
+    if widened:
+        parts.append(f"The area had few new listings, so nearby {', '.join(widened)} was added.")
+    return " ".join(parts)
+
+
+def _interleave_room_types(rows: list, room_type) -> list:
+    """Rows of a several-type request in turns by type, each type keeping its own order."""
+    parts = room_type_parts(room_type)
+    if len(parts) < 2:
+        return rows
+    queues = {part: [] for part in parts}
+    for row in rows:
+        queues[_matched_room_type(row, room_type) or parts[0]].append(row)
+    out = []
+    while any(queues.values()):
+        for part in parts:
+            if queues[part]:
+                out.append(queues[part].pop(0))
+    return out
+
+
 def _commute_candidate_pool(ranked: list, limit: int = 15) -> list:
     """The rows that go on to commute checks and final ranking, top `limit` only because
     each one costs a routing call. Retrieval order is semantic, and listing text says
@@ -3722,6 +4004,7 @@ async def search_properties_impl(
     criteria_gate_shown: bool = False,  # 🆕 本会话软性条件门是否已出现过（至多触发一次）
     reply_language: str = None,       # 🆕 显式回复语言 'zh'|'en'：覆盖基于消息的 is_cjk 推断
     _deadline_monotonic: float | None = None,  # 🆕 INJECTED 绝对 time.monotonic() 截止时间（不在模型可见 schema 中）
+    _shown_listings: list | None = None,  # INJECTED: listings this conversation already showed (url/address/price)
     **kwargs  # 接受 LLM 可能传递的任何额外参数（如 property_type）
 ) -> dict:
     """
@@ -3757,6 +4040,8 @@ async def search_properties_impl(
     area = clean_arg_text(area) or None
     location = clean_arg_text(location) or None
     commute_destination = clean_arg_text(commute_destination) or None
+    if isinstance(room_type, (list, tuple, set)):        # an older caller's list of types
+        room_type = join_room_types(room_type_parts(room_type))
     room_type = clean_arg_text(room_type) or None
     move_in_date = clean_arg_text(move_in_date) or None
     reply_language = clean_arg_text(reply_language) or None
@@ -3905,6 +4190,17 @@ async def search_properties_impl(
         room_type = _normalize_room_type(room_type)
         if not room_type:
             room_type = _extract_room_type(msg_for_extraction)
+        # "Find some others" / "these are too expensive": leave out what was shown.
+        if _shown_listings is None:
+            _shown_listings = SHOWN_LISTINGS.get()
+        _follow_up = (listing_follow_up(current_message or msg_for_extraction)
+                      if _shown_listings else None)
+        _shown_keys, _shown_prices = (_shown_listing_facts(_shown_listings) if _follow_up
+                                      else (set(), []))
+        _cheaper_than = (int(statistics.median(_shown_prices))
+                         if _follow_up and _follow_up["cheaper"] and _shown_prices else None)
+        _excluded_shown = 0
+        _follow_up_areas: list = []
         # 期望入住日：先净化传入值（累积状态/表单）；再看本轮消息是否显式声明，显式声明优先
         # （与预算"本轮覆盖累积"一致）。可选条件，绝不阻塞搜索。
         move_in_date = _valid_iso_date(move_in_date)
@@ -4230,7 +4526,9 @@ async def search_properties_impl(
                 min_beds, max_beds = beds
                 resolved_bedrooms = min_beds
                 bedrooms_minimum = min_beds != max_beds
-            elif 'studio' in feats_lower or room_type == 'studio':
+            elif room_type == 'studio' or ('studio' in feats_lower
+                                           and len(room_type_parts(room_type)) < 2):
+                # A studio-or-room request keeps the rooms' own bedroom counts.
                 min_beds = max_beds = 0
                 resolved_bedrooms = 0
             else:
@@ -4249,6 +4547,16 @@ async def search_properties_impl(
         for _feature in _sensitive_features:
             if _feature not in all_property_features:
                 all_property_features.append(_feature)
+
+        def _follow_up_facts():
+            """What a "find others" follow-up changed, for the reply; not search criteria, so
+            the inferred price preference is never stored as the user's budget."""
+            if not _follow_up:
+                return None
+            return {'excluded_shown': _excluded_shown,
+                    'cheaper_than_monthly': _cheaper_than,
+                    'price_preference_source': 'inferred_from_shown' if _cheaper_than else None,
+                    'widened_to': list(_follow_up_areas)}
 
         # 供两种载荷统一复用的 search_criteria 构造器（同时带 canonical + legacy 键）。
         def _criteria():
@@ -4693,6 +5001,50 @@ async def search_properties_impl(
                 incomplete_areas.append(_a)
                 _res_by_area[_a] = _incomplete_result()
 
+        # A "find others" follow-up whose areas hold too few listings the user has not seen
+        # yet reads one more nearby area instead of printing the same rows again: an area the
+        # recommender already gave (never waited for here), else the destination's curated one.
+        if _shown_keys and os.getenv("SEARCH_FOLLOW_UP_WIDEN", "1") != "0":
+            # For "too expensive", only the unseen rows under the shown middle price count.
+            _unseen = sum(1 for _a in search_areas
+                          for _r in ((_res_by_area.get(_a) or {}).get('rows') or [])
+                          if _row_identity(_r) not in _shown_keys
+                          and (_cheaper_than is None
+                               or (_record_price(_r.get('parsed_price') or _r.get('price')
+                                                 or _r.get('Price')) or _cheaper_than) < _cheaper_than))
+            _searched = {x.lower() for x in search_areas}
+            _nearby = []
+            if _reco_task is not None and _reco_task.done() and not _reco_task.cancelled():
+                try:
+                    _nearby = [str(_i.get('slug') or _i.get('name') or '').strip()
+                               for _i in (_reco_task.result() or []) if isinstance(_i, dict)]
+                except Exception:
+                    _nearby = []
+            _curated = _curated_destination_area(commute_target) if commute_target else None
+            _nearby = [_n for _n in _nearby + [_curated] if _n and _n.lower() not in _searched]
+            if _unseen < max(int(limit or 10), 5) and _nearby:
+                _extra = _nearby[0]
+                _xres = await loop.run_in_executor(
+                    None, lambda: get_listings(_extra, min_beds, max_beds, scrape_min, scrape_max,
+                                               limit=_area_row_limit, cache_only=True,
+                                               room_type=room_type))
+                _xleft = _time_left() - RANK_HEADROOM_S - _COMMUTE_ANNOTATE_EST_S
+                if not _xres.get('rows') and _xleft >= PER_AREA_EST_S:
+                    try:
+                        _xres = await asyncio.wait_for(loop.run_in_executor(
+                            None, lambda: get_listings(
+                                _extra, min_beds, max_beds, scrape_min, scrape_max,
+                                limit=_area_row_limit,
+                                budget_s=max(1.0, min(_SCRAPE_BUDGET_S, _xleft - 0.3)),
+                                room_type=room_type, deep_budget_s=0.0)), timeout=max(0.2, _xleft))
+                    except Exception:
+                        _xres = {}
+                if (_xres or {}).get('rows'):
+                    _res_by_area[_extra] = _tag(_extra, _xres)
+                    _follow_up_areas.append(_extra)
+                logger.info("property_search.follow_up_widened",
+                            extra={"unseen_rows": _unseen, "added_rows": len((_xres or {}).get('rows') or [])})
+
         # Per-area served-row counts (pre-filter) drive the crisp per-area status contract:
         # 'results' (complete, had listings) | 'empty' (complete, genuinely none) | 'incomplete'.
         # Rows the sample held outside this band still count: the area had listings (G-05).
@@ -4710,7 +5062,7 @@ async def search_properties_impl(
 
         live_rows = []
         _metas = []
-        for _a in search_areas:
+        for _a in search_areas + _follow_up_areas:
             res = _res_by_area.get(_a) or {"rows": [], "meta": {}}
             live_rows.extend(res.get('rows', []))
             _metas.append(res.get('meta', {}))
@@ -4875,7 +5227,7 @@ async def search_properties_impl(
             )
             from core.maps_service import geocode_address
 
-            for _idx, _a in enumerate(search_areas):
+            for _idx, _a in enumerate(search_areas + _follow_up_areas):
                 _centre = known_area_centroid(_a)
                 if _centre is None:
                     _city = (_metas[_idx].get('requested_city')
@@ -5045,10 +5397,16 @@ async def search_properties_impl(
                 extra={"feature_count": len(all_property_features)},
             )
             filtered_by_features = []
+            # A request for several room types is an OR the room-type filter applies; the
+            # same words as features would demand each listing be all of them at once.
+            _either_type = ({"studio", "en-suite"} if len(room_type_parts(room_type)) > 1
+                            else set())
             for prop in ranked_properties:
                 matches = True
                 for feature in all_property_features:
                     canonical = _canonical_property_feature(feature)
+                    if canonical in _either_type:
+                        continue
                     evidence = _property_feature_evidence(prop, canonical)
                     if _requires_explicit_feature_evidence(canonical):
                         # Missing disclosure is not proof that an accessibility
@@ -5069,7 +5427,7 @@ async def search_properties_impl(
             else:
                 print(f"   ⚠️ 特征过滤后无结果，保留原始结果并在说明中提及")
 
-        if room_type == 'ensuite' and not degraded:
+        if 'ensuite' in room_type_parts(room_type) and not degraded:
             await _read_room_descriptions(ranked_properties, min(
                 float(os.getenv("SEARCH_ROOM_READ_BUDGET_S", "5")),
                 _time_left() - _COMMUTE_ANNOTATE_EST_S - RANK_HEADROOM_S))
@@ -5080,7 +5438,9 @@ async def search_properties_impl(
             rt_matched = [p for p in ranked_properties if _matches_room_type(p, room_type)]
             if rt_matched:
                 print(f"   ✅ 房型过滤后剩余 {len(rt_matched)} 个房源")
-                ranked_properties = rt_matched
+                # Several types asked for together: take turns between them, so one type's
+                # rows (rooms are cheaper and plentiful) cannot push the other off the page.
+                ranked_properties = _interleave_room_types(rt_matched, room_type)
             else:
                 print(f"   ⚠️ 房型过滤后无结果，保留原始结果并在说明中提及")
 
@@ -5100,6 +5460,27 @@ async def search_properties_impl(
                 'known_criteria': _known_criteria(),
                 'area_recommendations': area_recommendations,
             })
+
+        if _shown_keys:
+            _unseen_rows = [p for p in ranked_properties if _row_identity(p) not in _shown_keys]
+            _excluded_shown = len(ranked_properties) - len(_unseen_rows)
+            ranked_properties = _unseen_rows
+            logger.info("property_search.follow_up_excluded_shown",
+                        extra={"excluded": _excluded_shown, "remaining": len(_unseen_rows)})
+            if not ranked_properties:
+                return _augment({
+                    'success': True,
+                    'status': 'no_results',
+                    'message': _all_shown_message(_excluded_shown, search_area, is_cjk),
+                    'recommendations': [],
+                    'data_source': data_source,
+                    'search_criteria': _criteria(),
+                    'known_criteria': _known_criteria(),
+                    'area_recommendations': area_recommendations,
+                    'follow_up': _follow_up_facts(),
+                })
+        if _cheaper_than is not None:
+            ranked_properties = _prefer_cheaper(ranked_properties, _cheaper_than)
 
         candidates = _commute_candidate_pool(ranked_properties)
         dest_coords = None
@@ -5244,6 +5625,12 @@ async def search_properties_impl(
                         rank_and_diversify(soft_violation, **rank_kwargs))
 
             perfect_match, soft_violation = await asyncio.to_thread(_rank_both)
+        # "Too expensive": the cheaper rows lead whatever the ranker preferred. Otherwise a
+        # request for several room types shows them in turns, each in its ranked order.
+        if _cheaper_than is not None:
+            perfect_match = _prefer_cheaper(perfect_match, _cheaper_than)
+        elif room_type:
+            perfect_match = _interleave_room_types(perfect_match, room_type)
 
         # ================================================================
         # 步骤 5.5: 无匹配时的回退
@@ -5578,8 +5965,7 @@ async def search_properties_impl(
                     images = [images] if images else []
                 geo_location = prop.get('Geo_Location', prop.get('geo_location', ''))
                 _avail_from = prop.get('_resolved_available_from', '')
-                _verified_room_type = (room_type if room_type and _matches_room_type(prop, room_type)
-                                       else None)
+                _verified_room_type = _matched_room_type(prop, room_type) if room_type else None
                 _verified_features = []
                 _unverified_features = []
                 _absent_features = []
@@ -5690,6 +6076,12 @@ async def search_properties_impl(
         # implies a checked commute (the CR5 failure).
         if _has_commute_constraint and not commute_verified:
             _summary += " " + _commute_note(is_cjk)
+        if _follow_up:
+            _cheaper_found = (sum(1 for _p in main_matches
+                                  if (_record_price(_p.get('price')) or _cheaper_than) < _cheaper_than)
+                              if _cheaper_than is not None else None)
+            _summary += " " + _follow_up_note(_excluded_shown, _cheaper_than, _follow_up_areas,
+                                              is_cjk, cheaper_found=_cheaper_found)
 
         # over-budget 备选的双语区块标签（reply_language / is_cjk 决定语言）。空列表时留空串。
         over_budget_label = (
@@ -5720,6 +6112,7 @@ async def search_properties_impl(
             'soft_count': len(soft_violation),
             'summary': _summary,
             'area_recommendations': area_recommendations,
+            'follow_up': _follow_up_facts(),
         })
 
     except Exception as e:
@@ -5834,7 +6227,9 @@ search_properties_tool = Tool(
             'room_type': {
                 'type': 'string',
                 'description': "OPTIONAL preferred room type: 'studio', 'ensuite', or "
-                               "'shared', or 'whole' for a self-contained flat/house (omit for any). Studio also implies a 0-bedroom search."
+                               "'shared', or 'whole' for a self-contained flat/house (omit for any). Studio also implies a 0-bedroom search. "
+                               "When the user accepts several types, join them with '+', e.g. 'studio+ensuite' for "
+                               "\"an en-suite or a studio\"; each listing then says which type it is."
             },
             'move_in_date': {
                 'type': 'string',

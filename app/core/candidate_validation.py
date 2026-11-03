@@ -103,6 +103,11 @@ def hard_constraints(criteria: dict | None) -> dict:
     features = c.get("property_features") or []
     if isinstance(features, str):
         features = [features]
+    if "+" in str(c.get("room_type") or ""):
+        # "an en-suite or a studio": the room type is the either-or; the same words as
+        # features would demand each listing be both.
+        features = [feature for feature in features
+                    if _norm(feature) not in {"studio", "en-suite", "ensuite"}]
     return {
         "max_budget_monthly": budget if budget and budget > 0 else None,
         # This is an independent rent-plus-travel constraint, never an invented rent cap.
@@ -463,13 +468,20 @@ def validate_candidates(candidates: list[dict], criteria: dict | None,
                                 or candidate.get("Type"))
             if not actual_type:
                 unknown_reasons.append("room type is not verified")
-            elif constraints['room_type'] == 'whole':
-                from core.tools.search_properties import _matches_room_type
-                if not _matches_room_type({'Room_Type_Category': actual_type,
-                    'Type': candidate.get('property_type') or candidate.get('Type') or ''}, 'whole'):
-                    reasons.append('room type does not match whole property')
-            elif constraints["room_type"] not in actual_type:
-                reasons.append(f"room type does not match {constraints['room_type']}")
+            else:
+                # Several types asked for together ('studio+ensuite'): any one of them fits.
+                from core.tools.search_properties import _matches_room_type, room_type_parts
+                wanted = room_type_parts(constraints["room_type"]) or (constraints["room_type"],)
+                fits = any(
+                    _matches_room_type({'Room_Type_Category': actual_type,
+                                        'Type': candidate.get('property_type') or candidate.get('Type') or ''},
+                                       'whole')
+                    if part == 'whole' else part in actual_type
+                    for part in wanted)
+                if not fits:
+                    label = ('whole property' if wanted == ('whole',)
+                             else " or ".join(wanted))
+                    reasons.append(f"room type does not match {label}")
 
         requested_areas = constraints["areas"]
         if requested_areas:

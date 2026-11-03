@@ -642,7 +642,9 @@ def find_rich_onthemarket(
             advanced = not page_urls or bool(page_urls - channel_urls[channel])
             channel_urls[channel] |= page_urls
             for mapped in mapped_rows:
-                url = mapped.get("URL", "")
+                # One listing reached through two channels: the student channel's link adds
+                # "?channel=student" to the same details page.
+                url = mapped.get("URL", "").split("?", 1)[0].rstrip("/")
                 if url and url in seen_urls:
                     continue
                 if url:

@@ -189,6 +189,18 @@ def test_channels_take_turns_and_share_one_row_set(monkeypatch):
     assert [row["URL"].rstrip("/").rsplit("/", 1)[1] for row in rows] == ["1", "2", "3", "4"]
 
 
+def test_one_listing_reached_through_two_channels_is_kept_once(monkeypatch):
+    """The student channel links the same details page with '?channel=student'."""
+    studio, student = "/to-rent/studio/camden/", "/student/property/camden/"
+    via_student = dict(listing(2), **{"details-url": "/details/2/?channel=student"})
+    serve(monkeypatch, {
+        studio: page([listing(1), listing(2)], following=False),
+        student: page([via_student, listing(3)], following=False)})
+    rows = om.find_rich_onthemarket("camden", 1, 0, 10**6, 120, 0, 9,
+                                    channels=("studio", "student"))
+    assert [row["URL"].split("?")[0].rstrip("/").rsplit("/", 1)[1] for row in rows] == ["1", "2", "3"]
+
+
 def test_a_channel_the_site_lacks_falls_back_to_all_property(monkeypatch):
     path = "/to-rent/property/smalltown/"
     session = serve(monkeypatch, {path: page([listing(1)], following=False)})

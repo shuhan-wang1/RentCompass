@@ -3369,7 +3369,35 @@ _TRAVEL_SOURCE_ROUTING = 'routing'
 _TRAVEL_SOURCE_ESTIMATE = 'estimate'
 
 
-def _travel_provenance(origin, destination, minutes, mode: str = 'transit'):
+def _listing_origin(prop):
+    """The listing's own ``{'lat', 'lng'}`` routing origin, or None (then route by address)."""
+    try:
+        from core.tools.search_nearby_pois import listing_origin_coordinates
+        return listing_origin_coordinates(prop)
+    except Exception:
+        return None
+
+
+def _listing_travel_time(prop, destination):
+    """Thresholding minutes for one listing, routed from its own coordinates when it has them.
+
+    OnTheMarket display addresses often fail to geocode; the row's coordinates do not. Without
+    coordinates this is exactly the old address-only call."""
+    from core.maps_service import calculate_travel_time
+    origin = _listing_origin(prop)
+    if origin:
+        return calculate_travel_time(prop.get('Address', ''), destination, origin_coordinates=origin)
+    return calculate_travel_time(prop.get('Address', ''), destination)
+
+
+def _listing_travel_provenance(prop, destination, minutes):
+    """``_travel_provenance`` for a listing, looked up under the origin it was routed from."""
+    return _travel_provenance(prop.get('Address', ''), destination, minutes,
+                              origin_coordinates=_listing_origin(prop))
+
+
+def _travel_provenance(origin, destination, minutes, mode: str = 'transit', *,
+                       origin_coordinates=None):
     """Classify a minutes figure as measured or estimated — from the basis, never by assumption.
 
     ``calculate_travel_time`` returns a bare int on BOTH of its branches: a real TfL itinerary,
@@ -3387,7 +3415,8 @@ def _travel_provenance(origin, destination, minutes, mode: str = 'transit'):
     try:
         from core.commute_basis import is_measured
         from core.maps_service import travel_basis_if_known
-        details = travel_basis_if_known(origin, destination, mode)
+        details = travel_basis_if_known(origin, destination, mode, **(
+            {'origin_coordinates': origin_coordinates} if origin_coordinates else {}))
     except Exception:
         return _TRAVEL_SOURCE_ESTIMATE
     if not isinstance(details, dict) or not is_measured(details.get('source')):
@@ -5125,14 +5154,14 @@ async def search_properties_impl(
                     "filter_enabled": commute_filter_enabled,
                 },
             )
-            from core.maps_service import calculate_travel_time, geocode_address
+            from core.maps_service import geocode_address
             loop = asyncio.get_event_loop()
             dest_coords = await loop.run_in_executor(None, geocode_address, commute_target)
             london_dest = (listing_meta.get('requested_city') == 'london') or _in_london(dest_coords)
 
             if london_dest:
                 travel_time_tasks = [
-                    loop.run_in_executor(None, calculate_travel_time, prop.get('Address', ''), commute_target)
+                    loop.run_in_executor(None, _listing_travel_time, prop, commute_target)
                     for prop in candidates
                 ]
                 # Geocoding and routing have no deadline of their own, and a slow provider
@@ -5157,8 +5186,7 @@ async def search_properties_impl(
                     travel_time = tfl if (isinstance(tfl, (int, float)) and 0 < tfl <= _COMMUTE_SANITY_CAP) else None
                     # The bare producer answers from a TfL itinerary OR from its own
                     # straight-line fallback; only the basis payload can tell them apart.
-                    travel_source = _travel_provenance(
-                        prop.get('Address', ''), commute_target, travel_time)
+                    travel_source = _listing_travel_provenance(prop, commute_target, travel_time)
                     if travel_time is None:
                         travel_time = _coord_commute_minutes(
                             prop.get('geo_location') or prop.get('Geo_Location'), dest_coords
@@ -5167,11 +5195,10 @@ async def search_properties_impl(
                             travel_source = _TRAVEL_SOURCE_ESTIMATE
                     if travel_time is None and not london_dest:
                         try:
-                            travel_time = calculate_travel_time(prop.get('Address', ''), commute_target)
+                            travel_time = _listing_travel_time(prop, commute_target)
                         except Exception:
                             travel_time = None
-                        travel_source = _travel_provenance(
-                            prop.get('Address', ''), commute_target, travel_time)
+                        travel_source = _listing_travel_provenance(prop, commute_target, travel_time)
                     if travel_time is not None:
                         _commute_known = True
                         prop['travel_time_minutes'] = travel_time
@@ -5268,12 +5295,11 @@ async def search_properties_impl(
                             travel_time = None
                             travel_source = None
                             if commute_annotation_enabled:
-                                from core.maps_service import calculate_travel_time
                                 if london_dest:
-                                    _tt = calculate_travel_time(prop.get('Address', ''), commute_target)
+                                    _tt = _listing_travel_time(prop, commute_target)
                                     travel_time = _tt if (isinstance(_tt, (int, float)) and 0 < _tt <= _COMMUTE_SANITY_CAP) else None
-                                    travel_source = _travel_provenance(
-                                        prop.get('Address', ''), commute_target, travel_time)
+                                    travel_source = _listing_travel_provenance(
+                                        prop, commute_target, travel_time)
                                 if travel_time is None:
                                     travel_time = _coord_commute_minutes(
                                         prop.get('geo_location') or prop.get('Geo_Location'), dest_coords

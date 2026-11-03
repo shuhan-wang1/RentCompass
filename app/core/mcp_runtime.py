@@ -1,8 +1,9 @@
 """Trusted runtime hints carried beside MCP tool arguments.
 
 MCP servers validate ``arguments`` against each tool's public JSON Schema before
-the handler runs.  The FC loop also needs two private execution hints, but those
-must not be mixed into that public object.  This module owns the small, explicit
+the handler runs.  The FC loop also needs a few private execution hints (an
+idempotency key, a deadline, a listing's own coordinates as a commute origin), but
+those must not be mixed into that public object.  This module owns the small, explicit
 bridge used by both the stdio client and server.
 """
 from __future__ import annotations
@@ -49,7 +50,26 @@ def split_mcp_arguments(arguments: Mapping[str, Any] | None) -> tuple[dict, dict
         if deadline is not None:
             runtime["_deadline_monotonic"] = deadline
 
+    if "_from_coordinates" in public:
+        origin = _coordinate_pair(public.pop("_from_coordinates"))
+        if origin is not None:
+            runtime["_from_coordinates"] = origin
+
     return public, ({RUNTIME_META_KEY: runtime} if runtime else None)
+
+
+# Tools that route a journey and accept a listing's own position as the origin.
+_ORIGIN_COORDINATE_TOOLS = frozenset({"calculate_commute", "calculate_commute_cost"})
+
+
+def _coordinate_pair(value: Any) -> dict[str, float] | None:
+    """``{'lat', 'lng'}`` with finite latitude/longitude in range, else None."""
+    data = _mapping(value)
+    lat = _finite_number(data.get("lat"))
+    lng = _finite_number(data.get("lng"))
+    if lat is None or lng is None or not (-90 <= lat <= 90 and -180 <= lng <= 180):
+        return None
+    return {"lat": lat, "lng": lng}
 
 
 def runtime_arguments_from_meta(tool_name: str, meta: Any) -> dict[str, Any]:
@@ -70,5 +90,10 @@ def runtime_arguments_from_meta(tool_name: str, meta: Any) -> dict[str, Any]:
         deadline = _finite_number(runtime.get("_deadline_monotonic"))
         if deadline is not None:
             restored["_deadline_monotonic"] = deadline
+
+    if tool_name in _ORIGIN_COORDINATE_TOOLS:
+        origin = _coordinate_pair(runtime.get("_from_coordinates"))
+        if origin is not None:
+            restored["_from_coordinates"] = origin
 
     return restored

@@ -2005,6 +2005,10 @@ async def _offload_tool_call(coro_factory, *, timing: Optional[dict] = None):
 # path re-attaches exactly ``_deadline_monotonic`` after sealing; the off-plan fan-out must
 # not be broader.
 _SPECIALIST_INJECTED_KEYS = frozenset({"_deadline_monotonic"})
+# Routing hints the unsealed fan-out may carry but a sealed specialist call does not: the
+# listing-coordinate origin. Dropped (not refused, not admitted) so the specialist path stays
+# exactly as narrow as the planned path and keeps routing from the address.
+_SPECIALIST_DROPPED_HINTS = frozenset({"_from_coordinates"})
 
 
 class _SpecialistCapabilityScope:
@@ -2052,7 +2056,8 @@ class _SpecialistCapabilityScope:
             validate_read_only_dispatch_for_role,
         )
 
-        params = dict(params or {})
+        params = {k: v for k, v in dict(params or {}).items()
+                  if str(k) not in _SPECIALIST_DROPPED_HINTS}
         # Harness-injected execution hints bypass the model-visible schema exactly as they do
         # on the planned path — and, exactly as on the planned path, ``_deadline_monotonic``
         # is the ONE permitted post-seal key. ``sealed.update(injected)`` used to re-admit any

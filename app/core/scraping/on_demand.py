@@ -1419,11 +1419,18 @@ def _band_key(slug: str, min_beds, max_beds, min_price, max_price) -> str:
 
 def _is_fresh_entry(entry, coverage=None) -> bool:
     """True when a cache entry exists and is within its TTL. An entry whose harvest was
-    cut short gets the shorter TTL, so the next search reads deeper."""
+    cut short gets the shorter TTL, so the next search reads deeper.
+
+    So does an entry whose coverage does not say which channels were read: the paging fix
+    kept the all-property key, and an entry written before it holds page 1 only (about 30
+    rows) under coverage with no ``channels``. Reusing it for the full TTL would hide the
+    deeper read for half a day after a deploy, while a new key would cold-start every area.
+    """
     if not entry:
         return False
-    stopped_early = isinstance(coverage, dict) and coverage.get("stopped_early")
-    return (time.time() - entry[1]) / 3600.0 < (SHALLOW_TTL_HOURS if stopped_early else TTL_HOURS)
+    shallow = isinstance(coverage, dict) and (
+        coverage.get("stopped_early") or "channels" not in coverage)
+    return (time.time() - entry[1]) / 3600.0 < (SHALLOW_TTL_HOURS if shallow else TTL_HOURS)
 
 
 def _band_narrower_than_canonical(min_beds, max_beds, min_price, max_price) -> bool:

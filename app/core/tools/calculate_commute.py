@@ -108,6 +108,10 @@ def calculate_commute_impl(
             base['routed_to_address'] = routed_to
         if routed_from != from_address:
             base['routed_from_address'] = routed_from
+        if _from_coordinates:
+            # The journey started at the listing's own position, not at a geocode of
+            # from_address: say so beside the number.
+            base['origin_source'] = 'listing_coordinates'
 
         duration = details.get('duration_minutes')
         if duration is not None and is_measured(details.get('source')):

@@ -1562,10 +1562,14 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         result['room_type'] = room_type
         changed = True
     elif not room_type and result.get('room_type'):
-        from core.constraint_updates import withdraws_room_type
-        if withdraws_room_type(current_message, result.get('room_type')):
-            # "never mind the studio" with nothing else named lifts the room type (R3-05).
-            result['room_type'] = None
+        from core.constraint_updates import withdrawn_room_types
+        from core.tools.search_properties import join_room_types, room_type_parts
+        withdrawn = withdrawn_room_types(current_message, result.get('room_type'))
+        if withdrawn:
+            # "never mind the studio" with nothing else named lifts the room type (R3-05);
+            # against "an en-suite or a studio" it leaves the en-suite.
+            result['room_type'] = join_room_types(
+                [part for part in room_type_parts(result.get('room_type')) if part not in withdrawn])
             changed = True
 
     from core.tools.search_properties import _extract_bedrooms, _accessibility_feature_mentions

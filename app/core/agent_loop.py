@@ -1281,6 +1281,21 @@ def _with_reply_language(node):
     return wrapped
 
 
+def _with_shown_listings(node):
+    """Run a tool-dispatch node with the listings this conversation already showed in
+    context, so a "find some others" search can leave them out (search_properties reads
+    SHOWN_LISTINGS). Same route as _with_reply_language, for the same reason."""
+    @functools.wraps(node)
+    async def wrapped(state):
+        from core.tools.search_properties import SHOWN_LISTINGS, shown_listing_records
+        token = SHOWN_LISTINGS.set(shown_listing_records(state.get("extracted_context") or {}))
+        try:
+            return await node(state)
+        finally:
+            SHOWN_LISTINGS.reset(token)
+    return wrapped
+
+
 def _inject_focus_url(params: dict, state: AgentState) -> dict:
     """get_property_details executor re-injection: supply the FOCUSED listing's URL when
     the model referenced that listing (or named none) and passed no URL of its own.
@@ -2005,6 +2020,10 @@ async def _offload_tool_call(coro_factory, *, timing: Optional[dict] = None):
 # path re-attaches exactly ``_deadline_monotonic`` after sealing; the off-plan fan-out must
 # not be broader.
 _SPECIALIST_INJECTED_KEYS = frozenset({"_deadline_monotonic"})
+# Routing hints the unsealed fan-out may carry but a sealed specialist call does not: the
+# listing-coordinate origin. Dropped (not refused, not admitted) so the specialist path stays
+# exactly as narrow as the planned path and keeps routing from the address.
+_SPECIALIST_DROPPED_HINTS = frozenset({"_from_coordinates"})
 
 
 class _SpecialistCapabilityScope:
@@ -2052,7 +2071,8 @@ class _SpecialistCapabilityScope:
             validate_read_only_dispatch_for_role,
         )
 
-        params = dict(params or {})
+        params = {k: v for k, v in dict(params or {}).items()
+                  if str(k) not in _SPECIALIST_DROPPED_HINTS}
         # Harness-injected execution hints bypass the model-visible schema exactly as they do
         # on the planned path — and, exactly as on the planned path, ``_deadline_monotonic``
         # is the ONE permitted post-seal key. ``sealed.update(injected)`` used to re-admit any
@@ -3034,6 +3054,11 @@ def _criteria_room_type_label(criteria: dict) -> Optional[str]:
     rt = criteria.get("room_type")
     if isinstance(rt, str):
         r = rt.strip().lower()
+        if "+" in r:     # several types asked for together, e.g. 'studio+ensuite'
+            labels = [label for label in (_criteria_room_type_label({"room_type": part})
+                                          for part in r.split("+")) if label]
+            if labels:
+                return " or ".join(labels)
         if r == "studio":
             return "studio"
         if r in ("shared", "flatshare", "house share", "houseshare", "room"):
@@ -6089,8 +6114,18 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         re.I)
     # Questions the candidate ledger does not answer: whether the listings can still be had,
     # what moving in costs, how they compare (r22 c9faf055: "这些房源现在还能租吗？" got the
-    # ledger instead of the grounded, honest answer).
+    # ledger instead of the grounded, honest answer), and what the market charges: "could you
+    # first help me to establish a typical range for an ensuite and a studio" got six
+    # "cannot verify the commute condition" rows and no range at all (2026-11-02).
     _LEDGER_UNANSWERED = re.compile(
+        r"\b(?:typical|usual|average|normal|going|market|realistic)\s+(?:monthly\s+)?"
+        r"(?:price\s+|rent(?:al)?\s+|cost\s+|budget\s+)?(?:range|rate|rent|price|cost)s?\b|"
+        r"\b(?:price|rent(?:al)?|budget|cost)\s+range\b|\bballpark\b|"
+        r"\bhow\s+much\s+(?:does|do|did|would|will|should|might|could|is|are)\b|"
+        r"\bwhat\s+(?:should|would|could|do|might)\s+(?:i|we)\s+(?:budget|expect\s+to\s+(?:pay|spend)|pay|spend)\b|"
+        r"\b(?:establish|figure\s+out|work\s+out)\s+(?:a|the|my|our)?\s*(?:typical\s+|realistic\s+)?"
+        r"(?:budget|range)\b|"
+        r"价格区间|价格范围|租金范围|租金区间|预算范围|预算区间|大概多少|一般多少|行情|均价|平均租金|租金水平|什么价位|"
         r"\bstill\s+(?:available|free|on\s+the\s+market|to\s+let|for\s+rent|up)\b|"
         r"\b(?:is|are)\s+(?:it|this|that|they|these|those|any)\s+(?:\w+\s+){0,2}?(?:available|free|let)\b|"
         r"\bcan\s+(?:i|we)\s+(?:still\s+)?(?:rent|get|book|view|have|move\s+in)\b|\bavailability\b|"
@@ -6290,7 +6325,22 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     and _LEDGER_UNANSWERED.search(_cm)):
                 composite_answer = True
             if composite_answer:
-                response = f"{str(final_response).strip()}\n\n{response}"
+                # The ledger below is the authority on which listing qualifies; the answer
+                # that leads it loses any claim that an unverified or excluded listing meets
+                # the conditions (a market range, advice and verified listings stay).
+                from core.candidate_validation import answer_lead_without_unverified_claims
+                lead = answer_lead_without_unverified_claims(
+                    str(final_response).strip(), validation, language=language)
+                composite_answer = bool(lead)
+            if composite_answer:
+                response = f"{lead}\n\n{response}"
+                # app.py re-checks the listings against the final criteria and, when any row
+                # is not eligible, rebuilds the ledger from that re-check. It used to rebuild
+                # the WHOLE reply from it, so every composite above reached the user as the
+                # ledger alone. The answer that leads travels with the turn's tool_data (which
+                # is rebuilt every turn, so it cannot leak into the next one) and app.py pops
+                # it before the payload ships.
+                tool_data["answer_lead"] = lead
             if search_found.get('source_message') and search_found['source_message'] not in response:
                 response = search_found['source_message'] + '\n\n' + response
             if (requires_status or len(artifacts) > 1) and not composite_answer:
@@ -6427,7 +6477,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
     return {
         "guard": guard_node,
         "agent": agent_node,
-        "execute_tools": _with_reply_language(execute_tools_node),
+        "execute_tools": _with_reply_language(_with_shown_listings(execute_tools_node)),
         "format_output_fc": (format_output_fc_with_contract if specialist_dispatch
                              else format_output_with_notes),
     }

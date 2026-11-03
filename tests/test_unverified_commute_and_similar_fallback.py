@@ -154,7 +154,8 @@ def commute_search(monkeypatch):
     """A one-listing London search with the commute annotation stage live."""
     set_rag_coordinator(_PassThroughCoordinator())
     monkeypatch.setattr(maps, "geocode_address", lambda addr: {"lat": 51.5054, "lng": -0.0235})
-    monkeypatch.setattr(maps, "calculate_travel_time", lambda o, d, mode="transit": 17)
+    monkeypatch.setattr(maps, "calculate_travel_time",
+                        lambda o, d, mode="transit", *, origin_coordinates=None: 17)
     monkeypatch.setattr(on_demand, "get_listings", lambda *a, **k: {
         "rows": [_similar_row("12 Rennie Street", 1733)],
         "meta": {"slug": "canary-wharf", "requested_city": "london", "source": "scraped",

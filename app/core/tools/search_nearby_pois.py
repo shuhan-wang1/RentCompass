@@ -206,6 +206,33 @@ def parse_geo_location(value) -> Optional[tuple]:
     return None
 
 
+def listing_origin_coordinates(row) -> Optional[dict]:
+    """A listing row's own position as a routing origin ``{'lat', 'lng'}``, or None.
+
+    OnTheMarket display addresses ("L-Suite at Gravity Co., The Weymouth Marylebone,
+    50-60 Weymouth Street W1G") often do not geocode, yet every scraped row carries the
+    portal's own coordinates. Reads ``geo_location`` (either scraper shape) or flat
+    latitude/longitude fields; anything outside the UK box, non-numeric or non-finite is
+    rejected, so the caller falls back to the address. Rounded to 6 places (about 0.1 m)
+    so the same listing always produces the same cache key."""
+    if not isinstance(row, dict):
+        return None
+    coords = None
+    for key in ('geo_location', 'Geo_Location'):
+        coords = parse_geo_location(row.get(key))
+        if coords:
+            break
+    if not coords:
+        lat = next((row.get(k) for k in ('latitude', 'lat', 'Latitude') if row.get(k) is not None), None)
+        lon = next((row.get(k) for k in ('longitude', 'lng', 'lon', 'Longitude')
+                    if row.get(k) is not None), None)
+        if not isinstance(lat, bool) and not isinstance(lon, bool):
+            coords = parse_geo_location({'lat': lat, 'lng': lon})
+    if not coords or not all(math.isfinite(v) for v in coords):
+        return None
+    return {'lat': round(coords[0], 6), 'lng': round(coords[1], 6)}
+
+
 def _calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """
     使用 Haversine 公式计算两点之间的距离（米）

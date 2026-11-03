@@ -1181,9 +1181,7 @@ ROOM_CHANNELS = ("house-flat-share", "student", "property")
 DEFAULT_PLAN = "property"
 
 
-def search_plan(min_beds, max_beds, room_type=None) -> str:
-    """The plan for a request: 'property' | 'studio' | 'rooms' | 'N-bed'. A bounded set,
-    so it is safe in a cache key; a range of bedroom counts has no channel of its own."""
+def _single_plan(min_beds, max_beds, room_type=None) -> str:
     if room_type in ("shared", "ensuite"):
         return "rooms"
     if room_type == "studio" or (min_beds == 0 and max_beds == 0):
@@ -1193,12 +1191,34 @@ def search_plan(min_beds, max_beds, room_type=None) -> str:
     return DEFAULT_PLAN
 
 
+def search_plan(min_beds, max_beds, room_type=None) -> str:
+    """The plan for a request: 'property' | 'studio' | 'rooms' | 'N-bed', or several of them
+    joined by '+' in sorted order when the request names several room types
+    ('studio+ensuite' -> 'rooms+studio'). A bounded set, so it is safe in a cache key; a
+    range of bedroom counts has no channel of its own."""
+    if isinstance(room_type, (list, tuple, set)):
+        parts = [str(part) for part in room_type]
+    else:
+        parts = str(room_type or "").split("+")
+    parts = [part.strip().lower() for part in parts if part and part.strip()]
+    if len(parts) <= 1:
+        return _single_plan(min_beds, max_beds, parts[0] if parts else None)
+    return "+".join(sorted({_single_plan(min_beds, max_beds, part) for part in parts}))
+
+
 def plan_channels(plan: str) -> tuple[str, ...]:
-    if plan == "rooms":
-        return ROOM_CHANNELS
-    if plan.endswith("-bed"):
-        return (f"{plan}-property",)
-    return (plan,)
+    """The OnTheMarket path channels a plan reads, all-property last: it is the fallback a
+    room search keeps for listings the share pages miss."""
+    channels: list[str] = []
+    for part in str(plan or DEFAULT_PLAN).split("+"):
+        if part == "rooms":
+            wanted = ROOM_CHANNELS
+        elif part.endswith("-bed"):
+            wanted = (f"{part}-property",)
+        else:
+            wanted = (part,)
+        channels.extend(channel for channel in wanted if channel not in channels)
+    return tuple(sorted(channels, key=lambda channel: channel == DEFAULT_PLAN))
 
 
 def curated_destination_area(destination) -> str | None:
@@ -1419,11 +1439,18 @@ def _band_key(slug: str, min_beds, max_beds, min_price, max_price) -> str:
 
 def _is_fresh_entry(entry, coverage=None) -> bool:
     """True when a cache entry exists and is within its TTL. An entry whose harvest was
-    cut short gets the shorter TTL, so the next search reads deeper."""
+    cut short gets the shorter TTL, so the next search reads deeper.
+
+    So does an entry whose coverage does not say which channels were read: the paging fix
+    kept the all-property key, and an entry written before it holds page 1 only (about 30
+    rows) under coverage with no ``channels``. Reusing it for the full TTL would hide the
+    deeper read for half a day after a deploy, while a new key would cold-start every area.
+    """
     if not entry:
         return False
-    stopped_early = isinstance(coverage, dict) and coverage.get("stopped_early")
-    return (time.time() - entry[1]) / 3600.0 < (SHALLOW_TTL_HOURS if stopped_early else TTL_HOURS)
+    shallow = isinstance(coverage, dict) and (
+        coverage.get("stopped_early") or "channels" not in coverage)
+    return (time.time() - entry[1]) / 3600.0 < (SHALLOW_TTL_HOURS if shallow else TTL_HOURS)
 
 
 def _band_narrower_than_canonical(min_beds, max_beds, min_price, max_price) -> bool:

@@ -759,6 +759,18 @@ def calculate_travel_details(origin_address: str, destination_address: str, mode
     return out
 
 
+def _travel_basis_cache_key(origin_n: str, dest_n: str, mode: str, origin_coordinates=None) -> str:
+    """One key for the basis cache, shared by its producer and ``travel_basis_if_known``.
+
+    A pair routed from a listing's own coordinates is a different journey from the same pair
+    routed from wherever the display address geocodes, so the coordinates are part of the key.
+    """
+    if origin_coordinates:
+        return create_cache_key('calculate_travel_basis_v1', origin_n, dest_n, mode,
+                                str(origin_coordinates))
+    return create_cache_key('calculate_travel_basis_v1', origin_n, dest_n, mode)
+
+
 def calculate_travel_basis(origin_address: str, destination_address: str,
                            mode: str = "transit", *, origin_coordinates=None) -> dict | None:
     """CACHED, basis-aware travel payload — the single producer both commute tools read.
@@ -783,9 +795,7 @@ def calculate_travel_basis(origin_address: str, destination_address: str,
         return None
     origin_n = _normalize_address_for_routing(origin_address)
     dest_n = _normalize_address_for_routing(destination_address)
-    cache_key = (create_cache_key('calculate_travel_basis_v1', origin_n, dest_n, mode, str(origin_coordinates))
-                 if origin_coordinates else
-                 create_cache_key('calculate_travel_basis_v1', origin_n, dest_n, mode))
+    cache_key = _travel_basis_cache_key(origin_n, dest_n, mode, origin_coordinates)
     cached_result = get_from_cache(cache_key)
     if cached_result is not None:
         print(
@@ -803,7 +813,7 @@ def calculate_travel_basis(origin_address: str, destination_address: str,
 
 
 def travel_basis_if_known(origin_address: str, destination_address: str,
-                          mode: str = "transit") -> dict | None:
+                          mode: str = "transit", *, origin_coordinates=None) -> dict | None:
     """The basis payload for a pair IF it is already cached. Never routes, never geocodes.
 
     ``calculate_travel_time`` is a thresholding view: it returns a TfL itinerary on one branch
@@ -824,12 +834,12 @@ def travel_basis_if_known(origin_address: str, destination_address: str,
         return None
     origin_n = _normalize_address_for_routing(origin_address)
     dest_n = _normalize_address_for_routing(destination_address)
-    cached = get_from_cache(create_cache_key(
-        'calculate_travel_basis_v1', origin_n, dest_n, mode))
+    cached = get_from_cache(_travel_basis_cache_key(origin_n, dest_n, mode, origin_coordinates))
     return cached if isinstance(cached, dict) else None
 
 
-def calculate_travel_time(origin_address: str, destination_address: str, mode: str = "transit") -> int | None:
+def calculate_travel_time(origin_address: str, destination_address: str, mode: str = "transit",
+                          *, origin_coordinates=None) -> int | None:
     """BARE minutes for internal thresholding only — filters, sorts, fare heuristics.
 
     A bare int carries no basis, so NOTHING that shows a figure to a user may call this: use
@@ -846,10 +856,14 @@ def calculate_travel_time(origin_address: str, destination_address: str, mode: s
     Unlike the basis payload this never withholds: a filter that drops a listing because the
     honest answer was "no number" would be a silent, invisible failure, whereas a thresholding
     figure is never asserted to anyone. Refusal belongs to the path that PUBLISHES the number.
+
+    ``origin_coordinates`` (a listing's own ``{'lat', 'lng'}``) route from where the listing
+    is instead of from wherever its display address geocodes, if it geocodes at all.
     """
     from core.commute_basis import best_estimate_minutes, is_measured
 
-    details = calculate_travel_basis(origin_address, destination_address, mode)
+    details = calculate_travel_basis(origin_address, destination_address, mode, **(
+        {'origin_coordinates': origin_coordinates} if origin_coordinates else {}))
     if details is None:
         print(f"  [WARN] Could not geocode origin/destination for travel time")
         return None

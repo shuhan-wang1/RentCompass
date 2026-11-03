@@ -193,14 +193,16 @@ def _surfaced_minutes(result) -> dict:
     return out
 
 
-def _raw_producer(origin_address, destination_address, mode="transit"):
+def _raw_producer(origin_address, destination_address, mode="transit", *,
+                  origin_coordinates=None):
     """``calculate_travel_time`` as it behaved BEFORE PR #53: the raw straight-line formula.
 
     Reconstructed from the mirror that ``test_the_legacy_mirror_matches_maps_service`` already
     cross-checks against ``maps_service.straight_line_travel_estimate``, so this control is not
-    a hand-written approximation of the old code — it is the same arithmetic.
+    a hand-written approximation of the old code — it is the same arithmetic. It takes the
+    listing-coordinate origin the search now passes, as the shipped producer does.
     """
-    o = ms._get_coordinates(origin_address)
+    o = origin_coordinates or ms._get_coordinates(origin_address)
     d = ms._get_coordinates(destination_address)
     if not o or not d:
         return None

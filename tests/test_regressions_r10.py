@@ -240,8 +240,7 @@ def test_g_04_other_figures_are_no_budget(row):
 
 def test_g_04_forget_scrubs_the_search_log(tmp_path, monkeypatch):
     from rag.agent_memory import AgentMemory
-    monkeypatch.setenv("AGENT_MEMORY_DB_PATH", str(tmp_path / "memory"))
-    memory = AgentMemory()
+    memory = AgentMemory(db_path=str(tmp_path / "memory"))
     uid = "g04-user"
     memory.add("User asked: Find me a 1-bed in Hackney under £1,850, no commute", "episodic", uid, uid, role="user")
     memory.add("User asked: Is there a travelcard under £150?", "episodic", uid, uid, role="user")
@@ -457,8 +456,7 @@ def test_g_06_any_other_turn_keeps_its_history(monkeypatch, tmp_path):
 # G-12 ── a new reflection records its turn, and an edit of that turn takes it back
 def test_g_12_a_reflection_goes_with_its_turn(tmp_path, monkeypatch):
     import rag.agent_memory as am
-    monkeypatch.setenv("AGENT_MEMORY_DB_PATH", str(tmp_path / "memory"))
-    memory = am.AgentMemory()
+    memory = am.AgentMemory(db_path=str(tmp_path / "memory"))
     uid = "g12-user"
     for index in range(5):
         memory.add(f"User asked: note {index}", "episodic", "s", uid, role="user", importance=9)
@@ -477,8 +475,7 @@ def test_g_12_a_reflection_goes_with_its_turn(tmp_path, monkeypatch):
 
 def test_g_12_an_edit_during_the_reflection_writes_nothing(tmp_path, monkeypatch):
     import rag.agent_memory as am
-    monkeypatch.setenv("AGENT_MEMORY_DB_PATH", str(tmp_path / "memory"))
-    memory = am.AgentMemory()
+    memory = am.AgentMemory(db_path=str(tmp_path / "memory"))
     uid = "g12-late"
     for index in range(5):
         memory.add(f"User asked: note {index}", "episodic", "s", uid, role="user", importance=9)
@@ -796,8 +793,7 @@ def test_g_11_naming_it_withdraws_nothing(text):
 
 def test_g_11_the_row_goes_and_the_other_facts_stay(tmp_path, monkeypatch):
     from rag.agent_memory import AgentMemory, SOURCE_AUTO
-    monkeypatch.setenv("AGENT_MEMORY_DB_PATH", str(tmp_path / "memory"))
-    memory = AgentMemory()
+    memory = AgentMemory(db_path=str(tmp_path / "memory"))
     uid = "g11-user"
     memory.add("The user needs a ground-floor flat with a lift-free entrance because of their knee.",
                "semantic", uid, uid, extra_meta={"source": SOURCE_AUTO})

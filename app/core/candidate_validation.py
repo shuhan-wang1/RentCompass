@@ -845,11 +845,28 @@ def _bounded_positive_int(env_name: str, default: int, *, ceiling: int) -> int:
     return max(1, min(value, ceiling))
 
 
+def _listing_origin_coordinates(candidate: dict) -> dict | None:
+    """The listing's own ``{'lat', 'lng'}`` when present and inside the UK, else None."""
+    try:
+        from core.tools.search_nearby_pois import listing_origin_coordinates
+    except Exception:
+        return None
+    try:
+        return listing_origin_coordinates(candidate)
+    except Exception:
+        return None
+
+
 async def collect_commute_evidence(
         provider, candidates: list[dict], destination: str, *, mode: str = "transit",
         timeout_s: float = 20.0, deadline_monotonic: float | None = None,
         max_candidates: int | None = None, concurrency: int | None = None) -> list[dict]:
     """Call ``calculate_commute`` once per listing and preserve failure classes.
+
+    A listing that carries its own coordinates is routed from them (``_from_coordinates``);
+    when the tool confirms it did so, the evidence row records
+    ``origin_source='listing_coordinates'``. Without coordinates the call uses the address
+    only, exactly as before.
 
     This helper intentionally does not retry or collapse calls. The tool's own retry policy
     handles retry-safe reads; the per-listing evidence ledger must still show which listing
@@ -884,6 +901,11 @@ async def collect_commute_evidence(
     async def _one(candidate: dict) -> dict:
         base = _base(candidate)
         address = base["from_address"]
+        # A display address such as "…, Weymouth Street W1G" often does not geocode, but the
+        # listing carries the portal's own coordinates. Route from those when they are sane;
+        # with neither, the call fails and the row stays unknown (fail-closed).
+        origin = _listing_origin_coordinates(candidate)
+        origin_kwargs = {"_from_coordinates": origin} if origin else {}
         if not address or not destination:
             return {**base, "success": False, "evidence_status": "missing",
                     "error": "from_address or to_address is missing", "elapsed_ms": 0}
@@ -908,7 +930,7 @@ async def collect_commute_evidence(
             try:
                 result = await asyncio.wait_for(provider.execute_tool(
                     "calculate_commute", from_address=address, to_address=destination,
-                    mode=mode), timeout=remaining)
+                    mode=mode, **origin_kwargs), timeout=remaining)
             except asyncio.TimeoutError:
                 dispatch_stopped.set()
                 return {
@@ -937,8 +959,14 @@ async def collect_commute_evidence(
             return {**base, "success": False, "evidence_status": "failed",
                     "raw_data": raw or None, "error": error or "calculate_commute failed",
                     "elapsed_ms": elapsed_ms}
-        return {**base, "success": True, "evidence_status": "success",
-                "duration_minutes": duration, "raw_data": raw, "elapsed_ms": elapsed_ms}
+        entry = {**base, "success": True, "evidence_status": "success",
+                 "duration_minutes": duration, "raw_data": raw, "elapsed_ms": elapsed_ms}
+        # Provenance comes from the tool's own answer, not from what was offered: a boundary
+        # that drops the hint routes from the address, and the row must not claim otherwise.
+        if origin and raw.get("origin_source") == "listing_coordinates":
+            entry["origin_source"] = "listing_coordinates"
+            entry["origin_coordinates"] = origin
+        return entry
 
     admitted = rows[:max_candidates]
     evidence = list(await asyncio.gather(*[_one(candidate) for candidate in admitted]))

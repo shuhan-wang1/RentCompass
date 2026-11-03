@@ -4333,11 +4333,14 @@ async def api_search_direct():
 
     # room_type: canonical enum ('studio'|'ensuite'|'shared') or None (any). Unknown
     # values are dropped so a bad form value never silently narrows the search.
+    # Several types travel as one '+'-joined value ('studio+ensuite'), or as a list.
     room_type = criteria.get('room_type')
-    if isinstance(room_type, str):
-        room_type = room_type.strip().lower() or None
-        if room_type not in ('studio', 'ensuite', 'shared', 'whole'):
-            room_type = None
+    _rt_tokens = (room_type.split('+') if isinstance(room_type, str)
+                  else list(room_type) if isinstance(room_type, list) else [])
+    _rt_tokens = [str(token).strip().lower() for token in _rt_tokens if str(token).strip()]
+    if _rt_tokens and all(token in ('studio', 'ensuite', 'shared', 'whole') for token in _rt_tokens):
+        from core.tools.search_properties import join_room_types
+        room_type = join_room_types(_rt_tokens)
     else:
         room_type = None
 

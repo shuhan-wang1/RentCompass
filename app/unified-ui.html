@@ -5529,7 +5529,20 @@
                     if (!skip(periodSelect)) periodSelect.value = (c.budget_period === 'week' ? 'week' : 'month');
                     if (!skip(bedSelect)) bedSelect.value = (c.bedrooms != null ? String(c.bedrooms) : '');
                     if (!skip(bedMinInput)) bedMinInput.checked = !!c.bedrooms_minimum;
-                    if (!skip(roomSelect)) roomSelect.value = c.room_type || '';
+                    if (!skip(roomSelect)) {
+                        // Several types asked for in chat travel as one value ('studio+ensuite');
+                        // offer it as its own option so a panel search keeps both.
+                        const rt = c.room_type || '';
+                        if (rt && !Array.prototype.some.call(roomSelect.options, function (o) { return o.value === rt; })) {
+                            const opt = document.createElement('option');
+                            opt.value = rt;
+                            opt.textContent = rt.split('+').map(function (part) {
+                                return t('room_type_' + part);
+                            }).join(' / ');
+                            roomSelect.appendChild(opt);
+                        }
+                        roomSelect.value = rt;
+                    }
                     if (!skip(destInput)) destInput.value = c.commute_destination || '';
                     if (!skip(maxInput)) maxInput.value = (c.max_commute_time != null ? String(c.max_commute_time) : '');
                     if (!skip(noInput)) noInput.checked = !!c.no_commute;

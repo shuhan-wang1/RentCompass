@@ -208,15 +208,15 @@ def test_ci_required_check_names_and_python_version_match_release_gate():
     assert workflow.count("AGENT_MEMORY_DB_PATH:") == 2
     assert workflow.count(
         "python -m pip install --require-hashes -r requirements-bootstrap.lock"
-    ) == 3
+    ) == 4
     assert workflow.count(
         "python -m pip install --require-hashes -r requirements-production.lock"
-    ) == 3
+    ) == 4
     assert workflow.count(
         "python -m pip install --require-hashes -r requirements-ci.lock"
-    ) == 2
+    ) == 3
     assert "--require-hashes -r requirements-supply.lock" in workflow
-    assert workflow.count("python -m pip check") == 3
+    assert workflow.count("python -m pip check") == 4
     dockerfile = _text("Dockerfile")
     assert "constraints-production.txt" in dockerfile
     assert "--require-hashes -r requirements-bootstrap.lock" in dockerfile
@@ -228,6 +228,18 @@ def test_ci_required_check_names_and_python_version_match_release_gate():
     assert "--skip-editable" not in workflow
     assert '"chromadb"' not in _text("pyproject.toml")
     assert 'RELEASE_TRACK_REF:-origin/main' in release
+
+
+def test_release_gate_check_requires_both_parallel_seed_jobs():
+    """The seeds run as parallel jobs; the check the release gate reads must stay red
+    unless both passed, including when one was cancelled or never ran."""
+    workflow = _text(".github/workflows/ci.yml")
+    gate = workflow.split("    name: Tests (Python 3.12)\n", 1)[1].split("\n  compose-smoke:", 1)[0]
+    assert "needs: [test-seed-1009, test-seed-2027]" in gate
+    assert "if: always()" in gate
+    assert 'test "${{ needs.test-seed-1009.result }}" = success' in gate
+    assert 'test "${{ needs.test-seed-2027.result }}" = success' in gate
+    assert "pytest" not in gate
 
 
 def test_production_hash_lock_covers_the_exact_reviewed_closure():

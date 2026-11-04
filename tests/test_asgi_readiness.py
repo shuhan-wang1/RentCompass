@@ -244,7 +244,7 @@ def test_external_provider_checks_are_explicitly_unknown_without_network(tmp_pat
     assert tfl["required"] is False
 
 
-def test_real_fourteen_tool_registry_passes_required_readiness(monkeypatch, tmp_path):
+def test_real_fifteen_tool_registry_passes_required_readiness(monkeypatch, tmp_path):
     from core.tool_system import create_tool_registry
 
     monkeypatch.setenv("IDEMPOTENCY_DB", str(tmp_path / "idempotency.sqlite3"))
@@ -256,7 +256,7 @@ def test_real_fourteen_tool_registry_passes_required_readiness(monkeypatch, tmp_
     assert result == {
         "status": "ok",
         "required": True,
-        "tool_count": 14,
+        "tool_count": 15,
         "strict_schemas": "valid",
         "runtime_constraints": "valid",
     }

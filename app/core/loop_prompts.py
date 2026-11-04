@@ -92,6 +92,20 @@ NO_SEARCH_YET_RULE = (
     "search_properties in that case."
 )
 
+# A range question asked BEFORE any budget ("could you first help me establish a typical range
+# for an en-suite and a studio near UCL?") was answered from UCL hall prices found by web search,
+# with no studio range at all, while the listing data held Bloomsbury studios from £1,127
+# (2026-11-03 replay). A listing search would have been the wrong answer to it too.
+RENT_RANGE_RULE = (
+    "TYPICAL RENT RANGES: When the user asks what rent is typical, how much a room type costs, "
+    "or wants a price range to set a budget (\"typical range for an en-suite and a studio near "
+    "UCL\" / 「一般多少钱」/「价格区间」), call rent_price_summary with the room types and the area "
+    "or the commute destination, and answer from it: per room type the number of listings, the "
+    "middle-half range and the median, labelled as current asking rents. That is research, not "
+    "a listing search — do NOT call search_properties for it unless the user also asks to see "
+    "listings. Hall-of-residence prices from web_search may be added, labelled as halls."
+)
+
 # H2 area-switch continuation. When criteria already exist and the user retargets the area,
 # the continuation is a property search — never web research. The negative directive above
 # still wins (stated as the explicit exception so this rule cannot regress guard case H3).
@@ -279,6 +293,7 @@ _BEHAVIOUR_RULES_ORDER = (
     EFFICIENCY_RULE,
     SEARCH_READINESS_RULE,
     NO_SEARCH_YET_RULE,
+    RENT_RANGE_RULE,
     AREA_SWITCH_RULE,
     AREA_RANKING_RULE,
     DEICTIC_RULE,

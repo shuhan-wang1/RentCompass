@@ -856,6 +856,120 @@ def render_candidate_status(validation: dict, *, language: str = "en") -> str:
     return "\n".join(lines)
 
 
+_LEAD_AMOUNT = re.compile(r"\d[\d,]*(?:\.\d+)?")
+
+
+def _status_monthly_price(status: dict) -> int | None:
+    """A ledger row's monthly rent as a whole number of pounds, or None."""
+    candidate = status.get("candidate") or {}
+    for key in ("parsed_price", "price", "Price"):
+        value = candidate.get(key)
+        if isinstance(value, bool) or value in (None, ""):
+            continue
+        if isinstance(value, (int, float)):
+            return int(value) if value > 0 else None
+        found = _LEAD_AMOUNT.search(str(value))
+        if found:
+            try:
+                amount = int(float(found.group(0).replace(",", "")))
+            except ValueError:
+                continue
+            if amount > 0:
+                return amount
+    return None
+
+
+def _lead_area_label(areas, zh: bool) -> str:
+    """'bloomsbury', 'kings-cross' -> 'Bloomsbury and Kings Cross' (zh: 'Bloomsbury、Kings Cross')."""
+    names: list[str] = []
+    for area in areas or []:
+        text = " ".join(str(area or "").replace("-", " ").split())
+        if not text:
+            continue
+        label = " ".join(word if any(ch.isupper() for ch in word) else word[:1].upper() + word[1:]
+                         for word in text.split())
+        if label.lower() not in {name.lower() for name in names}:
+            names.append(label)
+    if not names:
+        return ""
+    if zh:
+        return "、".join(names)
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+
+
+def render_search_lead(validation: dict, facts: dict | None = None, *, language: str = "en") -> str:
+    """One or two sentences that frame the candidate ledger of a plain search, built ONLY
+    from tool data: how many listings meet everything, where, the price span, and what a
+    follow-up changed ("left out the N you saw", "cheapest first", "nothing cheaper was
+    left"). A plain search ships no model prose (r6-O8: it was ungrounded or repeated the
+    ledger), and the bare ledger read as a status dump with no answer (2026-11-03 replay).
+    Every figure here comes from the ledger rows or the search's own follow-up facts, and a
+    claim about order is made only when the rows really are in that order."""
+    zh = (language or "").lower().startswith("zh")
+    facts = facts if isinstance(facts, dict) else {}
+    eligible = validation.get("eligible") or []
+    unknown = validation.get("unknown") or []
+    excluded = validation.get("excluded") or []
+    unchecked = [str(item) for item in (validation.get("unchecked") or []) if str(item).strip()]
+    area = _lead_area_label(facts.get("areas"), zh)
+    follow = facts.get("follow_up") if isinstance(facts.get("follow_up"), dict) else {}
+    prices = [price for price in (_status_monthly_price(s) for s in eligible) if price]
+    parts: list[str] = []
+    if eligible:
+        count = len(eligible)
+        lo, hi = (min(prices), max(prices)) if prices else (None, None)
+        if zh:
+            span = ("" if lo is None else f"，月租 £{lo:,}" if lo == hi
+                    else f"，月租 £{lo:,} 到 £{hi:,}")
+            parts.append(f"{area + ' ' if area else ''}有 {count} 套房源"
+                         f"{'满足已经核实的条件' if unchecked else '满足您提出的全部条件'}{span}。")
+        else:
+            span = ("" if lo is None else f", at £{lo:,} a month" if lo == hi
+                    else f", from £{lo:,} to £{hi:,} a month")
+            where = f" in {area}" if area else ""
+            verb = "meets" if count == 1 else "meet"
+            what = "the conditions that could be checked" if unchecked else "everything you asked for"
+            parts.append(f"{count} listing{'s' if count != 1 else ''}{where} {verb} {what}{span}.")
+    elif unknown or excluded:
+        parts.append(f"{area or '这次搜索'}没有能确认满足您全部条件的房源，找到的房源列在下面。" if zh else
+                     f"No listing{' in ' + area if area else ''} could be confirmed against every "
+                     "condition you gave; what was found is listed below.")
+    else:
+        return ""
+
+    left_out = follow.get("excluded_shown") or 0
+    if isinstance(left_out, int) and left_out > 0:
+        parts.append(f"已排除您之前看过的 {left_out} 套。" if zh else
+                     f"I left out the {left_out} listing{'s' if left_out != 1 else ''} you had "
+                     "already seen.")
+    below = follow.get("cheaper_than_monthly")
+    if isinstance(below, (int, float)) and not isinstance(below, bool) and below > 0:
+        below = int(below)
+        under = sum(1 for price in prices if price < below)
+        if under:
+            parts.append(f"其中 {under} 套低于 £{below:,}/月（您之前看到的房源的中间价）；"
+                         "这是按“太贵”推断的，不是您设定的预算。" if zh else
+                         f"{under} of them {'is' if under == 1 else 'are'} under £{below:,} a month, "
+                         "the middle of what you saw before; that is my reading of “too "
+                         "expensive”, not a budget you set.")
+        elif eligible:
+            parts.append(f"{area or '这一带'}已经没有低于 £{below:,}/月 的新房源，最便宜的之前已经给您看过了。"
+                         if zh else
+                         f"Nothing under £{below:,} a month was left{' in ' + area if area else ''}: "
+                         "the cheapest ones there were already shown.")
+    elif (follow.get("cheapest_first") and len(prices) > 1
+          and all(a <= b for a, b in zip(prices, prices[1:]))):
+        parts.append("因为您觉得之前的价格太高，这里按月租从低到高排列；这是我的推断，不是您设定的预算。"
+                     if zh else
+                     "As the earlier prices seemed too high, they are listed cheapest first; that is "
+                     "my reading, not a budget you set.")
+    widened = _lead_area_label(follow.get("widened_to"), zh)
+    if widened:
+        parts.append(f"原区域新房源不多，另外看了附近的 {widened}。" if zh else
+                     f"Few new listings were left, so nearby {widened} was added.")
+    return "".join(parts) if zh else " ".join(parts)
+
+
 _STREET_SUFFIX = (r"(?:Street|St|Road|Rd|Square|Sq|Place|Pl|Avenue|Ave|Lane|Gardens|Court|Crescent|"
                   r"Terrace|Close|Mews|Row|Way|Walk|Yard|Mansions|House|Wharf|Quay|Grove|Hill|"
                   r"Building|Hall|Tower|Gate|Green|Drive|Parade|Buildings|Estate|Lodge)")
@@ -4325,13 +4439,51 @@ def _superseded_journeys(artifacts: list) -> set:
     return superseded
 
 
-def render_structured_evidence_fallback(state: dict, *, language: str | None = None) -> str:
+def _listing_journey_groups(artifacts: list, superseded: set) -> dict:
+    """``{id(artifact): group}`` for ``calculate_commute`` journeys that share a target with
+    at least one journey from a DIFFERENT origin. A search's candidate check times every
+    listing to the same destination; one "Returned journey" line per listing repeated what
+    the ledger already says beside each row (seven near-identical lines in the 2026-11-03
+    replay). Such a group is stated once, as a range."""
+    groups: dict = {}
+    for artifact in artifacts:
+        if (id(artifact) in superseded or not _usable_artifact(artifact)
+                or artifact.get("tool") != "calculate_commute"):
+            continue
+        raw = artifact["raw_data"]
+        value = _measured_minutes(raw)
+        origin = _place_labels(raw.get("from_address") or raw.get("from"))
+        target = _place_labels(raw.get("to_address") or raw.get("to"))
+        if value is None or not origin or not target:
+            continue
+        station = any(_journey_end_label(raw.get(end)) for end in ("from", "to"))
+        group = groups.setdefault(_norm(target[0]), {"target": target[0], "origins": set(),
+                                                     "minutes": [], "station": False,
+                                                     "members": []})
+        group["origins"].add(_norm(origin[0]))
+        group["minutes"].append(value)
+        group["station"] = group["station"] or station
+        group["members"].append(id(artifact))
+    out: dict = {}
+    for group in groups.values():
+        if len(group["origins"]) >= 2:
+            for member in group["members"]:
+                out[member] = group
+    return out
+
+
+def render_structured_evidence_fallback(state: dict, *, language: str | None = None,
+                                        group_listing_journeys: bool = False) -> str:
     """Render independent facts from THIS turn's completed artifacts, without an LLM.
 
     Safe for provider-error degradation after tools have completed. It makes no candidate
     eligibility claim, computes no fare coverage/combined budget from incomplete inputs,
     and never treats a fastest itinerary as a wheelchair-accessibility guarantee. Empty
     means no supported evidence is available. Callers must pass current-turn artifacts.
+
+    ``group_listing_journeys``: under a candidate ledger, which already prints each
+    listing's verified minutes, journeys from several listings to one destination are
+    stated once as a measured range, still bound to each listing's own itinerary.
     """
     language = language or str((state.get("extracted_context") or {}).get("reply_language") or "en")
     zh = language.lower().startswith("zh")
@@ -4350,8 +4502,29 @@ def render_structured_evidence_fallback(state: dict, *, language: str | None = N
     has_forecast = any(_usable_artifact(a) and a.get('tool') == 'get_weather'
                        and a['raw_data'].get('weather_type') == 'forecast' for a in artifacts)
     superseded = _superseded_journeys(artifacts)
+    grouped = _listing_journey_groups(artifacts, superseded) if group_listing_journeys else {}
+    stated_groups: set = set()
     for artifact in artifacts:
         if id(artifact) in superseded:
+            continue
+        group = grouped.get(id(artifact))
+        if group is not None:
+            if id(group) not in stated_groups:
+                stated_groups.add(id(group))
+                lo, hi = min(group["minutes"]), max(group["minutes"])
+                count = len(group["origins"])
+                span = f"{lo:g} minutes for each" if lo == hi else f"{lo:g}–{hi:g} minutes"
+                span_zh = f"均为 {lo:g} 分钟" if lo == hi else f"{lo:g}–{hi:g} 分钟"
+                add(f"Journey times measured with the TfL planner from each of {count} listing addresses to "
+                    f"{group['target']}: {span} (each listing's own fastest returned itinerary"
+                    + ("; some are station to station and leave out the walk to and from the "
+                       "stations" if group["station"] else "") + ").",
+                    f"已用 TfL 路线规划器分别测出 {count} 个房源地址到 {group['target']} 的通勤时间：{span_zh}"
+                    f"（每套取规划器返回的最快行程"
+                    + ("；部分为站到站时间，不含往返车站的步行" if group["station"] else "") + "）。")
+                add("Each time belongs to its own listing only; none verifies another listing's "
+                    "travel time, arrival reliability, or step-free access.",
+                    "每个时间只对应各自的房源，不代表其他房源的通勤时长，也未证明准点到达或无台阶通行。")
             continue
         if not _usable_artifact(artifact):
             if (isinstance(artifact, dict) and artifact.get('tool') in {'get_transport_info', 'get_weather'}
@@ -4395,6 +4568,13 @@ def render_structured_evidence_fallback(state: dict, *, language: str | None = N
                     add(f'Returned rain probability: {rain:g}%.', f'返回的降雨概率：{rain:g}%。')
                 else:
                     add("A numerical rain probability was not returned.", "未返回具体降雨概率。")
+        elif tool == "rent_price_summary":
+            if raw.get("status") == "ok" and raw.get("summary"):
+                for summary_line in str(raw["summary"]).splitlines():
+                    if summary_line.strip():
+                        lines.append(plain(summary_line, 400))
+                if raw.get("note"):
+                    lines.append(plain(raw["note"], 300))
         elif tool == "get_property_details":
             prop = raw.get("property") or {}
             if raw.get("found") is False or not isinstance(prop, dict):

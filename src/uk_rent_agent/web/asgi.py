@@ -43,6 +43,7 @@ _EXPECTED_TOOL_NAMES = frozenset({
     "remember",
     "ask_user",
     "compare_or_rank_areas",
+    "rent_price_summary",
 })
 
 

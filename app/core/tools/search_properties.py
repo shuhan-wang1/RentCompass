@@ -3290,6 +3290,16 @@ def _prefer_cheaper(rows: list, below) -> list:
     return sorted(cheaper, key=_price) + rest
 
 
+def _cheapest_first_order(rows: list) -> list:
+    """Rows cheapest first; a row with no readable price keeps its place after the priced
+    ones. Used for "too expensive" when nothing was shown to compare against."""
+    def _price(prop):
+        return _record_price(prop.get("price") or prop.get("parsed_price") or prop.get("Price"))
+
+    priced = [row for row in rows if _price(row) is not None]
+    return sorted(priced, key=_price) + [row for row in rows if _price(row) is None]
+
+
 def _all_shown_message(excluded: int, area, is_cjk: bool) -> str:
     if is_cjk:
         return (f"符合这些条件的房源（{area or '该区域'}）都已经给您看过了（{excluded} 套），"
@@ -3300,10 +3310,14 @@ def _all_shown_message(excluded: int, area, is_cjk: bool) -> str:
 
 
 def _follow_up_note(excluded: int, cheaper_than, widened, is_cjk: bool, *,
-                    cheaper_found=None) -> str:
+                    cheaper_found=None, cheapest_first: bool = False) -> str:
     parts = []
     if is_cjk:
-        parts.append(f"已排除之前展示过的 {excluded} 套房源。")
+        if excluded:
+            parts.append(f"已排除之前展示过的 {excluded} 套房源。")
+        if cheapest_first:
+            parts.append("之前没有展示过可以比较价格的房源，所以按您说的“太贵”，从最便宜的排起；"
+                         "这是推断的偏好，不是您设定的预算。")
         if cheaper_than:
             parts.append(f"按您说的“太贵”，低于 £{cheaper_than}/月（之前展示房源的中间价）的排在前面；"
                          f"这是推断的偏好，不是您设定的预算。")
@@ -3313,7 +3327,12 @@ def _follow_up_note(excluded: int, cheaper_than, widened, is_cjk: bool, *,
         if widened:
             parts.append(f"原区域新房源不多，另外看了附近的 {'、'.join(widened)}。")
         return "".join(parts)
-    parts.append(f"Left out the {excluded} listing{'s' if excluded != 1 else ''} already shown.")
+    if excluded:
+        parts.append(f"Left out the {excluded} listing{'s' if excluded != 1 else ''} already shown.")
+    if cheapest_first:
+        parts.append("No listing had been shown yet to compare prices with, so since the prices "
+                     "seemed too high these are ordered cheapest first; that is inferred, not a "
+                     "budget you set.")
     if cheaper_than:
         parts.append(f"Since the last ones were too expensive, listings under £{cheaper_than}/month "
                      f"(the middle of what was shown) come first; that is inferred, not a budget "
@@ -4242,12 +4261,17 @@ async def search_properties_impl(
         # "Find some others" / "these are too expensive": leave out what was shown.
         if _shown_listings is None:
             _shown_listings = SHOWN_LISTINGS.get()
-        _follow_up = (listing_follow_up(current_message or msg_for_extraction)
-                      if _shown_listings else None)
+        _follow_up = listing_follow_up(current_message or msg_for_extraction)
+        # "Find others" with nothing shown has nothing to leave out. "Too expensive" still
+        # means something: with no shown listing to compare against (the earlier answer was
+        # a market range, not listings), the rows simply come cheapest first.
+        if _follow_up and not _shown_listings and not _follow_up["cheaper"]:
+            _follow_up = None
         _shown_keys, _shown_prices = (_shown_listing_facts(_shown_listings) if _follow_up
                                       else (set(), []))
         _cheaper_than = (int(statistics.median(_shown_prices))
                          if _follow_up and _follow_up["cheaper"] and _shown_prices else None)
+        _cheapest_first = bool(_follow_up and _follow_up["cheaper"] and _cheaper_than is None)
         _excluded_shown = 0
         _follow_up_areas: list = []
         # 期望入住日：先净化传入值（累积状态/表单）；再看本轮消息是否显式声明，显式声明优先
@@ -4604,7 +4628,10 @@ async def search_properties_impl(
                 return None
             return {'excluded_shown': _excluded_shown,
                     'cheaper_than_monthly': _cheaper_than,
-                    'price_preference_source': 'inferred_from_shown' if _cheaper_than else None,
+                    'cheapest_first': _cheapest_first,
+                    'price_preference_source': ('inferred_from_shown' if _cheaper_than else
+                                                'inferred_cheapest_first' if _cheapest_first
+                                                else None),
                     'widened_to': list(_follow_up_areas)}
 
         # 供两种载荷统一复用的 search_criteria 构造器（同时带 canonical + legacy 键）。
@@ -5542,6 +5569,8 @@ async def search_properties_impl(
                 })
         if _cheaper_than is not None:
             ranked_properties = _prefer_cheaper(ranked_properties, _cheaper_than)
+        elif _cheapest_first:
+            ranked_properties = _cheapest_first_order(ranked_properties)
 
         candidates = _commute_candidate_pool(ranked_properties)
         dest_coords = None
@@ -5688,6 +5717,8 @@ async def search_properties_impl(
         # request for several room types shows them in turns, each in its ranked order.
         if _cheaper_than is not None:
             perfect_match = _prefer_cheaper(perfect_match, _cheaper_than)
+        elif _cheapest_first:
+            perfect_match = _cheapest_first_order(perfect_match)
         elif room_type:
             perfect_match = _interleave_room_types(perfect_match, room_type)
 
@@ -6139,7 +6170,8 @@ async def search_properties_impl(
                                   if (_record_price(_p.get('price')) or _cheaper_than) < _cheaper_than)
                               if _cheaper_than is not None else None)
             _summary += " " + _follow_up_note(_excluded_shown, _cheaper_than, _follow_up_areas,
-                                              is_cjk, cheaper_found=_cheaper_found)
+                                              is_cjk, cheaper_found=_cheaper_found,
+                                              cheapest_first=_cheapest_first)
 
         # over-budget 备选的双语区块标签（reply_language / is_cjk 决定语言）。空列表时留空串。
         over_budget_label = (

@@ -3,6 +3,8 @@ Property Amenity Map Generator
 Integrates OpenStreetMap visualization for property recommendations
 """
 
+import os
+
 import folium
 from folium import plugins
 import time
@@ -24,6 +26,16 @@ from .cache_service import get_from_cache, set_to_cache, create_cache_key
 # coordinates + radius. This keeps repeat map generations (and live tests) off
 # the shared Overpass servers.
 POI_CACHE_TTL_SECONDS = 7 * 24 * 3600
+
+# Map tiles come through this site, not straight from tile.openstreetmap.org. The map is shown
+# in a sandboxed srcdoc iframe without allow-same-origin, so its document has an opaque origin
+# and the browser sends no Referer with tile requests; OSM's tile servers answer those with an
+# "Access blocked" image. The edge (or app.py's /tiles/osm route) fetches the tile with this
+# site's identity and caches it. A relative URL resolves against the parent page's address
+# because a srcdoc document inherits its base URL.
+MAP_TILE_URL = os.getenv("MAP_TILE_URL", "/tiles/osm/{z}/{x}/{y}.png")
+MAP_TILE_ATTRIBUTION = ('&copy; <a href="https://www.openstreetmap.org/copyright" '
+                        'target="_blank" rel="noopener">OpenStreetMap</a> contributors')
 
 
 class PropertyAmenityMapGenerator:
@@ -387,8 +399,14 @@ class PropertyAmenityMapGenerator:
         m = folium.Map(
             location=[lat, lon],
             zoom_start=15,
-            tiles='OpenStreetMap'
+            tiles=None
         )
+        folium.TileLayer(
+            tiles=MAP_TILE_URL,
+            attr=MAP_TILE_ATTRIBUTION,
+            name='OpenStreetMap',
+            max_zoom=19,
+        ).add_to(m)
         
         # Add the property marker (always visible)
         prop_price = escape(property_data.get('Price', property_data.get('price', 'N/A')))
@@ -565,8 +583,14 @@ class PropertyAmenityMapGenerator:
         m = folium.Map(
             location=[lat, lon],
             zoom_start=15,
-            tiles='OpenStreetMap'
+            tiles=None
         )
+        folium.TileLayer(
+            tiles=MAP_TILE_URL,
+            attr=MAP_TILE_ATTRIBUTION,
+            name='OpenStreetMap',
+            max_zoom=19,
+        ).add_to(m)
         
         # Add the property marker
         prop_price = escape(property_data.get('Price', property_data.get('price', 'N/A')))

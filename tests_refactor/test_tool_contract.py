@@ -14,7 +14,7 @@ def test_tool_wraps_dict_once_and_propagates_logical_failure():
     assert result.data == {"success": False, "error": "expected", "payload": 1}
 
 
-def test_registry_has_all_fourteen_tools_and_memory_identity_schema():
+def test_registry_has_all_fifteen_tools_and_memory_identity_schema():
     from core.tool_system import create_tool_registry
 
     registry = create_tool_registry()
@@ -25,6 +25,8 @@ def test_registry_has_all_fourteen_tools_and_memory_identity_schema():
         "get_transport_info",
         # Phase 1 (harness migration): terminal clarification + area value ranking.
         "ask_user", "compare_or_rank_areas",
+        # Read-only research: current asking-rent ranges per room type.
+        "rent_price_summary",
     }
     for name in ("recall_memory", "remember"):
         properties = registry.get(name).parameters["properties"]

@@ -1253,6 +1253,7 @@ def create_tool_registry() -> ToolRegistry:
     from core.tools.memory_tools import recall_memory_tool, remember_tool
     from core.tools.ask_user import ask_user_tool
     from core.tools.compare_or_rank_areas import compare_or_rank_areas_tool
+    from core.tools.rent_price_summary import rent_price_summary_tool
 
     registry = ToolRegistry()
 
@@ -1271,6 +1272,7 @@ def create_tool_registry() -> ToolRegistry:
     registry.register(remember_tool)              # 🧠 长期记忆：写入
     registry.register(ask_user_tool)              # ❓ 终止型：向用户反问澄清
     registry.register(compare_or_rank_areas_tool)  # 🏙️ 区域性价比排序/比较（design §2.5b）
+    registry.register(rent_price_summary_tool)     # 💷 各房型典型租金区间（不列房源）
 
     logger.info("Tool registry initialized with %s tools", len(registry.tools))
 

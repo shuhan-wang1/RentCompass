@@ -19,7 +19,7 @@ from core.tool_system import (
     to_function_calling_format,
 )
 
-EXPECTED_TOOL_COUNT = 14  # 12 existing + ask_user + compare_or_rank_areas
+EXPECTED_TOOL_COUNT = 15  # 12 existing + ask_user + compare_or_rank_areas + rent_price_summary
 
 
 @pytest.fixture(scope="module")

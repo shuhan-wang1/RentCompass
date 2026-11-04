@@ -3392,6 +3392,7 @@ _LOOKUP_NAMES = {
     "calculate_commute_cost": ("通勤费用计算", "commute cost calculation"),
     "get_weather": ("天气查询", "weather lookup"),
     "compare_or_rank_areas": ("区域比较", "area comparison"),
+    "rent_price_summary": ("租金区间查询", "rent range lookup"),
 }
 # The dimension a failed tool leaves unverified, and the line that says so (zh, en).
 _FAILED_DIMENSION = {
@@ -6341,11 +6342,27 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 # is rebuilt every turn, so it cannot leak into the next one) and app.py pops
                 # it before the payload ships.
                 tool_data["answer_lead"] = lead
+            elif requires_status and search_found.get('status') != 'no_results':
+                # A plain search keeps no model prose (r6-O8), but the ledger alone read as a
+                # status dump with no answer (2026-11-03 replay). A lead built only from the
+                # tool data frames it. app.py rebuilds the ledger from its own re-check and
+                # renders the lead again from that, so the facts travel with the turn's
+                # tool_data and are popped before the payload ships.
+                from core.candidate_validation import render_search_lead
+                lead_facts = {
+                    "areas": list((search_found.get("search_criteria") or {}).get("areas") or []),
+                    "follow_up": search_found.get("follow_up"),
+                }
+                search_lead = render_search_lead(validation, lead_facts, language=language)
+                if search_lead:
+                    response = f"{search_lead}\n\n{response}"
+                tool_data["search_lead_facts"] = lead_facts
             if search_found.get('source_message') and search_found['source_message'] not in response:
                 response = search_found['source_message'] + '\n\n' + response
             if (requires_status or len(artifacts) > 1) and not composite_answer:
                 from core.candidate_validation import render_structured_evidence_fallback
-                evidence = render_structured_evidence_fallback(state, language=language)
+                evidence = render_structured_evidence_fallback(
+                    state, language=language, group_listing_journeys=requires_status)
                 # A line the ledger already ends with ("房源来自缓存，价格和出租状态可能已变化；
                 # 请联系中介核实。") is not repeated (r22 c9faf055).
                 shown = {line.strip() for line in response.split('\n') if line.strip()}

@@ -169,9 +169,13 @@ def test_a_plain_search_or_an_ungrounded_answer_keeps_the_ledger_alone():
     case, state, _evidence, _message = _ctx("r22_c9faf055")
     draft = case["drafts"][-1]
     plain = _format(state, draft, "帮我在Hackney找一个一居室，预算每月2000英镑")
-    assert plain.startswith("满足全部已声明条件") and plain.count(CACHE_LINE) == 1
+    # Only the lead built from the tool data precedes the ledger, never the model's draft.
+    lead, ledger = plain.split("\n\n", 1)
+    assert "满足您提出的全部条件" in lead and draft.strip()[:20] not in plain
+    assert ledger.startswith("满足全部已声明条件") and plain.count(CACHE_LINE) == 1
     ungrounded = _format(state, draft, verdict={"grounded": False, "issues": ["unsupported_prices"]})
-    assert ungrounded.startswith("满足全部已声明条件") and ungrounded.count(CACHE_LINE) == 1
+    assert ungrounded.split("\n\n", 1)[1].startswith("满足全部已声明条件")
+    assert ungrounded.count(CACHE_LINE) == 1
 
 
 # ── r20 3745b76a: an enumeration whose predicate was withdrawn goes with it ───

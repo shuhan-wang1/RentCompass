@@ -24,8 +24,8 @@ _SPEC_BY_NAME = {s.name: s for s in _SPECS}
 _TOOL_NAMES = sorted(_SPEC_BY_NAME)
 
 
-def test_registry_has_fourteen_tools():
-    assert len(_SPECS) == 14
+def test_registry_has_fifteen_tools():
+    assert len(_SPECS) == 15
 
 
 # The "14 schema acceptability tests" gate (design §2.9 step 2): each transformed schema

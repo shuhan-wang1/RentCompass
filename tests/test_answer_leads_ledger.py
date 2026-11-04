@@ -282,14 +282,22 @@ def test_a_price_range_question_keeps_its_answer_before_the_ledger():
     "Find me a studio near UCL, I've set a budget of £2,000, 40 minutes by public transport.",
 ])
 def test_a_plain_search_keeps_the_ledger_alone(message):
+    """No model prose leads a plain search (r6-O8). Only the lead built from the tool data
+    does (2026-11-03: the bare ledger read as a status dump with no answer)."""
     _state_, out = _pipeline(_payload(), message=message)
-    assert out["final_response"].startswith("Meets all declared conditions (verified):")
+    text = out["final_response"]
+    lead, ledger = text.split("\n\n", 1)
+    assert lead == "3 listings meet everything you asked for, from £1,127 to £1,550 a month."
+    assert ledger.startswith("Meets all declared conditions (verified):")
+    assert RANGE not in text
     assert "answer_lead" not in out["tool_data"]
 
 
 def test_an_ungrounded_answer_keeps_the_ledger_alone():
     _state_, out = _pipeline(_payload(), grounded=False)
-    assert out["final_response"].startswith("Meets all declared conditions (verified):")
+    text = out["final_response"]
+    assert RANGE not in text
+    assert text.split("\n\n", 1)[1].startswith("Meets all declared conditions (verified):")
     assert "answer_lead" not in out["tool_data"]
 
 
@@ -357,5 +365,9 @@ def test_a_plain_search_turn_through_app_py_still_ships_the_ledger_alone(monkeyp
     payload = _payload(verified=False)
     state, out = _pipeline(payload, message="Find me a studio near UCL, 40 minutes by public transport.")
     result = _run_app_turn(monkeypatch, dict(state, **out), "c-answer-leads-plain")
-    assert result["message"].startswith("- No listing is both fully eligible and verified.")
+    lead, ledger = result["message"].split("\n\n", 1)
+    # The lead app.py renders from its own re-check: built from the ledger, no model prose.
+    assert lead == ("No listing could be confirmed against every condition you gave; what was "
+                    "found is listed below.")
+    assert ledger.startswith("- No listing is both fully eligible and verified.")
     assert RANGE not in result["message"]

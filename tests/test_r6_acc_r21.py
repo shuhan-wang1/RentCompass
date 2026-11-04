@@ -178,7 +178,10 @@ def test_the_deposit_answer_leads_and_the_listing_ledger_follows():
 def test_a_plain_search_turn_still_ships_the_ledger_alone():
     case, state, _, _ = _ctx("r21_63fb6f8a")
     out = _format(state, case["raw_draft"], message="Find me a flat in Hackney under £2,000.")
-    assert out.startswith(LEDGER_HEAD) and "£4,650" not in out
+    # Only the lead built from the tool data precedes the ledger, never the model's draft.
+    lead, ledger = out.split("\n\n", 1)
+    assert ledger.startswith(LEDGER_HEAD) and "£4,650" not in out
+    assert "meet everything you asked for" in lead or "meets everything you asked for" in lead
 
 
 # ── r21 0136f2f6: the cached-record caveat and its enumeration ─────────────────

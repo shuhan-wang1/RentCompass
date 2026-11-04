@@ -3826,9 +3826,11 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     # The model's answer that leads the candidate ledger (format_output_fc's composite), if
     # any. It is turn-internal: it never ships in the payload.
     answer_lead = ''
-    if isinstance(tool_data, dict) and 'answer_lead' in tool_data:
+    search_lead_facts = None
+    if isinstance(tool_data, dict) and ('answer_lead' in tool_data or 'search_lead_facts' in tool_data):
         tool_data = dict(tool_data)
-        answer_lead = str(tool_data.pop('answer_lead') or '')
+        answer_lead = str(tool_data.pop('answer_lead', '') or '')
+        search_lead_facts = tool_data.pop('search_lead_facts', None)
         final_state['tool_data'] = tool_data
     if isinstance(tool_data, dict) and 'recommendations' in tool_data:
         # Check the final user constraints again, independently of the tool's echo.
@@ -3877,9 +3879,14 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             if lead:
                 response_text = f"{lead}\n\n{ledger_text}"
             else:
-                response_text = ledger_text
+                # A plain search: the deterministic lead, rendered again from THIS re-check.
+                from core.candidate_validation import render_search_lead
+                search_lead = (render_search_lead(ledger, search_lead_facts, language=_ledger_language)
+                               if search_lead_facts is not None else '')
+                response_text = f"{search_lead}\n\n{ledger_text}" if search_lead else ledger_text
                 from core.candidate_validation import render_structured_evidence_fallback
-                evidence = render_structured_evidence_fallback(final_state, language=_ledger_language)
+                evidence = render_structured_evidence_fallback(
+                    final_state, language=_ledger_language, group_listing_journeys=True)
                 if evidence:
                     response_text += '\n\n' + evidence
         final_state['tool_data'] = tool_data

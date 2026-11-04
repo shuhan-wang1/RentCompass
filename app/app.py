@@ -5210,6 +5210,50 @@ def remove_favorite(url):
     raise ApiError(404, "Property not found")
 
 
+# Map tiles for the sandboxed map iframe (core.amenity_map_generator.MAP_TILE_URL). The iframe
+# has an opaque origin, so tile requests carry no Referer and OSM's tile servers answer them with
+# an "Access blocked" image. In production the edge serves /tiles/osm/ itself, with a cache; this
+# route is the fallback when nothing sits in front of the app. Only z/x/y inside the tile grid is
+# accepted, so it cannot be used to fetch anything else.
+_OSM_TILE_UPSTREAM = os.getenv("OSM_TILE_UPSTREAM", "https://tile.openstreetmap.org").rstrip("/")
+_OSM_TILE_USER_AGENT = "RentCompass/1.0 (+https://github.com/shuhan-wang1/RentCompass)"
+_OSM_TILE_CACHE_MAX = 512
+_osm_tile_cache: dict = {}
+_osm_tile_lock = threading.Lock()
+
+
+@app.route('/tiles/osm/<int:z>/<int:x>/<int:y>.png', methods=['GET'])
+def osm_tile(z, x, y):
+    from flask import Response
+    if not (0 <= z <= 19 and 0 <= x < 2 ** z and 0 <= y < 2 ** z):
+        return Response(status=404)
+    key = (z, x, y)
+    with _osm_tile_lock:
+        body = _osm_tile_cache.pop(key, None)
+        if body is not None:
+            _osm_tile_cache[key] = body          # most recently used last
+    if body is None:
+        import requests as _requests
+        try:
+            upstream = _requests.get(
+                f"{_OSM_TILE_UPSTREAM}/{z}/{x}/{y}.png",
+                headers={"User-Agent": _OSM_TILE_USER_AGENT, "Referer": request.host_url},
+                timeout=8)
+        except _requests.RequestException as exc:
+            logger.warning("map_tiles.upstream_failed", extra={"error_type": type(exc).__name__})
+            return Response(status=502)
+        if upstream.status_code != 200 or not str(upstream.headers.get("Content-Type", "")).startswith("image/"):
+            logger.warning("map_tiles.upstream_status", extra={"status": upstream.status_code})
+            return Response(status=502)
+        body = upstream.content
+        with _osm_tile_lock:
+            _osm_tile_cache[key] = body
+            while len(_osm_tile_cache) > _OSM_TILE_CACHE_MAX:
+                _osm_tile_cache.pop(next(iter(_osm_tile_cache)))
+    return Response(body, mimetype="image/png",
+                    headers={"Cache-Control": "public, max-age=604800"})
+
+
 @app.route('/api/generate_map', methods=['POST'])
 def generate_property_map():
     """

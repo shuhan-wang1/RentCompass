@@ -223,6 +223,15 @@ def _pace_request(deadline: Optional[float] = None) -> bool:
         _pace_lock.release()
 
 
+def _local_overpass_answer(query: str) -> Optional[dict]:
+    """The local OSM index's answer to ``query``, or None (never raises)."""
+    try:
+        from core.osm_poi_index import answer_overpass_query
+    except Exception:  # noqa: BLE001 — the network path must survive any local defect
+        return None
+    return answer_overpass_query(query)
+
+
 def overpass_request(query: str, timeout: int = 30, max_rounds: int = 2,
                      expect_nonempty: bool = False,
                      deadline: Optional[float] = None) -> dict:
@@ -253,6 +262,14 @@ def overpass_request(query: str, timeout: int = 30, max_rounds: int = 2,
     30s read timeout on any of them, is the shape that turned a rate-limited pool into an
     85-second tool call.
     """
+    # A local OpenStreetMap extract answers first when it covers the whole query (see
+    # core.osm_poi_index): no pacing, no mirror walk, and an empty answer there is a real
+    # "none nearby". It returns None — and the network path below runs as before — when the
+    # index is missing or stale, the query is outside its subset, or any part of it lies
+    # outside the extract.
+    local = _local_overpass_answer(query)
+    if local is not None:
+        return local
     # Even callers without their own outer deadline must not leave a worker
     # walking five mirrors for minutes after the user has received a timeout.
     if deadline is None:

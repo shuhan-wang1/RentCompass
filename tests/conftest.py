@@ -31,6 +31,9 @@ for _name, _file in (
     ("AREA_RECO_CACHE_PATH", "area_reco_cache.sqlite3"),
     ("OTM_DESC_CACHE_PATH", "otm_desc_cache.sqlite3"),
     ("IDEMPOTENCY_DB", "idempotency.sqlite3"),
+    # Read-only, but a checkout that holds a built index would otherwise answer the amenity
+    # tests from real map data instead of their stubbed Overpass responses.
+    ("OSM_POI_INDEX_PATH", "osm_poi_absent.sqlite3"),
 ):
     os.environ.setdefault(_name, os.path.join(_TEST_RUNTIME, _file))
 os.environ.setdefault("ALLOW_LEGACY_CLIENT_USER_ID", "1")

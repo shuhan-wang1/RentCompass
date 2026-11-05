@@ -476,6 +476,12 @@ _REVISION_MARKERS = (
     "let's say", "lets say", "update that", "revise", "no wait", "rather",
     "on second thought", "sorry, ", "not ", "now it's", "now its",
     "其实", "改成", "改为", "更新", "不对", "算了", "重新", "我是说", "应该是",
+    # An explicit move of the figure is its own announcement: "预算提高到每周 £340，其他要求
+    #不变" was asked to confirm a "conflict" with the earlier £300 (2026-11-05).
+    "raise", "increase", "lower", "reduce", "bump", "up it to", "go up to", "push it to",
+    "tighten", "new budget", "budget is now", "budget to", "change my budget", "change the budget",
+    "提高", "提到", "调整", "调到", "调高", "调低", "上调", "下调", "降到", "降至", "降低",
+    "增加到", "加到", "收紧", "放宽", "改到",
 )
 
 # The earlier statement frames itself as a hard ceiling.
@@ -569,10 +575,13 @@ def _statements(text: str, turn: int) -> List[Dict[str, Any]]:
     if not field:
         return []
     low = raw.casefold()
-    absolute = any(mk in low for mk in _ABSOLUTE_MARKERS)
     revision = any(mk in low for mk in _REVISION_MARKERS) or explicit_criteria_revision(raw)
     out: List[Dict[str, Any]] = []
+    from core.constraint_updates import clause_at
     for m in _AMOUNT_RE.finditer(raw):
+        # A hard-ceiling word frames the amount in its own clause only: "通勤不超过35分钟，
+        # 预算每周£300" made £300 an absolute ceiling because of the commute limit.
+        absolute = any(mk in clause_at(raw, m.start(), m.end()).casefold() for mk in _ABSOLUTE_MARKERS)
         # Use the same amount-local noun-phrase scope as the executor. A rent
         # ceiling and a combined rent/travel cap are independent quantities even
         # when their qualifier follows the amount ("£2100 for rent plus travel").

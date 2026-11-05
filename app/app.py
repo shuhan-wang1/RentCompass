@@ -4025,11 +4025,18 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     )
 
     # The journeys this turn measured stay quotable on the next ones (F-02).
-    from core.candidate_validation import earlier_routes
+    from core.candidate_validation import earlier_routes, with_detail_page_text
     with turn_lock:
         _get_session(user_id, conversation_id).persistent_state.setdefault('extracted_context', {})[
             'earlier_routes'] = earlier_routes(extracted_context.get('earlier_routes'),
                                                final_state.get('tool_artifacts'))
+        # A listing page read this turn goes onto that listing's card, so the re-check after
+        # the turn sees what the answer saw ("a room in a shared house").
+        _shown = _get_session(user_id, conversation_id)
+        _paged = with_detail_page_text(_shown.last_results or [], final_state.get('tool_artifacts'))
+        if _paged is not None:
+            _shown.last_results = _paged
+            _shown.persistent_state.setdefault('extracted_context', {})['view_results'] = list(_paged)
 
     # ── 长期记忆：随 turn 原子提交到 durable outbox，响应路径不做 LLM/SQLite 写入 ──
     # 记忆按 user_id 命名空间共享（跨会话）；worker 使用 idempotency_key 做 at-least-once

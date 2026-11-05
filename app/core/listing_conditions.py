@@ -32,6 +32,10 @@ REASON_SHARED_BATHROOM = "listing says the bathroom is shared"
 REASON_SHARED_KITCHEN = "listing says the kitchen is shared"
 REASON_BILLS_NOT_MET = "listing says not all bills are included"
 REASON_BILLS_UNKNOWN = "bills included is not confirmed"
+REASON_SHARED_HOME = "listing says it is a room in a shared home, not a whole property"
+REASON_GARDEN_NOT_MET = "listing says there is no {kind}garden"
+REASON_GARDEN_SHARED = "listing mentions only a shared garden, not a private one"
+REASON_GARDEN_UNKNOWN = "{kind}garden is not confirmed"
 REASON_MOVE_IN_UNKNOWN = "listed as available from {available}; not confirmed for {requested}"
 REASON_MOVE_IN_NOW_UNKNOWN = "listed as available now; not confirmed for {requested}"
 
@@ -109,6 +113,28 @@ _SHARED_KITCHEN = re.compile(
 _PRIVATE_BATHROOM = re.compile(
     r"\ben[- ]?suite\b|\bprivate\s+" + _BATH + r"|\bown\s+(?:private\s+)?" + _BATH +
     r"|\bseparate\s+shower\s*room\b|\bself[- ]contained\b", re.I)
+
+# A room in a shared home, whatever the platform's title says: Water Lane was listed as a
+# "1 bed Terraced house" and its page said "A spacious double bedroom is available within a
+# well-presented shared house … three shared bathrooms" (2026-11-05). Shared gardens,
+# hallways and entrances belong to whole flats too, so they are not here.
+_SHARED_HOME = re.compile(
+    r"\b(?:bed)?rooms?\s+(?:is\s+|are\s+)?(?:available\s+|to\s+(?:rent|let)\s+)?(?:with)?in\s+"
+    r"(?:a|an|the|our|this)\s+(?:[\w-]+\s+){0,3}?(?:shared|house[- ]?share|flat[- ]?share)\b"
+    r"|\bshared\s+(?:house|flat|home|apartment|property|accommodation|maisonette)\b"
+    r"|\b(?:house|flat)[- ]?share\b|\bh\.?m\.?o\b|\b(?:house|flat)\s*mates?\b"
+    r"|\bcommunal\s+(?:accommodation|living(?:\s+(?:room|area|space))?|lounge|kitchen)\b"
+    r"|\bshared\s+(?:kitchen|bath(?:room)?s?|shower(?:\s*rooms?)?|living\s+(?:room|area|space)|lounge|"
+    r"reception\s+room)\b|\b(?:two|three|four|five|\d)\s+shared\s+bath(?:room)?s\b", re.I)
+_PRIVATE_GARDEN = re.compile(
+    r"\b(?:private|own|rear|back|front|south[- ]facing|west[- ]facing|east[- ]facing|north[- ]facing|"
+    r"enclosed|walled|landscaped|lawned|patio|secluded)\s+gardens?\b|\bgarden\s+flat\b"
+    r"|\bexclusive\s+use\s+of\s+(?:the\s+|a\s+)?garden\b|私人花园|独立花园|后花园|前花园", re.I)
+_SHARED_GARDEN = re.compile(
+    r"\b(?:communal|shared|residents[’']?)\s+gardens?\b|\bgardens?\s+(?:is\s+|are\s+)?(?:communal|shared)\b"
+    r"|公共花园|共用花园|共享花园", re.I)
+_NO_GARDEN = re.compile(r"\bno\s+(?:private\s+)?garden\b|\bwithout\s+(?:a\s+)?garden\b|没有花园|无花园", re.I)
+_ANY_GARDEN = re.compile(r"\bgardens?\b|花园", re.I)
 
 _BILLS_EXCLUDED = (
     re.compile(r"\bbills?\s+(?:are\s+)?(?:not|n[o’']t)\s+(?:included|inclusive)\b", re.I),
@@ -218,6 +244,34 @@ def bills_evidence(text: str) -> tuple[str, str]:
     return "unknown", ""
 
 
+def garden_condition(text: str, *, private: bool) -> dict:
+    """A garden the user called essential, as the listing's own words describe it. A rear or
+    back garden of a whole home is its own; a communal one is not private."""
+    kind = "private " if private else ""
+    none = _first(_NO_GARDEN, text)
+    if none is not None:
+        return {"condition": "garden", "status": "not_met", "quote": _quote(text, none.start(), none.end()),
+                "reason": REASON_GARDEN_NOT_MET.format(kind=kind)}
+    own = _first(_PRIVATE_GARDEN, text)
+    if own is not None:
+        return {"condition": "garden", "status": "met", "reason": "",
+                "quote": _quote(text, own.start(), own.end())}
+    shared = _first(_SHARED_GARDEN, text)
+    if shared is not None:
+        if private:
+            return {"condition": "garden", "status": "not_met", "reason": REASON_GARDEN_SHARED,
+                    "quote": _quote(text, shared.start(), shared.end())}
+        return {"condition": "garden", "status": "met", "reason": "",
+                "quote": _quote(text, shared.start(), shared.end())}
+    if not private:
+        any_garden = _first(_ANY_GARDEN, text)
+        if any_garden is not None:
+            return {"condition": "garden", "status": "met", "reason": "",
+                    "quote": _quote(text, any_garden.start(), any_garden.end())}
+    return {"condition": "garden", "status": "unknown", "quote": "",
+            "reason": REASON_GARDEN_UNKNOWN.format(kind=kind)}
+
+
 def _requested_room_types(constraints: dict) -> set[str]:
     raw = str(constraints.get("room_type") or "").lower()
     parts = {part.strip() for part in re.split(r"[+,/|]", raw) if part.strip()}
@@ -227,6 +281,8 @@ def _requested_room_types(constraints: dict) -> set[str]:
             out.add("studio")
         elif "suite" in part:
             out.add("ensuite")
+        elif part == "whole":
+            out.add("whole")
     features = {str(f).lower() for f in constraints.get("property_features") or []}
     if "studio" in features:
         out.add("studio")
@@ -287,6 +343,13 @@ def check_listing_conditions(candidate: dict, constraints: dict) -> list[dict]:
                          "reason": template.format(group=label), "quote": quote})
 
         wanted = _requested_room_types(constraints)
+        if "whole" in wanted:
+            shared = _first(_SHARED_HOME, text)
+            if shared is not None:
+                rows.append({"condition": "whole_property", "status": "not_met",
+                             "reason": REASON_SHARED_HOME,
+                             "quote": _quote(text, shared.start(), shared.end())})
+        wanted -= {"whole"}
         if wanted:
             bath = _first(_SHARED_BATHROOM, text)
             kitchen = _first(_SHARED_KITCHEN, text)
@@ -310,14 +373,19 @@ def check_listing_conditions(candidate: dict, constraints: dict) -> list[dict]:
                     rows.append({"condition": "private_bathroom", "status": "met", "reason": "",
                                  "quote": _quote(text, private.start(), private.end())})
 
+        if constraints.get("garden"):
+            rows.append(garden_condition(text, private=constraints["garden"] == "private"))
         if constraints.get("bills_included"):
             status, quote = bills_evidence(text)
             rows.append({"condition": "bills", "status": status,
                          "reason": {"not_met": REASON_BILLS_NOT_MET, "unknown": REASON_BILLS_UNKNOWN}
                          .get(status, ""), "quote": quote})
-    elif constraints.get("bills_included"):
-        rows.append({"condition": "bills", "status": "unknown", "reason": REASON_BILLS_UNKNOWN,
-                     "quote": ""})
+    else:
+        if constraints.get("garden"):
+            rows.append(garden_condition("", private=constraints["garden"] == "private"))
+        if constraints.get("bills_included"):
+            rows.append({"condition": "bills", "status": "unknown", "reason": REASON_BILLS_UNKNOWN,
+                         "quote": ""})
     if constraints.get("move_in_date"):
         available = candidate.get("available_from") or candidate.get("_available_from")
         row = move_in_condition(available, constraints["move_in_date"])
@@ -335,6 +403,12 @@ def condition_reason_zh(reason: str) -> str | None:
         if text == REASON_ELIGIBILITY_UNKNOWN.format(group=label):
             return f"房源只租给{TENANT_GROUP_LABELS_ZH[group]}，尚未确认您是否符合"
     fixed = {
+        REASON_SHARED_HOME: "房源原文说明这是合租房里的一个房间，不是整租",
+        REASON_GARDEN_NOT_MET.format(kind=""): "房源原文说明没有花园",
+        REASON_GARDEN_NOT_MET.format(kind="private "): "房源原文说明没有私人花园",
+        REASON_GARDEN_SHARED: "房源原文只提到公共花园，不是私人花园",
+        REASON_GARDEN_UNKNOWN.format(kind=""): "尚未确认是否有花园",
+        REASON_GARDEN_UNKNOWN.format(kind="private "): "尚未确认是否有私人花园",
         REASON_SHARED_BATHROOM: "房源原文说明卫生间是共用的",
         REASON_SHARED_KITCHEN: "房源原文说明厨房是共用的",
         REASON_BILLS_NOT_MET: "房源原文说明账单并未全包",

@@ -4114,7 +4114,8 @@
                         address: rec.address,
                         geo_location: rec.geo_location || '',
                         price: rec.price,
-                        travel_time: rec.travel_time
+                        travel_time: rec.travel_time,
+                        ui_language: currentLang
                     })
                 });
                 if (!response.ok) { showToast(t('error_map'), 'error'); return; }

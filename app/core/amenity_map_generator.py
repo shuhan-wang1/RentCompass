@@ -29,6 +29,19 @@ from .cache_service import get_from_cache, set_to_cache, create_cache_key
 # the shared Overpass servers.
 POI_CACHE_TTL_SECONDS = 7 * 24 * 3600
 
+
+def _html_text(value) -> str:
+    """``value`` HTML-escaped for popup and tooltip HTML.
+
+    folium places that HTML inside a JavaScript template literal, which HTML escaping
+    does not protect: an OSM name containing ``${...}`` ran as script in the map, and a
+    backslash sequence such as ``\\xZZ`` stopped the whole map script with a syntax
+    error. As entities, the backtick, dollar sign and backslash are inert in the
+    literal and still read the same once Leaflet renders the HTML."""
+    return (str(escape(value)).replace('\\', '&#92;')
+            .replace('`', '&#96;').replace('$', '&#36;'))
+
+
 # Map tiles come through this site, not straight from tile.openstreetmap.org. The map is shown
 # in a sandboxed srcdoc iframe without allow-same-origin, so its document has an opaque origin
 # and the browser sends no Referer with tile requests; OSM's tile servers answer those with an
@@ -554,9 +567,9 @@ class PropertyAmenityMapGenerator:
 
         # The listing's own marker: never clustered, drawn above every amenity marker
         # and cluster bubble, and labelled permanently so it is easy to find.
-        prop_price = escape(property_data.get('Price', property_data.get('price', 'N/A')))
-        prop_address = escape(property_data.get('Address', property_data.get('address', 'N/A')))
-        prop_travel = escape(property_data.get('travel_time_minutes', property_data.get('travel_time', 'N/A')))
+        prop_price = _html_text(property_data.get('Price', property_data.get('price', 'N/A')))
+        prop_address = _html_text(property_data.get('Address', property_data.get('address', 'N/A')))
+        prop_travel = _html_text(property_data.get('travel_time_minutes', property_data.get('travel_time', 'N/A')))
         property_popup = f"""
         <div style="font-family: Arial; min-width: 200px;">
             <h4 style="margin-bottom: 10px; color: #2c3e50;">🏠 Property</h4>
@@ -602,21 +615,21 @@ class PropertyAmenityMapGenerator:
             for amenity in amenities:
                 # Every interpolated value is OSM-derived (publicly editable) or
                 # client-supplied, so escape it all.
-                amenity_name = escape(amenity.get('name', 'Unknown'))
+                amenity_name = _html_text(amenity.get('name', 'Unknown'))
                 popup_html = f"""
                 <div style="font-family: Arial; min-width: 150px;">
                     <h4 style="margin-bottom: 10px; color: {config['color']};">
                         {amenity_name}
                     </h4>
-                    <b>Distance:</b> {escape(amenity.get('distance_m', 'N/A'))}m<br>
+                    <b>Distance:</b> {_html_text(amenity.get('distance_m', 'N/A'))}m<br>
                 """
                 if 'cuisine' in amenity:
-                    popup_html += f"<b>Cuisine:</b> {escape(amenity['cuisine'])}<br>"
+                    popup_html += f"<b>Cuisine:</b> {_html_text(amenity['cuisine'])}<br>"
                 if 'opening_hours' in amenity:
-                    popup_html += f"<b>Hours:</b> {escape(amenity['opening_hours'])}<br>"
+                    popup_html += f"<b>Hours:</b> {_html_text(amenity['opening_hours'])}<br>"
                 address = amenity.get('address')
                 if isinstance(address, str) and address and not address.startswith('('):
-                    popup_html += f"<b>Address:</b> {escape(address)}<br>"
+                    popup_html += f"<b>Address:</b> {_html_text(address)}<br>"
                 popup_html += "</div>"
 
                 folium.Marker(

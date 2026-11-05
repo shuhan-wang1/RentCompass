@@ -82,6 +82,25 @@ def _number(value: Any) -> float | None:
 
 
 _BILLS_FEATURES = frozenset({"bills included", "bills-included", "bills inclusive"})
+_GARDEN_WORD = re.compile(r"garden|花园", re.I)
+
+
+def _garden_requirement(c: dict) -> str | None:
+    """'private' / 'any' when the user NEEDS a garden ("the garden is essential"), else None.
+
+    A need was stored as the soft line "Must have garden" and listed once as "not checked
+    for any listing", so no card said which homes lacked the garden the family called
+    essential (2026-11-05). A wish ("Would like garden") stays an unchecked preference."""
+    features = [str(v) for v in (c.get("property_features") or []) if _GARDEN_WORD.search(str(v))]
+    needs = [str(v) for v in (c.get("soft_preferences") or [])
+             if _GARDEN_WORD.search(str(v)) and re.match(r"\s*must\s+have\b", str(v), re.I)]
+    if not (features or needs):
+        return None
+    sources = c.get("constraint_sources") if isinstance(c.get("constraint_sources"), dict) else {}
+    said = " ".join(str((sources.get(key) or {}).get("text") or "")
+                    for key in ("soft_preferences", "property_features") if isinstance(sources.get(key), dict))
+    private = re.search(r"\b(?:private|own)\s+garden|私人花园|独立花园|自己的花园", " ".join(features + needs) + " " + said, re.I)
+    return "private" if private else "any"
 
 
 def hard_constraints(criteria: dict | None) -> dict:
@@ -137,6 +156,7 @@ def hard_constraints(criteria: dict | None) -> dict:
         # Who the user said they are ("I'm a UCL student"), for listings let only to a
         # group. Unknown stays None: a restriction is then "not confirmed", never a pass.
         "tenant_status": _norm(c.get("tenant_status")) or None,
+        "garden": _garden_requirement(c),
     }
 
 
@@ -188,7 +208,48 @@ def revalidate_view_results(rows: list[dict], criteria: dict | None, *,
             row['qualification'] = qualification
         _withdraw_unverified_commute_display(row, criteria)
         result.append(row)
+    # A listing that fails a stated condition stays visible, after those that may still
+    # qualify: the panel order follows the re-check, not the order the search found them.
+    result.sort(key=lambda row: 1 if (row.get('qualification') or {}).get('status') == 'excluded' else 0)
     return result
+
+
+def with_detail_page_text(rows: list[dict], artifacts: Any) -> list[dict] | None:
+    """``rows`` with the detail-page text that ``get_property_details`` read this turn put
+    on the card of the same listing, or None when nothing changed.
+
+    Asked about Water Lane, the answer read its page and said it was a room in a shared
+    house, not a whole 1-bed; the card kept its old text, so it still listed only "cat policy
+    and move-in date not verified" (2026-11-05). With the page on the row, the re-check that
+    follows every turn excludes it there too."""
+    pages: dict[str, dict] = {}
+    for artifact in artifacts or []:
+        if not isinstance(artifact, dict) or artifact.get("tool") != "get_property_details":
+            continue
+        raw = artifact.get("raw_data")
+        if not isinstance(raw, dict) or not raw.get("found"):
+            continue
+        prop = raw.get("property") if isinstance(raw.get("property"), dict) else {}
+        url = str(prop.get("url") or "").strip().rstrip("/")
+        if url and prop.get("description") and str(raw.get("description_source") or "").startswith(
+                "listing detail page"):
+            pages[url] = prop
+    if not pages:
+        return None
+    changed = False
+    out = []
+    for row in rows or []:
+        prop = pages.get(str((row or {}).get("url") or (row or {}).get("URL") or "").strip().rstrip("/"))
+        if prop and len(str(prop["description"])) > len(str(row.get("description") or "")):
+            row = dict(row, description=prop["description"])
+            available = str(prop.get("available_from") or "").strip()
+            if available and not str(row.get("available_from") or "").strip() and \
+                    available.lower() != "contact agent":
+                row["available_from"] = available
+            row.pop("qualification", None)      # re-checked from the page, never reused
+            changed = True
+        out.append(row)
+    return out if changed else None
 
 
 def _withdraw_unverified_commute_display(candidate: dict, criteria: dict) -> None:
@@ -507,7 +568,7 @@ def validate_candidates(candidates: list[dict], criteria: dict | None,
 
         # Bills are read from the listing's own words below, with the words quoted.
         requested_features = [feature for feature in constraints["property_features"]
-                              if feature not in _BILLS_FEATURES]
+                              if feature not in _BILLS_FEATURES and not _GARDEN_WORD.search(feature)]
         if requested_features:
             available_features = _structured_features(candidate)
             if available_features is None:
@@ -636,7 +697,9 @@ def validate_candidates(candidates: list[dict], criteria: dict | None,
         "eligible": [s for s in statuses if s["status"] == "eligible"],
         "excluded": [s for s in statuses if s["status"] == "excluded"],
         "unknown": [s for s in statuses if s["status"] == "unknown"],
-        "unchecked": unchecked_requirements(criteria),
+        # A garden the user needs is checked per listing above, so it is no longer "unchecked".
+        "unchecked": [item for item in unchecked_requirements(criteria)
+                      if not (constraints["garden"] and _GARDEN_WORD.search(item))],
     }
 
 

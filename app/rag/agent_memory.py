@@ -538,14 +538,19 @@ def with_pending_changes(mems: list, pending: list) -> list:
     return out
 
 
-def stated_budget_note(mems: list, criteria: dict | None) -> str:
+def stated_budget_note(mems: list, criteria: dict | None, conversation_id=None) -> str:
     """A line for a recall's memory block when a saved fact gives another budget than this
-    conversation's criteria: the budget the user stated last is the current one."""
+    conversation's criteria: the budget the user stated last is the current one. With
+    ``conversation_id``, a fact another conversation saved is another search's budget, not an
+    older one of this search, and never prompts "the saved figure differs" (2026-11-05)."""
     budget = (criteria or {}).get("max_budget")
     if not budget:
         return ""
     for record in mems or []:
         text = str(record.get("text") or "")
+        if conversation_id is not None and memory_source_label(
+                record, conversation_id) == MEMORY_SOURCE_OTHER:
+            continue
         if record.get("mtype") == "semantic" and _BUDGET_WORD.search(text) and (
                 _row_bounds(text).get("money") not in (None, budget)):
             return (f"The budget stated most recently in this conversation is £{budget:,.0f} a month. "
@@ -1012,6 +1017,62 @@ def without_rows_of_conversation(memories: list, conversation_id) -> list:
     return [memory for memory in memories or []
             if memory.get("from_conversation") != conversation_id
             or (memory.get("mtype") == "semantic" and memory.get("source") != SOURCE_AUTO)]
+
+
+# Where a remembered row came from, seen from the conversation reading it. One user ran a search
+# with a £2,000 budget, then started a new conversation for another search at £2,800: the reply
+# used £2,800 but volunteered an "old record" of £2,000, and nothing said where that came from
+# (browser test 2026-11-05). Each row now says whether this conversation saved it.
+MEMORY_SOURCE_THIS = "(saved in this conversation)"
+MEMORY_SOURCE_OTHER = ("(saved in another conversation: background from an earlier search, "
+                       "not this search's criteria)")
+MEMORY_SOURCE_UNKNOWN = "(origin unknown)"
+MEMORY_SOURCE_RULE = (
+    "A fact saved in another conversation, or of unknown origin, never conflicts with, overrides "
+    "or gets compared against the criteria the user states in this conversation. Mention one only "
+    "if the user asks what you remember, or if this conversation has said nothing on that point "
+    "and you are offering to apply it.")
+
+
+def memory_source_label(memory: dict, conversation_id) -> str:
+    """The source label of one remembered row for the conversation ``conversation_id``."""
+    origin = (memory or {}).get("from_conversation")
+    if not origin:
+        return MEMORY_SOURCE_UNKNOWN
+    return MEMORY_SOURCE_THIS if str(origin) == str(conversation_id) else MEMORY_SOURCE_OTHER
+
+
+def conversation_holds_budget(criteria: dict | None, message: str = "") -> bool:
+    """True when the conversation has a budget of its own: its criteria hold one, or the
+    message of this turn states one (the first turn of a new search has no criteria yet)."""
+    if (criteria or {}).get("max_budget") is not None:
+        return True
+    try:
+        from core.tools.search_properties import _extract_budget
+        return _extract_budget(str(message or "")[:4000])[0] is not None
+    except Exception:
+        return False
+
+
+def without_other_conversation_budgets(memories: list, conversation_id) -> list:
+    """``memories`` without the budget another conversation stated, for a conversation that
+    holds its own: that figure belongs to another search and is no conflict with this one. The
+    erasure's own rule finds the budget and cuts only its clauses, so the rest of the row stays
+    ("has a cat"). Rows of this conversation and rows of unknown origin are left as they are."""
+    out = []
+    for memory in memories or []:
+        origin = memory.get("from_conversation") if isinstance(memory, dict) else None
+        if not origin or not conversation_id or str(origin) == str(conversation_id):
+            out.append(memory)
+            continue
+        text = str(memory.get("text") or "")
+        if not _states_field_value(text, "budget", str(memory.get("mtype") or "")):
+            out.append(memory)
+            continue
+        rest = _without_field_clauses(text, "budget")
+        if rest:
+            out.append(dict(memory, text=rest))
+    return out
 
 
 def history_without_fields(history: list, fields: tuple) -> list:
@@ -2774,7 +2835,9 @@ class AgentMemory:
                 continue
             records.append({'id': record_id, 'text': document, 'mtype': 'semantic',
                             'created_at': metadata.get('created_at'),
-                            **({'source': metadata['source']} if metadata.get('source') else {})})
+                            **({'source': metadata['source']} if metadata.get('source') else {}),
+                            **({'from_conversation': _row_conversation(metadata)}
+                               if _row_conversation(metadata) else {})})
         return sorted(records, key=lambda m: str(m.get('created_at') or ''), reverse=True)
 
     def retrieve(self, query, session_id="default", user_id=None, n=6,
@@ -2862,7 +2925,8 @@ class AgentMemory:
             return ""
         return _stated_rows_text(zip(got.get("documents") or [], got.get("metadatas") or []))
 
-    def format_for_prompt(self, mems, saved_total=None, user_id=None) -> str:
+    def format_for_prompt(self, mems, saved_total=None, user_id=None,
+                          conversation_id=None) -> str:
         """The memory block. Reflections are the assistant's own INFERENCES and are labelled
         and listed apart: they were recalled as "everything I have saved" and applied as
         search preferences (R2-06/R2-20). They are labelled TENTATIVE, and one whose wording
@@ -2871,14 +2935,22 @@ class AgentMemory:
 
         ``saved_total`` (a recall question): how many saved facts the user has, so the block
         says whether it lists all of them. "Here is everything I have stored" listed 19 of 25
-        (R4-13)."""
+        (R4-13).
+
+        ``conversation_id`` (the conversation reading the block): each stated row says whether
+        this conversation saved it, another one did, or its origin is unknown, and one line
+        under the header says a row from elsewhere is never compared with this conversation's
+        criteria (2026-11-05). None keeps the unlabelled block."""
         mems = presentable_memories(
             mems, history=(lambda: self.user_stated_history(user_id)) if user_id else None)
         if not mems:
             return ""
         tag = {"semantic": "FACT", "episodic": "PAST"}
-        stated = [f"[{tag.get(m.get('mtype'), 'MEM')}] {m['text']}" for m in mems
-                  if m.get("mtype") != "reflection"]
+        rows = [m for m in mems if m.get("mtype") != "reflection"]
+        labels = ([memory_source_label(m, conversation_id) for m in rows]
+                  if conversation_id is not None else [""] * len(rows))
+        stated = [f"[{tag.get(m.get('mtype'), 'MEM')}] {label + ' ' if label else ''}{m['text']}"
+                  for m, label in zip(rows, labels)]
         inferred = [f"[INFERENCE] {m['text']}" for m in mems if m.get("mtype") == "reflection"]
         header = "What I remember about this user:"
         if saved_total is not None:
@@ -2888,6 +2960,8 @@ class AgentMemory:
                       f"What I remember about this user (showing {shown} of {saved_total} saved "
                       "facts; this list is NOT complete, so never say it is everything you have "
                       "stored):")
+        if any(label and label != MEMORY_SOURCE_THIS for label in labels):
+            header += "\n" + MEMORY_SOURCE_RULE
         block = header + "\n" + "\n".join(stated) if stated else ""
         if inferred:
             block = (block + "\n" if block else "") + (

@@ -3619,9 +3619,16 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         if _reset_in_conversation and _saved_total is None:
             # A recall still reads everything: "what do you remember?" has its own answer.
             _mems = without_rows_of_conversation(_mems, conversation_id)
-        _mem_block = (_am.format_for_prompt(_mems, user_id=user_id) if _saved_total is None
+        from rag.agent_memory import conversation_holds_budget, without_other_conversation_budgets
+        if _saved_total is None and conversation_holds_budget(
+                persistent_snapshot.get('accumulated_search_criteria'), user_message):
+            # Another conversation's budget belongs to another search: it is not shown beside
+            # this one's, where it read as an "old record" (2026-11-05). A recall lists it.
+            _mems = without_other_conversation_budgets(_mems, conversation_id)
+        _mem_block = (_am.format_for_prompt(_mems, user_id=user_id, conversation_id=conversation_id)
+                      if _saved_total is None
                       else _am.format_for_prompt(_mems, saved_total=_saved_total,
-                                                 user_id=user_id))
+                                                 user_id=user_id, conversation_id=conversation_id))
         if _mem_block:
             print(f"[Memory] 🧠 注入 {len(_mems)} 条相关记忆")
     except Exception as _e:
@@ -3646,13 +3653,16 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     if selected_defaults:
         _mems = selected_defaults + [record for record in _mems if record.get('id') not in selected_memory_ids]
         # A recall question keeps its full list (R4-13); otherwise the six most relevant.
-        _mem_block = (_am.format_for_prompt(_mems[:6], user_id=user_id) if _saved_total is None
+        _mem_block = (_am.format_for_prompt(_mems[:6], user_id=user_id,
+                                            conversation_id=conversation_id)
+                      if _saved_total is None
                       else _am.format_for_prompt(_mems, saved_total=_saved_total,
-                                                 user_id=user_id))
+                                                 user_id=user_id, conversation_id=conversation_id))
 
     if _saved_total is not None and _mem_block:
         from rag.agent_memory import stated_budget_note
-        _budget_note = stated_budget_note(_mems, persistent_snapshot['accumulated_search_criteria'])
+        _budget_note = stated_budget_note(_mems, persistent_snapshot['accumulated_search_criteria'],
+                                          conversation_id)
         if _budget_note:
             _mem_block = _budget_note + "\n" + _mem_block
 
@@ -3954,6 +3964,12 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             if rendered and rendered not in response_text:
                 response_text += '\n\n' + rendered
             break
+    # "First summarise all my requirements" got a candidate list and no recap (2026-11-05): a
+    # recap the user asks for leads the reply, rendered from the criteria, not left to the model.
+    from core.criteria_recap import with_criteria_recap
+    response_text = with_criteria_recap(
+        response_text, final_state.get('accumulated_search_criteria') or {},
+        message=user_message, language=extracted_context.get('reply_language', 'en'))
     recommendations = tool_data.get('recommendations')
 
     # ── Tool-markup guard, LAYER 1: before anything persists this ──
@@ -4025,11 +4041,18 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     )
 
     # The journeys this turn measured stay quotable on the next ones (F-02).
-    from core.candidate_validation import earlier_routes
+    from core.candidate_validation import earlier_routes, with_detail_page_text
     with turn_lock:
         _get_session(user_id, conversation_id).persistent_state.setdefault('extracted_context', {})[
             'earlier_routes'] = earlier_routes(extracted_context.get('earlier_routes'),
                                                final_state.get('tool_artifacts'))
+        # A listing page read this turn goes onto that listing's card, so the re-check after
+        # the turn sees what the answer saw ("a room in a shared house").
+        _shown = _get_session(user_id, conversation_id)
+        _paged = with_detail_page_text(_shown.last_results or [], final_state.get('tool_artifacts'))
+        if _paged is not None:
+            _shown.last_results = _paged
+            _shown.persistent_state.setdefault('extracted_context', {})['view_results'] = list(_paged)
 
     # ── 长期记忆：随 turn 原子提交到 durable outbox，响应路径不做 LLM/SQLite 写入 ──
     # 记忆按 user_id 命名空间共享（跨会话）；worker 使用 idempotency_key 做 at-least-once

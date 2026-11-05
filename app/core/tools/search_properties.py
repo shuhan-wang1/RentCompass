@@ -610,6 +610,27 @@ def _amount_role(text: str, lo: int, hi: int) -> str:
             after = after[:joins[-1].start()]
     if re.search(r'每人|人均|\b(?:each|per person|per head)\b', before, re.I):
         return 'per_person'
+    # "£1,200 per person" / "£1,200 each": the qualifier after the figure, possibly after its
+    # period. Read as a household ceiling it searched a 2-bed at £1,200 (2026-11-05).
+    if re.match(r'\s*(?:(?:pcm|pw|p/w|monthly|weekly|per\s+(?:calendar\s+)?(?:month|week)|a\s+(?:month|week)|'
+                r'/\s*(?:month|week|wk|mo))\s*)?(?:per\s+(?:person|head|tenant)|each(?!\s+(?:month|week|year))|'
+                r'a\s+head|apiece|pp\b|每人|一人|人均)', after, re.I):
+        return 'per_person'
+    # "a combined maximum of £2,400 per month for the whole flat", "£2,400 between us": the
+    # household's rent for the whole home, not rent plus travel. As a rent-and-travel cap it
+    # left the ceiling at £1,200 and marked every listing "monthly travel cost is not
+    # verified" with no commute stated (2026-11-05).
+    clause = f"{before} {after}"
+    if (re.search(r'\bfor\s+(?:the\s+)?(?:whole|entire)\s+(?:flat|property|place|house|home|apartment)\b'
+                  r'|\b(?:whole|entire)[- ](?:flat|property|place|house|home)\s+(?:max(?:imum)?|budget|ceiling|limit|total)\b'
+                  r'|\bbetween\s+(?:us|the\s+(?:two|three|four)\s+of\s+us|both\s+of\s+us)\b'
+                  r'|\bfor\s+(?:both|all|the\s+(?:two|three|four))\s+of\s+us\b|\bfor\s+the\s+(?:household|two\s+of\s+us)\b'
+                  r'|整套|两人(?:合计|一共|加起来)|我们(?:俩|两个|几个)?(?:一共|合计|加起来)', clause, re.I)
+            and not re.search(r'travel|transport|commut|fares?\b|交通|通勤', clause, re.I)
+            # 「不要把 250 当整套预算」 says the figure is NOT the whole-flat ceiling.
+            and not re.search(r'不要|别把|不是|并非|不算|\b(?:not|don.t|do\s+not|never|isn.t|is\s+not)\b',
+                              clause, re.I)):
+        return 'rent'
     total = (r'\brent[\s–—-]*(?:plus|and|&)[\s–—-]*(?:commut(?:e|ing)|travel|transport)\b'
              r'|(?:租金|房租|rent)[^£\d。;；]{0,35}(?:交通|通勤|travel|transport|commut)'
              r'|(?:交通|通勤|travel|transport|commut)[^£\d。;；]{0,25}(?:租金|房租|rent)'

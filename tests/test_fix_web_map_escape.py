@@ -85,3 +85,40 @@ def test_benign_values_render_readably():
     # Benign ampersand escaped (safe) but the text still present and readable.
     assert "Nero &amp; Sons" in inner
     assert "221B Baker Street" in inner
+
+
+# folium puts popup and tooltip HTML inside JavaScript template literals (`...`), where
+# HTML escaping is no protection: `${...}` is evaluated and a backtick closes the
+# literal. An OSM name like the ones below ran as script in the map (2026-11-05), and
+# a stray backslash escape (\xZZ) stopped the whole map script with a syntax error.
+_TEMPLATE_BREAKERS = ["Cafe ${globalThis.pwned = 1}", "Cafe `+(globalThis.pwned = 2)+`",
+                      "Bad \\xZZ escape"]
+
+
+def _template_literal_safe(text):
+    return "${" not in text and "`+(" not in text and "\\xZZ" not in text
+
+
+def test_template_literal_breakers_in_amenity_fields_are_inert():
+    for hostile in _TEMPLATE_BREAKERS:
+        raw = _gen_html(
+            {"address": "1 Test St", "geo_location": "51.5074, -0.1278"},
+            {"supermarkets": [{"name": hostile, "cuisine": hostile, "opening_hours": hostile,
+                               "address": hostile, "lat": 51.5075, "lon": -0.1279,
+                               "distance_m": 120}]},
+        )
+        inner = _html.unescape(raw)
+        assert _template_literal_safe(inner), hostile
+    inner = _html.unescape(_gen_html(
+        {"address": "1 Test St", "geo_location": "51.5074, -0.1278"},
+        {"cafes": [{"name": _TEMPLATE_BREAKERS[0], "lat": 51.5075, "lon": -0.1279}]}))
+    # Still readable: Leaflet renders the entities back to the same characters.
+    assert "Cafe &#36;{globalThis.pwned = 1}" in inner
+
+
+def test_template_literal_breakers_in_the_property_fields_are_inert():
+    for hostile in _TEMPLATE_BREAKERS:
+        inner = _html.unescape(_gen_html(
+            {"address": hostile, "price": hostile, "travel_time": hostile,
+             "geo_location": "51.5074, -0.1278"}, {}))
+        assert _template_literal_safe(inner), hostile

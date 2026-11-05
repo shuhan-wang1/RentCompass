@@ -19,6 +19,7 @@ result and NO price at all.
 import pandas as pd
 import json
 import math
+import os
 import time
 from datetime import datetime, timezone
 from typing import Optional, Dict, List, Tuple
@@ -574,6 +575,66 @@ def format_property_details(property_data: Dict, match_note: Optional[str] = Non
     return details.strip()
 
 
+def _detail_page(url: str) -> Dict:
+    """The listing's own detail-page text: ``{"description", "available_from", "source"}``.
+
+    The cache row behind a search card holds one line ("Studio to rent in Guilford Street"
+    and "Apartment, Studio Flat"); the detail page said the room was let only to NHS staff,
+    shared its kitchen and bathroom and did not include electricity. Asked to check the
+    listing itself, the answer came from the one-line row and called it a self-contained
+    studio (2026-11-05). The search already stores every shown listing's page text in the
+    weekly description cache; that copy is read first, and only a listing never read is
+    fetched once, within ``PROPERTY_DETAILS_PAGE_BUDGET_S``."""
+    if not re.search(r"onthemarket\.com/details/\d+", str(url or ""), re.I):
+        return {}
+    try:
+        from core.scraping.onthemarket import _desc_cache, fetch_listing_details
+    except Exception:
+        return {}
+    try:
+        hit = _desc_cache().get(url)
+    except Exception:
+        hit = None
+    if hit is not None and hit[0]:
+        return {"description": hit[0], "available_from": hit[1] or "",
+                "source": "listing detail page (cached copy)", "fetched_at": hit[2]}
+    if hit is not None or os.getenv("PROPERTY_DETAILS_PAGE_FETCH", "1") == "0":
+        return {}
+    try:
+        budget = float(os.getenv("PROPERTY_DETAILS_PAGE_BUDGET_S", "6"))
+    except ValueError:
+        budget = 6.0
+    try:
+        detail = fetch_listing_details(url, budget_s=max(0.5, budget))
+    except Exception:
+        detail = None
+    if isinstance(detail, dict) and detail.get("description"):
+        return {"description": detail["description"],
+                "available_from": detail.get("available_from") or "",
+                "source": "listing detail page", "fetched_at": time.time()}
+    return {}
+
+
+def _listing_text_facts(text: str) -> Dict:
+    """What the listing's own words say about who may rent it, shared rooms and bills."""
+    from core.listing_conditions import (_SHARED_BATHROOM, _SHARED_KITCHEN, _first, _quote,
+                                         bills_evidence, tenant_restrictions, TENANT_GROUP_LABELS)
+    facts: Dict = {}
+    restrictions = tenant_restrictions(text)
+    if restrictions:
+        facts["let_only_to"] = [{"group": TENANT_GROUP_LABELS[group], "listing_says": quote}
+                                for group, quote in restrictions]
+    for key, pattern in (("shared_bathroom", _SHARED_BATHROOM), ("shared_kitchen", _SHARED_KITCHEN)):
+        match = _first(pattern, text)
+        if match is not None:
+            facts[key] = _quote(text, match.start(), match.end())
+    state, quote = bills_evidence(text)
+    facts["bills_included"] = {"met": "yes", "not_met": "no", "unknown": "not stated"}[state]
+    if quote:
+        facts["bills_listing_says"] = quote
+    return facts
+
+
 def _refusal(verdict: str, requested: Dict, search_query: str,
              reasons: List[str], rejected: List[Dict],
              message: str, suggestion: str) -> dict:
@@ -809,18 +870,30 @@ def get_property_details_impl(
                       f"(confirmed by: {', '.join(corroborated) or 'name'}). "
                       f"The price below belongs to THIS listing.")
 
+    page = _detail_page(str(primary.get('URL', '') or ''))
+    card_description = primary.get('Description', '')
+    if page.get("description"):
+        primary = dict(primary, Description=page["description"])
+        if page.get("available_from") and str(primary.get('Available From') or '').strip(
+                ).lower() in ('', 'contact agent'):
+            primary['Available From'] = page["available_from"]
     formatted_details = format_property_details(primary, match_note=match_note,
                                                 language="zh" if zh else "en")
     provenance = _listing_provenance(primary)
 
     # 提取关键信息用于回答特定问题
     room_type = primary.get('Room_Type_Category', '') or ''
+    page_text = " ".join(str(v) for v in (page.get("description"), primary.get('Detailed_Amenities'),
+                                          card_description) if v)
+    facts = _listing_text_facts(page_text) if page_text else {}
 
-    # 判断房型相关信息
+    # 判断房型相关信息: the platform's label, overruled by the listing's own words.
     is_studio = 'studio' in room_type.lower()
     is_shared = 'shared' in room_type.lower() or 'twin' in room_type.lower()
-    is_ensuite = 'en-suite' in room_type.lower() or 'ensuite' in room_type.lower()
-    has_private_kitchen = 'own kitchen' in room_type.lower() or 'private kitchen' in room_type.lower()
+    is_ensuite = ('en-suite' in room_type.lower() or 'ensuite' in room_type.lower()) \
+        and 'shared_bathroom' not in facts
+    has_private_kitchen = ('own kitchen' in room_type.lower() or 'private kitchen' in room_type.lower()) \
+        and 'shared_kitchen' not in facts
 
     result = {
         **provenance,
@@ -845,11 +918,17 @@ def get_property_details_impl(
         },
         "room_type_analysis": {
             "is_studio": is_studio,
-            "is_shared_room": is_shared,
+            "is_shared_room": is_shared or bool({'shared_bathroom', 'shared_kitchen'} & set(facts)),
             "is_ensuite": is_ensuite,
             "has_private_kitchen": has_private_kitchen,
+            # A "Studio" label is the platform's; a page that says the kitchen or bathroom is
+            # shared is not a self-contained studio.
+            "self_contained": (False if {'shared_bathroom', 'shared_kitchen'} & set(facts)
+                               else None),
             "room_type_category": room_type
         },
+        "listing_text_facts": facts,
+        "description_source": page.get("source") or "search card (one line)",
         "formatted_details": formatted_details,
         "total_matches": 1 + len(others),
         "message": (f"找到房产: {primary.get('Address', '')}（已核对与请求一致）" if zh else
@@ -882,7 +961,7 @@ def get_property_details_impl(
 get_property_details_tool = Tool(
     name="get_property_details",
     description="""Get a specific property's full details from the local cache (description, amenities, visitor/payment policy, room type) — same source as search, more accurate than the web. Use when the user asks about a specific listing, clicks "Ask AI" on one, or asks about any previously recommended listing. The RECOMMENDED LISTINGS INDEX in context holds only summaries; pass a listing's URL to property_url for an exact cache hit (avoids same-name ambiguity), else use its name or address.
-This tool VERIFIES listing IDENTITY, not current availability. It reads only local cached snapshots and never refreshes a listing. Preserve source, cache_status, fetched_at and freshness_note; even a fresh cache is not a live/current asking-price or availability verification. If it returns found=false (verdict no_match / ambiguous / url_not_in_cache), never quote another listing's price, room type or size.
+This tool VERIFIES listing IDENTITY, not current availability. It reads local cached snapshots: the search card and the listing's own detail-page text (a page never read before is fetched once); it never refreshes price or availability. listing_text_facts is what the listing's own words say (who it is let only to, a shared kitchen or bathroom, whether bills are included) and overrules the platform's room-type label: a "Studio" whose page says the bathroom is shared is not self-contained. Quote those words when the user asks you to check the listing. Preserve source, cache_status, fetched_at and freshness_note; even a fresh cache is not a live/current asking-price or availability verification. If it returns found=false (verdict no_match / ambiguous / url_not_in_cache), never quote another listing's price, room type or size.
 获取某房源的完整详情；优先用该房源 URL 精确命中缓存。若返回 found=false，说明缓存里没有这套房，不要用别的房源代替。""",
     parameters={
         "type": "object",

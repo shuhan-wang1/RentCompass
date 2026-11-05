@@ -37,6 +37,9 @@ for _name, _file in (
 ):
     os.environ.setdefault(_name, os.path.join(_TEST_RUNTIME, _file))
 os.environ.setdefault("ALLOW_LEGACY_CLIENT_USER_ID", "1")
+# get_property_details reads a listing's detail page from the description cache and fetches
+# it once when missing. No test may reach the real site; a test of the fetch sets it back.
+os.environ.setdefault("PROPERTY_DETAILS_PAGE_FETCH", "0")
 os.environ.setdefault("CANARY_LOG_PATH", "off")
 # One deterministic canary HMAC key for the whole session. Without a stable secret every
 # canary record carries a null hash + "unkeyed_no_stable_secret" (an instrumentation HOLD),

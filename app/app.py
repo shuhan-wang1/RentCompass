@@ -5264,7 +5264,8 @@ def generate_property_map():
         "address": "property address",
         "geo_location": "lat, lon" or {"lat": X, "lng": Y},
         "price": "£X pcm",
-        "travel_time": "X min" or X (minutes)
+        "travel_time": "X min" or X (minutes),
+        "ui_language": "en" or "zh" (optional; language of the map's notices)
     }
     
     Returns:
@@ -5324,6 +5325,7 @@ def generate_property_map():
         map_html = generator.generate_map_html(
             property_data, amenities_data,
             amenities_unavailable=amenities_unavailable,
+            lang='zh' if str(data.get('ui_language') or '').lower().startswith('zh') else 'en',
         )
 
         if map_html:

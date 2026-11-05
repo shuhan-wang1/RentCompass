@@ -577,19 +577,25 @@ def acknowledge_remembered_budget(text: str, memory_block: str, max_budget=None,
         return body
     amount = " ".join((match.group(1) or match.group(2) or "").split())
     zh = str(reply_language or "").lower().startswith("zh")
+    # A row the memory block labels as another conversation's says so: the user asked where a
+    # remembered figure came from (2026-11-05).
+    if "(saved in another conversation" in str(memory_block)[match.start():].split("\n", 1)[0]:
+        when_en, when_zh = "in an earlier conversation", "在之前的对话中"
+    else:
+        when_en, when_zh = "earlier", "之前"
     if claims_none and searched_without_budget:
         # The search ran without a budget AND the prose says none was given: the claim is
         # withdrawn and the saved budget named instead, never both side by side (R4-11).
         body = _without_no_budget_claim(body)
         claims_none = False
     if claims_none:
-        note = (f"补充：你之前保存过预算 {amount}。如需按这个预算重新搜索，请告诉我。" if zh else
-                f"Note: you saved a budget of {amount} earlier. Say if you want me to apply it "
+        note = (f"补充：你{when_zh}保存过预算 {amount}。如需按这个预算重新搜索，请告诉我。" if zh else
+                f"Note: you saved a budget of {amount} {when_en}. Say if you want me to apply it "
                 "to this search.")
     else:
-        note = (f"补充：你之前保存过预算 {amount}，本次搜索没有使用它，所以部分结果可能超出这个预算。"
+        note = (f"补充：你{when_zh}保存过预算 {amount}，本次搜索没有使用它，所以部分结果可能超出这个预算。"
                 "如需按这个预算重新筛选，请告诉我。" if zh else
-                f"Note: you saved a budget of {amount} earlier. It was not applied to this search, "
+                f"Note: you saved a budget of {amount} {when_en}. It was not applied to this search, "
                 "so some results may be above it. Say if you want me to apply it.")
     return body if note in body else f"{body.rstrip()}\n\n{note}"
 

@@ -350,8 +350,12 @@ def is_criteria_consultation(text: str) -> bool:
         return True
     # "Please don't search; give me a summary" is still a read-only request.
     cleaned = re.sub(r'请?不要搜索|don.t search|do not search', '', text, flags=re.I)
+    # "Recap my criteria, and make it a 1-bed" asks for a recap AND changes a slot: the change
+    # still applies (2026-11-05).
     if re.search(r'摘要|需求总结|\b(?:summary|recap)\b', cleaned, re.I) and not re.search(
-            r'改为|改回|更新|取消|删除|移除|\b(?:set|change|raise|lower|remove|drop)\b', cleaned, re.I):
+            r'改为|改回|改成|换成|调到|调成|更新|取消|删除|移除|'
+            r'\b(?:set|change|raise|lower|remove|drop|make\s+it|switch|instead|update|increase|reduce)\b',
+            cleaned, re.I) and not _BUDGET_SET.search(cleaned):
         return True
     return bool(re.search(r'^\s*(?:is|does|has)\b', text, re.I) and not update
                 and not _states_a_ceiling_outside_a_question(text))

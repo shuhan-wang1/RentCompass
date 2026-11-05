@@ -80,7 +80,10 @@ _GENERIC_CJK = re.compile(
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
 _CJK_RE = re.compile(r"[\u4e00-\u9fff]+")
-_FACT_LINE = re.compile(r"^\[FACT\] ?(.*)$", re.M)
+# The fact's text, without the source label the memory block puts before it (agent_memory
+# MEMORY_SOURCE_*): the label's words are not something the user said.
+_FACT_LINE = re.compile(r"^\[FACT\] ?(?:\((?:saved in this conversation|saved in another "
+                        r"conversation[^)\n]*|origin unknown)\) ?)?(.*)$", re.M)
 
 
 def _words(text: str) -> set[str]:

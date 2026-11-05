@@ -869,6 +869,11 @@
         }
         .alert-warning { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
         .alert-success { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+        .alert-info { background: var(--bg-hover); border-color: var(--border-medium); color: var(--text-secondary); }
+        /* Results panel while a turn or a criteria search is still running */
+        .results-busy-state .spinner { margin-bottom: 16px; }
+        .results-busy-bar { align-items: center; padding: 10px 14px; margin-bottom: 16px; }
+        .results-busy-bar .spinner { width: 16px; height: 16px; margin: 0; flex-shrink: 0; }
 
         /* ============================================================= */
         /* CONVERSATION SIDEBAR                                           */
@@ -1672,6 +1677,12 @@
                 search_incomplete_desc: "Some areas have not been checked yet. More listings may be available.",
                 no_results_title: "No properties found",
                 no_results_desc: "Try adjusting your budget or location.",
+                results_searching_title: "Searching for properties…",
+                results_working_title: "Working on your request…",
+                results_busy_desc: "Matching properties will appear here when Alex has finished.",
+                results_updating: "Working on your request — these results may change.",
+                results_idle_title: "Your matches will appear here",
+                results_idle_desc: "Tell Alex what you are looking for, or fill in the search criteria.",
                 backend_offline_title: "Backend offline",
                 backend_offline_desc: "Could not connect to load your saved properties.",
 
@@ -1922,6 +1933,12 @@
                 search_incomplete_desc: "部分区域尚未完成检索，可能还有更多房源。",
                 no_results_title: "未找到房源",
                 no_results_desc: "请尝试调整您的预算或位置。",
+                results_searching_title: "正在搜索房源…",
+                results_working_title: "正在处理您的请求…",
+                results_busy_desc: "Alex 完成后，匹配的房源会显示在这里。",
+                results_updating: "正在处理您的请求，以下结果可能会更新。",
+                results_idle_title: "匹配的房源会显示在这里",
+                results_idle_desc: "告诉 Alex 您的需求，或填写搜索条件。",
                 backend_offline_title: "后端离线",
                 backend_offline_desc: "无法连接以加载您的收藏。",
 
@@ -2190,6 +2207,7 @@
             this.conversationId = null;
             this.stateRevision = -1;
             this.isProcessing = false;
+            this.processingKind = null;                   // 'chat' | 'search' while isProcessing
             this.lastResponseType = null;
             this.activeController = null;                 // in-flight request (for cancel)
             this.lastUserMessage = '';
@@ -2818,7 +2836,9 @@
             pane.messagesEl.querySelectorAll('.clarification-option').forEach(button => { button.disabled = true; });
             pane.lastUserMessage = message;
             pane.isProcessing = true;
+            pane.processingKind = 'chat';
             setProcessingUI(pane, true);
+            syncResultsBusy();
 
             const userMsgEl = addMessage(pane, message, 'user');
             input.value = '';
@@ -2947,6 +2967,7 @@
                     pane.isProcessing = false;
                     pane.activeController = null;
                     setProcessingUI(pane, false);
+                    syncResultsBusy();
                     if (window.innerWidth > 1024) input.focus();
                 }
             }
@@ -3305,6 +3326,58 @@
             return box;
         }
 
+        // A chat turn or a criteria search is still running. Until it completes, an empty
+        // panel is "not here yet", never "No properties found": a tester read that
+        // message, shown mid-search, as the final answer (2026-11-05).
+        function resultsPanelBusy() {
+            return allPanes().some(p => p && p.isProcessing);
+        }
+
+        function buildResultsBusyState() {
+            const searching = allPanes().some(p => p && p.isProcessing && p.processingKind === 'search');
+            const wrap = el('div', 'empty-state results-busy-state');
+            wrap.setAttribute('role', 'status');
+            wrap.setAttribute('aria-live', 'polite');
+            wrap.appendChild(el('div', 'spinner'));
+            const h = document.createElement('h3');
+            h.textContent = t(searching ? 'results_searching_title' : 'results_working_title');
+            const p = document.createElement('p');
+            p.textContent = t('results_busy_desc');
+            wrap.appendChild(h);
+            wrap.appendChild(p);
+            return wrap;
+        }
+
+        // Shown above the previous turn's cards while a new turn runs: the cards stay.
+        function buildResultsBusyBar() {
+            const bar = el('div', 'alert-box alert-info results-busy-bar');
+            bar.setAttribute('role', 'status');
+            bar.appendChild(el('div', 'spinner'));
+            const span = document.createElement('span');
+            span.textContent = t('results_updating');
+            bar.appendChild(span);
+            return bar;
+        }
+
+        // Call whenever a pane's isProcessing changes. Cards already shown stay in place
+        // (only the busy bar comes or goes); an empty panel is repainted. The Saved tab
+        // is left alone.
+        function syncResultsBusy() {
+            if (favoritesTabActive()) return;
+            const content = document.getElementById('resultsContent');
+            if (!content) return;
+            if (!Array.isArray(currentResults) || !currentResults.length) {
+                displayResults(currentResults);
+                return;
+            }
+            const bar = content.querySelector('.results-busy-bar');
+            if (resultsPanelBusy()) {
+                if (!bar) content.insertBefore(buildResultsBusyBar(), content.firstChild);
+            } else if (bar) {
+                bar.remove();
+            }
+        }
+
         function displayResults(recommendations) {
             setActiveTab('results');
             const content = document.getElementById('resultsContent');
@@ -3315,10 +3388,22 @@
             const recoRow = buildAreaRecommendations(currentAreaRecommendations);
             if (recoRow) content.appendChild(recoRow);
 
+            const busy = resultsPanelBusy();
             const retrieval = (resultsOwnerPane && resultsOwnerPane.retrieval) || {};
             const sourceFailed = ['blocked', 'rate_limited', 'unavailable', 'schema_error',
                                   'robots_disallowed', 'cooldown', 'timeout', 'error'].includes(retrieval.source_status);
             if (!recommendations || recommendations.length === 0) {
+                if (busy) {
+                    content.appendChild(buildResultsBusyState());
+                    return;
+                }
+                // No completed search in this conversation yet: nothing has been "not found".
+                // pane.retrieval is set by every completed search response (see
+                // applyResponseState and submitCriteriaSearch).
+                if (!(resultsOwnerPane && resultsOwnerPane.retrieval)) {
+                    content.appendChild(buildEmptyState('search', t('results_idle_title'), t('results_idle_desc')));
+                    return;
+                }
                 const title = sourceFailed ? t('source_unavailable_title') :
                               retrieval.partial ? t('search_incomplete_title') : t('no_results_title');
                 const desc = sourceFailed ? (retrieval.source_message || t('source_unavailable_desc')) :
@@ -3326,6 +3411,7 @@
                 content.appendChild(buildEmptyState(sourceFailed ? 'warning' : 'search', title, desc));
                 return;
             }
+            if (busy) content.insertBefore(buildResultsBusyBar(), content.firstChild);
             if (sourceFailed || retrieval.partial) {
                 const note = el('div', 'alert-box alert-warning');
                 note.setAttribute('role', 'status');
@@ -4405,6 +4491,7 @@
                     pane.inputEl.disabled = false;
                     pane.sendBtnEl.disabled = false;
                     pane.messagesEl.setAttribute('aria-busy', 'false');
+                    syncResultsBusy();
                 }
             }
         }
@@ -5779,8 +5866,10 @@
             if (pane.conversationId) body.conversation_id = pane.conversationId;
 
             pane.isProcessing = true;
+            pane.processingKind = 'search';
             setProcessingUI(pane, true);
             setAllCriteriaBusy(true);
+            syncResultsBusy();
 
             const userMsgEl = addMessage(pane, summarizeCriteria(criteria), 'user');
             showTypingIndicator(pane);
@@ -5822,6 +5911,9 @@
                         addMessage(pane, cleanRawResponse(data.message || ''), 'alex', { turnId: turnId });
                         const recs = Array.isArray(data.recommendations) ? data.recommendations : [];
                         pane.lastResponseType = 'search';
+                        // A completed search: from here an empty panel means "nothing found".
+                        pane.retrieval = {source_status: data.source_status, source_message: data.source_message,
+                                          partial: data.partial, partial_note: data.partial_note};
                         if (recs.length) {
                             paintResults(pane, recs, data.area_recommendations);
                         } else {
@@ -5857,6 +5949,7 @@
                 pane.isProcessing = false;
                 setProcessingUI(pane, false);
                 setAllCriteriaBusy(false);
+                syncResultsBusy();
             }
         }
 

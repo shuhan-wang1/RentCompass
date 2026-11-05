@@ -313,6 +313,17 @@ def asks_for_homes(text: str) -> bool:
     return bool(_ASKS_FOR_HOMES.search(text or ''))
 
 
+# A sentence that SETS the rent ceiling. Shared by the read-only test above: a message that
+# states a new budget is an update even when it also asks something.
+_BUDGET_SET = re.compile(
+    r"预算[^，,。.!?？；;\n]{0,8}?(?:是|为|改|调|降|收紧|提高|提到|只有|最多|上限|不超过|以内|控制在|限制在)"
+    r"[^。.!?？；;\n]{0,16}?(?:£|￡|\d)"
+    r"|\bbudget\s+(?:is|of|=|:|now|to|at\s+most|strictly|max(?:imum)?|cap(?:ped)?|limit)\b[^.!?;\n]{0,24}?(?:£|\d)"
+    r"|\b(?:change|lower|raise|set|cut|reduce|tighten|drop|increase|decrease)\s+(?:my\s+|the\s+)?"
+    r"(?:max(?:imum)?\s+)?budget\b[^.!?;\n]{0,24}?(?:£|\d)"
+    r"|\bi\s+can\s+(?:only\s+)?(?:pay|afford|spend)\b[^.!?;\n]{0,20}?£\s?\d", re.I)
+
+
 def is_criteria_consultation(text: str) -> bool:
     """An explicit read-only request must also bypass cached-result refinement."""
     if re.search(r"(?:don.t|do not|please don.t) change (?:my |the )?(?:search )?(?:criteria|filters)"
@@ -331,7 +342,11 @@ def is_criteria_consultation(text: str) -> bool:
                         text, re.I) or asks_for_homes(text))
     if re.search(r'\b(?:details?|furniture|furnished|bills|availability|tenancy|epc)\b|房源详情|家具|账单', text, re.I) and re.search(
             r'^\s*(?:please|can |could |what|tell |explain|get |check |verify|for the)|请|这套|这个房源|告诉|查询|[?？]', text, re.I) and not re.search(
-            r'\b(?:find|search|set|change|raise|lower|remove|drop|switch|restore)\b|改为|改回|更新|取消|删除|移除|找房|搜索', text, re.I):
+            r'\b(?:find|search|set|change|raise|lower|remove|drop|switch|restore)\b|改为|改回|更新|取消|删除|移除|找房|搜索|重新找|重新搜|再找', text, re.I) \
+            and not _BUDGET_SET.search(text):
+        # "My budget is actually a strict £250 a week, bills included, please search again"
+        # names bills and says "please", and was read as a question about one listing: the
+        # budget never changed and the old £1,300 search was reused (2026-11-05).
         return True
     # "Please don't search; give me a summary" is still a read-only request.
     cleaned = re.sub(r'请?不要搜索|don.t search|do not search', '', text, flags=re.I)
@@ -981,6 +996,82 @@ def furnished_requirement_update(text: str) -> bool | None:
                      r"\bno\s+unfurnished\b|\b(?:need|require)s?\s+(?:an?\s+)?(?:fully\s+)?furnished\b|"
                      r"必须(?:带|有)家具|(?:要|需要)(?:带|有)家具|只要(?:带)?家具", clause, re.I):
             return True
+    return None
+
+
+_BILLS_WORD = r'(?:bills?|utilities|账单|水电(?:网|煤|费)?|杂费)'
+_BILLS_WITHDRAWAL = re.compile(
+    r"\b(?:bills?|utilities)\b[^.!?;]{0,30}\b(?:doesn.t|does\s+not|don.t|do\s+not)\s+(?:matter|need\s+to\s+be"
+    r"\s+included|have\s+to\s+be\s+included)"
+    r"|\b(?:don.t|do\s+not|no\s+longer)\s+(?:need|require|mind)\b[^.!?;]{0,20}\bbills?\b"
+    r"|\b(?:forget|never\s*mind|drop|ignore)\b[^.!?;]{0,20}\bbills?\b"
+    r"|\bbills?\s+(?:not\s+included|excluded|extra)\s+(?:is|are)\s+(?:fine|ok(?:ay)?)\b"
+    r"|(?:不(?:用|需要|必|要求)包|不包也(?:行|可以|没关系))\s*" + _BILLS_WORD +
+    r"|" + _BILLS_WORD + r"\s*(?:不包也(?:行|可以|没关系)|无所谓|不重要)", re.I)
+_BILLS_REQUIRED = re.compile(
+    r"(?:包|含|包含|包括)\s*(?:所有\s*|全部\s*)?" + _BILLS_WORD +
+    r"|" + _BILLS_WORD + r"\s*(?:全包|都包|要包|必须包|包含在内|在内)"
+    r"|\b(?:all\s+)?(?:bills|utilities)\s+(?:must\s+be\s+|need\s+to\s+be\s+|have\s+to\s+be\s+)?"
+    r"(?:included|inclusive)\b"
+    r"|\b(?:including|inclusive\s+of|incl\.?|with)\s+(?:all\s+)?(?:bills|utilities)\b"
+    r"|\ball[- ]inclusive\b|\bbills[- ]inclusive\b", re.I)
+
+
+def bills_requirement_update(text: str) -> bool | None:
+    """"包 bills" / "bills included" as a requirement (True), its withdrawal (False), else None.
+
+    "UCL, studio or en-suite, £300 a week including bills" was searched without it, and the
+    first listing shown said "all utilities included apart from electricity" (2026-11-05). A
+    question about one listing ("does it include bills?") is not a requirement."""
+    for match in re.finditer(r'[^。.!?;；\n]+[。.!?;；\n]*', text or ''):
+        clause = match.group()
+        if not re.search(r'bills?|utilit|账单|水电|杂费|all[- ]inclusive', clause, re.I):
+            continue
+        if _BILLS_WITHDRAWAL.search(clause):
+            return False
+        if is_hypothetical(clause) or re.search(
+                r'[?？]|是否|吗|\bwhether\b|^\s*(?:does|do|is|are|will|can)\b'
+                r'|\b(?:does|do|is|are)\s+(?:it|this|that|the\s+\w+)\b', clause, re.I):
+            continue
+        found = _BILLS_REQUIRED.search(clause)
+        if found and not re.search(r'\b(?:no|not|without|excluding)\s+$', clause[:found.start()][-14:], re.I):
+            return True
+    return None
+
+
+_STUDENT_SELF = re.compile(
+    r"(?:我是|我现在是|我目前是|本人是)[^。，,.!?；;]{0,16}?(?:学生|留学生|研究生|本科生|硕士生?|博士生?|大学生)"
+    r"|(?:在|于)[^。，,.!?；;]{0,16}?(?:读书|上学|读研|读博|念书|读本科|读硕士|上课)"
+    r"|\b(?:i\s*(?:am|'m|’m)|i\s+will\s+be)\s+(?:a\s+|an\s+)?(?:new\s+|first[- ]year\s+|full[- ]time\s+|"
+    r"international\s+|incoming\s+|[\w&-]{2,15}\s+){0,3}(?:student|undergrad(?:uate)?|"
+    r"post[- ]?grad(?:uate)?|phd\s+(?:student|candidate)|master'?s\s+student|fresher)\b"
+    r"|\b(?:i\s+)?(?:study|am\s+studying|will\s+be\s+studying|start(?:ing)?\s+(?:my\s+)?(?:degree|course|"
+    r"master'?s|phd))\s+at\b"
+    r"|\bas\s+an?\s+(?:\w+\s+){0,2}student\b", re.I)
+_HEALTH_SELF = re.compile(
+    r"(?:我是|本人是)[^。，,.!?；;]{0,10}?(?:护士|医生|医护|NHS)"
+    r"|\b(?:i\s*(?:am|'m|’m)|i\s+work)\s+(?:a\s+|an\s+|as\s+an?\s+|for\s+the\s+|in\s+the\s+)?"
+    r"(?:nhs|nurse|doctor|junior\s+doctor|midwife|paramedic|healthcare\s+worker)\b", re.I)
+_NOT_STUDENT = re.compile(r"\bi\s*(?:am|'m|’m)\s+not\s+a\s+student\b|我不是学生|不是学生了", re.I)
+
+
+def tenant_status_update(text: str) -> str | None:
+    """Who the user says they are, for listings let only to one group: 'student' ("I'm a UCL
+    student", "我是UCL的学生", "在UCL上课"), 'healthcare' ("I'm a nurse"), 'other' for "I'm not
+    a student", else None. Read only from the user's own words, never inferred."""
+    value = str(text or '')
+    if _NOT_STUDENT.search(value):
+        return 'other'
+    for pattern, status in ((_HEALTH_SELF, 'healthcare'), (_STUDENT_SELF, 'student')):
+        for match in pattern.finditer(value):
+            clause = clause_at(value, match.start(), match.end())
+            if is_hypothetical(clause) or re.search(r'[?？]|吗', clause):
+                continue
+            if status == 'student' and re.search(
+                    r"post[- ]?grad|master'?s|\bmsc\b|\bma\b|\bphd\b|doctoral|研究生|硕士|博士|读研|读博",
+                    clause, re.I):
+                return 'postgraduate'
+            return status
     return None
 
 

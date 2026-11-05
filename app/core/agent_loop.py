@@ -774,8 +774,48 @@ _SEARCH_DROP_KEYS = {"images", "description", "score", "score_breakdown", "provi
                      "geo_location", "commute_evidence"}
 
 
+def _listing_condition_lines(conditions) -> list[str]:
+    """``listing_conditions`` as short lines: what the listing's OWN text says about each
+    condition, with its words. The full description never reaches the model view, so
+    without these a "Studio" whose page says "shared kitchen and bathroom, NHS staff only"
+    read as a self-contained studio (2026-11-05)."""
+    lines = []
+    for row in conditions or []:
+        if not isinstance(row, dict) or not row.get("condition"):
+            continue
+        line = f"{row['condition']}: {row.get('status') or 'unknown'}"
+        if row.get("reason"):
+            line += f" ({row['reason']})"
+        quote = " ".join(str(row.get("quote") or "").split())
+        if quote:
+            line += f" — listing says “{quote[:160]}”"
+        lines.append(line)
+    return lines[:6]
+
+
+def _with_conversation_tenant(payload, state) -> Any:
+    """The search payload with the user's own tenant status ("I'm a UCL student") in its
+    criteria, so a listing let only to NHS staff is checked against who the user said they
+    are. The tool never receives it: it is a validation input, not a search filter."""
+    tenant = ((state or {}).get("accumulated_search_criteria") or {}).get("tenant_status")
+    if not tenant or not isinstance(payload, dict):
+        return payload
+    criteria = payload.get("search_criteria")
+    if not isinstance(criteria, dict) or criteria.get("tenant_status"):
+        return payload
+    return dict(payload, search_criteria=dict(criteria, tenant_status=tenant))
+
+
 def _project_listing(row: dict, stage: int) -> dict:
     out = {k: row[k] for k in _LISTING_CORE if k in row and row[k] not in (None, "", [])}
+    # The provider's listing number keeps units with one street address apart.
+    from core.candidate_validation import listing_number
+    number = listing_number(row)
+    if number:
+        out["listing_id"] = number
+    conditions = _listing_condition_lines(row.get("listing_conditions"))
+    if conditions:
+        out["listing_conditions"] = conditions
     for index, keys in enumerate(_LISTING_OPTIONAL_STAGES):
         if index < stage:
             continue
@@ -909,10 +949,19 @@ def _compact_listing(row: dict) -> str:
     if travel and row.get("travel_time_source"):
         travel = f"{travel} ({row['travel_time_source']})"
     budget = re.sub(r"[^\w\s£/.-]", "", str(row.get("budget_status") or "")).strip()
+    from core.candidate_validation import listing_number
     values = (row.get("rank"), row.get("address"), row.get("area"), row.get("price"),
               row.get("bedrooms"), row.get("property_type"), row.get("room_type"),
               row.get("match_type"), budget, travel, row.get("distance_miles"))
-    return " | ".join("" if v in (None, "") else str(v) for v in values)
+    line = " | ".join("" if v in (None, "") else str(v) for v in values)
+    number = listing_number(row)
+    conflicts = [c for c in _listing_condition_lines(row.get("listing_conditions"))
+                 if ": not_met" in c or ": unknown" in c]
+    if number:
+        line += f" | listing {number}"
+    if conflicts:
+        line += " | " + "; ".join(c[:140] for c in conflicts[:3])
+    return line
 
 # Kinds whose latest artifact drives a structured card in format_output_fc.
 _CARD_FORMATTERS = {
@@ -3824,6 +3873,36 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             "wrapped_by": wrapped_by,
         }, goto="critic")
 
+    def _criteria_change_research(state, batch_calls, cur_msg) -> list:
+        """``[("search_properties", args)]`` when this turn changed a search filter after
+        listings were shown and nothing has searched again yet, else ``[]``.
+
+        The cards, the filter panel and the answer must all describe the criteria the user
+        has NOW. Answering a budget cut from the old search left "Within Budget" on rows
+        above the new ceiling (2026-11-05). The arguments are left to the executor's
+        ``_inject_search_params``, which fills every known criterion from the state."""
+        ec = state.get("extracted_context") or {}
+        if not ec.get("hard_criteria_changed"):
+            return []
+        if not (ec.get("last_results_full") or ec.get("last_results") or ec.get("view_results")):
+            return []
+        if any((call or {}).get("name") == "search_properties" for call in batch_calls or []):
+            return []
+        if any(a.get("tool") == "search_properties" for a in (state.get("tool_artifacts") or [])):
+            return []
+        spec = _spec_map().get("search_properties")
+        if spec is None or getattr(spec, "side_effect", "none") == "write":
+            return []
+        from core.constraint_updates import resets_all_criteria
+        if resets_all_criteria(cur_msg or ""):
+            return []      # "start over": the next search waits for the new criteria
+        args = {"user_query": cur_msg or ""}
+        if _read_tool_denial(_load_tool_policy(), "search_properties", args, cur_msg or "") is not None:
+            return []
+        logger.info("fc_loop.criteria_change_research fields=%s",
+                    ",".join(ec.get("hard_criteria_changed") or []))
+        return [("search_properties", args)]
+
     def _fanout_into_batch(state, resp, batch_calls, cur_msg, loop_turn) -> list:
         """Append the harness-added dimension reads to `resp`'s tool_calls IN PLACE, so the
         assistant message the provider will see next round-trip carries exactly the calls whose
@@ -3837,6 +3916,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         """
         added = _dimension_fanout_calls(state, batch_calls, cur_msg,
                                         specs=_spec_map(), read_policy=_load_tool_policy())
+        added.extend(_criteria_change_research(state, batch_calls, cur_msg))
         if 'get_transport_info' in _spec_map():
             added.extend(_explicit_transport_reads(state, batch_calls, cur_msg))
         if 'get_weather' in _spec_map():
@@ -3900,7 +3980,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         if _executed_read_count(state) <= 0:
             cur_msg = ((state.get('extracted_context') or {}).get('current_message') or '')
             if not (_explicit_transport_reads(state, [], cur_msg) or
-                    _explicit_weather_reads(state, [], cur_msg)):
+                    _explicit_weather_reads(state, [], cur_msg) or
+                    _criteria_change_research(state, [], cur_msg)):
                 return []
         elapsed_now = (time.monotonic() - turn_start) if turn_start else 0.0
         if turn_start and elapsed_now > (_turn_soft_wrap_s() - _min_batch_s()):
@@ -5867,7 +5948,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 try:
                     validated, commute_evidence = await validate_search_payload_with_provider(
                         validation_provider,
-                        result.data,
+                        _with_conversation_tenant(result.data, state),
                         timeout_s=validation_timeout,
                         deadline_monotonic=validation_deadline,
                     )
@@ -6555,6 +6636,71 @@ def _derive_known_criteria(acc: dict) -> dict:
 # GRAPH WIRING (consumed lazily by langgraph_agent.build_agent_graph)
 # ═══════════════════════════════════════════════════════════════════
 
+# The criteria a listing search filters on. When one of them changes in a turn that follows
+# shown results, the results on screen were searched under the OLD value: "strictly £250 a
+# week" was answered from the £1,300-a-month search, whose £1,127 and £1,150 rows still read
+# "Within Budget" (2026-11-05). Who the user is (tenant_status) is a validation input only.
+_RESEARCH_FIELDS = ("max_budget", "area", "areas", "room_type", "bedrooms", "bedrooms_minimum",
+                    "move_in_date", "max_travel_time", "commute_destination", "no_commute",
+                    "property_features")
+
+
+def _criteria_value(value):
+    if value is None or value is False or value == "" or value == [] or value == {}:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return round(float(value), 2)
+    if isinstance(value, (list, tuple, set)):
+        items = tuple(sorted(" ".join(str(item).lower().split()) for item in value
+                             if str(item or "").strip()))
+        return items or None
+    return " ".join(str(value).lower().split()) or None
+
+
+def hard_criteria_changes(before: dict | None, after: dict | None) -> list[str]:
+    """The search-filter fields whose value differs between two criteria snapshots."""
+    before = before if isinstance(before, dict) else {}
+    after = after if isinstance(after, dict) else {}
+    return [field for field in _RESEARCH_FIELDS
+            if _criteria_value(before.get(field)) != _criteria_value(after.get(field))]
+
+
+def _record_criteria_change(extract_preferences_node):
+    """Note on ``extracted_context`` which search filters THIS turn's message changed.
+
+    The node that folds the message into the criteria is the last place holding the
+    pre-turn criteria, so the comparison is made here, around it. ``agent`` reads the note
+    (``_criteria_change_research``) to search again before answering."""
+    import inspect
+
+    def _note(state, update):
+        before = state.get("accumulated_search_criteria") or {}
+        after = (update or {}).get("accumulated_search_criteria")
+        if not isinstance(after, dict):
+            after = before
+        changed = hard_criteria_changes(before, after) if after is not before else []
+        ec = dict((update or {}).get("extracted_context") or state.get("extracted_context") or {})
+        if changed or ec.get("hard_criteria_changed"):
+            ec["hard_criteria_changed"] = changed
+            result = dict(update or {})
+            result["extracted_context"] = ec
+            if changed:
+                logger.info("fc_loop.hard_criteria_changed fields=%s", ",".join(changed))
+            return result
+        return update
+
+    if inspect.iscoroutinefunction(extract_preferences_node):
+        async def node(state):
+            return _note(state, await extract_preferences_node(state))
+    else:
+        def node(state):
+            return _note(state, extract_preferences_node(state))
+    node.__name__ = getattr(extract_preferences_node, "__name__", "extract_preferences")
+    return node
+
+
 def _relative_budget_repair(extract_preferences_node):
     """Resolve a RELATIVE budget edit against the PRE-turn ceiling.
 
@@ -6631,7 +6777,8 @@ def build_fc_graph(tool_registry, *, extract_preferences_node, critic_node,
 
     graph = StateGraph(AgentState)
     graph.add_node("extract_preferences", ident(
-        "extract_preferences", _relative_budget_repair(extract_preferences_node)))
+        "extract_preferences",
+        _record_criteria_change(_relative_budget_repair(extract_preferences_node))))
     graph.add_node("guard", ident("guard", nodes["guard"]))
     graph.add_node("agent", ident("agent", nodes["agent"]))
     graph.add_node("execute_tools", ident("execute_tools", nodes["execute_tools"]))

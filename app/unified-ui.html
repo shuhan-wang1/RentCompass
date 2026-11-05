@@ -3618,6 +3618,17 @@
             const reasons = Array.isArray(localizedReasons) ? localizedReasons
                 : [].concat(q.reasons || rec.candidate_reasons || [], q.unknown_reasons || rec.candidate_unknown_reasons || []);
             reasons.forEach(reason => { const line = document.createElement('div'); line.textContent = Array.isArray(localizedReasons) ? humanizeEvidenceText(reason) : localizeEvidenceReason(reason); evidence.appendChild(line); });
+            // The listing's own words behind each confirmed conflict ("AVAILABLE EXCLUSIVELY TO
+            // NURSES…", "a shared kitchen and bathroom"), so the reason can be checked on the card.
+            const conditions = Array.isArray(rec.listing_conditions) ? rec.listing_conditions : [];
+            conditions.filter(c => c && c.status === 'not_met' && typeof c.quote === 'string' && c.quote.trim())
+                .slice(0, 3).forEach(c => {
+                    const line = document.createElement('div');
+                    line.className = 'listing-quote';
+                    line.style.cssText = 'font-style:italic;color:#92400e;';
+                    line.textContent = (currentLang === 'zh' ? '房源原文：“' : 'Listing says: “') + c.quote.trim() + '”';
+                    evidence.appendChild(line);
+                });
             const freshness = document.createElement('div');
             freshness.textContent = rec.possibly_outdated
                 ? (currentLang === 'zh' ? '缓存房源可能已变化，请联系中介核实。' : 'Cached listing may have changed; confirm with the agent.')

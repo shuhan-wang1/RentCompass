@@ -50,7 +50,7 @@ def test_the_ledger_app_py_rebuilds_from_the_panel_still_says_not_verified():
     text = render_candidate_status(ledger)
     assert "Not verified:" in text
     assert "King Square" in text and "St. Clements Street" in text
-    assert "Masons Yard, London EC1V: monthly price 2701 exceeds budget 2600" in text
+    assert "Masons Yard, London EC1V (£2701 pcm): monthly price 2701 exceeds budget 2600" in text
     assert not ledger["eligible"]
 
 

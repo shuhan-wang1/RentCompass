@@ -20,6 +20,8 @@ import re
 import time
 from typing import Any
 
+from core.listing_conditions import (check_listing_conditions, condition_reason_zh,
+                                    conflict_quotes)
 from core.tenancy_reference import monthly_from_weekly
 
 logger = logging.getLogger(__name__)
@@ -79,6 +81,9 @@ def _number(value: Any) -> float | None:
         return None
 
 
+_BILLS_FEATURES = frozenset({"bills included", "bills-included", "bills inclusive"})
+
+
 def hard_constraints(criteria: dict | None) -> dict:
     """Normalize the hard constraints used by candidate validation.
 
@@ -125,6 +130,13 @@ def hard_constraints(criteria: dict | None) -> dict:
         "areas": [value for value in (_norm(area) for area in areas) if value],
         "move_in_date": c.get("move_in_date") or None,
         "property_features": [value for value in (_norm(feature) for feature in features) if value],
+        # "包 bills" / "bills included": checked against the listing's own text, so a page
+        # that says "all utilities included apart from electricity" is a confirmed miss.
+        "bills_included": bool(c.get("bills_included")) or any(
+            _norm(feature) in _BILLS_FEATURES for feature in features),
+        # Who the user said they are ("I'm a UCL student"), for listings let only to a
+        # group. Unknown stays None: a restriction is then "not confirmed", never a pass.
+        "tenant_status": _norm(c.get("tenant_status")) or None,
     }
 
 
@@ -493,7 +505,9 @@ def validate_candidates(candidates: list[dict], criteria: dict | None,
                 # "anywhere in London" asks for the whole city: Bow is inside it (R4-02).
                 reasons.append(f"area {actual_area} is outside the requested areas")
 
-        requested_features = constraints["property_features"]
+        # Bills are read from the listing's own words below, with the words quoted.
+        requested_features = [feature for feature in constraints["property_features"]
+                              if feature not in _BILLS_FEATURES]
         if requested_features:
             available_features = _structured_features(candidate)
             if available_features is None:
@@ -529,6 +543,20 @@ def validate_candidates(candidates: list[dict], criteria: dict | None,
                 unknown_reasons.append("availability is not verified")
             elif available != "available_now" and available > requested_date:
                 reasons.append(f"available from {available}, after requested date")
+
+        # What the listing's own text says about each condition (eligibility, a private
+        # bathroom or kitchen for a studio / en-suite, bills, the move-in date). A confirmed
+        # conflict excludes the listing; a restriction nobody can check keeps it unverified.
+        conditions = check_listing_conditions(candidate, constraints)
+        for row in conditions:
+            if row["status"] == "not_met" and row["reason"] not in reasons:
+                reasons.append(row["reason"])
+            elif row["status"] == "unknown" and row["reason"] not in unknown_reasons:
+                unknown_reasons.append(row["reason"])
+        if conditions:
+            candidate["listing_conditions"] = conditions
+        else:
+            candidate.pop("listing_conditions", None)
 
         if (constraints['max_commute_minutes'] is not None and not constraints['no_commute']
                 and not constraints['commute_destination']):
@@ -644,6 +672,46 @@ def _price_text(status: dict) -> str:
     return str(c.get("price") or c.get("Price") or "price unavailable")
 
 
+_LISTING_NUMBER = re.compile(r"/details/(\d{5,})")
+
+
+def listing_number(candidate: dict) -> str:
+    """The provider's own listing number ("19803199"), or "" when the URL carries none."""
+    match = _LISTING_NUMBER.search(str((candidate or {}).get("url") or (candidate or {}).get("URL") or ""))
+    return match.group(1) if match else ""
+
+
+def _shared_addresses(statuses: list[dict]) -> set[str]:
+    """Addresses that more than one row of this ledger carries ("Grays Inn Road, WC1X")."""
+    seen: dict[str, int] = {}
+    for status in statuses:
+        key = _norm(_address(status))
+        seen[key] = seen.get(key, 0) + 1
+    return {key for key, count in seen.items() if count > 1}
+
+
+def _listing_label(status: dict, shared: set[str], *, zh: bool) -> str:
+    """``address (price)``, with the listing number inside the brackets when another row has
+    the same address: several units on one street at different rents otherwise read as one
+    listing quoted at two prices."""
+    address = _address(status)
+    number = listing_number(status.get("candidate") or {})
+    ident = ""
+    if number and _norm(address) in shared:
+        ident = f"房源编号 {number}，" if zh else f"listing {number}, "
+    return f"{address}（{ident}{_price_text(status)}" if zh else f"{address} ({ident}{_price_text(status)}"
+
+
+def _conflict_note(status: dict, *, zh: bool) -> str:
+    """The listing's own words behind each confirmed conflict."""
+    quotes = conflict_quotes((status.get("candidate") or {}).get("listing_conditions"))[:3]
+    if not quotes:
+        return ""
+    if zh:
+        return "。房源原文：" + "；".join(f"“{quote}”" for quote in quotes)
+    return ". Listing says: " + "; ".join(f"“{quote}”" for quote in quotes)
+
+
 def _unknown_reason_text(status: dict, *, zh: bool = False) -> str:
     reasons = status.get("unknown_reasons") or ["insufficient evidence"]
     if zh:
@@ -697,6 +765,9 @@ def render_nearby_failure_notice(state: dict, *, language: str = 'en') -> str:
 def _candidate_reason_zh(reason: Any) -> str:
     """Localize presentation only; the stable internal reason strings remain unchanged."""
     text = str(reason)
+    from_listing = condition_reason_zh(text)
+    if from_listing:
+        return from_listing
     labels = {
         "alternative is outside the declared hard result set": "该房源是备选，未满足全部已声明条件",
         "price is not structured": "月租信息尚未核实",
@@ -808,11 +879,12 @@ def render_candidate_status(validation: dict, *, language: str = "en") -> str:
     excluded = validation.get("excluded") or []
     unknown = validation.get("unknown") or []
     unchecked = [str(item) for item in (validation.get("unchecked") or []) if str(item).strip()]
+    shared = _shared_addresses(eligible + excluded + unknown)
     if zh:
         if eligible:
             # The header never covers a requirement nobody checked (R3-07).
             lines.append("满足已核实的条件：" if unchecked else "满足全部已声明条件（已核实）：")
-        lines.extend(f"- {_address(s)}（{_price_text(s)}" +
+        lines.extend(f"- {_listing_label(s, shared, zh=True)}" +
                      (f"，通勤已核实 {s['candidate']['verified_commute_minutes']:g} 分钟" if
                       s.get("candidate", {}).get("verified_commute_minutes") is not None else "") + ")"
                      for s in eligible)
@@ -822,7 +894,10 @@ def render_candidate_status(validation: dict, *, language: str = "en") -> str:
             lines.append("以下要求未逐条核实，请向中介确认：" + "、".join(unchecked))
         if excluded:
             lines.append("已排除/不符合：")
-            lines.extend(dict.fromkeys(f"- {_address(s)}：{'；'.join(_candidate_reason_zh(reason) for reason in s.get('reasons') or ['不满足硬约束'])}" for s in excluded))
+            lines.extend(dict.fromkeys(
+                f"- {_listing_label(s, shared, zh=True)}）："
+                f"{'；'.join(_candidate_reason_zh(reason) for reason in s.get('reasons') or ['不满足硬约束'])}"
+                f"{_conflict_note(s, zh=True)}" for s in excluded))
         if unknown:
             lines.append("尚未核实：")
             lines.extend(_unknown_status_lines(unknown, zh=True))
@@ -834,7 +909,7 @@ def render_candidate_status(validation: dict, *, language: str = "en") -> str:
     if eligible:
         lines.append("Meets the checked conditions (verified):" if unchecked
                      else "Meets all declared conditions (verified):")
-    lines.extend(f"- {_address(s)} ({_price_text(s)}" +
+    lines.extend(f"- {_listing_label(s, shared, zh=False)}" +
                  (f", commute verified at {s['candidate']['verified_commute_minutes']:g} min" if
                   s.get("candidate", {}).get("verified_commute_minutes") is not None else "") + ")"
                  for s in eligible)
@@ -845,8 +920,10 @@ def render_candidate_status(validation: dict, *, language: str = "en") -> str:
     if excluded:
         lines.append("Excluded / does not meet:")
         # Two rows can read the same and be different listings: only the identical line goes (X-01).
-        lines.extend(dict.fromkeys(f"- {_address(s)}: {('; '.join(s.get('reasons') or ['hard constraint failed']))}"
-                                   for s in excluded))
+        lines.extend(dict.fromkeys(
+            f"- {_listing_label(s, shared, zh=False)}): "
+            f"{('; '.join(s.get('reasons') or ['hard constraint failed']))}{_conflict_note(s, zh=False)}"
+            for s in excluded))
     if unknown:
         lines.append("Not verified:")
         lines.extend(_unknown_status_lines(unknown, zh=False))
@@ -981,7 +1058,9 @@ _LEAD_FIT_CLAIM = re.compile(
     r"\b(?:meets?|meeting|fits?|fitting|satisf(?:y|ies|ying|ied)|qualif(?:y|ies|ying|ied)|"
     r"match(?:es|ing)?|eligible|suitable|within|under\s+(?:your|the)|ticks?\s+(?:all|every|the)|"
     r"checks?\s+(?:all|every)|good\s+(?:fit|match|option|choice)|recommend(?:ed|ation)?|"
-    r"best\s+(?:option|choice|bet|pick|value))\b|[✓✅✔]|符合|满足|以内|之内|范围内|推荐|合适|适合", re.I)
+    r"best\s+(?:option|choice|bet|pick|value|match|fit)|closest\s+match|perfect\s+(?:match|fit)|"
+    r"top\s+(?:pick|choice|match|option)|(?<!not\s)(?<!n.t\s)(?<!never\s)(?<!be\s)(?<!been\s)verified)\b|[✓✅✔]|符合|满足|以内|之内|范围内|推荐|合适|适合|"
+    r"最匹配|最符合|最佳|首选|首推|已核实|已验证|核实无误", re.I)
 _TABLE_YES = re.compile(r"\|\s*(?:yes|y|是|✓|✅|✔)\s*(?=\|)", re.I)
 _LEAD_ABBREVIATION = re.compile(r"\b(Co|St|Rd|Ave|Sq|No|Mr|Mrs|Ms|Dr|Ltd|Inc|approx|vs)\.", re.I)
 _LEAD_LIST_ITEM = re.compile(r"^\s*(?:[-•*]|\d{1,3}[.)])\s+")

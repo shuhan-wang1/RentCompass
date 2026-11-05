@@ -395,7 +395,7 @@ _ACCESSIBILITY_FEATURE_PATTERNS = (
 
 _ACCESSIBILITY_FEATURES = frozenset(name for name, _ in _ACCESSIBILITY_FEATURE_PATTERNS)
 _EVIDENCE_ONLY_FEATURES = _ACCESSIBILITY_FEATURES | {'cats allowed', 'pets allowed', 'cat_written_consent',
-                                                     'furnished'}
+                                                     'furnished', 'bills included'}
 
 
 def _requires_explicit_feature_evidence(feature: str) -> bool:
@@ -446,6 +446,9 @@ def _canonical_property_feature(value) -> str:
                 return canonical
         return mentions[0][0]
     normal = raw.lower()
+    if normal in {"bills inclusive", "bills-included", "bills_included", "all bills included",
+                  "including bills", "bills incl"}:
+        return "bills included"
     return "en-suite" if normal == "ensuite" else normal
 
 
@@ -538,6 +541,16 @@ def _property_feature_evidence(prop: dict, feature: str) -> str:
         if re.search(r"\b(?:fully\s+)?furnished\b", blob):
             return 'verified'
         return 'unverified'
+    if canonical == 'bills included':
+        # What the listing's own words say: "All Bills Included" verifies it, "all utilities
+        # included apart from electricity" or "bills are not included" denies it, silence
+        # stays unknown. The detail page, when it was read, counts too.
+        from core.listing_conditions import bills_evidence
+        blob = " ".join(str(v) for v in (amenities, prop.get("Enhanced_Description"),
+                                         prop.get("Description"), prop.get("_full_description"))
+                        if v not in (None, ""))
+        state, _quote = bills_evidence(blob)
+        return {'met': 'verified', 'not_met': 'absent'}.get(state, 'unverified')
     if canonical in {'cats allowed', 'pets allowed'}:
         keys = ('Cats_Allowed', 'Pets_Allowed') if canonical == 'cats allowed' else ('Pets_Allowed',)
         for key in keys:

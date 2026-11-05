@@ -1716,6 +1716,22 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         if soft != previous_soft:
             result['soft_preferences'] = soft
             changed = True
+    from core.constraint_updates import bills_requirement_update, tenant_status_update
+    bills_need = bills_requirement_update(original_message)
+    if bills_need is not None:
+        existing = list(result.get('property_features') or [])
+        if bills_need and 'bills included' not in existing:
+            result['property_features'] = existing + ['bills included']
+            changed = True
+        elif not bills_need and 'bills included' in existing:
+            result['property_features'] = [f for f in existing if f != 'bills included']
+            changed = True
+    tenant = tenant_status_update(original_message)
+    if tenant is not None and result.get('tenant_status') != tenant:
+        # Who the user said they are, for listings let only to one group (NHS staff only,
+        # professionals only). Their own words only; nothing here is inferred.
+        result['tenant_status'] = tenant
+        changed = True
     from core.constraint_updates import precise_property_requirements
     precise_required = list(accessibility['required'])
     if pet_requirement is True:
@@ -1781,7 +1797,7 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         for key in ('area', 'areas', 'max_budget', 'budget_period', 'monthly_total_budget', 'office_days_per_week',
                     'bedrooms', 'bedrooms_minimum', 'room_type', 'commute_destination', 'destination',
                     'move_in_date', 'max_travel_time', 'max_changes', 'no_commute', 'property_features',
-                    'soft_preferences'):
+                    'soft_preferences', 'tenant_status'):
             if key in result and (key not in accumulated or result.get(key) != accumulated.get(key)):
                 sources[key] = {'source': 'user_message', 'value': result.get(key), 'text': current_message[:800]}
         result['constraint_sources'] = sources

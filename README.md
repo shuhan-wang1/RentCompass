@@ -459,6 +459,16 @@ module that owns each subsystem. The main ones:
 | `SEARXNG_URL` | `http://localhost:8080` | Search backend (`http://searxng:8080` under compose) |
 | `TFL_APP_KEY` | empty | Optional; raises TfL rate limits |
 
+Identity is taken from the authenticated session, or a server-issued signed guest
+cookie. Keep `ALLOW_LEGACY_CLIENT_USER_ID=false` for shared deployments. With
+`REQUIRE_AUTH=false` and `ALLOW_LEGACY_CLIENT_USER_ID=true`, unauthenticated clients
+can choose an identity through the request body, `X-User-Id`, or query string;
+that mode is only suitable for controlled legacy migrations or local tests.
+Compose explicitly disables it for both app pools. This describes the repository
+configuration, not proof of the settings running in production. Both flags accept
+the documented boolean spellings and reject unrecognized values at startup, so a
+typo in `REQUIRE_AUTH` cannot silently disable the login gate.
+
 **State paths** (defaults are under `.runtime/` in the repo)
 
 | Variable | Default | Purpose |

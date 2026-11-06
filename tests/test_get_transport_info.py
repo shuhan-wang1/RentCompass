@@ -6,7 +6,7 @@ neutralised per-test. Covers:
   * journey + fare parsing (fare block present),
   * the Single-Fare-Finder fallback when the journey plan carries no fare
     (TfL omits fares on future-dated plans),
-  * disambiguation (HTTP 300 -> best matchQuality option -> retry),
+  * disambiguation (HTTP 300 -> equivalent station name -> retry),
   * line status (single line, all-lines disruption summary, name filter),
   * non-London honesty ("TfL covers London only"),
   * travelcard prices from the shared 2025 table,
@@ -121,17 +121,17 @@ def _geo(lat, lng, postcode=None):
 # ── journey + fare parsing ────────────────────────────────────────────────────
 
 def test_journey_with_fare_block(monkeypatch):
-    geos = {"kings cross": _geo(51.5308, -0.1238, "N1 9AP"),
-            "canary wharf": _geo(51.5054, -0.0235, "E14 5AB")}
-    monkeypatch.setattr(gti, "_geocode", lambda loc: geos[loc.lower()])
+    monkeypatch.setattr(gti, "_geocode", lambda loc: pytest.fail("Exact stations need no geocoding"))
     monkeypatch.setattr(gti, "_journey_time_params", lambda: ({}, None))
     fake = _fake_tfl({
-        "/StopPoint": (200, _STOPPOINTS_KGX),   # both snaps -> same list is fine
+        "/StopPoint/Search/": (200, {"matches": [
+            {"id": "940GZZLUKSX", "name": "King's Cross St. Pancras Underground Station"},
+            {"id": "940GZZLUCYF", "name": "Canary Wharf Underground Station"}]}),
         "/Journey/JourneyResults/": (200, _journey_response(22, 310)),
     })
     monkeypatch.setattr(gti, "_tfl_get", fake)
 
-    out = gti.get_transport_info_impl(query_type="fare", from_location="Kings Cross",
+    out = gti.get_transport_info_impl(query_type="fare", from_location="King's Cross St. Pancras",
                                       to_location="Canary Wharf")
     assert out["success"] is True
     assert out["coverage"] == "london"
@@ -148,19 +148,20 @@ def test_journey_with_fare_block(monkeypatch):
 
 def test_fare_finder_fallback_when_plan_has_no_fare(monkeypatch):
     """Future-dated plans carry no fare block -> Single Fare Finder supplies it."""
-    geos = {"kings cross": _geo(51.5308, -0.1238), "canary wharf": _geo(51.5054, -0.0235)}
-    monkeypatch.setattr(gti, "_geocode", lambda loc: geos[loc.lower()])
+    monkeypatch.setattr(gti, "_geocode", lambda loc: pytest.fail("Exact stations need no geocoding"))
     monkeypatch.setattr(gti, "_journey_time_params",
                         lambda: ({"date": "20260708", "time": "0900", "timeIs": "Departing"},
                                  "2026-07-08 09:00 (typical daytime service)"))
     fake = _fake_tfl({
-        "/StopPoint": (200, _STOPPOINTS_KGX),
+        "/StopPoint/Search/": (200, {"matches": [
+            {"id": "940GZZLUKSX", "name": "King's Cross St. Pancras Underground Station"},
+            {"id": "940GZZLUCYF", "name": "Canary Wharf Underground Station"}]}),
         "/Journey/JourneyResults/": (200, _journey_response(23, None, ("tube", "elizabeth-line"))),
         "/Stoppoint/940GZZLUKSX/FareTo/": (200, _FARETO),
     })
     monkeypatch.setattr(gti, "_tfl_get", fake)
 
-    out = gti.get_transport_info_impl(query_type="fare", from_location="Kings Cross",
+    out = gti.get_transport_info_impl(query_type="fare", from_location="King's Cross St. Pancras",
                                       to_location="Canary Wharf")
     assert out["success"] is True
     assert out["duration_minutes"] == 23
@@ -177,13 +178,13 @@ def test_fare_finder_fallback_when_plan_has_no_fare(monkeypatch):
     assert journey_calls and journey_calls[0][1].get("time") == "0900"
 
 
-def test_disambiguation_picks_best_match_and_retries(monkeypatch):
-    """HTTP 300 -> retry once with the highest-matchQuality candidates."""
+def test_disambiguation_retries_only_with_matching_station_names(monkeypatch):
+    """HTTP 300 can change a token, but a higher score cannot change the station."""
     monkeypatch.setattr(gti, "_geocode", lambda loc: None)  # force StopPoint/Search path
     monkeypatch.setattr(gti, "_journey_time_params", lambda: ({}, None))
     disamb = {
         "fromLocationDisambiguation": {"disambiguationOptions": [
-            {"parameterValue": "1000110", "matchQuality": 500,
+            {"parameterValue": "1000110", "matchQuality": 999,
              "place": {"commonName": "Kings Cross Road"}},
             {"parameterValue": "940GZZLUKSX", "matchQuality": 900,
              "place": {"commonName": "King's Cross St. Pancras Underground Station"}},
@@ -197,8 +198,8 @@ def test_disambiguation_picks_best_match_and_retries(monkeypatch):
 
     def fake(path, params=None, timeout=15):
         if path.startswith("/StopPoint/Search/"):
-            name = "kings" if "kings" in path.lower() else "canary"
-            return 200, {"matches": [{"id": name.upper(), "name": f"{name} match"}]}
+            name = "King's Cross St. Pancras" if "Cross" in path else "Canary Wharf"
+            return 200, {"matches": [{"id": "test-initial-token", "name": name + " Underground Station"}]}
         if path.startswith("/Journey/"):
             state["n"] += 1
             if state["n"] == 1:
@@ -207,11 +208,11 @@ def test_disambiguation_picks_best_match_and_retries(monkeypatch):
         return 404, None
 
     monkeypatch.setattr(gti, "_tfl_get", fake)
-    out = gti.get_transport_info_impl(query_type="journey", from_location="Kings Cross",
+    out = gti.get_transport_info_impl(query_type="journey", from_location="King's Cross St. Pancras",
                                       to_location="Canary Wharf")
     assert out["success"] is True
     assert state["n"] == 2  # exactly one retry
-    # the best-quality candidate (not the first) was chosen and surfaced
+    # The matching station wins over the higher-quality road candidate.
     assert out["from"]["naptan"] == "940GZZLUKSX"
     assert "King's Cross St. Pancras" in out["stations_used"]
     assert out["duration_minutes"] == 25

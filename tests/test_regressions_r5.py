@@ -124,10 +124,10 @@ def test_u_01_a_hub_only_match_resolves_to_the_station_at_the_hub(monkeypatch, l
     assert not resolved["token"].startswith("HUB")
 
 
-def test_u_01_a_hub_with_no_station_of_its_name_falls_back_to_the_geocoder(monkeypatch):
+def test_u_01_a_hub_with_only_a_hub_nearby_widens_the_exact_station_lookup(monkeypatch):
     from core.tools import get_transport_info as gti
     _no_cache(monkeypatch, gti)
-    monkeypatch.setattr(gti, "_geocode", lambda text: {"lat": 51.5033, "lng": -0.1145, "postcode": "SE1 8SW"})
+    monkeypatch.setattr(gti, "_geocode", lambda text: pytest.fail("Use the exact hub's coordinates"))
 
     def fake_tfl(path, params=None, **_k):
         if path.startswith("/StopPoint/Search/"):
@@ -141,7 +141,7 @@ def test_u_01_a_hub_with_no_station_of_its_name_falls_back_to_the_geocoder(monke
     assert resolved["token"] == "940GZZLUWLO"
 
 
-def test_u_01_the_name_search_fallback_skips_hub_ids(monkeypatch):
+def test_u_01_an_inexact_name_cannot_fall_back_to_a_different_station(monkeypatch):
     from core.tools import get_transport_info as gti
     _no_cache(monkeypatch, gti)
     monkeypatch.setattr(gti, "_geocode", lambda text: None)
@@ -150,7 +150,8 @@ def test_u_01_the_name_search_fallback_skips_hub_ids(monkeypatch):
         return 200, {"matches": [{"id": "HUBBAN", "name": "Bank-ish"},
                                  {"id": "940GZZLUBNK", "name": "Bank Underground Station"}]}
     monkeypatch.setattr(gti, "_tfl_get", fake_tfl)
-    assert gti._resolve_station("Bankish")["token"] == "940GZZLUBNK"
+    resolved = gti._resolve_station("Bankish")
+    assert resolved["token"] is None and resolved["needs_clarification"] is True
 
 
 # U-02 ── "<Area> was better. Go back." switches back to that area ─────────────────

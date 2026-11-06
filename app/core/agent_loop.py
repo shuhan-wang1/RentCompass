@@ -765,19 +765,19 @@ _SEARCH_LEAD_KEYS = ("status", "message", "summary", "suggestion", "partial", "p
                      "incomplete_areas", "coverage", "total_found", "total_matches", "search_criteria",
                      "known_criteria")
 _SEARCH_LIST_KEYS = ("recommendations", "over_budget_alternatives", "similar_properties",
-                     "unverified_candidates", "excluded_candidates", "candidate_states")
+                     "unverified_candidates", "excluded_candidates")
 _LISTING_CORE = ("rank", "address", "area", "price", "bedrooms", "property_type", "room_type",
                  "match_type", "budget_status", "travel_time", "travel_time_minutes",
-                 "travel_time_source", "distance_miles")
+                 "travel_time_source", "distance_miles", "url")
 # Dropped in this order while the projection is still over the cap.
 _LISTING_OPTIONAL_STAGES = (
     ("explanation",),
-    ("url", "source", "possibly_outdated"),
+    ("source", "possibly_outdated"),
     ("available_from", "availability_status"),
     ("verified_features", "unverified_features", "absent_features"),
 )
 _SEARCH_DROP_KEYS = {"images", "description", "score", "score_breakdown", "provider_address",
-                     "geo_location", "commute_evidence"}
+                     "geo_location", "commute_evidence", "candidate_states"}
 
 
 def _listing_condition_lines(conditions) -> list[str]:
@@ -874,7 +874,7 @@ def _project_validation(validation: dict) -> dict:
 # itinerary's own fare, and the answer said the cheapest route's fare "didn't come back"
 # (R1-08). The model view leads with the answer fields and drops the duplicate legs; the raw
 # artifact keeps everything.
-_TRANSPORT_LEAD_KEYS = ("success", "query_type", "coverage", "from", "to", "duration_minutes",
+_TRANSPORT_LEAD_KEYS = ("success", "needs_clarification", "error", "query_type", "coverage", "from", "to", "duration_minutes",
                         "changes_count", "fare_available", "fare_display", "fare_gbp",
                         "fare_pence", "fare_basis", "fare_itinerary_id",
                         "fare_matches_itinerary", "fare_note", "selected_itinerary_id")
@@ -916,7 +916,24 @@ def project_search_payload(raw: dict, cap: int) -> dict:
     rest = {k: v for k, v in raw.items()
             if k not in lead and k not in _SEARCH_LIST_KEYS and k not in _SEARCH_DROP_KEYS
             and k != "candidate_validation"}
-    lists = {k: raw[k] for k in _SEARCH_LIST_KEYS if isinstance(raw.get(k), list) and raw[k]}
+    # The same alternatives occur in several buckets. Repeat identical facts only
+    # once, leaving room for later commutes/links. Compare the projected facts, not
+    # just the URL: validation may add a condition or a previously missing commute.
+    lists, seen = {}, set()
+    for key in _SEARCH_LIST_KEYS:
+        if not isinstance(raw.get(key), list):
+            continue
+        rows = []
+        for row in raw.get(key) or []:
+            if isinstance(row, dict):
+                identity = json.dumps(_project_listing(row, 0), sort_keys=True,
+                                      ensure_ascii=False, default=str)
+                if identity in seen:
+                    continue
+                seen.add(identity)
+            rows.append(row)
+        if rows:
+            lists[key] = rows
     projected: dict = {}
     for stage in range(len(_LISTING_OPTIONAL_STAGES) + 1):
         projected = dict(lead)
@@ -931,7 +948,7 @@ def project_search_payload(raw: dict, cap: int) -> dict:
     # validation ledger as one line per status, and the auxiliary keys last (r08 NEW-A).
     compact = {k: v for k, v in lead.items() if k != "known_criteria"}
     compact["listing_fields"] = ("rank | address | area | price | bedrooms | property type | "
-                                 "room type | match | budget | travel time | distance (mi)")
+                                 "room type | match | budget | travel time | distance (mi) | url")
     for key, rows in lists.items():
         compact[key] = [_compact_listing(r) if isinstance(r, dict) else r for r in rows]
     validation = raw.get("candidate_validation")
@@ -958,7 +975,7 @@ def _compact_listing(row: dict) -> str:
     from core.candidate_validation import listing_number
     values = (row.get("rank"), row.get("address"), row.get("area"), row.get("price"),
               row.get("bedrooms"), row.get("property_type"), row.get("room_type"),
-              row.get("match_type"), budget, travel, row.get("distance_miles"))
+              row.get("match_type"), budget, travel, row.get("distance_miles"), row.get("url"))
     line = " | ".join("" if v in (None, "") else str(v) for v in values)
     number = listing_number(row)
     conflicts = [c for c in _listing_condition_lines(row.get("listing_conditions"))

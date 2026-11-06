@@ -144,15 +144,20 @@ def _in_london(lat: float, lng: float) -> bool:
     return lo_lat <= lat <= hi_lat and lo_lng <= lng <= hi_lng
 
 
-def _pick_disambiguation(disamb: dict):
+def _pick_disambiguation(disamb: dict, expected_name: str | None = None):
     """Given a TfL ``*LocationDisambiguation`` block, return the best-matching
     option as (parameter_value, common_name) or None.
 
     TfL returns candidate stops (with a ``matchQuality``) when an input place is
-    ambiguous; we pick the highest-quality one and surface which stop we chose."""
+    ambiguous; an already exact station name restricts the options before quality
+    is compared. No equivalent name means the caller must ask for clarification."""
     if not isinstance(disamb, dict):
         return None
-    options = disamb.get('disambiguationOptions') or []
+    options = [o for o in disamb.get('disambiguationOptions') or []
+               if isinstance(o, dict) and o.get('parameterValue')]
+    if expected_name:
+        options = [o for o in options if _station_key(
+            (o.get('place') or {}).get('commonName')) == _station_key(expected_name)]
     if not options:
         return None
     best = max(options, key=lambda o: o.get('matchQuality', 0))
@@ -178,7 +183,7 @@ _STATION_SUFFIX = re.compile(
 
 def _station_key(name) -> str:
     """A station name compared without its suffix, punctuation or "&"."""
-    value = _STATION_SUFFIX.sub("", str(name or "").strip())
+    value = _STATION_SUFFIX.sub("", _station_query(name))
     value = re.sub(r"\s*\((?:london|[a-z ]+ line)\)\s*", " ", value, flags=re.I)
     value = value.lower().replace("&", " and ")
     value = re.sub(r"[’'.]", "", value)
@@ -186,12 +191,18 @@ def _station_key(name) -> str:
     return " ".join(re.sub(r"[^a-z0-9]+", " ", value).split())
 
 
-def _exact_station_match(location: str) -> dict | None:
-    """TfL's station whose name IS ``location`` (a station suffix aside), else None.
+def _station_query(location) -> str:
+    """A London qualifier is not part of a station's name; street addresses stay intact."""
+    return re.sub(r",\s*(?:Greater\s+)?London(?:,\s*(?:UK|England|United Kingdom))?\s*$",
+                  "", str(location or "").strip(), flags=re.I).strip()
 
-    Only a bare name is looked up: an address, a postcode or anything with a digit or a
-    comma goes to the geocoder as before."""
-    text = str(location or "").strip()
+
+def _exact_station_match(location: str) -> dict | None:
+    """Resolve a station name exactly, or return a clarification result.
+
+    None means this is an address, postcode or campus alias for the geocoder.
+    A trailing London qualifier is allowed on a bare station name."""
+    text = _station_query(location)
     if not text or re.search(r"[\d,]", text) or len(text) > 60:
         return None
     key = _station_key(text)
@@ -199,7 +210,7 @@ def _exact_station_match(location: str) -> dict | None:
         return None
     status, data = _tfl_get(f"/StopPoint/Search/{_STATION_SUFFIX.sub('', text).strip()}",
                             {'modes': _STATION_MODES})
-    matches = (data or {}).get('matches') if isinstance(data, dict) else None
+    matches = data.get('matches') if status == 200 and isinstance(data, dict) else None
     exact = [m for m in matches or []
              if isinstance(m, dict) and m.get('id') and _station_key(m.get('name')) == key]
     # "Clapham Junction" and "Bank" match TfL interchange hubs (HUBCLJ, HUBBAN). The journey
@@ -208,25 +219,41 @@ def _exact_station_match(location: str) -> dict | None:
     # is a stop; a hub is resolved to the station at its position.
     for match in exact:
         if not _is_hub_id(match.get('id')):
-            return _station_found(match.get('id'), match.get('name'), match.get('lat'), match.get('lon'))
+            return dict(_station_found(match.get('id'), match.get('name'), match.get('lat'), match.get('lon')),
+                        resolution='exact_station')
     for match in exact:
         lat, lon = match.get('lat'), match.get('lon')
         if lat is None or lon is None:
             continue
-        status, data = _tfl_get('/StopPoint', {
-            'lat': lat, 'lon': lon, 'radius': 300,
-            'stopTypes': 'NaptanMetroStation,NaptanRailStation', 'modes': _STATION_MODES,
-        })
-        stops = (data or {}).get('stopPoints') if isinstance(data, dict) else None
-        named = sorted((stop for stop in stops or []
-                        if isinstance(stop, dict) and stop.get('id') and not _is_hub_id(stop.get('id'))
-                        and _station_key(stop.get('commonName')) == key),
-                       key=lambda stop: (0 if stop.get('stopType') == 'NaptanMetroStation' else 1,
-                                         stop.get('distance') or 0))
-        if named:
-            return _station_found(named[0].get('id'), named[0].get('commonName'), lat, lon)
-    # No station of that name: the geocoder resolves it as before.
-    return None
+        # Some interchange searches expose only the hub in the smallest radius.
+        # Widen at that hub's own coordinates, retaining the exact-name requirement.
+        for radius in (300, 1500):
+            status, data = _tfl_get('/StopPoint', {
+                'lat': lat, 'lon': lon, 'radius': radius,
+                'stopTypes': 'NaptanMetroStation,NaptanRailStation', 'modes': _STATION_MODES,
+            })
+            if status != 200:
+                break
+            stops = (data or {}).get('stopPoints') if isinstance(data, dict) else None
+            named = sorted((stop for stop in stops or []
+                            if isinstance(stop, dict) and stop.get('id') and not _is_hub_id(stop.get('id'))
+                            and _station_key(stop.get('commonName')) == key),
+                           key=lambda stop: (0 if stop.get('stopType') == 'NaptanMetroStation' else 1,
+                                             stop.get('distance') or 0))
+            if named:
+                return dict(_station_found(named[0].get('id'), named[0].get('commonName'), lat, lon),
+                            resolution='exact_station')
+    # A bare place can name a station even without the word "station". Neither an
+    # empty/unavailable lookup nor OTHER matches authorize snapping it to another
+    # station. A known campus alias can still use its street address; other places
+    # can be clarified with a postcode rather than guessing what the user meant.
+    landmark = maps_service.LANDMARK_TO_ADDRESS.get(text.lower())
+    if not matches and landmark and not re.search(r'\bstation\b', landmark, re.I):
+        return None
+    return {'token': None, 'station': False, 'needs_clarification': True,
+            'unresolved_reason': f'no exact TfL station match for "{location}"',
+            'station_options': [{'name': m.get('name'), 'id': m.get('id')}
+                                for m in matches or [] if isinstance(m, dict) and m.get('id')]}
 
 
 def _is_hub_id(stop_id) -> bool:
@@ -244,13 +271,13 @@ def _station_found(stop_id, name, lat, lon) -> dict:
 def _resolve_station(location: str) -> dict:
     """Resolve a free-text place/postcode/station to a fare-chargeable TfL station.
 
-    Strategy (reuses the London-commute path's geocoder, then snaps to the nearest
-    real station so the journey is fare-chargeable):
-      1. geocode the text to coordinates;
-      2. if the coordinates are outside Greater London -> {'in_london': False};
-      3. otherwise snap to the nearest metro/rail station (Naptan id) -> a token
+    Strategy:
+      1. resolve a bare station name exactly with TfL, or ask for clarification;
+      2. geocode a street address/postcode (or known campus alias) to coordinates;
+      3. if the coordinates are outside Greater London -> {'in_london': False};
+      4. otherwise snap to the nearest metro/rail station (Naptan id) -> a token
          TfL prices; note the matched station name in ``name``;
-      4. if nothing is nearby, fall back to the raw coordinates (journey still
+      5. if nothing is nearby, fall back to the raw coordinates (journey still
          works but may carry no fare).
 
     Returns a dict: {input, in_london, station(bool), token, name, coords}.
@@ -263,7 +290,8 @@ def _resolve_station(location: str) -> dict:
     # v3: resolutions are now checked against the input's postcode district (R2-09); a v2
     # entry may hold a wrong-district station.
     # v4: a v3 entry may hold a TfL hub id (HUBCLJ) as the stop token (U-01).
-    cache_key = create_cache_key('tfl_resolve_station_v4', location.lower())
+    # v5: older entries may silently substitute a different named station.
+    cache_key = create_cache_key('tfl_resolve_station_v5', location.lower())
     cached = _cache_get(cache_key, _GEO_TTL)
     if cached is not None:
         return cached
@@ -274,9 +302,17 @@ def _resolve_station(location: str) -> dict:
     # King's Cross St. Pancras (R4-13). A station name resolves by TfL's own name first, and
     # only an exact match (suffixes and punctuation aside) is taken.
     exact = _exact_station_match(location)
-    if exact:
+    if exact is not None:
         result.update(exact)
-        _cache_set(cache_key, result)
+        if result.get('token'):
+            _cache_set(cache_key, result)
+        elif not _STATION_SUFFIX.search(_station_query(location)):
+            # Preserve the outside-London answer for a bare non-London place. The
+            # geocode is used only for coverage, never to select a different stop.
+            geo = _geocode(location)
+            if geo and geo.get('lat') is not None and geo.get('lng') is not None:
+                if not _in_london(geo['lat'], geo['lng']):
+                    result['in_london'] = False
         return result
     geo = _geocode(location)
     if not (geo and geo.get('lat') is not None):
@@ -341,16 +377,8 @@ def _resolve_station(location: str) -> dict:
         _cache_set(cache_key, result)
         return result
 
-    # Geocoding failed: try a direct station-name search (handles bare names).
-    status, data = _tfl_get(f"/StopPoint/Search/{location}", {'modes': _STATION_MODES})
-    matches = (data or {}).get('matches') if isinstance(data, dict) else None
-    # A hub id is not a stop the journey planner knows (U-01).
-    matches = [m for m in matches or [] if isinstance(m, dict) and not _is_hub_id(m.get('id'))]
-    if matches:
-        top = matches[0]
-        result.update({'in_london': True, 'station': True,
-                       'token': top.get('id'), 'name': top.get('name')})
-        _cache_set(cache_key, result)
+    # The exact-name lookup above already tried station search. Never take its
+    # first inexact result after geocoding fails.
     return result
 
 
@@ -677,9 +705,11 @@ def _do_journey(from_location: str, to_location: str, want_fare: bool,
         bad = frm if not frm.get('token') else to
         reason = bad.get('unresolved_reason')
         return {"success": False,
+                "needs_clarification": bool(bad.get('needs_clarification')),
+                "station_options": bad.get('station_options') or [],
                 "error": f"Couldn't locate {'the start' if not frm.get('token') else 'the destination'} "
                          + (f"reliably: {reason}. " if reason else "on the TfL network. ")
-                         + "Try a nearby station name or a full postcode."}
+                         + "Please confirm the station name or give a full postcode."}
 
     if requested_time is None:
         time_params, planned_for = _journey_time_params()
@@ -695,11 +725,23 @@ def _do_journey(from_location: str, to_location: str, want_fare: bool,
         status, data = _tfl_get(f"/Journey/JourneyResults/{frm['token']}/to/{to['token']}",
                                 time_params, timeout=20)
         if status == 300 and isinstance(data, dict):
-            # Ambiguous endpoint(s): pick the best candidate stop and retry once.
-            f_tok, f_name = (_pick_disambiguation(data.get('fromLocationDisambiguation')) or (frm['token'], frm['name']))
-            t_tok, t_name = (_pick_disambiguation(data.get('toLocationDisambiguation')) or (to['token'], to['name']))
-            frm['token'], frm['name'] = f_tok, f_name or frm['name']
-            to['token'], to['name'] = t_tok, t_name or to['name']
+            # TfL may disambiguate a token too. An exact named station must remain
+            # that station even when another option has a higher matchQuality.
+            for endpoint, key in ((frm, 'fromLocationDisambiguation'), (to, 'toLocationDisambiguation')):
+                block = data.get(key)
+                if not block or not block.get('disambiguationOptions'):
+                    continue
+                expected = endpoint.get('name') if endpoint.get('resolution') == 'exact_station' else None
+                picked = _pick_disambiguation(block, expected_name=expected)
+                if expected and not picked:
+                    return {'success': False, 'needs_clarification': True, 'coverage': 'london',
+                            'error': f'TfL could not resolve the requested station "{expected}" exactly. '
+                                     'Please confirm the station; no alternative journey or fare was selected.',
+                            'station_options': [o.get('place') for o in block['disambiguationOptions']
+                                                if isinstance(o, dict)],
+                            'source': 'TfL Unified API Journey Planner'}
+                if picked:
+                    endpoint['token'], endpoint['name'] = picked
             status, data = _tfl_get(f"/Journey/JourneyResults/{frm['token']}/to/{to['token']}",
                                     time_params, timeout=20)
         if status == 200 and isinstance(data, dict) and data.get('journeys'):

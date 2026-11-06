@@ -411,14 +411,15 @@ def _normalize_address_for_routing(address: str) -> str:
     if address_lower == 'stratford':
         return 'Stratford, London'
     
-    # Check if it's a known landmark
-    for landmark, specific_address in LANDMARK_TO_ADDRESS.items():
-        if landmark in address_lower:
-            print(
-                f"  -> Converted landmark address_chars={len(address)} "
-                f"resolved_chars={len(specific_address)}"
-            )
-            return specific_address
+    # An alias names the whole place. Substring matching changed Euston Square and
+    # Euston Road into Euston Station before the geocoder ever saw the request.
+    specific_address = LANDMARK_TO_ADDRESS.get(address_lower)
+    if specific_address:
+        print(
+            f"  -> Converted landmark address_chars={len(address)} "
+            f"resolved_chars={len(specific_address)}"
+        )
+        return specific_address
     
     return address
 

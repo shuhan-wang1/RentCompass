@@ -1251,7 +1251,15 @@ def render_similar_listings(rows: list[dict], *, language: str = "en") -> str:
             value = row.get(key) or row.get(key.capitalize())
             if value:
                 parts.append(str(value))
+        # These are the same source URLs exposed by View Deal on the cards. A
+        # missing availability check does not mean the listing link is unavailable.
+        url = str(row.get("url") or "")
+        if re.fullmatch(r"https?://[^\s<>()]+", url, re.I):
+            parts.append(f"[{'房源链接' if zh else 'View listing'}]({url})")
         lines.append("- " + ("，".join(parts) if zh else ", ".join(parts)))
+    note = _cached_listing_note([row for row in rows if isinstance(row, dict)], zh=zh)
+    if note:
+        lines.append(note)
     return "\n".join(lines)
 
 

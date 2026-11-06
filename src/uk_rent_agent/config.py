@@ -49,6 +49,9 @@ def _bool_strict(name: str, default: bool = False) -> bool:
     read as false here and true there — config accepted the pair while the graph
     build then died with a bare RuntimeError. One spelling set, and anything
     outside it is refused by name before the server binds.
+
+    Identity switches use the same strict parser: a misspelled REQUIRE_AUTH must
+    not quietly disable authentication.
     """
     raw = os.getenv(name)
     if raw is None:
@@ -375,9 +378,9 @@ class Config:
             auth_db_path=Path(
                 os.getenv("AUTH_DB_PATH", str(root / ".runtime" / "auth.sqlite3"))
             ),
-            require_auth=_bool("REQUIRE_AUTH", False),
+            require_auth=_bool_strict("REQUIRE_AUTH", False),
             session_cookie_secure=_bool("SESSION_COOKIE_SECURE", False),
-            allow_legacy_client_user_id=_bool("ALLOW_LEGACY_CLIENT_USER_ID", False),
+            allow_legacy_client_user_id=_bool_strict("ALLOW_LEGACY_CLIENT_USER_ID", False),
             max_request_bytes=int(os.getenv("MAX_REQUEST_BYTES", str(256 * 1024))),
             rate_limit_window_seconds=int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60")),
             rate_limit_db_path=Path(
